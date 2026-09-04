@@ -12,7 +12,8 @@
     "scheme": "maihoonna",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
+      "buildNumber": "2",
       "config": {
         "googleMapsApiKey": "AIzaSyDPrFpN29FZ786mTWjIbeQvW3y6ztjx3xU"
       },

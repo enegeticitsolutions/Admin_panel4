@@ -39,7 +39,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
     <key>GMSApiKey</key>
     <string>AIzaSyDPrFpN29FZ786mTWjIbeQvW3y6ztjx3xU</string>
     <key>LSApplicationQueriesSchemes</key>
@@ -107,20 +107,18 @@
         </dict>
       </dict>
     </dict>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>NSCameraUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your camera</string>
-    <key>NSFaceIDUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to use Face ID</string>
+    <string>MaiHoonNa requires camera access to photograph prescriptions, medical records, and to update senior and family member profile photos.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>MaiHoonNa needs your location to show your address on the map and find nearby care services.</string>
+    <string>MaiHoonNa uses your location to share live GPS coordinates with your care team and family when an SOS Emergency Alert is triggered.</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>MaiHoonNa needs background location access so your GPS coordinates are shared with caregivers the moment you press the SOS button.</string>
+    <string>MaiHoonNa needs background location access so your GPS coordinates are immediately broadcast to caregivers the instant you press the SOS emergency button.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>MaiHoonNa needs your location to pin your address and find nearby Care Companions.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>MaiHoonNa needs your location to pin your home address and connect you with nearby Care Companions and nurses.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your photos</string>
+    <string>MaiHoonNa requires photo library access to upload existing medical reports, prescription documents, and senior beneficiary profile pictures.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

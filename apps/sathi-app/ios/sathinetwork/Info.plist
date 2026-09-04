@@ -39,7 +39,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
     <key>GMSApiKey</key>
     <string>AIzaSyBIgXpRrlQ6AcqgMTUpDpHcvPOQfdwBOb0</string>
     <key>LSMinimumSystemVersion</key>
@@ -53,20 +53,18 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>NSCameraUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your camera</string>
-    <key>NSFaceIDUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to use Face ID</string>
+    <string>Sathi Network requires camera access to capture verification photos during care companion visits and to update your profile photo.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>MaiHoonNa needs your location to show your address on the map and find nearby care services.</string>
+    <string>Sathi Network needs your location to show assigned visit locations on the map and coordinate care companion dispatch to senior citizens.</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <string>Sathi Network uses your location in the background to ensure companion safety and real-time coordination during active field visits.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>MaiHoonNa needs your location to pin your address and find nearby Care Companions.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>Sathi Network needs your location to navigate to elder care service addresses and locate nearby companion visit assignments.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your photos</string>
+    <string>Sathi Network requires photo library access to upload identity verification documents and profile photos for companion registration.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
