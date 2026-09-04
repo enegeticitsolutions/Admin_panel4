@@ -35,11 +35,11 @@ export default ({ config }) => {
       },
       razorpayKeyId,
       firebase: {
-        projectNumber: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_NUMBER || "1024621796653",
-        projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "maihoonna-999af",
-        storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "maihoonna-999af.firebasestorage.app",
-        appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "1:1024621796653:android:468a40329e2f9066fc07a4",
-        apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyAgQPAScwUnUfSLcehCRwyhsVQFSlesaCQ",
+        projectNumber: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_NUMBER || '',
+        projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '',
+        storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+        appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '',
+        apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '',
       },
     },
   };
