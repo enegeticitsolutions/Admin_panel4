@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, useWindowDimensions, Linking, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { LEGAL_CONFIG } from '@/constants/legal';
 import { useDeleteAccountWithConfirm } from '@/utils/deleteAccount';
 import Constants from 'expo-constants';
+import CareSupportModal from '@/components/shared/CareSupportModal';
 
 export default function SettingsScreen() {
     const { width } = useWindowDimensions();
@@ -31,97 +32,92 @@ export default function SettingsScreen() {
         Linking.openURL(LEGAL_CONFIG.TERMS_OF_SERVICE_URL).catch(err => console.log('Error opening terms link:', err));
     };
 
+    const [supportModalVisible, setSupportModalVisible] = useState(false);
+
     const openHelpSupport = () => {
-        Alert.alert(
-            'MaiHoonNa Care Support',
-            'We are here to assist you with companion care, visits, and account assistance.\n\n✉️ Email: info@maihoonna.com\n⏱️ Support Hours: Mon–Sat, 9:00 AM – 7:00 PM IST\n📍 Service Hub: Gurugram, Haryana, India',
-            [
-                {
-                    text: 'Send Email',
-                    onPress: () => {
-                        const mailUrl = `mailto:${LEGAL_CONFIG.SUPPORT_EMAIL}?subject=MaiHoonNa%20App%20Support`;
-                        Linking.openURL(mailUrl).catch(() => {
-                            Alert.alert('Email Support', `Please email us directly at:\n${LEGAL_CONFIG.SUPPORT_EMAIL}`);
-                        });
-                    }
-                },
-                { text: 'Close', style: 'cancel' }
-            ]
-        );
+        setSupportModalVisible(true);
     };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <View style={[styles.header, responsiveContentStyle]}>
-                <TouchableOpacity
-                    onPress={() => safeBack()}
-                    style={styles.backBtn}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                    <Feather name="arrow-left" size={22} color="#111827" />
-                </TouchableOpacity>
-
-                <Text style={styles.headerTitle}>Settings</Text>
-
-                <View style={styles.headerSpacer} />
-            </View>
-
-            <View style={styles.container}>
-                <View style={[styles.aboutCard, responsiveContentStyle]}>
-                    <Text style={styles.aboutTitle}>About</Text>
-
-                    <View style={styles.aboutRows}>
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Version</Text>
-                            <Text style={styles.infoValue}>{appVersion}</Text>
-                        </View>
-
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Build</Text>
-                            <Text style={styles.infoValue}>{buildNumber}</Text>
-                        </View>
-                    </View>
-                </View>
-
-                <View style={[styles.linksCard, responsiveContentStyle]}>
-                    <TouchableOpacity style={styles.linkRow} activeOpacity={0.7} onPress={openPrivacyPolicy}>
-                        <Text style={styles.linkText}>Privacy Policy</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.divider} />
-
-                    <TouchableOpacity style={styles.linkRow} activeOpacity={0.7} onPress={openTermsOfService}>
-                        <Text style={styles.linkText}>Terms of Service</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.divider} />
-
-                    <TouchableOpacity style={styles.linkRow} activeOpacity={0.7} onPress={openHelpSupport}>
-                        <Text style={styles.linkText}>Help & Support</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Account & Privacy Section */}
-                <View style={[styles.dangerCard, responsiveContentStyle]}>
-                    <Text style={styles.dangerTitle}>Account</Text>
+        <>
+            <SafeAreaView style={styles.safeArea}>
+                <View style={[styles.header, responsiveContentStyle]}>
                     <TouchableOpacity
-                        style={styles.deleteRow}
+                        onPress={() => safeBack()}
+                        style={styles.backBtn}
                         activeOpacity={0.7}
-                        onPress={deleteAccountWithConfirm}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                        <View style={styles.deleteLeft}>
-                            <Feather name="trash-2" size={18} color="#DC2626" />
-                            <View style={styles.deleteTextCol}>
-                                <Text style={styles.deleteTitle}>Delete Account</Text>
-                                <Text style={styles.deleteSubtitle}>Permanently remove your account and profile</Text>
+                        <Feather name="arrow-left" size={22} color="#111827" />
+                    </TouchableOpacity>
+
+                    <Text style={styles.headerTitle}>Settings</Text>
+
+                    <View style={styles.headerSpacer} />
+                </View>
+
+                <View style={styles.container}>
+                    <View style={[styles.aboutCard, responsiveContentStyle]}>
+                        <Text style={styles.aboutTitle}>About</Text>
+
+                        <View style={styles.aboutRows}>
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoLabel}>Version</Text>
+                                <Text style={styles.infoValue}>{appVersion}</Text>
+                            </View>
+
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoLabel}>Build</Text>
+                                <Text style={styles.infoValue}>{buildNumber}</Text>
                             </View>
                         </View>
-                        <Feather name="chevron-right" size={18} color="#DC2626" />
-                    </TouchableOpacity>
+                    </View>
+
+                    <View style={[styles.linksCard, responsiveContentStyle]}>
+                        <TouchableOpacity style={styles.linkRow} activeOpacity={0.7} onPress={openPrivacyPolicy}>
+                            <Text style={styles.linkText}>Privacy Policy</Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.divider} />
+
+                        <TouchableOpacity style={styles.linkRow} activeOpacity={0.7} onPress={openTermsOfService}>
+                            <Text style={styles.linkText}>Terms of Service</Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.divider} />
+
+                        <TouchableOpacity style={styles.linkRow} activeOpacity={0.7} onPress={openHelpSupport}>
+                            <Text style={styles.linkText}>Help & Support</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Account & Privacy Section */}
+                    <View style={[styles.dangerCard, responsiveContentStyle]}>
+                        <Text style={styles.dangerTitle}>Account</Text>
+                        <TouchableOpacity
+                            style={styles.deleteRow}
+                            activeOpacity={0.7}
+                            onPress={deleteAccountWithConfirm}
+                        >
+                            <View style={styles.deleteLeft}>
+                                <Feather name="trash-2" size={18} color="#DC2626" />
+                                <View style={styles.deleteTextCol}>
+                                    <Text style={styles.deleteTitle}>Delete Account</Text>
+                                    <Text style={styles.deleteSubtitle}>Permanently remove your account and profile</Text>
+                                </View>
+                            </View>
+                            <Feather name="chevron-right" size={18} color="#DC2626" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
-        </SafeAreaView>
+            </SafeAreaView>
+
+            <CareSupportModal
+                visible={supportModalVisible}
+                onClose={() => setSupportModalVisible(false)}
+                emailSubject="MaiHoonNa App Support"
+            />
+        </>
     );
 }
 

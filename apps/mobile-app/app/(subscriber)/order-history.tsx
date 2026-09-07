@@ -181,7 +181,7 @@ export default function OrderHistoryScreen() {
         <TouchableOpacity onPress={() => pop()} style={styles.iconBtn}>
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order History</Text>
+        <Text style={styles.headerTitle}>Order Summary</Text>
       </View>
       <View style={styles.container}>
         <FlatList

@@ -30,7 +30,8 @@ export default function BeneficiaryProfileScreen() {
     useAndroidBackHandler();
     const safeBack = useSafeBack();
     const params = useLocalSearchParams();
-    const { id } = params;
+    const rawId = params.id;
+    const id = Array.isArray(rawId) ? rawId[0] : rawId;
 
 
     const [activeTab, setActiveTab] = useState<TabType>('Timeline');
@@ -54,6 +55,7 @@ export default function BeneficiaryProfileScreen() {
     const {
         data: beneficiary,
         isLoading: loading,
+        error,
         refetch
     } = useQuery({
         queryKey: ['beneficiary', id],
@@ -70,6 +72,8 @@ export default function BeneficiaryProfileScreen() {
                 throw new Error("Auth missing");
             }
 
+            console.log(`[BeneficiaryProfile] Fetching profile for ID: "${id}" from: ${API_URL}/subscriber/beneficiaries/${id}/profile`);
+
             const res = await fetch(`${API_URL}/subscriber/beneficiaries/${id}/profile`, {
                 headers: {
                     'Authorization': `Bearer ${storedToken}`,
@@ -77,17 +81,28 @@ export default function BeneficiaryProfileScreen() {
                 }
             });
 
+            console.log(`[BeneficiaryProfile] Response status: ${res.status}`);
+
             if (res.status === 401) {
-                console.error('Unauthorized access - redirecting to login');
+                console.error('[BeneficiaryProfile] Unauthorized access - redirecting to login');
                 replace('/(auth)');
                 throw new Error("Unauthorized");
             }
 
-            const data = await res.json();
-            if (data.success) {
+            let data;
+            try {
+                data = await res.json();
+            } catch (parseErr: any) {
+                console.error('[BeneficiaryProfile] Failed to parse JSON response:', parseErr);
+                throw new Error(`Server returned status ${res.status}`);
+            }
+
+            console.log(`[BeneficiaryProfile] Response payload:`, JSON.stringify(data));
+
+            if (data.success && data.data) {
                 return data.data;
             }
-            throw new Error("Failed to fetch beneficiary");
+            throw new Error(data.message || `Failed to fetch beneficiary (status: ${res.status})`);
         },
         enabled: !!id,
     });
@@ -117,6 +132,11 @@ export default function BeneficiaryProfileScreen() {
             <SafeAreaView style={styles.centerContainer}>
                 <Ionicons name="warning-outline" size={scale(48)} color="#9CA3AF" style={{ marginBottom: scale(12) }} />
                 <Text style={styles.notFoundText}>Beneficiary not found.</Text>
+                {error ? (
+                    <Text style={{ color: '#EF4444', fontSize: 13, marginTop: 8, marginBottom: 16, textAlign: 'center', paddingHorizontal: 24 }}>
+                        {(error as any)?.message}
+                    </Text>
+                ) : null}
                 <TouchableOpacity style={styles.backBtn} onPress={() => safeBack()}>
                     <Text style={styles.backBtnText}>← Go Back</Text>
                 </TouchableOpacity>

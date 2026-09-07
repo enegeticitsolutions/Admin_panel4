@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import CareSupportModal from '@/components/shared/CareSupportModal';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal, Dimensions, ScrollView, Platform, Image, Linking, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -75,6 +76,7 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
 
     // ─── Reusable Account Deletion hook ───────────────────────────────────────
     const deleteAccountWithConfirm = useDeleteAccountWithConfirm(onClose);
+    const [supportModalVisible, setSupportModalVisible] = useState(false);
 
     return (
         <Modal 
@@ -235,23 +237,7 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
                                     color="#2563EB"
                                     onPress={() => {
                                         onClose();
-                                        setTimeout(() => {
-                                            Alert.alert(
-                                                'MaiHoonNa Care Support',
-                                                'We are here to assist you with care plans, scheduling, and billing inquiries.\n\n✉️ Email: info@maihoonna.com\n⏱️ Support Hours: Mon–Sat, 9:00 AM – 7:00 PM IST\n📍 Service Hub: Gurugram, Haryana, India',
-                                                [
-                                                    {
-                                                        text: 'Send Email',
-                                                        onPress: () => {
-                                                            Linking.openURL(`mailto:${LEGAL_CONFIG.SUPPORT_EMAIL}?subject=MaiHoonNa%20Subscriber%20Support`).catch(() => {
-                                                                Alert.alert('Help & Support', `Please email us directly at:\n${LEGAL_CONFIG.SUPPORT_EMAIL}`);
-                                                            });
-                                                        }
-                                                    },
-                                                    { text: 'Close', style: 'cancel' }
-                                                ]
-                                            );
-                                        }, 300);
+                                        setTimeout(() => setSupportModalVisible(true), 300);
                                     }} 
                                 />
                                 <DrawerItem 
@@ -336,6 +322,13 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
                     </View>
                 </View>
             </Animated.View>
+
+            {/* Care Support Modal */}
+            <CareSupportModal
+                visible={supportModalVisible}
+                onClose={() => setSupportModalVisible(false)}
+                emailSubject="MaiHoonNa Subscriber Support"
+            />
         </Modal>
     );
 };

@@ -497,6 +497,7 @@ export default function SubscriberDashboardScreen() {
                                     isSelf && !isPending && styles.benCardSelf
                                 ]}
                                 onPress={() => {
+                                    console.log('[Dashboard] Tapped beneficiary:', b?.id, b?.name, 'isSelected:', isSelected);
                                     if (isPending) {
                                         router.push({
                                             pathname: '/(setup)/beneficiary-info',
@@ -506,6 +507,7 @@ export default function SubscriberDashboardScreen() {
                                         router.push('/(setup)/subscription-packages');
                                     } else if (isSelected) {
                                         // Tap on active card → open beneficiary profile details
+                                        console.log('[Dashboard] Navigating to beneficiary-profile with id:', b.id);
                                         router.push(`/(subscriber)/beneficiary-profile?id=${b.id}`);
                                     } else {
                                         // Select beneficiary and update dashboard view

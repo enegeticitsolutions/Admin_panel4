@@ -7,7 +7,7 @@ const AUTO_ENV = __DEV__ ? 'local' : 'production';
 const ENV = process.env.EXPO_PUBLIC_ENV || AUTO_ENV;
 const USE_LOCAL = ENV === 'local';
 
-const PRODUCTION_URL = process.env.EXPO_PUBLIC_PRODUCTION_API_URL ?? 'https://api.maihoonna.com/app-api';
+const PRODUCTION_URL = (process.env.EXPO_PUBLIC_PRODUCTION_API_URL ?? 'https://api.maihoonna.com/app-api').replace(/\/+$/, '');
 
 const LOCAL_IP = process.env.EXPO_PUBLIC_LOCAL_IP ?? 'localhost';
 const PORT = process.env.EXPO_PUBLIC_API_PORT ?? '8001';

@@ -6,7 +6,6 @@ import {
     ScrollView,
     TouchableOpacity,
     Modal,
-    useWindowDimensions,
     ActivityIndicator,
     RefreshControl,
 } from 'react-native';
@@ -18,6 +17,7 @@ import { API_URL } from '@/constants/api';
 import { addNotificationReceivedListener } from '@/services/notifications';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeBack } from '@/hooks/useSafeBack';
+import { scale, vscale } from '@/utils/responsive';
 
 // Custom SVG Icons matching design
 const CustomMailOpenIcon = ({ size = 22, color = '#9CA3AF' }) => (
@@ -81,11 +81,6 @@ interface InboxViewProps {
 }
 
 export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: InboxViewProps) {
-    const { width } = useWindowDimensions();
-    const MAX_CONTENT_WIDTH = 440;
-    const BASE_HORIZONTAL_PADDING = 20;
-    const contentWidth = Math.min(Math.max(width - BASE_HORIZONTAL_PADDING * 2, 0), MAX_CONTENT_WIDTH);
-    const responsiveContentStyle = { width: contentWidth, alignSelf: 'center' as const };
     const safeBack = useSafeBack();
 
     const [notifications, setNotifications] = useState<NotificationMessage[]>([]);
@@ -214,7 +209,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
     return (
         <SafeAreaView style={styles.safeArea} edges={['top']}>
             {/* Header */}
-            <View style={[styles.header, responsiveContentStyle]}>
+            <View style={styles.header}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     {showBackButton && (
                         <TouchableOpacity
@@ -241,7 +236,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
             </View>
 
             {/* Category Filter Pills */}
-            <View style={[styles.filterBar, responsiveContentStyle]}>
+            <View style={styles.filterBar}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
                     <TouchableOpacity
                         style={[styles.filterPill, activeFilter === 'all' && { backgroundColor: accentColor, borderColor: accentColor }]}
@@ -289,7 +284,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
             ) : (
                 <ScrollView
                     style={styles.scroll}
-                    contentContainerStyle={[styles.content, responsiveContentStyle]}
+                    contentContainerStyle={styles.content}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[accentColor]} tintColor={accentColor} />
@@ -322,7 +317,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
                                 <View style={styles.messageBody}>
                                     <View style={styles.messageTopRow}>
                                         <Text style={[styles.sender, !message.isRead && styles.unreadSender]} numberOfLines={1}>
-                                            {message.sender}
+                                             {message.sender}
                                         </Text>
                                         <Text style={styles.date}>{message.date}</Text>
                                     </View>
@@ -345,7 +340,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
             {/* MESSAGE POPUP MODAL */}
             <Modal visible={selectedMessage !== null} animationType="fade" transparent={true}>
                 <View style={styles.modalBackdrop}>
-                    <View style={[styles.modalCard, responsiveContentStyle]}>
+                    <View style={styles.modalCard}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalSubject} numberOfLines={2}>
                                 {selectedMessage?.subject}
@@ -389,60 +384,62 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF0E6',
     },
     header: {
-        height: 60,
+        width: '100%',
+        height: scale(56),
         backgroundColor: '#FFF0E6',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
+        paddingHorizontal: scale(16),
         borderBottomWidth: 1,
         borderBottomColor: '#FEE2E2',
     },
     backBtn: {
-        marginRight: 12,
+        marginRight: scale(10),
     },
     headerTitle: {
-        fontSize: 20,
+        fontSize: scale(18),
         color: '#111827',
         fontFamily: 'Poppins-Bold',
     },
     headerUnreadBadge: {
-        borderRadius: 12,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        marginLeft: 8,
+        borderRadius: scale(12),
+        paddingHorizontal: scale(8),
+        paddingVertical: scale(2),
+        marginLeft: scale(8),
     },
     headerUnreadBadgeText: {
         fontFamily: 'Poppins-Bold',
-        fontSize: 11,
+        fontSize: scale(11),
         color: '#FFFFFF',
     },
     markAllReadText: {
         fontFamily: 'Poppins-Medium',
-        fontSize: 13,
+        fontSize: scale(13),
     },
 
     filterBar: {
+        width: '100%',
         backgroundColor: '#FFF0E6',
-        paddingVertical: 10,
-        paddingHorizontal: 16,
+        paddingVertical: scale(10),
     },
     filterScroll: {
         flexDirection: 'row',
         alignItems: 'center',
+        paddingHorizontal: scale(16),
     },
     filterPill: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        marginRight: 8,
+        borderRadius: scale(20),
+        paddingHorizontal: scale(14),
+        paddingVertical: scale(6),
+        marginRight: scale(8),
         borderWidth: 1,
         borderColor: '#E5E7EB',
     },
     filterPillText: {
         fontFamily: 'Poppins-Medium',
-        fontSize: 12,
+        fontSize: scale(12),
         color: '#4B5563',
     },
     filterPillTextActive: {
@@ -455,9 +452,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     loadingText: {
-        marginTop: 10,
+        marginTop: scale(10),
         fontFamily: 'Poppins-Regular',
-        fontSize: 14,
+        fontSize: scale(14),
         color: '#6B7280',
     },
 
@@ -466,15 +463,20 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF0E6',
     },
     content: {
-        paddingHorizontal: 16,
-        paddingTop: 10,
+        width: '100%',
+        maxWidth: 680,
+        alignSelf: 'center',
+        paddingHorizontal: scale(16),
+        paddingTop: scale(8),
+        paddingBottom: scale(32),
     },
     messageCard: {
+        width: '100%',
         flexDirection: 'row',
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
+        borderRadius: scale(16),
+        padding: scale(16),
+        marginBottom: scale(12),
         elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -486,9 +488,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
     },
     messageIcon: {
-        marginRight: 14,
+        marginRight: scale(12),
         justifyContent: 'flex-start',
-        paddingTop: 2,
+        paddingTop: scale(2),
     },
     messageBody: {
         flex: 1,
@@ -497,14 +499,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 4,
+        marginBottom: scale(4),
     },
     sender: {
         fontFamily: 'Poppins-Medium',
-        fontSize: 14,
+        fontSize: scale(14),
         color: '#4B5563',
         flex: 1,
-        marginRight: 8,
+        marginRight: scale(8),
     },
     unreadSender: {
         fontFamily: 'Poppins-SemiBold',
@@ -512,14 +514,14 @@ const styles = StyleSheet.create({
     },
     date: {
         fontFamily: 'Poppins-Regular',
-        fontSize: 12,
+        fontSize: scale(12),
         color: '#9CA3AF',
     },
     subject: {
         fontFamily: 'Poppins-Medium',
-        fontSize: 15,
+        fontSize: scale(15),
         color: '#374151',
-        marginBottom: 4,
+        marginBottom: scale(4),
     },
     unreadSubject: {
         fontFamily: 'Poppins-Bold',
@@ -527,37 +529,37 @@ const styles = StyleSheet.create({
     },
     preview: {
         fontFamily: 'Poppins-Regular',
-        fontSize: 13,
+        fontSize: scale(13),
         color: '#6B7280',
-        lineHeight: 18,
+        lineHeight: scale(18),
     },
 
     emptyContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 60,
+        paddingVertical: scale(60),
     },
     emptyIconWrap: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+        width: scale(80),
+        height: scale(80),
+        borderRadius: scale(40),
         backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
+        marginBottom: scale(16),
     },
     emptyTitle: {
         fontFamily: 'Poppins-Bold',
-        fontSize: 18,
+        fontSize: scale(18),
         color: '#111827',
-        marginBottom: 6,
+        marginBottom: scale(6),
     },
     emptySub: {
         fontFamily: 'Poppins-Regular',
-        fontSize: 14,
+        fontSize: scale(14),
         color: '#6B7280',
         textAlign: 'center',
-        paddingHorizontal: 30,
+        paddingHorizontal: scale(30),
     },
 
     // Modal Styles
@@ -566,12 +568,14 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 16,
+        paddingHorizontal: scale(16),
     },
     modalCard: {
+        width: '100%',
+        maxWidth: scale(480),
         backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 20,
+        borderRadius: scale(20),
+        padding: scale(20),
         maxHeight: '80%',
         elevation: 5,
         shadowColor: '#000',
@@ -583,71 +587,71 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 14,
+        marginBottom: scale(14),
     },
     modalSubject: {
         fontFamily: 'Poppins-Bold',
-        fontSize: 17,
+        fontSize: scale(17),
         color: '#111827',
         flex: 1,
-        marginRight: 10,
+        marginRight: scale(10),
     },
     modalMetaRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: scale(12),
     },
     modalSenderBlock: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     modalAvatarPlaceholder: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: scale(32),
+        height: scale(32),
+        borderRadius: scale(16),
         backgroundColor: '#FFF3EB',
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 10,
+        marginRight: scale(10),
     },
     modalAvatarText: {
         fontFamily: 'Poppins-Bold',
-        fontSize: 14,
+        fontSize: scale(14),
     },
     modalSender: {
         fontFamily: 'Poppins-Medium',
-        fontSize: 14,
+        fontSize: scale(14),
         color: '#374151',
     },
     modalDate: {
         fontFamily: 'Poppins-Regular',
-        fontSize: 12,
+        fontSize: scale(12),
         color: '#9CA3AF',
     },
     modalDivider: {
         height: 1,
         backgroundColor: '#E5E7EB',
-        marginBottom: 14,
+        marginBottom: scale(14),
     },
     modalBodyScroll: {
-        maxHeight: 250,
-        marginBottom: 16,
+        maxHeight: scale(250),
+        marginBottom: scale(16),
     },
     modalBodyText: {
         fontFamily: 'Poppins-Regular',
-        fontSize: 14,
+        fontSize: scale(14),
         color: '#4B5563',
-        lineHeight: 22,
+        lineHeight: scale(22),
     },
     closeBtn: {
-        borderRadius: 12,
-        paddingVertical: 12,
+        borderRadius: scale(12),
+        paddingVertical: scale(12),
         alignItems: 'center',
     },
     closeBtnText: {
         fontFamily: 'Poppins-SemiBold',
-        fontSize: 14,
+        fontSize: scale(14),
         color: '#FFFFFF',
     },
 });

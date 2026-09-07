@@ -80,9 +80,8 @@ const SubscriptionTab = ({ plan, beneficiaries }: SubscriptionTabProps) => {
                 <View style={styles.card}>
                     {[
                         { icon: 'ribbon-outline', title: 'Upgrade Plan', sub: 'Get more hours & benefits', onPress: () => push('/(setup)/subscription-packages') },
-                        { icon: 'card-outline', title: 'Payment Methods', sub: 'Manage payment options' },
-                        { icon: 'document-text-outline', title: 'Billing History', sub: 'View past invoices' },
-                    ].map((item, i) => (
+                        { icon: 'document-text-outline', title: 'Billing History', sub: 'View past invoices', onPress: () => push('/(subscriber)/order-history') },
+                    ].map((item, i, arr) => (
                         <React.Fragment key={i}>
                             <TouchableOpacity style={styles.manageItem} onPress={item.onPress}>
                                 <View style={[styles.iconBox, manageToneByTitle[item.title]?.box]}>
@@ -94,7 +93,7 @@ const SubscriptionTab = ({ plan, beneficiaries }: SubscriptionTabProps) => {
                                 </View>
                                 <Ionicons name="chevron-forward" size={scale(18)} color="#D1D5DB" />
                             </TouchableOpacity>
-                            {i < 2 && <View style={styles.divider} />}
+                            {i < arr.length - 1 && <View style={styles.divider} />}
                         </React.Fragment>
                     ))}
                 </View>
@@ -104,7 +103,12 @@ const SubscriptionTab = ({ plan, beneficiaries }: SubscriptionTabProps) => {
             <View style={styles.section}>
                 <View style={styles.sectionHeaderRow}>
                     <Text style={styles.sectionTitle}>Your Beneficiaries</Text>
-                    <TouchableOpacity style={styles.addBtn}>
+                    <TouchableOpacity
+                        style={styles.addBtn}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        onPress={() => push('/(setup)/beneficiary-info')}
+                    >
                         <Text style={styles.addBtnText}>+ Add</Text>
                     </TouchableOpacity>
                 </View>
