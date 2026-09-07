@@ -1,5 +1,31 @@
 import { useEffect } from "react";
 
+const BASE_URL = "https://maihoonna.in";
+
+/**
+ * Resolves the full absolute canonical URL dynamically based on the active page and browser location
+ */
+const resolveCanonicalUrl = (activePage) => {
+  if (!activePage || activePage === "home") {
+    return `${BASE_URL}/`;
+  }
+
+  if (typeof window !== "undefined") {
+    // If accessed via a clean pathname (e.g. /services, /plans, /story)
+    const pathname = window.location.pathname.replace(/\/+$/, "");
+    if (pathname && pathname !== "" && pathname !== "/") {
+      return `${BASE_URL}${pathname}`;
+    }
+    // If accessed via hash routing (e.g. #services, #story)
+    if (window.location.hash) {
+      const cleanHash = window.location.hash.replace(/^#/, "");
+      return `${BASE_URL}/#${cleanHash}`;
+    }
+  }
+
+  return `${BASE_URL}/#${activePage}`;
+};
+
 /**
  * Page-by-page SEO Metadata Configuration Map
  */
@@ -8,7 +34,6 @@ const SEO_CONFIG = {
     title: "MaiHoonNa | Connected Senior Care & Elder Companionship Platform",
     description:
       "MaiHoonNa provides senior companionship, health monitoring, emotional wellness support, medication adherence tracking, and connected family care for elderly individuals in India.",
-    canonical: "https://maihoonna.in/",
     robots: "index, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg",
@@ -52,7 +77,7 @@ const SEO_CONFIG = {
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "Our team will help you understand the right care flow, plan, and support model for your family."
+                "A Care Mitra is a trained, background-verified care companion who visits your parent at home. Care Mitras are graded by skill level — from ANM to GNM, B.Sc Nurse, and Specialist Mitra — so your parent is matched with someone qualified for their specific health needs, not a one-size-fits-all attendant."
             }
           },
           {
@@ -61,7 +86,7 @@ const SEO_CONFIG = {
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "Our team will help you understand the right care flow, plan, and support model for your family."
+                "When you hire independently, you're responsible for verifying background, training, backups when someone falls sick or quits, and you have no visibility into what actually happens during a visit. MaiHoonNa handles verification and training upfront, provides a replacement if your Care Mitra is unavailable, and gives you visit logs, health vitals, and mood tracking after every visit — plus an Emergency Response Coordinator on standby. You're paying for accountability and continuity, not just a person's time."
             }
           },
           {
@@ -70,7 +95,25 @@ const SEO_CONFIG = {
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "Our team will help you understand the right care flow, plan, and support model for your family."
+                "Yes — this is one of the main reasons families use MaiHoonNa. The Family Connect app lets you track every visit, view health vitals, message the care team, and get emergency alerts in real time, from any time zone. Many of our subscribers are adult children living outside India who want a reliable, honest window into how their parent is actually doing."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does the Happiness Score work?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text":
+                "At each visit, your Care Mitra logs simple signals about your parent's mood and engagement, which we combine into a running Happiness Score you can see on the app. It's designed to catch a gradual decline — not just a bad day — so if the trend dips, both you and our care team are alerted to check in, well before a small issue becomes a bigger one."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What does the Saathi Network do?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text":
+                "The Saathi Network is our community of volunteer companions who visit for conversation, company, and connection between your parent's scheduled Care Mitra visits — matched by gender, support needs, and proximity to keep visits comfortable and low-effort. It's built to address loneliness specifically, alongside the hands-on care your Care Mitra provides."
             }
           }
         ]
@@ -82,7 +125,6 @@ const SEO_CONFIG = {
     title: "Senior Care Services & Elderly Health Monitoring | MaiHoonNa",
     description:
       "Explore MaiHoonNa's senior care services in India: Care Mitra visits, vitals monitoring, medication adherence tracking, clinic accompaniment, and emergency response.",
-    canonical: "https://maihoonna.in/",
     robots: "index, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg",
@@ -110,7 +152,6 @@ const SEO_CONFIG = {
     title: "Saathi Network | Senior Companionship & Volunteer Support | MaiHoonNa",
     description:
       "Connect your elderly parents with verified Saathi community companions for meaningful conversations, walks, hobbies, and loneliness support across India.",
-    canonical: "https://maihoonna.in/",
     robots: "index, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg",
@@ -176,7 +217,6 @@ const SEO_CONFIG = {
     title: "Senior Care Plans & Pricing | Transparent Elder Care | MaiHoonNa",
     description:
       "Transparent senior care subscription plans built around prepaid hours with 30-day rollover, no hidden fees, and full family connect app access for NRI families.",
-    canonical: "https://maihoonna.in/",
     robots: "index, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg",
@@ -215,7 +255,7 @@ const SEO_CONFIG = {
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "Our team will help you understand the right care flow, plan, and support model for your family."
+                "A Care Mitra is a trained, background-verified care companion who visits your parent at home. Care Mitras are graded by skill level — from ANM to GNM, B.Sc Nurse, and Specialist Mitra — so your parent is matched with someone qualified for their specific health needs, not a one-size-fits-all attendant."
             }
           },
           {
@@ -224,7 +264,25 @@ const SEO_CONFIG = {
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "Our team will help you understand the right care flow, plan, and support model for your family."
+                "At each visit, your Care Mitra logs simple signals about your parent's mood and engagement, which we combine into a running Happiness Score you can see on the app. It's designed to catch a gradual decline — not just a bad day — so if the trend dips, both you and our care team are alerted to check in, well before a small issue becomes a bigger one."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I manage care from abroad as an NRI?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text":
+                "Yes — this is one of the main reasons families use MaiHoonNa. The Family Connect app lets you track every visit, view health vitals, message the care team, and get emergency alerts in real time, from any time zone. Many of our subscribers are adult children living outside India who want a reliable, honest window into how their parent is actually doing."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I change or cancel my plan?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text":
+                "You can move between plans (Saathi Starter, Plus, Premium) as your parent's needs change. Please refer to our Terms and Conditions for the cancellation policy."
             }
           }
         ]
@@ -232,11 +290,92 @@ const SEO_CONFIG = {
     ]
   },
 
+  story: {
+    title: "Our Story & Mission | MaiHoonNa Connected Senior Care",
+    description:
+      "Learn about MaiHoonNa's founding story by Sumit Kejriwal. Dedicated to caring for aging parents in India with trustworthy companionship, medical tracking, and NRI peace of mind.",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.in/og-image.jpg",
+    schemas: [
+      {
+        "@context": "https://schema.org",
+        "@type": "AboutPage",
+        "name": "Our Story - MaiHoonNa Senior Care",
+        "description":
+          "MaiHoonNa was created to solve the silent crisis of aging parents living alone in India, connecting them with verified Care Mitras and loving Saathi companions.",
+        "publisher": {
+          "@type": "Organization",
+          "name": "MaiHoonNa Eldercare Private Limited",
+          "url": "https://maihoonna.in"
+        }
+      }
+    ]
+  },
+
+  about: {
+    title: "Our Story & Mission | MaiHoonNa Connected Senior Care",
+    description:
+      "Learn about MaiHoonNa's founding story by Sumit Kejriwal. Dedicated to caring for aging parents in India with trustworthy companionship, medical tracking, and NRI peace of mind.",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.in/og-image.jpg",
+    schemas: [
+      {
+        "@context": "https://schema.org",
+        "@type": "AboutPage",
+        "name": "Our Story - MaiHoonNa Senior Care",
+        "description":
+          "MaiHoonNa was created to solve the silent crisis of aging parents living alone in India, connecting them with verified Care Mitras and loving Saathi companions.",
+        "publisher": {
+          "@type": "Organization",
+          "name": "MaiHoonNa Eldercare Private Limited",
+          "url": "https://maihoonna.in"
+        }
+      }
+    ]
+  },
+
+  terms: {
+    title: "Terms of Service | MaiHoonNa Eldercare Platform",
+    description:
+      "Read the terms and conditions governing the use of MaiHoonNa senior care and companionship services, subscription hours, and Care Mitra visits.",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.in/og-image.jpg"
+  },
+
+  privacy: {
+    title: "Privacy Policy | MaiHoonNa Senior Care",
+    description:
+      "Learn how MaiHoonNa protects and respects your personal, health, and family data across our senior care mobile apps and web platform.",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.in/og-image.jpg"
+  },
+
+  "refund-policy": {
+    title: "Refund & Cancellation Policy | MaiHoonNa",
+    description:
+      "Understand MaiHoonNa's subscription cancellation rules, refund criteria, and 30-day unused care hour rollover terms.",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.in/og-image.jpg"
+  },
+
+  "cookie-policy": {
+    title: "Cookie Policy | MaiHoonNa Eldercare",
+    description:
+      "Information on how MaiHoonNa utilizes cookies and analytics to enhance user experience across our senior care website.",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.in/og-image.jpg"
+  },
+
   auth: {
     title: "Sign Up & Login | MaiHoonNa Senior Care",
     description:
       "Sign up or log in to MaiHoonNa to access family connect dashboard, manage parent care, and track companion visits.",
-    canonical: "https://maihoonna.in/",
     robots: "noindex, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg"
@@ -246,7 +385,6 @@ const SEO_CONFIG = {
     title: "My Account Dashboard | MaiHoonNa",
     description:
       "Manage active senior care subscriptions, view visit logs, and update parent care details.",
-    canonical: "https://maihoonna.in/",
     robots: "noindex, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg"
@@ -256,7 +394,6 @@ const SEO_CONFIG = {
     title: "Complete Subscription | MaiHoonNa",
     description:
       "Securely finalize senior care plan subscription for your parents.",
-    canonical: "https://maihoonna.in/",
     robots: "noindex, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg"
@@ -266,7 +403,6 @@ const SEO_CONFIG = {
     title: "Page Not Found (404) | MaiHoonNa Senior Care",
     description:
       "The requested page does not exist on MaiHoonNa. Explore our senior care services, Saathi network, and subscription plans.",
-    canonical: "https://maihoonna.in/",
     robots: "noindex, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg"
@@ -274,11 +410,12 @@ const SEO_CONFIG = {
 };
 
 /**
- * SeoHead Component - Dynamic Metadata & Schema Manager
+ * SeoHead Component - Dynamic Metadata, Canonical & Schema Manager
  */
 const SeoHead = ({ activePage = "home" }) => {
   useEffect(() => {
     const config = SEO_CONFIG[activePage] || SEO_CONFIG.home;
+    const dynamicCanonical = resolveCanonicalUrl(activePage);
 
     // 1. Update Document Title
     document.title = config.title;
@@ -301,7 +438,7 @@ const SeoHead = ({ activePage = "home" }) => {
     // 4. Update Open Graph Meta Tags
     setMeta('meta[property="og:title"]', "property", "og:title", config.title);
     setMeta('meta[property="og:description"]', "property", "og:description", config.description);
-    setMeta('meta[property="og:url"]', "property", "og:url", config.canonical);
+    setMeta('meta[property="og:url"]', "property", "og:url", dynamicCanonical);
     setMeta('meta[property="og:type"]', "property", "og:type", config.ogType || "website");
     setMeta('meta[property="og:image"]', "property", "og:image", config.ogImage);
 
@@ -309,16 +446,16 @@ const SeoHead = ({ activePage = "home" }) => {
     setMeta('meta[name="twitter:title"]', "name", "twitter:title", config.title);
     setMeta('meta[name="twitter:description"]', "name", "twitter:description", config.description);
     setMeta('meta[name="twitter:image"]', "name", "twitter:image", config.ogImage);
-    setMeta('meta[name="twitter:url"]', "name", "twitter:url", config.canonical);
+    setMeta('meta[name="twitter:url"]', "name", "twitter:url", dynamicCanonical);
 
-    // 6. Update Canonical Link Element (points to clean root canonical https://maihoonna.in/)
+    // 6. Update Dynamic Canonical Link Element
     let canonicalLink = document.querySelector('link[rel="canonical"]');
     if (!canonicalLink) {
       canonicalLink = document.createElement("link");
       canonicalLink.setAttribute("rel", "canonical");
       document.head.appendChild(canonicalLink);
     }
-    canonicalLink.setAttribute("href", config.canonical);
+    canonicalLink.setAttribute("href", dynamicCanonical);
 
     // 7. Inject / Update Dynamic JSON-LD Structured Data
     const existingScript = document.getElementById("mhn-dynamic-jsonld");
