@@ -2,7 +2,7 @@
   "expo": {
     "name": "maihoonna",
     "slug": "maihoonna",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "updates": {
@@ -13,7 +13,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "2",
+      "buildNumber": "8",
       "config": {
         "googleMapsApiKey": "AIzaSyDPrFpN29FZ786mTWjIbeQvW3y6ztjx3xU"
       },
@@ -72,6 +72,7 @@
     },
     "android": {
       "package": "com.maihoonna.app",
+      "versionCode": 8,
       "allowBackup": false,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {

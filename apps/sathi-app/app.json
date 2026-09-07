@@ -2,7 +2,7 @@
   "expo": {
     "name": "sathi-network",
     "slug": "sathi-app",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "updates": {
@@ -14,7 +14,7 @@
     "primaryColor": "#ffffff",
     "ios": {
       "supportsTablet": false,
-      "buildNumber": "2",
+      "buildNumber": "8",
       "config": {
         "googleMapsApiKey": "AIzaSyDPrFpN29FZ786mTWjIbeQvW3y6ztjx3xU"
       },
@@ -23,6 +23,7 @@
     },
     "android": {
       "package": "com.maihoonna.sathiapp",
+      "versionCode": 8,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",

@@ -1,7 +1,7 @@
 {
   "name": "sathi-app",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "scripts": {
     "start": "expo start --port 8082",
     "dev": "expo start --port 8082",
