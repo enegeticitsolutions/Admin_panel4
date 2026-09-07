@@ -172,8 +172,19 @@ export default function SathiProfile() {
           onPress: async () => {
             const success = await deleteSathiAccount();
             if (success) {
-              await logout();
-              router.replace('/(auth)');
+              Alert.alert(
+                'Account Deleted',
+                'Your account has been deleted successfully.\n\nTo reactivate in the future, please contact the Saathi coordinator on aastha@maihoonna.com',
+                [
+                  {
+                    text: 'OK',
+                    onPress: async () => {
+                      await logout();
+                      router.replace('/(auth)');
+                    },
+                  },
+                ]
+              );
             } else {
               Alert.alert('Error', 'Failed to delete account. Please try again later.');
             }

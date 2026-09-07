@@ -34,6 +34,9 @@ export const registerVolunteer = async (data: any) => {
   });
 
   if (existing) {
+    if (!existing.isActive) {
+      throw new ApiError(403, 'This account has been deleted. To reactivate, please contact the Saathi coordinator on aastha@maihoonna.com');
+    }
     throw new ApiError(400, 'A volunteer with this phone number is already registered.');
   }
 
@@ -76,6 +79,9 @@ export const registerVolunteerWithOtp = async (data: any) => {
   });
 
   if (existing) {
+    if (!existing.isActive) {
+      throw new ApiError(403, 'This account has been deleted. To reactivate, please contact the Saathi coordinator on aastha@maihoonna.com');
+    }
     throw new ApiError(400, 'A volunteer with this phone number is already registered.');
   }
 
@@ -113,7 +119,7 @@ export const loginVolunteer = async (phone: string, passwordRaw: string) => {
   }
 
   if (!volunteer.isActive) {
-    throw new ApiError(403, 'This account has been deleted.');
+    throw new ApiError(403, 'This account has been deleted. To reactivate, please contact the Saathi coordinator on aastha@maihoonna.com');
   }
 
   const isMatch = await bcrypt.compare(passwordRaw, volunteer.password || '');
@@ -150,6 +156,10 @@ export const sendVolunteerOtp = async (rawPhone: string) => {
     throw new ApiError(404, 'Volunteer profile not found. Please register first.');
   }
 
+  if (!volunteer.isActive) {
+    throw new ApiError(403, 'This account has been deleted. To reactivate, please contact the Saathi coordinator on aastha@maihoonna.com');
+  }
+
   const provider = OtpFactory.getProvider();
   return await provider.send(phone);
 };
@@ -172,7 +182,7 @@ export const verifyVolunteerOtp = async (rawPhone: string, otpCode: string) => {
   }
 
   if (!volunteer.isActive) {
-    throw new ApiError(403, 'This account has been deleted.');
+    throw new ApiError(403, 'This account has been deleted. To reactivate, please contact the Saathi coordinator on aastha@maihoonna.com');
   }
 
   const token = createToken({ sub: volunteer.id, role: 'volunteer' });
@@ -373,6 +383,23 @@ export const getVolunteerDashboard = async (id: string) => {
     reapplyAllowedAfter = allowedDate.toISOString();
   }
 
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const monthLogs = await prisma.volunteerVisitLog.findMany({
+    where: {
+      volunteerId: id,
+      status: 'completed',
+      checkInTime: {
+        gte: startOfMonth
+      }
+    }
+  });
+
+  const visitsThisMonth = monthLogs.length;
+  const hoursThisMonth = monthLogs.reduce((acc, log) => acc + (log.hoursEarned || 0), 0);
+
   return {
     applicationStatus: volunteer.applicationStatus,
     rejectionReason: volunteer.rejectionReason,
@@ -386,6 +413,8 @@ export const getVolunteerDashboard = async (id: string) => {
     totalCreditHours: volunteer.totalCreditHours,
     totalCreditPoints: volunteer.totalCreditPoints,
     monthlyGoalHours: volunteer.monthlyGoalHours,
+    visitsThisMonth,
+    hoursThisMonth,
     beneficiariesCount: volunteer.assignments.length,
     activeVisit: volunteer.visitLogs[0] || null,
     assignedBeneficiaries: volunteer.assignments.map(a => ({

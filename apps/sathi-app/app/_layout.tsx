@@ -110,6 +110,7 @@ function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
+      <Stack.Screen name="splash" options={{ gestureEnabled: false, animation: 'fade' }} />
       {!isLoggedIn ? (
         <Stack.Screen name="(auth)" />
       ) : (
