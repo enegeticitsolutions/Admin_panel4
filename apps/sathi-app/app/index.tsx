@@ -3,11 +3,11 @@ import { View, ActivityIndicator } from "react-native";
 import { useAuth } from "@/contexts/AuthContext";
 
 /**
- * Root entry point — redirects based on auth state from the global context.
- * No AsyncStorage reads here; the AuthProvider already loaded the session.
+ * Root entry point — always shows the splash carousel first,
+ * then the splash screen handles navigation to auth or main app.
  */
 export default function Index() {
-  const { isLoading, isLoggedIn, role } = useAuth();
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -17,10 +17,6 @@ export default function Index() {
     );
   }
 
-  if (!isLoggedIn) {
-    return <Redirect href="/(auth)" />;
-  }
-
-  // Standalone sathi-app always routes to /(sathi) when logged in
-  return <Redirect href="/(sathi)" />;
+  // Always show the splash carousel on app launch
+  return <Redirect href="/splash" />;
 }

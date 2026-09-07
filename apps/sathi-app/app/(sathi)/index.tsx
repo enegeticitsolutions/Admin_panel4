@@ -801,22 +801,22 @@ export default function SathiDashboard() {
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#EAF2FF' }]}>
-              <Ionicons name="time-outline" size={22} color="#4B93FF" />
+            <View style={[styles.statIconContainer, { backgroundColor: '#E6F7F1' }]}>
+              <Ionicons name="checkmark-done-outline" size={22} color="#1FB474" />
             </View>
             <View>
-              <Text style={styles.statVal}>{dashboard?.totalCreditHours?.toFixed(1) || '0.0'}</Text>
-              <Text style={styles.statLbl}>Total Hours</Text>
+              <Text style={styles.statVal}>{dashboard?.visitsThisMonth || 0}</Text>
+              <Text style={styles.statLbl}>Total Visits</Text>
             </View>
           </View>
 
           <View style={styles.statCard}>
-            <View style={[styles.statIconContainer, { backgroundColor: '#E6F7F1' }]}>
-              <Ionicons name="people-outline" size={22} color="#1FB474" />
+            <View style={[styles.statIconContainer, { backgroundColor: '#EAF2FF' }]}>
+              <Ionicons name="time-outline" size={22} color="#4B93FF" />
             </View>
             <View>
-              <Text style={styles.statVal}>{dashboard?.beneficiariesCount || 0}</Text>
-              <Text style={styles.statLbl}>Beneficiaries</Text>
+              <Text style={styles.statVal}>{dashboard?.hoursThisMonth?.toFixed(1) || '0.0'}</Text>
+              <Text style={styles.statLbl}>Hours This Month</Text>
             </View>
           </View>
         </View>
@@ -854,21 +854,6 @@ export default function SathiDashboard() {
           </View>
         </TouchableOpacity>
 
-        {/* Monthly Goal progress card */}
-        <View style={styles.goalCard}>
-          <View style={styles.goalHeader}>
-            <Text style={styles.goalTitle}>Monthly Goal</Text>
-            <View style={styles.goalBadge}>
-              <Text style={styles.goalBadgeText}>{goalProgress.toFixed(0)}%</Text>
-            </View>
-          </View>
-          <Text style={styles.goalSubtitle}>
-            {dashboard?.totalCreditHours?.toFixed(1) || '0.0'} / {dashboard?.monthlyGoalHours || 10} hours
-          </Text>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressBar, { width: `${goalProgress}%` }]} />
-          </View>
-        </View>
 
         {/* Upcoming Visits */}
         <View style={styles.sectionHeader}>

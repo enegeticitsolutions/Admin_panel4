@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -121,6 +122,23 @@ export default function RegisterVolunteerScreen() {
     }
   };
 
+  const showDeletedAccountAlert = (customMsg?: string) => {
+    Alert.alert(
+      'Account Deleted',
+      customMsg ||
+        'This account has been deleted.\n\nTo reactivate, please contact the Saathi coordinator on aastha@maihoonna.com',
+      [
+        {
+          text: 'Contact Coordinator',
+          onPress: () => {
+            Linking.openURL('mailto:aastha@maihoonna.com?subject=Reactivate%20Saathi%20Account');
+          },
+        },
+        { text: 'OK', style: 'cancel' },
+      ]
+    );
+  };
+
   const handleVerifyOtp = async () => {
     const code = otp.join('');
     if (code.length !== 6) {
@@ -141,7 +159,12 @@ export default function RegisterVolunteerScreen() {
         await login(result.token, result.volunteer || result.user);
         replace('/(sathi)/apply');
       } else {
-        Alert.alert('Registration Failed', registerData.message || 'Failed to create volunteer account.');
+        const message = registerData.message || 'Failed to create volunteer account.';
+        if (registerRes.status === 403 || message.toLowerCase().includes('deleted')) {
+          showDeletedAccountAlert(message);
+        } else {
+          Alert.alert('Registration Failed', message);
+        }
       }
     } catch (error) {
       Alert.alert('Error', 'Could not connect to the server.');
@@ -185,7 +208,12 @@ export default function RegisterVolunteerScreen() {
           await login(result.token, result.volunteer || result.user);
           replace('/(sathi)/apply');
         } else {
-          Alert.alert('Registration Failed', data.message || 'Failed to create account.');
+          const message = data.message || 'Failed to create account.';
+          if (response.status === 403 || message.toLowerCase().includes('deleted')) {
+            showDeletedAccountAlert(message);
+          } else {
+            Alert.alert('Registration Failed', message);
+          }
         }
       } else {
         const response = await fetch(`${API_URL}/auth/send-otp`, {
@@ -203,7 +231,12 @@ export default function RegisterVolunteerScreen() {
           setResendTimer(30);
           setOtp(['', '', '', '', '', '']);
         } else {
-          Alert.alert('Error', data.message || 'Failed to send OTP.');
+          const message = data.message || 'Failed to send OTP.';
+          if (response.status === 403 || message.toLowerCase().includes('deleted')) {
+            showDeletedAccountAlert(message);
+          } else {
+            Alert.alert('Error', message);
+          }
         }
       }
     } catch (error) {

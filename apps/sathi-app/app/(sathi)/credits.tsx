@@ -285,7 +285,6 @@ export default function SathiCreditsScreen() {
         </TouchableOpacity>
         <View style={styles.headerTextContainer}>
           <Text style={styles.headerTitle}>Credits & Rewards</Text>
-          <Text style={styles.headerSubtitle}>1 Credit = ₹{conversionRate} Value (Configurable)</Text>
         </View>
       </View>
 
@@ -301,10 +300,6 @@ export default function SathiCreditsScreen() {
                 </Text>
                 <Text style={styles.heroPointsUnit}>pts</Text>
               </View>
-            </View>
-            <View style={styles.badgeContainer}>
-              <Text style={styles.badgeText}>≈ ₹{rupeeValue.toLocaleString('en-IN')}</Text>
-              <Text style={styles.badgeSubText}>Estimated Value</Text>
             </View>
           </View>
 
@@ -441,13 +436,14 @@ export default function SathiCreditsScreen() {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.actionBtnText}>
-                    Redeem {giftPoints || '0'} Credits (Worth ₹{(parseInt(giftPoints || '0', 10) * conversionRate).toLocaleString('en-IN')} MHN Voucher)
+                    Redeem {giftPoints || '0'} Credits
                   </Text>
                 )}
               </TouchableOpacity>
             </View>
 
             {/* Option 2: Direct UPI Transfer */}
+            {/* Direct UPI Transfer — commented out for now
             <View style={styles.rewardCard}>
               <View style={styles.rewardHeader}>
                 <View style={[styles.rewardIconBox, { backgroundColor: '#D1FAE5' }]}>
@@ -495,6 +491,7 @@ export default function SathiCreditsScreen() {
                 )}
               </TouchableOpacity>
             </View>
+            */}
           </View>
         )}
 
@@ -1121,6 +1118,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
   sectionHeaderRow: {
     flexDirection: 'row',

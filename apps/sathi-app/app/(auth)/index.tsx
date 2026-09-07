@@ -12,6 +12,7 @@ import {
   ScrollView,
   Dimensions,
   Image,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { IS_PASSWORD_LOGIN_ENABLED } from '@/constants/authMode';
+import { LegalConsentModal } from '@/components/shared/LegalConsentModal';
 
 const { width, height } = Dimensions.get('window');
 const scale = (size: number) => Math.round((width / 390) * size);
@@ -37,10 +39,28 @@ export default function AuthScreen() {
   const [otpCode, setOtpCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [showLegal, setShowLegal] = useState(false);
   const { push, replace } = useNavigationStack();
   useAndroidBackHandler();
   const { login } = useAuth();
   const router = useRouter();
+
+  const showDeletedAccountAlert = (customMsg?: string) => {
+    Alert.alert(
+      'Account Deleted',
+      customMsg ||
+        'This account has been deleted.\n\nTo reactivate, please contact the Saathi coordinator on aastha@maihoonna.com',
+      [
+        {
+          text: 'Contact Coordinator',
+          onPress: () => {
+            Linking.openURL('mailto:aastha@maihoonna.com?subject=Reactivate%20Saathi%20Account');
+          },
+        },
+        { text: 'OK', style: 'cancel' },
+      ]
+    );
+  };
 
   const handleSendOtp = async () => {
     setErrorMessage('');
@@ -63,7 +83,12 @@ export default function AuthScreen() {
       if (response.ok || data.success) {
         setOtpSent(true);
       } else {
-        setErrorMessage(data.message || 'Account not found. Please register first.');
+        const message = data.message || 'Account not found. Please register first.';
+        setErrorMessage(message);
+        if (response.status === 403 || message.toLowerCase().includes('deleted')) {
+          setOtpSent(false);
+          showDeletedAccountAlert(message);
+        }
       }
     } catch (error) {
       console.error('OTP Send Error:', error);
@@ -97,7 +122,11 @@ export default function AuthScreen() {
         await login(result.token, result.volunteer || result.user);
         replace('/(sathi)');
       } else {
-        setErrorMessage(data.message || 'Invalid or expired OTP code.');
+        const message = data.message || 'Invalid or expired OTP code.';
+        setErrorMessage(message);
+        if (response.status === 403 || message.toLowerCase().includes('deleted')) {
+          showDeletedAccountAlert(message);
+        }
       }
     } catch (error) {
       console.error('OTP Verify Error:', error);
@@ -139,7 +168,11 @@ export default function AuthScreen() {
         // Navigate to the volunteer layout
         replace('/(sathi)');
       } else {
-        setErrorMessage(data.message || 'Invalid credentials or review in progress.');
+        const message = data.message || 'Invalid credentials or review in progress.';
+        setErrorMessage(message);
+        if (response.status === 403 || message.toLowerCase().includes('deleted')) {
+          showDeletedAccountAlert(message);
+        }
       }
     } catch (error) {
       console.error('Login Error:', error);
@@ -179,8 +212,20 @@ export default function AuthScreen() {
             
             {!!errorMessage && (
               <View style={styles.errorContainer}>
-                <MaterialCommunityIcons name="alert-circle" size={scale(18)} color="#DC2626" />
-                <Text style={styles.errorText}>{errorMessage}</Text>
+                <MaterialCommunityIcons name="alert-circle" size={scale(18)} color="#DC2626" style={{ marginTop: 2 }} />
+                <View style={{ flex: 1, marginLeft: scale(8) }}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                  {errorMessage.toLowerCase().includes('aastha@maihoonna.com') && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        Linking.openURL('mailto:aastha@maihoonna.com?subject=Reactivate%20Saathi%20Account')
+                      }
+                      style={{ marginTop: scale(6) }}
+                    >
+                      <Text style={styles.coordinatorLink}>✉️ Contact: aastha@maihoonna.com</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             )}
 
@@ -305,9 +350,15 @@ export default function AuthScreen() {
 
             <Text style={styles.terms}>
               By continuing, you agree to our{' '}
-              <Text style={styles.orangeTextTerms}>Terms of Service</Text>
-              {'\n'}and <Text style={styles.orangeTextTerms}>Privacy Policy</Text>
+              <Text style={styles.orangeTextTerms} onPress={() => setShowLegal(true)}>Terms of Service and Privacy Policy</Text>
             </Text>
+
+            <LegalConsentModal
+              visible={showLegal}
+              onClose={() => setShowLegal(false)}
+              onAccept={() => setShowLegal(false)}
+              requireConsent={false}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -372,8 +423,13 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontSize: scale(13),
     fontWeight: '500',
-    marginLeft: scale(8),
-    flex: 1,
+    lineHeight: scale(18),
+  },
+  coordinatorLink: {
+    color: '#C2410C',
+    fontSize: scale(13),
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   label: {
     fontSize: scale(13),

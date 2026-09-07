@@ -217,6 +217,9 @@ export class AuthService {
   public async sendOtp(rawPhone: string) {
     const phone = this.normalizePhone(rawPhone);
     const user = await prisma.user.findUnique({ where: { phone } });
+    if (user && !user.isActive) {
+      throw new ApiError(403, 'This account has been deleted. Please contact support.');
+    }
     const provider = OtpFactory.getProvider();
     const sendResult = await provider.send(phone);
     return { ...sendResult, isNewUser: !user };
