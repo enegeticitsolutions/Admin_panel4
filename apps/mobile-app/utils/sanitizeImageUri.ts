@@ -52,6 +52,11 @@ function _validateUri(uri: string | null | undefined): string | null {
     // Only allow known safe protocols
     if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) return null;
 
+    // file: protocol has no hostname (e.g. file:///data/user/0/...)
+    if (parsed.protocol === 'file:') {
+      return parsed.href;
+    }
+
     // Ensure a real hostname exists (blocks "https://" naked attacks)
     if (!parsed.hostname || parsed.hostname.trim() === '') return null;
 

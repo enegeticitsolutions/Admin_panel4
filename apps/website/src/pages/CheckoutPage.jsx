@@ -171,7 +171,7 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
     paymentLockRef.current = true;
     setPaymentStage("creating_order");
 
-    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_T5r7EAjfxEsAtl";
+    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_live_TZ3KKOCt6TIiSt";
 
     // Step 1: Create a real Razorpay order from backend
     let orderData = null;
@@ -190,7 +190,7 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
     setPaymentStage("gateway_open");
 
     const options = {
-      key: razorpayKey,
+      key: orderData?.key_id || razorpayKey,
       amount: orderData ? orderData.amount : Math.round(finalTotal * 100),
       currency: orderData ? orderData.currency : "INR",
       name: "MaiHoonNa Care Technologies",

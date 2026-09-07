@@ -1,18 +1,43 @@
 const Razorpay = require('razorpay');
 const clean = (s) => (s || '').toString().replace(/^["']|["']$/g, '').trim();
 
+function isTestMode() {
+  const toggle = clean(process.env.RAZORPAY_TEST_MODE).toLowerCase();
+  if (toggle === 'true' || toggle === '1') return true;
+  if (toggle === 'false' || toggle === '0') return false;
+  const defaultKey = clean(process.env.RAZORPAY_KEY_ID);
+  return defaultKey.startsWith('rzp_test_');
+}
+
+function getCredentials() {
+  const test = isTestMode();
+  const key_id = clean(
+    test
+      ? (process.env.RAZORPAY_TEST_KEY_ID || process.env.RAZORPAY_KEY_ID)
+      : (process.env.RAZORPAY_LIVE_KEY_ID || process.env.RAZORPAY_KEY_ID)
+  );
+  const key_secret = clean(
+    test
+      ? (process.env.RAZORPAY_TEST_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET)
+      : (process.env.RAZORPAY_LIVE_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET)
+  );
+  return { key_id, key_secret, isTestMode: test };
+}
+
 let razorpayInstance = null;
+let currentKeyId = null;
 
 function getRazorpayInstance() {
-  const key_id = clean(process.env.RAZORPAY_KEY_ID);
-  const key_secret = clean(process.env.RAZORPAY_KEY_SECRET);
+  const { key_id, key_secret, isTestMode: test } = getCredentials();
 
   if (key_id && key_secret && key_secret !== 'PASTE_FULL_SECRET_HERE') {
-    if (!razorpayInstance || razorpayInstance.key_id !== key_id) {
+    if (!razorpayInstance || currentKeyId !== key_id) {
       razorpayInstance = new Razorpay({
         key_id,
         key_secret,
       });
+      currentKeyId = key_id;
+      console.log(`[Admin Razorpay Service] Initialized in ${test ? 'TEST 🧪' : 'LIVE 🚀'} mode`);
     }
   }
   return razorpayInstance;

@@ -380,7 +380,8 @@ router.post('/create-order', paymentLimiter as unknown as RequestHandler, authen
         order_id: order.id,
         amount: order.amount,
         currency: order.currency,
-        receipt: order.receipt
+        receipt: order.receipt,
+        key_id: order.key_id
       }
     });
 
@@ -925,6 +926,7 @@ router.post('/addon/create-order', paymentLimiter as unknown as RequestHandler, 
         amount: order.amount,
         currency: order.currency,
         receipt: order.receipt,
+        key_id: order.key_id,
         benefitName: p.benefit.name,
         total: p.total,
         quantity: p.quantity,
@@ -1092,12 +1094,13 @@ router.post('/addon/purchase', paymentLimiter as unknown as RequestHandler, auth
           paidAt: new Date(),
           items: {
             create: invoiceCalc.items.map(item => ({
+              id: generateUUID(),
+              benefitId: item.benefitId || benefitId,
               description: item.description,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
               amount: item.amount,
               taxRate: item.taxRate,
-              taxAmount: item.tax,
               hsnSacCode: item.hsnSacCode,
               isGstExempt: item.isGstExempt
             }))

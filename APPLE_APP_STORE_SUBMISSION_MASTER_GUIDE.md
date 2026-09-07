@@ -239,7 +239,7 @@ Record a 60–90 second screen video on your phone:
 ### 4.2 Mandatory Live Web URLs
 All URLs must be accessible via public HTTPS:
 * **Privacy Policy URL**: `https://maihoonna.in/#privacy` (or `/privacy`)
-* **Support URL**: `https://maihoonna.in/contact` (or `mailto:info@maihoonna.com`)
+* **Support URL**: `https://maihoonna.in/#terms` (Section 6 publishes direct support email & grievance contact)
 * **Marketing URL**: `https://maihoonna.in/`
 
 ### 4.3 Mandatory Medical Disclaimer in App Description

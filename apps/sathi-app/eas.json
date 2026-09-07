@@ -40,7 +40,7 @@
       "autoIncrement": true,
       "node": "22.14.0",
       "env": {
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T5r7EAjfxEsAtl"
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_live_TZ3KKOCt6TIiSt"
       }
     }
   },

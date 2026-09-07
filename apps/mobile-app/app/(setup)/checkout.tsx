@@ -562,8 +562,10 @@ export default function CheckoutScreen() {
                 // 3. Open Razorpay Checkout
                 const razorpayKey = getRazorpayKey();
 
-                // ── Safety guard: alert devs immediately if the key is missing ──────────
-                if (!razorpayKey) {
+                // ── Active key: Prefer dynamic key from backend order, fallback to env ──
+                const activeKey = orderData.data?.key_id || razorpayKey;
+
+                if (!activeKey) {
                     console.error(
                         '[Razorpay] KEY IS MISSING.\n' +
                         '  • Local dev: check .env has EXPO_PUBLIC_RAZORPAY_KEY_ID (no quotes around value)\n' +
@@ -577,13 +579,13 @@ export default function CheckoutScreen() {
                     return;
                 }
 
-                console.log('[Razorpay] Key resolved:', razorpayKey.substring(0, 12) + '...');
+                console.log('[Razorpay] Key resolved:', activeKey.substring(0, 12) + '... (mode: ' + (activeKey.startsWith('rzp_test_') ? 'TEST' : 'LIVE') + ')');
 
                 const options = {
                     description: `Mai-Hoonaa: ${pricing.packageName}`,
                     image: 'https://maihoonna.com/logo.png',
                     currency: orderData.data.currency,
-                    key: razorpayKey,
+                    key: activeKey,
                     amount: orderData.data.amount,
                     name: 'Mai-Hoonaa',
                     order_id: orderData.data.order_id,

@@ -11,6 +11,7 @@ import {
   Alert,
   Dimensions,
   Modal,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -182,6 +183,24 @@ export default function SathiProfile() {
     );
   };
 
+  const handleOpenSupport = () => {
+    Alert.alert(
+      'Sathi Care Support',
+      'Need assistance with your companion visits, earnings, or verification?\n\n✉️ Email: info@maihoonna.com\n⏱️ Hours: Mon–Sat, 9:00 AM – 7:00 PM IST\n📍 Service Hub: Gurugram, Haryana, India',
+      [
+        {
+          text: 'Send Email',
+          onPress: () => {
+            Linking.openURL('mailto:info@maihoonna.com?subject=Sathi%20Network%20Companion%20Support').catch(() => {
+              Alert.alert('Email Support', 'Please write to us directly at:\ninfo@maihoonna.com');
+            });
+          }
+        },
+        { text: 'Close', style: 'cancel' }
+      ]
+    );
+  };
+
   if (loading && !profile) {
     return (
       <View style={[styles.container, { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 40 : 20) }]}>
@@ -330,6 +349,51 @@ export default function SathiProfile() {
             <Text style={styles.bioText}>{profile.whyJoin}</Text>
           </View>
         )}
+
+        {/* Support & Legal Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Help & Support</Text>
+          
+          <TouchableOpacity 
+            style={styles.supportRow} 
+            activeOpacity={0.7}
+            onPress={handleOpenSupport}
+          >
+            <View style={styles.supportRowLeft}>
+              <Ionicons name="help-circle-outline" size={20} color={DEEP_ORANGE} />
+              <Text style={styles.supportRowText}>Contact Sathi Support</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <View style={styles.supportDivider} />
+
+          <TouchableOpacity 
+            style={styles.supportRow} 
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL('https://maihoonna.in/#terms')}
+          >
+            <View style={styles.supportRowLeft}>
+              <Ionicons name="document-text-outline" size={20} color="#7C3AED" />
+              <Text style={styles.supportRowText}>Terms of Service</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          </TouchableOpacity>
+
+          <View style={styles.supportDivider} />
+
+          <TouchableOpacity 
+            style={styles.supportRow} 
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL('https://maihoonna.in/#privacy')}
+          >
+            <View style={styles.supportRowLeft}>
+              <Ionicons name="shield-checkmark-outline" size={20} color="#0D9488" />
+              <Text style={styles.supportRowText}>Privacy Policy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={20} color="#EF4444" />
@@ -670,6 +734,26 @@ const styles = StyleSheet.create({
     fontSize: scale(13),
     color: '#7C3AED', // Purple like the Figma design
     fontWeight: '500',
+  },
+  supportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: scale(12),
+  },
+  supportRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(10),
+  },
+  supportRowText: {
+    fontSize: scale(14),
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  supportDivider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
   },
   logoutBtn: {
     flexDirection: 'row',

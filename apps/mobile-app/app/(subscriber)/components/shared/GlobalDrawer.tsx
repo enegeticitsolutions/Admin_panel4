@@ -229,6 +229,32 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
                                     onPress={() => navigateTo('/(subscriber)/profile')} 
                                 />
                                 <DrawerItem 
+                                    label="Help & Support" 
+                                    icon="help-circle-outline" 
+                                    bg="#EFF6FF"
+                                    color="#2563EB"
+                                    onPress={() => {
+                                        onClose();
+                                        setTimeout(() => {
+                                            Alert.alert(
+                                                'MaiHoonNa Care Support',
+                                                'We are here to assist you with care plans, scheduling, and billing inquiries.\n\n✉️ Email: info@maihoonna.com\n⏱️ Support Hours: Mon–Sat, 9:00 AM – 7:00 PM IST\n📍 Service Hub: Gurugram, Haryana, India',
+                                                [
+                                                    {
+                                                        text: 'Send Email',
+                                                        onPress: () => {
+                                                            Linking.openURL(`mailto:${LEGAL_CONFIG.SUPPORT_EMAIL}?subject=MaiHoonNa%20Subscriber%20Support`).catch(() => {
+                                                                Alert.alert('Help & Support', `Please email us directly at:\n${LEGAL_CONFIG.SUPPORT_EMAIL}`);
+                                                            });
+                                                        }
+                                                    },
+                                                    { text: 'Close', style: 'cancel' }
+                                                ]
+                                            );
+                                        }, 300);
+                                    }} 
+                                />
+                                <DrawerItem 
                                     label="Privacy Policy" 
                                     icon="document-text-outline" 
                                     bg="#F0FDFA"

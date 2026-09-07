@@ -340,11 +340,13 @@ export default function PackageUtilizationScreen() {
       const orderData = await orderRes.json();
       if (!orderData.success) throw new Error(orderData.message);
 
+      const activeKey = orderData.data?.key_id || razorpayKey;
+
       const options = {
         description: `Add-on: ${addonPreview.benefitName}`,
         image: 'https://maihoonna.com/logo.png',
         currency: orderData.data.currency,
-        key: razorpayKey,
+        key: activeKey,
         amount: orderData.data.amount,
         name: 'Mai-Hoonaa',
         order_id: orderData.data.order_id,

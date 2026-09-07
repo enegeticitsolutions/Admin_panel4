@@ -32,10 +32,22 @@ export default function SettingsScreen() {
     };
 
     const openHelpSupport = () => {
-        const mailUrl = `mailto:${LEGAL_CONFIG.SUPPORT_EMAIL}?subject=MaiHoonNa%20App%20Support`;
-        Linking.openURL(mailUrl).catch(() => {
-            Alert.alert('Help & Support', `For support, please send an email to:\n${LEGAL_CONFIG.SUPPORT_EMAIL}`);
-        });
+        Alert.alert(
+            'MaiHoonNa Care Support',
+            'We are here to assist you with companion care, visits, and account assistance.\n\n✉️ Email: info@maihoonna.com\n⏱️ Support Hours: Mon–Sat, 9:00 AM – 7:00 PM IST\n📍 Service Hub: Gurugram, Haryana, India',
+            [
+                {
+                    text: 'Send Email',
+                    onPress: () => {
+                        const mailUrl = `mailto:${LEGAL_CONFIG.SUPPORT_EMAIL}?subject=MaiHoonNa%20App%20Support`;
+                        Linking.openURL(mailUrl).catch(() => {
+                            Alert.alert('Email Support', `Please email us directly at:\n${LEGAL_CONFIG.SUPPORT_EMAIL}`);
+                        });
+                    }
+                },
+                { text: 'Close', style: 'cancel' }
+            ]
+        );
     };
 
     return (

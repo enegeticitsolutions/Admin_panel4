@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   Keyboard,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -192,9 +193,19 @@ export default function SathiDashboard() {
 
   const handleContactSupport = () => {
     Alert.alert(
-      'Contact Support',
-      'Need help with verification?\n\n📞 Call: +91 99999-55555\n✉️ Email: support@maihoonna.com',
-      [{ text: 'OK' }]
+      'Sathi Care Support',
+      'Need assistance with companion verification or visit coordination?\n\n✉️ Email: info@maihoonna.com\n⏱️ Hours: Mon–Sat, 9:00 AM – 7:00 PM IST\n📍 Service Hub: Gurugram, Haryana, India',
+      [
+        {
+          text: 'Send Email',
+          onPress: () => {
+            Linking.openURL('mailto:info@maihoonna.com?subject=Sathi%20Network%20Verification%20Support').catch(() => {
+              Alert.alert('Support Email', 'Please email us directly at:\ninfo@maihoonna.com');
+            });
+          }
+        },
+        { text: 'Close', style: 'cancel' }
+      ]
     );
   };
 
