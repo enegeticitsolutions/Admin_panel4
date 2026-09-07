@@ -99,6 +99,23 @@ const MedicalRecordItem = ({ doc, onRefresh, existingRecords }: { doc: any; onRe
     };
 
     const handleViewDocument = async () => {
+        try {
+            // First attempt: fetch temporary signed URL from secure backend endpoint
+            const token = await AsyncStorage.getItem('token') || await AsyncStorage.getItem('userToken');
+            const res = await fetch(`${API_URL}/files/presigned?type=medical_record&id=${doc.id}`, {
+                headers: {
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                }
+            });
+            const data = await res.json();
+            if (data?.success && data?.url) {
+                await WebBrowser.openBrowserAsync(data.url);
+                return;
+            }
+        } catch (error) {
+            console.warn('Presigned URL fetch failed, trying direct fileUrl fallback:', error);
+        }
+
         if (doc.fileUrl) {
             try {
                 await WebBrowser.openBrowserAsync(doc.fileUrl);

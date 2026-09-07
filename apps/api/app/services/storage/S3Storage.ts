@@ -2,20 +2,26 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { StorageService, UploadResult } from './StorageInterface';
 
 /**
- * S3Storage
+ * S3Storage — AWS S3 Storage Provider
  *
- * Storage provider backed by AWS S3.
- * Used in all deployed environments (Staging + Production) when STORAGE_PROVIDER=s3.
+ * Extends StorageService (Strategy Pattern). Activated when STORAGE_PROVIDER=s3.
+ * Used in all deployed environments (Staging + Production) on AWS ECS Fargate.
  *
- * On ECS Fargate, the task IAM role (mhn-ecs-task-role-*) provides S3 access
- * automatically — no AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY needed in the secret.
- * The SDK picks up IAM role credentials from the ECS metadata endpoint.
+ * Authentication:
+ *   - On ECS Fargate: the Task IAM Role provides credentials automatically via
+ *     the ECS metadata endpoint — no AWS_ACCESS_KEY_ID / SECRET needed.
+ *   - Locally (if testing S3): set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env.
  *
- * For local testing with S3, set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env.
+ * File access model:
+ *   - Bucket remains PRIVATE (Block All Public Access = ON).
+ *   - Files are served via time-limited presigned URLs generated server-side.
+ *   - Direct S3 URLs are never given to clients.
  */
 export class S3Storage extends StorageService {
   private readonly s3: S3Client;
@@ -24,11 +30,8 @@ export class S3Storage extends StorageService {
 
   constructor() {
     super();
-    this.bucketName = process.env.STORAGE_BUCKET || 'maihoonna-staff-documents-staging';
+    this.bucketName = process.env.STORAGE_BUCKET || 'maihoonna-media-staging';
     this.region = process.env.AWS_REGION || 'ap-south-1';
-
-    // On ECS Fargate the SDK uses IAM role credentials automatically.
-    // Locally, it falls back to AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env.
     this.s3 = new S3Client({ region: this.region });
     console.log('[Storage] Using AWS S3 provider → bucket:', this.bucketName, '| region:', this.region);
   }
@@ -40,12 +43,11 @@ export class S3Storage extends StorageService {
         Key: path,
         Body: fileBuffer,
         ContentType: mimeType,
-        // Buckets are private — access via pre-signed URLs or CloudFront OAC
+        // Bucket is private — access via presigned URLs only
       })
     );
-
-    const url = await this.getPublicUrl(path);
-    return { path, url };
+    // Return the storage path as url too (callers that need a real URL must call getPresignedUrl)
+    return { path, url: path };
   }
 
   async delete(path: string): Promise<void> {
@@ -57,8 +59,28 @@ export class S3Storage extends StorageService {
     );
   }
 
+  /**
+   * Returns the raw S3 URI. Do NOT expose to clients — bucket is private.
+   * Provided only for internal logging/debugging. Use getPresignedUrl() for client access.
+   */
   async getPublicUrl(path: string): Promise<string> {
-    // Standard S3 URL. For private buckets, replace with pre-signed URL logic.
-    return `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${path}`;
+    return `s3://${this.bucketName}/${path}`;
+  }
+
+  /**
+   * Generate a cryptographically signed, time-limited URL for secure file access.
+   * The URL signature is bound to the exact path — changing any character invalidates it.
+   *
+   * @param path       - storage key (from UploadResult.path)
+   * @param ttlSeconds - validity window in seconds. Default: 900 (15 minutes).
+   * @returns          - HTTPS presigned URL, valid for ttlSeconds from now
+   */
+  async getPresignedUrl(path: string, ttlSeconds = 900): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: path,
+    });
+    return getSignedUrl(this.s3, command, { expiresIn: ttlSeconds });
   }
 }
+

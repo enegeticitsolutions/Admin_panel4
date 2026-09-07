@@ -34,10 +34,18 @@ import usersRouter from './api/admin/users.routes';
 // Shared Routes
 import medicationsRouter from './api/shared/medications.routes';
 import profilePhotoRouter from './api/shared/profile-photo.routes';
+import fileAccessRouter from './api/shared/file-access.routes';
 import emergencyRouter from './api/shared/emergency.routes';
 import callbackRouter from './api/shared/callback.routes';
 import utilizationRouter from './api/shared/utilization.routes';
 import sharedUsersRouter from './api/shared/users.routes';
+
+// File Resource Registry — OOP presigned URL system
+import { fileResourceRegistry } from './services/file-access/FileResourceRegistry';
+import { MedicalRecordResource } from './services/file-access/resources/MedicalRecordResource';
+import { VisitImageResource } from './services/file-access/resources/VisitImageResource';
+import { ProfilePhotoResource } from './services/file-access/resources/ProfilePhotoResource';
+import { BeneficiaryPhotoResource } from './services/file-access/resources/BeneficiaryPhotoResource';
 
 // Beneficiary Routes
 import beneficiaryDashboardRouter from './api/beneficiary/dashboard.routes';
@@ -118,6 +126,15 @@ app.use(express.urlencoded({ extended: true, limit: config.jsonLimit }));
 // ─── Routes ───────────────────────────────────────────────────────────────────
 const API = '/api';
 
+// ─── File Resource Registry Setup (Presigned URL system) ─────────────────────
+// Register all file resource types here. Each type maps to a subclass of FileResource
+// that defines its own authorization logic.
+// To add a new file type: extend FileResource, register one line below. Done.
+fileResourceRegistry.register(new MedicalRecordResource());
+fileResourceRegistry.register(new VisitImageResource());
+fileResourceRegistry.register(new ProfilePhotoResource());
+fileResourceRegistry.register(new BeneficiaryPhotoResource());
+
 app.get(`${API}`, (_req, res) => {
   res.json({ message: 'MaiHoonNa Role-Based API', version: '2.0.0', status: 'active' });
 });
@@ -166,6 +183,10 @@ app.use(`${API}/notifications`, sharedUsersRouter);
 
 // Profile Photo Upload (all roles)
 app.use(`${API}/profile-photo`, profilePhotoRouter);
+
+// Secure File Access — Presigned URL endpoint (all authenticated roles)
+app.use(`${API}/files`, fileAccessRouter);
+app.use('/app-api/files', fileAccessRouter);
 
 // Public endpoints
 app.use(`${API}/public/vitals`, publicVitalsRouter);

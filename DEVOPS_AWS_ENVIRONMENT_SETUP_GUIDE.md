@@ -151,7 +151,7 @@ We enforce strict **resource-level isolation** — staging and production enviro
   "MHN_APP_SECRET": "mhn-staging-app-secret-2026",
 
   "STORAGE_PROVIDER": "s3",
-  "STORAGE_BUCKET": "maihoonna-staff-documents-staging",
+  "STORAGE_BUCKET": "maihoonna-media-staging",
   "AWS_REGION": "ap-south-1",
   "AWS_S3_ENDPOINT": "",
 

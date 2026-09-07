@@ -101,13 +101,18 @@ export const uploadMedicalRecord = async (req: Request, res: Response) => {
 
     const storage = getStorageService();
     const ext = file.originalname.split('.').pop() || 'pdf';
-    const path = `medical_records/${beneficiaryId}/${Date.now()}_${uuidv4().split('-')[0]}.${ext}`;
+    const fileKey = `medical_records/${beneficiaryId}/${Date.now()}_${uuidv4().split('-')[0]}.${ext}`;
 
-    const { path: storedPath, url: fileUrl } = await storage.upload(file.buffer, path, file.mimetype);
+    // Upload the file and get back the storage path
+    const { path: storedKey } = await storage.upload(file.buffer, fileKey, file.mimetype);
+
+    // Generate a presigned URL for immediate display after upload
+    const fileUrl = await storage.getPresignedUrl(storedKey, 900);
 
     const record = await beneficiaryService.createMedicalRecord(subscriberId, beneficiaryId, {
       title: req.body.title || file.originalname,
-      fileUrl,
+      fileKey: storedKey,  // stored for future presigned URL generation
+      fileUrl,             // short-lived URL returned to client immediately after upload
       mimeType: file.mimetype,
       fileSizeBytes: file.size,
     });
@@ -118,6 +123,8 @@ export const uploadMedicalRecord = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
 
 export const getBeneficiaryPendingDetails = async (req: Request, res: Response) => {
   try {

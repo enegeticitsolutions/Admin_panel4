@@ -146,7 +146,8 @@ model MedicalRecord {
   uploadedBy      String
   recordType      RecordType   @default(prescription)
   title           String
-  fileUrl         String?
+  fileUrl         String?      // kept for backward compat (Supabase public URL in local dev)
+  fileKey         String?      // storage object key — used to generate presigned URLs
   thumbnailUrl    String?
   mimeType        String?
   fileSizeBytes   Int?

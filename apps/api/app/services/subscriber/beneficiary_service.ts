@@ -835,6 +835,7 @@ export const createMedicalRecord = async (
   data: {
     title: string;
     fileUrl: string;
+    fileKey?: string;
     mimeType: string;
     fileSizeBytes: number;
   }
@@ -846,6 +847,7 @@ export const createMedicalRecord = async (
       uploadedBy: subscriberId,
       title: data.title,
       fileUrl: data.fileUrl,
+      fileKey: data.fileKey,
       mimeType: data.mimeType,
       fileSizeBytes: data.fileSizeBytes,
       recordType: 'prescription', // default to prescription as in schema

@@ -2,13 +2,28 @@ const {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
 } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const StorageService = require('./storageInterface');
 
+/**
+ * S3Storage — AWS S3 Storage Provider (admin-backend)
+ *
+ * Extends StorageService (Strategy Pattern). Activated when STORAGE_PROVIDER=s3.
+ * Used in all deployed AWS environments (Staging + Production).
+ *
+ * Authentication:
+ *   - ECS Fargate: Task IAM Role provides credentials automatically.
+ *   - Local testing: set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY in .env.
+ *
+ * File access model:
+ *   - Bucket is PRIVATE. Files served via presigned URLs only.
+ */
 class S3Storage extends StorageService {
   constructor() {
     super();
-    this.bucketName = process.env.STORAGE_BUCKET || 'staff-documents';
+    this.bucketName = process.env.STORAGE_BUCKET || 'maihoonna-media-staging';
 
     const region = process.env.AWS_REGION || 'ap-south-1';
     const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
@@ -20,50 +35,55 @@ class S3Storage extends StorageService {
     }
 
     this.s3Client = new S3Client(clientConfig);
+    this.region = region;
+    console.log('[Storage] Using AWS S3 provider → bucket:', this.bucketName, '| region:', region);
   }
 
   async upload(fileBuffer, path, mimeType) {
-    const command = new PutObjectCommand({
+    await this.s3Client.send(new PutObjectCommand({
       Bucket: this.bucketName,
       Key: path,
       Body: fileBuffer,
       ContentType: mimeType,
-      // ACL: 'public-read' // Uncomment if you want public access out of the box in S3
-    });
+      // Bucket is private — access via presigned URLs only
+    }));
 
-    try {
-      await this.s3Client.send(command);
-      const url = await this.getPublicUrl(path);
-
-      return {
-        path: path,
-        url: url,
-      };
-    } catch (error) {
-      throw new Error(`S3 upload failed: ${error.message}`);
-    }
+    return { path, url: path };
   }
 
   async delete(path) {
-    const command = new DeleteObjectCommand({
+    await this.s3Client.send(new DeleteObjectCommand({
+      Bucket: this.bucketName,
+      Key: path,
+    }));
+  }
+
+  /**
+   * Returns raw S3 URI. Not for client use — bucket is private.
+   * Use getPresignedUrl() to generate client-accessible URLs.
+   */
+  async getPublicUrl(path) {
+    return `s3://${this.bucketName}/${path}`;
+  }
+
+  /**
+   * Generate a cryptographically signed, time-limited URL for secure file access.
+   * The signature is bound to the exact path — any modification invalidates it.
+   *
+   * @param {string} path        - storage key (from upload result)
+   * @param {number} ttlSeconds  - validity window. Default: 900 (15 minutes)
+   * @returns {Promise<string>}  - HTTPS presigned URL valid for ttlSeconds
+   */
+  async getPresignedUrl(path, ttlSeconds = 900) {
+    const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: path,
     });
-
-    try {
-      await this.s3Client.send(command);
-    } catch (error) {
-      throw new Error(`S3 delete failed: ${error.message}`);
-    }
-  }
-
-  async getPublicUrl(path) {
-    // For public buckets, the URL format is generally standard:
-    // This assumes the bucket is public.
-    // For private buckets, we would use @aws-sdk/s3-request-presigner
-    const region = await this.s3Client.config.region();
-    return `https://${this.bucketName}.s3.${region}.amazonaws.com/${path}`;
+    return getSignedUrl(this.s3Client, command, { expiresIn: ttlSeconds });
   }
 }
 
 module.exports = S3Storage;
+
+
+

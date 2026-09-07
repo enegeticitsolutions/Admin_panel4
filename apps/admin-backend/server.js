@@ -110,6 +110,10 @@ app.use('/api/config', mastersOnly, require('./routes/config'));
 app.use('/api/saathi-guide', adminsOnly, require('./routes/saathi-guide'));
 app.use('/api/payments', require('./routes/payments'));
 
+// ─── Secure File Access — Presigned URL (all authenticated staff) ─────────────────
+// Route never changes. New file types are registered in the block below.
+app.use('/api/files', staffOnly, require('./routes/file-access'));
+
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/api/ping', (req, res) => res.json({ message: 'pong' }));
 app.get('/health', (req, res) => {
@@ -140,6 +144,14 @@ app.use((err, req, res, next) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const { ensureEmergencyBenefit } = require('./utils/initEmergencyBenefit');
+
+// ─── File Resource Registry Setup (Presigned URL OOP system) ─────────────────
+// To add a new file type: extend FileResource, register one line here. Done.
+const fileRegistry = require('./services/file-access/FileResourceRegistry');
+const StaffDocumentResource = require('./services/file-access/resources/StaffDocumentResource');
+const AdminProfilePhotoResource = require('./services/file-access/resources/AdminProfilePhotoResource');
+fileRegistry.register(new StaffDocumentResource());
+fileRegistry.register(new AdminProfilePhotoResource());
 
 const server = app
   .listen(PORT, async () => {

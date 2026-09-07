@@ -2,11 +2,14 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { StorageService, UploadResult } from './StorageInterface';
 
 /**
- * SupabaseStorage
+ * SupabaseStorage — Supabase Storage Provider
  *
- * Storage provider backed by Supabase Storage.
- * Used LOCALLY during development when STORAGE_PROVIDER=supabase (default).
- * Not used in any deployed AWS environment.
+ * Extends StorageService (Strategy Pattern). Activated when STORAGE_PROVIDER=supabase (default).
+ * Used LOCALLY during development only — never in any deployed AWS environment.
+ *
+ * File access model mirrors production S3 behaviour:
+ *   - getPresignedUrl() calls Supabase createSignedUrl() — same TTL-based signed access.
+ *   - This ensures local dev behaves identically to the S3 production environment.
  */
 export class SupabaseStorage extends StorageService {
   private readonly client: SupabaseClient;
@@ -48,8 +51,33 @@ export class SupabaseStorage extends StorageService {
     if (error) throw new Error(`[SupabaseStorage] Delete failed: ${error.message}`);
   }
 
+  /**
+   * Returns the Supabase public URL (valid only if bucket has public access enabled).
+   * For local dev with a public bucket this works fine for quick testing.
+   * In production (S3), use getPresignedUrl() instead.
+   */
   async getPublicUrl(path: string): Promise<string> {
     const { data } = this.client.storage.from(this.bucketName).getPublicUrl(path);
     return data.publicUrl;
   }
+
+  /**
+   * Generate a time-limited signed URL via Supabase createSignedUrl.
+   * Mirrors the presigned URL behaviour of S3 in local development.
+   *
+   * @param path       - storage key (from UploadResult.path)
+   * @param ttlSeconds - validity window. Default: 900 (15 minutes)
+   * @returns          - Signed Supabase URL, valid for ttlSeconds from now
+   */
+  async getPresignedUrl(path: string, ttlSeconds = 900): Promise<string> {
+    const { data, error } = await this.client.storage
+      .from(this.bucketName)
+      .createSignedUrl(path, ttlSeconds);
+
+    if (error || !data?.signedUrl) {
+      throw new Error(`[SupabaseStorage] Presigned URL failed: ${error?.message ?? 'no URL returned'}`);
+    }
+    return data.signedUrl;
+  }
 }
+
