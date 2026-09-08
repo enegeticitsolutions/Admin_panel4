@@ -1,11 +1,14 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform, ActivityIndicator, useWindowDimensions } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform, ActivityIndicator, useWindowDimensions, RefreshControl } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
 import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import { useSafeBack } from '@/hooks/useSafeBack';
+import { useGlobalRefresh } from '@/utils/events';
+import { useFocusEffect } from 'expo-router';
 
 type TeamMember = {
     id: string;
@@ -18,16 +21,23 @@ type TeamMember = {
 };
 
 export default function CareTeamScreen() {
+    const safeBack = useSafeBack();
     const { width } = useWindowDimensions();
     const MAX_CONTENT_WIDTH = 440;
     const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
 
     const [team, setTeam] = useState<TeamMember[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchTeam();
+    useFocusEffect(useCallback(() => { fetchTeam(); }, []));
+    useGlobalRefresh(() => { fetchTeam(); });
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await fetchTeam();
+        setRefreshing(false);
     }, []);
 
     const fetchTeam = async () => {
@@ -76,7 +86,16 @@ export default function CareTeamScreen() {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            <View style={styles.header}>
+            <View style={[styles.header, responsiveStyle]}>
+                <TouchableOpacity
+                    onPress={() => safeBack('/(beneficiary)')}
+                    style={styles.backBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Go back"
+                >
+                    <Feather name="arrow-left" size={22} color="#111827" />
+                </TouchableOpacity>
                 <Text style={styles.headerTitle}>Your Care Team</Text>
             </View>
 
@@ -103,6 +122,7 @@ export default function CareTeamScreen() {
                     style={styles.scroll}
                     contentContainerStyle={[styles.content, responsiveStyle]}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />}
                 >
                     {team.map((member) => (
                         <View key={member.id} style={styles.card}>
@@ -167,6 +187,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderBottomWidth: 1,
         borderBottomColor: '#F3F4F6',
+    },
+    backBtn: {
+        position: 'absolute',
+        left: 20,
+        zIndex: 1,
     },
     headerTitle: {
         fontFamily: 'Poppins-Medium',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Platform, TextInput, Modal, useWindowDimensions, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, Platform, TextInput, Modal, useWindowDimensions, Alert, RefreshControl } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather, Ionicons, MaterialCommunityIcons, FontAwesome5, AntDesign } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
@@ -13,6 +13,8 @@ import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { AddressInputField } from '@/components/ui/AddressInputField';
 import { EmailVerificationModal } from '@/components/ui/EmailVerificationModal';
 import { ProfilePhotoUploader } from '@/components/ui/ProfilePhotoUploader';
+import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
+import { useCallback } from 'react';
 
 interface ContactInfo {
     phone: string;
@@ -45,6 +47,7 @@ export default function ProfileScreen() {
     const logoutWithConfirm = useLogoutWithConfirm();
     const deleteAccountWithConfirm = useDeleteAccountWithConfirm();
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [profile, setProfile] = useState<ProfileData>({
         name: 'Beneficiary',
         age: 70,
@@ -79,8 +82,13 @@ export default function ProfileScreen() {
     const [verifyingOtp, setVerifyingOtp] = useState(false);
     const [emailVerifyStatus, setEmailVerifyStatus] = useState({ message: '', isError: false });
 
-    useEffect(() => {
-        fetchProfile();
+    useFocusEffect(useCallback(() => { fetchProfile(); }, []));
+    useGlobalRefresh(() => { fetchProfile(); });
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await fetchProfile();
+        setRefreshing(false);
     }, []);
 
     const mapFromEnum = (enumVal: string): string => {
@@ -178,6 +186,7 @@ export default function ProfileScreen() {
                         userData.name = editName;
                         await AsyncStorage.setItem('userData', JSON.stringify(userData));
                     }
+                    emitGlobalRefresh();
                 }
             }
 
@@ -215,7 +224,11 @@ export default function ProfileScreen() {
     return (
         <View style={{ flex: 1, backgroundColor: '#FFF0E6' }}>
             <SafeAreaView style={{ flex: 0, backgroundColor: '#FE6700' }} edges={['top']} />
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+            <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                contentContainerStyle={styles.scrollContent}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />}
+            >
                 {/* Header Banner */}
                 <View style={styles.gradientHeader}>
                     <View style={[styles.topRow, responsiveContentStyle]}>

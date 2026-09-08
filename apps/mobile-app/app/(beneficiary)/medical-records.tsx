@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Platform, useWindowDimensions,
+    ActivityIndicator, Platform, useWindowDimensions, RefreshControl
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,6 +11,7 @@ import { useSafeBack } from '@/hooks/useSafeBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { VitalsCharts } from '../(subscriber)/components/beneficiary/VitalsCharts';
+import { useGlobalRefresh } from '@/utils/events';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,10 +60,18 @@ export default function MedicalRecordsScreen() {
     const [trends, setTrends] = useState<any[]>([]);
     const [history, setHistory] = useState<HistoryItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
     useFocusEffect(useCallback(() => { fetchMedicalRecords(); }, []));
+    useGlobalRefresh(() => { fetchMedicalRecords(); });
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await fetchMedicalRecords();
+        setRefreshing(false);
+    }, []);
 
     const fetchMedicalRecords = async () => {
         try {
@@ -122,6 +131,7 @@ export default function MedicalRecordsScreen() {
                 <ScrollView
                     contentContainerStyle={[styles.content, responsiveStyle]}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />}
                 >
                     <Text style={styles.subtitle}>Track your vitals</Text>
 

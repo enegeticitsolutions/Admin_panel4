@@ -18,9 +18,9 @@ import { useAuth } from '@/contexts/AuthContext';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const SLIDES = [
-  { key: '1', image: require('@/assets/images/Flash_1.png') },
-  { key: '2', image: require('@/assets/images/Flash_2.png') },
-  { key: '3', image: require('@/assets/images/Flash_3.png') },
+  { key: '1', image: require('@/assets/images/Flash_1.jpg') },
+  { key: '2', image: require('@/assets/images/Flash_2.jpg') },
+  { key: '3', image: require('@/assets/images/Flash_3.jpg') },
 ];
 
 /** Duration each slide stays visible (ms) */

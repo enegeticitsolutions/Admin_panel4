@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
   Platform,
+  RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import { useSafeBack } from '@/hooks/useSafeBack';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { useRouter } from 'expo-router';
 import { useCustomAlert } from '@/contexts/CustomAlertContext';
+import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 
 // Safe date formatter — prevents "Invalid time value" crash when API returns null/undefined dates
 const safeFormat = (value: any, fmt: string, fallback = '—'): string => {
@@ -60,6 +62,7 @@ export function SaathiView({
   const { showAlert } = useCustomAlert();
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [eligible, setEligible] = useState(false);
   const [remainingUnits, setRemainingUnits] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -106,6 +109,17 @@ export function SaathiView({
     if (beneficiaryId) {
       checkEligibility();
     }
+  }, [beneficiaryId]);
+
+  useGlobalRefresh(() => {
+    if (beneficiaryId) checkEligibility();
+  });
+
+  const onRefresh = React.useCallback(async () => {
+    if (!beneficiaryId) return;
+    setRefreshing(true);
+    await checkEligibility();
+    setRefreshing(false);
   }, [beneficiaryId]);
 
   const hasAutoSelected = useRef(false);
@@ -274,24 +288,20 @@ export function SaathiView({
         }),
       });
 
-      const data = await res.json();
-
-      if (res.ok || data.success) {
-        const volName = selectedVolunteer.name;
-        // Show success modal
+      const resData = await res.json();
+      if (resData.success) {
         setSuccessModal({
-          title: 'Request Sent Successfully!',
-          message: `Your visit request has been sent to ${volName}. You can track the status under 'My Requests'.`,
-          volunteerName: volName,
+          title: 'Request Sent',
+          message: 'Your Saathi companion request has been sent.',
+          volunteerName: selectedVolunteer?.name,
         });
-        // Reset form
         setDate(null);
         setTime(null);
         setReason('');
-        setFormError(null);
-        checkEligibility();
+        await checkEligibility();
+        emitGlobalRefresh();
       } else {
-        throw new Error(data.message || 'Failed to submit request.');
+        throw new Error(resData.message || 'Failed to submit request.');
       }
     } catch (err: any) {
       const msg = err.message || 'Something went wrong.';
@@ -319,6 +329,7 @@ export function SaathiView({
       if (res.ok || data.success) {
         showAlert('Success', data.message || `Reschedule ${action === 'ACCEPT' ? 'accepted' : 'declined'} successfully.`);
         checkEligibility(); // Refresh list
+        emitGlobalRefresh();
       } else {
         throw new Error(data.message || 'Failed to respond to reschedule.');
       }
@@ -349,6 +360,7 @@ export function SaathiView({
         setFeedbackRating(5);
         setFeedbackText('');
         checkEligibility(); // Refresh list to get new rating
+        emitGlobalRefresh();
       } else {
         throw new Error(data.message || 'Failed to submit feedback.');
       }
@@ -428,8 +440,12 @@ export function SaathiView({
           <Text style={styles.headerTitle}>Request Sathi Companion</Text>
           <View style={{ width: 24 }} />
         </View>
-
-        <ScrollView style={[styles.content, responsiveStyle]} showsVerticalScrollIndicator={false}>
+        <View style={{ flex: 1 }}>
+        <ScrollView 
+          style={[styles.content, responsiveStyle]} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
+        >
           {/* Info Card */}
           <View style={styles.infoCard}>
             <MaterialCommunityIcons name="heart-pulse" size={28} color="#FF6A00" />
@@ -535,6 +551,7 @@ export function SaathiView({
           </TouchableOpacity>
           <View style={{ height: 40 }} />
         </ScrollView>
+        </View>
 
         <DateTimePickerModal
           isVisible={isDatePickerVisible}
@@ -587,8 +604,11 @@ export function SaathiView({
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView style={[styles.content, responsiveStyle]} showsVerticalScrollIndicator={false}>
-        
+      <ScrollView 
+        style={[styles.content, responsiveStyle]} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
+      >
         {/* Network Banner */}
         <View style={styles.networkBanner}>
           <View style={styles.heartIconWrapper}>
@@ -659,7 +679,7 @@ export function SaathiView({
                           </Text>
                           {req.rejectionReason && (
                             <Text style={{ fontSize: 13, color: '#9A3412', fontStyle: 'italic', marginBottom: 12 }}>
-                              "{req.rejectionReason}"
+                              &quot;{req.rejectionReason}&quot;
                             </Text>
                           )}
                           <View style={{ flexDirection: 'row', gap: 8 }}>

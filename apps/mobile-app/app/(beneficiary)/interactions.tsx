@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Platform, Dimensions, TextInput, Alert, Image,
+    ActivityIndicator, Platform, Dimensions, TextInput, Alert, Image, RefreshControl
 } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { VisitDetailsModal, VisitDetailData } from '@/app/(subscriber)/components/beneficiary/VisitDetailsModal';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { PartnerServiceBadge } from '@/components/shared/PartnerServiceBadge';
+import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,6 +119,7 @@ export default function InteractionsScreen() {
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [submittingRatingId, setSubmittingRatingId] = useState<string | null>(null);
     const [selectedDetailVisit, setSelectedDetailVisit] = useState<Interaction | null>(null);
 
@@ -135,6 +137,18 @@ export default function InteractionsScreen() {
             fetchEmergencyHistory();
         }, [])
     );
+
+    useGlobalRefresh(() => {
+        fetchInteractions();
+        fetchEmergencyHistory();
+    });
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await fetchInteractions();
+        await fetchEmergencyHistory();
+        setRefreshing(false);
+    }, []);
 
     const fetchInteractions = async () => {
         try {
@@ -208,6 +222,8 @@ export default function InteractionsScreen() {
                 setInteractions(prev =>
                     prev.map(i => i.id === interactionId ? { ...i, beneficiaryRating: null } : i)
                 );
+            } else {
+                emitGlobalRefresh();
             }
         } catch (e) {
             console.error('Rating error:', e);
@@ -235,6 +251,7 @@ export default function InteractionsScreen() {
                     prev.map(i => i.id === interactionId ? { ...i, feedback: text } : i)
                 );
                 Alert.alert('Saved', 'Your feedback has been saved.');
+                emitGlobalRefresh();
             }
         } catch (e) {
             console.error('Feedback save error:', e);
@@ -291,9 +308,9 @@ export default function InteractionsScreen() {
                 </View>
             ) : (
                 <ScrollView
-                    style={styles.scrollContainer}
-                    contentContainerStyle={styles.content}
+                    contentContainerStyle={[styles.content, responsiveStyle]}
                     showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />}
                 >
                     {/* ── Emergency SOS History Section ── */}
                     {emergencyLogs.length > 0 && (

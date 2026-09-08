@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    Platform, ActivityIndicator,
+    Platform, ActivityIndicator, RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { VitalEntrySheet } from '@/components/shared/VitalEntrySheet';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { API_URL } from '@/constants/api';
+import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ export default function VitalsScreen() {
     const [authToken, setAuthToken] = useState('');
     const [history, setHistory] = useState<SelfReportedHistoryEntry[]>([]);
     const [historyLoading, setHistoryLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [showForm, setShowForm] = useState(true); // start with form visible
 
     useFocusEffect(
@@ -39,6 +41,14 @@ export default function VitalsScreen() {
             loadData();
         }, [])
     );
+
+    useGlobalRefresh(() => { loadData(); });
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await loadData();
+        setRefreshing(false);
+    }, []);
 
     const loadData = async () => {
         try {
@@ -77,6 +87,7 @@ export default function VitalsScreen() {
         setShowForm(false);
         const token = await AsyncStorage.getItem('userToken');
         if (token) await fetchHistory(token);
+        emitGlobalRefresh();
         router.replace('/(beneficiary)');
     };
 
@@ -105,6 +116,7 @@ export default function VitalsScreen() {
                 contentContainerStyle={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />}
             >
                 {/* Entry Form */}
                 {showForm && (

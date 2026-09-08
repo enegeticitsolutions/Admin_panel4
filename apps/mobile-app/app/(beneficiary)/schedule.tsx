@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, useWindowDimensions, Modal, TextInput, Alert, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, useWindowDimensions, Modal, TextInput, Alert, KeyboardAvoidingView, RefreshControl } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,8 +7,11 @@ import { API_URL } from '@/constants/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
+import { useSafeBack } from '@/hooks/useSafeBack';
+import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { format } from 'date-fns';
+
 
 type Visit = {
     id: string;
@@ -32,10 +35,13 @@ export default function ScheduleScreen() {
 
     const router = useRouter();
     const { push, replace, pop } = useNavigationStack();
+    const safeBack = useSafeBack();
     useAndroidBackHandler();
+
     const [upcomingVisits, setUpcomingVisits] = useState<Visit[]>([]);
     const [pastVisits, setPastVisits] = useState<Visit[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // Modal state
@@ -64,6 +70,14 @@ export default function ScheduleScreen() {
             fetchVisits();
         }, [])
     );
+
+    useGlobalRefresh(() => { fetchVisits(); });
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await fetchVisits();
+        setRefreshing(false);
+    }, []);
 
     const fetchVisits = async () => {
         try {
@@ -153,6 +167,7 @@ export default function ScheduleScreen() {
                 Alert.alert("Success", "Your change request has been submitted.");
                 setModalVisible(false);
                 fetchVisits(); // Refresh data
+                emitGlobalRefresh();
             } else {
                 Alert.alert("Error", data.message || "Failed to submit request.");
             }
@@ -167,6 +182,15 @@ export default function ScheduleScreen() {
         <SafeAreaView style={styles.safeArea}>
             {/* Top Navigation Bar */}
             <View style={styles.navBar}>
+                <TouchableOpacity
+                    onPress={() => safeBack('/(beneficiary)')}
+                    style={styles.navBarBackBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Go back"
+                >
+                    <Feather name="arrow-left" size={22} color="#111827" />
+                </TouchableOpacity>
                 <Text style={styles.navBarTitle}>Visit Schedule</Text>
             </View>
 
@@ -184,7 +208,11 @@ export default function ScheduleScreen() {
                     </TouchableOpacity>
                 </View>
             ) : (
-                <ScrollView contentContainerStyle={[styles.content, responsiveStyle]} showsVerticalScrollIndicator={false}>
+                <ScrollView 
+                    contentContainerStyle={[styles.content, responsiveStyle]} 
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />}
+                >
 
                     {/* Upcoming Visits Section */}
                     <Text style={styles.sectionHeader}>Upcoming Visits</Text>
@@ -420,10 +448,20 @@ const styles = StyleSheet.create({
     navBar: {
         height: 60,
         backgroundColor: '#FFFFFF',
+        flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         borderBottomWidth: 1,
         borderBottomColor: '#F3F4F6',
+    },
+    navBarBackBtn: {
+        position: 'absolute',
+        left: 20,
+        zIndex: 1,
+        width: 40,
+        height: 40,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     navBarTitle: {
         fontSize: 18,

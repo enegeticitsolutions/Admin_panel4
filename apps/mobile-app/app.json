@@ -99,7 +99,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/Flash_1.png",
+          "image": "./assets/images/Flash_1.jpg",
           "resizeMode": "cover",
           "backgroundColor": "#FFFFFF"
         }

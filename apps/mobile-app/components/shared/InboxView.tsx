@@ -18,6 +18,7 @@ import { addNotificationReceivedListener } from '@/services/notifications';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { scale, vscale } from '@/utils/responsive';
+import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 
 // Custom SVG Icons matching design
 const CustomMailOpenIcon = ({ size = 22, color = '#9CA3AF' }) => (
@@ -149,6 +150,8 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
         }, [])
     );
 
+    useGlobalRefresh(() => { fetchNotifications(); });
+
     useEffect(() => {
         const sub = addNotificationReceivedListener(() => {
             fetchNotifications();
@@ -175,6 +178,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
                         method: 'PATCH',
                         headers: { Authorization: `Bearer ${token}` },
                     });
+                    emitGlobalRefresh();
                 }
             } catch (e) {
                 console.error('Error marking notification as read:', e);
@@ -191,6 +195,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
                     method: 'PATCH',
                     headers: { Authorization: `Bearer ${token}` },
                 });
+                emitGlobalRefresh();
             }
         } catch (e) {
             console.error('Error marking all as read:', e);

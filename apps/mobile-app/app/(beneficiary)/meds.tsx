@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Animated, TouchableWithoutFeedback, Alert, Image, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Animated, TouchableWithoutFeedback, Alert, Image, useWindowDimensions, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import Svg, { Path } from 'react-native-svg';
 import { API_URL } from '@/constants/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 
 const bellIcon = require('../../assets/icons/bell.png');
 const calendarIcon = require('../../assets/icons/calendar.png');
@@ -111,10 +112,18 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
     const [schedule, setSchedule] = useState<MedScheduleItem[]>([]);
     const [metrics, setMetrics] = useState<Metrics>({ average: 100, taken: 0, missed: 0 });
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [remindersActive, setRemindersActive] = useState(true);
     const [submittingId, setSubmittingId] = useState<string | null>(null);
 
     useFocusEffect(useCallback(() => { loadData(); }, [propBeneficiaryId]));
+    useGlobalRefresh(() => { loadData(); });
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await loadData();
+        setRefreshing(false);
+    }, [propBeneficiaryId]);
 
     const loadData = async () => {
         try {
@@ -289,6 +298,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
             const responseData = await res.json();
             if (responseData.success) {
                 await loadData();
+                emitGlobalRefresh();
             } else {
                 Alert.alert('Error', responseData.message || 'Failed to update schedule');
             }
@@ -338,7 +348,14 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                 </View>
             </View>
 
-            <ScrollView style={styles.container} contentContainerStyle={[styles.content, responsiveStyle]} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+                style={styles.container} 
+                contentContainerStyle={[styles.content, responsiveStyle]} 
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />
+                }
+            >
                 <View style={styles.topRow}>
                     <Text style={styles.topTitle}>Medications</Text>
                     <View style={styles.toggleContainer}>
@@ -392,6 +409,8 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                             schedTime.getFullYear() === now.getFullYear()
                         );
                         const canMarkItem = item.canMark ?? (isItemToday && !item.isFutureSchedule);
+                        // Once marked, lock both buttons — no further changes allowed
+                        const isMarked = item.status === 'taken' || item.status === 'missed';
 
                         return (
                             <View key={`${item.id}-${index}`} style={styles.medCard}>
@@ -423,30 +442,36 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                                         ) : (
                                             <View style={styles.btnRow}>
                                                 <TouchableOpacity
-                                                    onPress={() => handleLogAdherence(item, true)}
+                                                    onPress={() => !isMarked && handleLogAdherence(item, true)}
+                                                    disabled={isMarked}
+                                                    activeOpacity={isMarked ? 1 : 0.7}
                                                     style={[
                                                         styles.actionBtn,
                                                         styles.checkBtn,
-                                                        item.status === 'taken' && styles.activeCheck
+                                                        item.status === 'taken' && styles.activeCheck,
+                                                        isMarked && item.status !== 'taken' && styles.disabledBtn,
                                                     ]}
                                                 >
                                                     <CustomCheckIcon
                                                         size={18}
-                                                        color={item.status === 'taken' ? '#FFFFFF' : '#16A34A'}
+                                                        color={item.status === 'taken' ? '#FFFFFF' : (isMarked ? '#9CA3AF' : '#16A34A')}
                                                     />
                                                 </TouchableOpacity>
 
                                                 <TouchableOpacity
-                                                    onPress={() => handleLogAdherence(item, false)}
+                                                    onPress={() => !isMarked && handleLogAdherence(item, false)}
+                                                    disabled={isMarked}
+                                                    activeOpacity={isMarked ? 1 : 0.7}
                                                     style={[
                                                         styles.actionBtn,
                                                         styles.crossBtn,
-                                                        item.status === 'missed' && styles.activeCross
+                                                        item.status === 'missed' && styles.activeCross,
+                                                        isMarked && item.status !== 'missed' && styles.disabledBtn,
                                                     ]}
                                                 >
                                                     <CustomCrossIcon
                                                         size={18}
-                                                        color={item.status === 'missed' ? '#FFFFFF' : '#EF4444'}
+                                                        color={item.status === 'missed' ? '#FFFFFF' : (isMarked ? '#9CA3AF' : '#EF4444')}
                                                     />
                                                 </TouchableOpacity>
                                             </View>
@@ -739,6 +764,9 @@ const styles = StyleSheet.create({
     },
     activeCross: {
         backgroundColor: '#EF4444',
+    },
+    disabledBtn: {
+        opacity: 0.3,
     },
     lockedBadgeContainer: {
         flexDirection: 'row',
