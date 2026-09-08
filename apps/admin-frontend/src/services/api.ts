@@ -1714,3 +1714,15 @@ export const visitRequestApi = {
   }
 };
 
+export const fileAccessApi = {
+  getPresignedUrl: async (type: string, id: string): Promise<string> => {
+    const res = await apiFetch(`${API_BASE}/files/presigned?type=${type}&id=${encodeURIComponent(id)}`);
+    const data = await res.json();
+    if (data.success && data.url) {
+      return data.url;
+    }
+    throw new Error(data.message || 'Failed to get presigned URL');
+  }
+};
+
+

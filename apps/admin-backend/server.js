@@ -150,8 +150,10 @@ const { ensureEmergencyBenefit } = require('./utils/initEmergencyBenefit');
 const fileRegistry = require('./services/file-access/FileResourceRegistry');
 const StaffDocumentResource = require('./services/file-access/resources/StaffDocumentResource');
 const AdminProfilePhotoResource = require('./services/file-access/resources/AdminProfilePhotoResource');
+const MedicalRecordResource = require('./services/file-access/resources/MedicalRecordResource');
 fileRegistry.register(new StaffDocumentResource());
 fileRegistry.register(new AdminProfilePhotoResource());
+fileRegistry.register(new MedicalRecordResource());
 
 const server = app
   .listen(PORT, async () => {

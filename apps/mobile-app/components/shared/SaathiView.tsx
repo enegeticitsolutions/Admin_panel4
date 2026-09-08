@@ -1446,11 +1446,13 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginTop: 20,
   },
   reqBtn: {
     flex: 1,
+    minWidth: 140,
     backgroundColor: '#2563EB', // Blue matching Connect
     paddingVertical: 12,
     borderRadius: 24,
@@ -1465,6 +1467,7 @@ const styles = StyleSheet.create({
   },
   feedBtn: {
     flex: 1,
+    minWidth: 140,
     backgroundColor: '#EA580C', // Orange matching Chat
     paddingVertical: 12,
     borderRadius: 24,
@@ -1479,12 +1482,14 @@ const styles = StyleSheet.create({
   },
   actionRowSmall: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 16,
     justifyContent: 'space-between',
   },
   smallViewBtn: {
     flex: 1,
+    minWidth: 80,
     backgroundColor: '#F3F4F6', // Gray
     paddingVertical: 10,
     borderRadius: 8,
@@ -1499,6 +1504,7 @@ const styles = StyleSheet.create({
   },
   smallConnectBtn: {
     flex: 1,
+    minWidth: 90,
     backgroundColor: '#2563EB', // Blue
     paddingVertical: 10,
     borderRadius: 8,
@@ -1513,6 +1519,7 @@ const styles = StyleSheet.create({
   },
   smallRejectBtn: {
     flex: 1,
+    minWidth: 90,
     backgroundColor: '#EA580C', // Orange
     paddingVertical: 10,
     borderRadius: 8,
@@ -1563,6 +1570,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   availabilityTextCol: {
+    flex: 1,
     marginLeft: 12,
   },
   availabilityLabel: {
@@ -1571,9 +1579,10 @@ const styles = StyleSheet.create({
   },
   availabilityText: {
     color: '#16A34A',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
     marginTop: 2,
+    flexWrap: 'wrap',
   },
   languagesContainer: {
     marginBottom: 20,

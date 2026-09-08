@@ -42,6 +42,7 @@ export default function SathiHours() {
   const [creditsLedger, setCreditsLedger] = useState<any[]>([]);
   const [upcomingVisits, setUpcomingVisits] = useState<any[]>([]);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [showAllLedger, setShowAllLedger] = useState(false);
 
   // OTP Modal State
   const [showOtpModal, setShowOtpModal] = useState(false);
@@ -512,14 +513,18 @@ export default function SathiHours() {
         )}
 
         {/* Credits Ledger Transaction Ledger */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
           <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Points Ledger & History</Text>
-          <TouchableOpacity onPress={() => router.push('/(sathi)/credits')}>
-            <Text style={{ color: '#FE6700', fontWeight: '700', fontSize: 13 }}>Redeem Rewards →</Text>
-          </TouchableOpacity>
+          {creditsLedger.length > 5 && (
+            <TouchableOpacity onPress={() => setShowAllLedger(!showAllLedger)}>
+              <Text style={{ color: '#FE6700', fontWeight: 'bold', fontSize: 13 }}>
+                {showAllLedger ? 'Show Less' : 'View All'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
         {creditsLedger.length > 0 ? (
-          creditsLedger.map((item) => {
+          (showAllLedger ? creditsLedger : creditsLedger.slice(0, 5)).map((item) => {
             const isEarned = item.pointsDelta >= 0;
             return (
               <View key={item.id} style={styles.ledgerItem}>

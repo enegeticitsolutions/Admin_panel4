@@ -5,7 +5,7 @@ import {
   Thermometer, Droplet, Scale, RefreshCw, UserCheck, ArrowLeft, Edit2, Trash2,
   CalendarClock, Eye, Pencil, CheckCircle2, XCircle
 } from 'lucide-react';
-import { beneficiaryApi, visitApi } from '../../services/api';
+import { beneficiaryApi, visitApi, fileAccessApi } from '../../services/api';
 import { StatusChip } from '../components/common/StatusChip';
 import { ProfilePhotoUploader } from '../components/common/ProfilePhotoUploader';
 import { RefreshButton } from '../components/common/RefreshButton';
@@ -49,6 +49,20 @@ export default function BeneficiaryProfilePage() {
   const [visitsLoading, setVisitsLoading] = useState(false);
   const [openModalVisitId, setOpenModalVisitId] = useState<string | null>(null);
   const [previewDoc, setPreviewDoc] = useState<any>(null);
+  const [loadingPreviewId, setLoadingPreviewId] = useState<string | null>(null);
+
+  const handleOpenPreview = async (doc: any) => {
+    try {
+      setLoadingPreviewId(doc.id);
+      const presignedUrl = await fileAccessApi.getPresignedUrl('medical_record', doc.id);
+      setPreviewDoc({ ...doc, fileUrl: presignedUrl });
+    } catch (e) {
+      console.warn('Could not fetch presigned URL, falling back to direct URL:', e);
+      setPreviewDoc(doc);
+    } finally {
+      setLoadingPreviewId(null);
+    }
+  };
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const [activeTab, setActiveTab] = useState(queryParams.get('tab') || 'profile');
@@ -492,10 +506,11 @@ export default function BeneficiaryProfilePage() {
                             
                             {doc.fileUrl && (
                               <button 
-                                onClick={() => setPreviewDoc(doc)}
+                                onClick={() => handleOpenPreview(doc)}
+                                disabled={loadingPreviewId === doc.id}
                                 className="inline-flex items-center justify-center p-2 rounded-xl bg-orange-50 text-[#FF7A00] hover:bg-orange-100 transition-colors"
                               >
-                                <Eye size={16} />
+                                {loadingPreviewId === doc.id ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
                               </button>
                             )}
                           </div>
