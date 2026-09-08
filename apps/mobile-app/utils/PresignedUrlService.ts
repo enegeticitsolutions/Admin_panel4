@@ -1,4 +1,5 @@
-import { apiClient } from '../core/api'; // adjust this import to match your actual API client path
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '@/constants/api';
 
 /**
  * PresignedUrlService — Client-side helper for fetching presigned file URLs
@@ -38,18 +39,23 @@ export class PresignedUrlService {
       return cached.url;
     }
 
-    const response = await apiClient.get<{
-      success: boolean;
-      url: string;
-      expiresAt: string;
-      ttlSeconds: number;
-    }>(`/files/presigned?type=${type}&id=${encodeURIComponent(id)}`);
+    const token = (await AsyncStorage.getItem('token')) || (await AsyncStorage.getItem('userToken'));
 
-    if (!response.data.success || !response.data.url) {
-      throw new Error(`Failed to get presigned URL for ${type}:${id}`);
+    const response = await fetch(`${API_URL}/files/presigned?type=${type}&id=${encodeURIComponent(id)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success || !data.url) {
+      throw new Error(data?.message || `Failed to get presigned URL for ${type}:${id}`);
     }
 
-    const { url, expiresAt } = response.data;
+    const { url, expiresAt } = data;
 
     // Cache it until expiry
     this.cache.set(cacheKey, {
