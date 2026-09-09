@@ -1725,4 +1725,74 @@ export const fileAccessApi = {
   }
 };
 
+export const invoicesApi = {
+  getInvoices: async (params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<{
+    data: any[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.status) query.append('status', params.status);
+    const qStr = query.toString();
+    const res = await apiFetch(`${API_BASE}/invoices${qStr ? `?${qStr}` : ''}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to fetch invoices');
+    }
+    return data;
+  },
+
+  getInvoiceById: async (id: string): Promise<any> => {
+    return apiJson<any>(`/invoices/${encodeURIComponent(id)}`);
+  },
+
+  /** Admin: all invoices for a specific subscriber */
+  getBySubscriberId: async (subscriberId: string, params?: { page?: number; limit?: number }): Promise<any> => {
+    const query = new URLSearchParams();
+    query.append('subscriberId', subscriberId);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit || 50));
+    const res = await apiFetch(`${API_BASE}/invoices?${query.toString()}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.message || 'Failed to fetch invoices');
+    return data;
+  },
+
+  /** Admin: all invoices for a specific beneficiary */
+  getByBeneficiaryId: async (beneficiaryId: string, params?: { page?: number; limit?: number }): Promise<any> => {
+    const query = new URLSearchParams();
+    query.append('beneficiaryId', beneficiaryId);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit || 50));
+    const res = await apiFetch(`${API_BASE}/invoices?${query.toString()}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.message || 'Failed to fetch invoices');
+    return data;
+  },
+
+  getInvoiceHtmlUrl: (id: string): string => {
+    let token = '';
+    const savedAuth = localStorage.getItem('maihonna_user');
+    if (savedAuth) {
+      try {
+        const authData = JSON.parse(savedAuth);
+        token = authData.accessToken || authData.token || '';
+      } catch (e) {}
+    }
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE}/invoices/${encodeURIComponent(id)}/html${query}`;
+  },
+
+  fetchInvoiceHtml: async (id: string): Promise<string> => {
+    const res = await apiFetch(`${API_BASE}/invoices/${encodeURIComponent(id)}/html`);
+    if (!res.ok) {
+      throw new Error('Failed to load invoice HTML preview');
+    }
+    return await res.text();
+  },
+};
+
+
 

@@ -775,7 +775,7 @@ function formatAddonUnitText(count: number, rawLabel?: string | null): string {
 async function calculateAddonPricing(benefitId: string, subscriptionId: string, userId: string, quantity: number = 1) {
   const q = Math.max(1, Math.floor(Number(quantity) || 1));
 
-  // 1. Fetch the benefit and assert it is an active add-on
+  // 1. Fetch the benefit (includes tax fields — all from DB, not hardcoded)
   const benefit = await prisma.benefit.findUnique({
     where: { id: benefitId },
     include: { benefitType: { select: { name: true } } }
@@ -786,24 +786,50 @@ async function calculateAddonPricing(benefitId: string, subscriptionId: string, 
   if (!benefit.isActive) throw new Error('This benefit is not currently active');
   if (benefit.addonPrice === null || benefit.addonPrice === undefined) throw new Error('Add-on price is not configured for this benefit');
 
-  // 2. Verify subscription ownership and load beneficiary info for notification
+  // 2. Verify subscription ownership and load beneficiary state for place-of-supply
   const subscription = await prisma.subscription.findFirst({
     where: { id: subscriptionId, subscriberId: userId, isActive: true },
-    include: { beneficiary: { select: { id: true, name: true, userId: true } } }
+    include: {
+      beneficiary: { select: { id: true, name: true, userId: true, state: true } },
+    }
   });
   if (!subscription) throw new Error('Active subscription not found or access denied');
 
-  // 3. Calculate pricing — scaled by quantity `q`
+  // 3. Resolve GST rate from DB (priority: exempt → benefit.gstRate → TaxCategory → system default)
+  let resolvedGstRate = 18; // absolute last resort
+  let resolvedHsnSac = benefit.hsnSacCode || '998399';
+
+  if (benefit.isGstExempt) {
+    resolvedGstRate = 0;
+    resolvedHsnSac = benefit.hsnSacCode || '999312';
+  } else if (benefit.gstRate !== null && benefit.gstRate !== undefined) {
+    resolvedGstRate = parseFloat(benefit.gstRate as any);
+  } else if (benefit.taxCategory) {
+    // Look up TaxCategory table — the real source of truth
+    const category = await prisma.taxCategory.findUnique({ where: { code: benefit.taxCategory } });
+    if (category && category.isActive) {
+      resolvedGstRate = parseFloat(category.gstRate as any);
+      resolvedHsnSac = benefit.hsnSacCode || category.hsnSacCode || '998399';
+    } else {
+      // Try system_configs DEFAULT_GST_RATE as last DB-driven fallback
+      const sysConfig = await prisma.systemConfig.findUnique({ where: { key: 'DEFAULT_GST_RATE' } }).catch(() => null);
+      if (sysConfig?.value) resolvedGstRate = parseFloat(sysConfig.value) || 18;
+    }
+  }
+
+  // 4. Calculate pricing
   const singleBasePrice = benefit.addonDiscountPrice ?? benefit.addonPrice;
   const singleOriginalPrice = benefit.addonPrice;
   const singleUnits = benefit.addonIncludedUnits ?? 1;
 
   const basePrice = parseFloat((singleBasePrice * q).toFixed(2));
   const originalPrice = parseFloat((singleOriginalPrice * q).toFixed(2));
-  const effectiveGstRate = benefit.isGstExempt ? 0 : (benefit.gstRate !== null && benefit.gstRate !== undefined ? benefit.gstRate / 100 : GST_RATE);
-  const tax = parseFloat((basePrice * effectiveGstRate).toFixed(2));
+  const tax = parseFloat((basePrice * resolvedGstRate / 100).toFixed(2));
   const total = parseFloat((basePrice + tax).toFixed(2));
   const includedUnits = singleUnits * q;
+
+  // Place of supply from beneficiary state (not hardcoded)
+  const placeOfSupply = (subscription as any).beneficiary?.state || 'Haryana';
 
   return {
     benefit,
@@ -814,13 +840,14 @@ async function calculateAddonPricing(benefitId: string, subscriptionId: string, 
     basePrice,
     originalPrice,
     hasDiscount: !!(benefit.addonDiscountPrice && benefit.addonDiscountPrice < benefit.addonPrice),
-    taxRate: benefit.isGstExempt ? 0 : (benefit.gstRate ?? 18),
+    taxRate: resolvedGstRate,
     taxCategory: benefit.taxCategory,
-    hsnSacCode: benefit.hsnSacCode,
+    hsnSacCode: resolvedHsnSac,
     isGstExempt: benefit.isGstExempt || false,
     tax,
     total,
-    includedUnits
+    includedUnits,
+    placeOfSupply,
   };
 }
 
@@ -1063,12 +1090,14 @@ router.post('/addon/purchase', paymentLimiter as unknown as RequestHandler, auth
         name: `Add-on: ${p.benefit.name}`,
         quantity: p.quantity || 1,
         unitPrice: p.unitPrice,
-        gstRate: p.benefit.gstRate ?? 18,
-        hsnSacCode: p.benefit.hsnSacCode || '998399',
-        isGstExempt: p.benefit.isGstExempt || false,
+        gstRate: p.taxRate,                     // Resolved from DB (not hardcoded)
+        hsnSacCode: p.hsnSacCode,               // Resolved from DB
+        isGstExempt: p.isGstExempt || false,
       }];
 
-      const invoiceCalc = calculateItemizedInvoice(taxItems, 0, 'Haryana', 'Haryana');
+      // placeOfSupply from beneficiary state — not hardcoded
+      const customerState = p.placeOfSupply || 'Haryana';
+      const invoiceCalc = calculateItemizedInvoice(taxItems, 0, customerState, 'Haryana');
       
       const invoiceId = generateUUID();
       const beneficiaryId = p.subscription.beneficiaryId || null;
@@ -1086,7 +1115,7 @@ router.post('/addon/purchase', paymentLimiter as unknown as RequestHandler, auth
           discountAmount: 0,
           taxAmount: invoiceCalc.taxAmount,
           totalAmount: invoiceCalc.totalAmount,
-          placeOfSupply: 'Haryana', // Default state for add-on unless fetched
+          placeOfSupply: customerState,          // From beneficiary state — not hardcoded
           cgstAmount: invoiceCalc.cgstAmount,
           sgstAmount: invoiceCalc.sgstAmount,
           igstAmount: invoiceCalc.igstAmount,

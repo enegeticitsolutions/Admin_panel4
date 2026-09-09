@@ -3,9 +3,9 @@ import { useParams, useNavigate, useLocation } from 'react-router';
 import { 
   User, Phone, Mail, MapPin, Calendar, Loader2, Heart, Activity, 
   Thermometer, Droplet, Scale, RefreshCw, UserCheck, ArrowLeft, Edit2, Trash2,
-  CalendarClock, Eye, Pencil, CheckCircle2, XCircle
+  CalendarClock, Eye, Pencil, CheckCircle2, XCircle, Receipt, ExternalLink, FileText
 } from 'lucide-react';
-import { beneficiaryApi, visitApi, fileAccessApi } from '../../services/api';
+import { beneficiaryApi, visitApi, fileAccessApi, invoicesApi } from '../../services/api';
 import { StatusChip } from '../components/common/StatusChip';
 import { ProfilePhotoUploader } from '../components/common/ProfilePhotoUploader';
 import { RefreshButton } from '../components/common/RefreshButton';
@@ -50,6 +50,29 @@ export default function BeneficiaryProfilePage() {
   const [openModalVisitId, setOpenModalVisitId] = useState<string | null>(null);
   const [previewDoc, setPreviewDoc] = useState<any>(null);
   const [loadingPreviewId, setLoadingPreviewId] = useState<string | null>(null);
+
+  // Billing tab state
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [openingInvoiceId, setOpeningInvoiceId] = useState<string | null>(null);
+
+  const handleViewInvoice = async (invoiceId: string) => {
+    setOpeningInvoiceId(invoiceId);
+    try {
+      const html = await invoicesApi.fetchInvoiceHtml(invoiceId);
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+      const win = window.open(blobUrl, '_blank');
+      if (!win) {
+        window.open(invoicesApi.getInvoiceHtmlUrl(invoiceId), '_blank');
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to open invoice preview');
+    } finally {
+      setOpeningInvoiceId(null);
+    }
+  };
 
   const handleOpenPreview = async (doc: any) => {
     try {
@@ -138,7 +161,21 @@ export default function BeneficiaryProfilePage() {
 
   useEffect(() => {
     if (activeTab === 'visits') fetchVisits();
+    if (activeTab === 'billing') fetchInvoices();
   }, [activeTab, id]);
+
+  const fetchInvoices = async () => {
+    if (!id) return;
+    setInvoicesLoading(true);
+    try {
+      const result = await invoicesApi.getByBeneficiaryId(id);
+      setInvoices(result.data || []);
+    } catch (err) {
+      console.error('Failed to load invoices', err);
+    } finally {
+      setInvoicesLoading(false);
+    }
+  };
 
   const handleAssignStaff = async () => {
     if (!details || !id) return;
@@ -385,6 +422,7 @@ export default function BeneficiaryProfilePage() {
                 <TabsTrigger value="assign" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-[#FF7A00] data-[state=active]:shadow-md transition-all">Staff Assignment</TabsTrigger>
                 <TabsTrigger value="clinical" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-[#FF7A00] data-[state=active]:shadow-md transition-all">Clinical Config</TabsTrigger>
                 <TabsTrigger value="visits" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-[#1D4ED8] data-[state=active]:shadow-md transition-all flex items-center gap-1.5"><CalendarClock size={12} />Visits</TabsTrigger>
+                <TabsTrigger value="billing" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-md transition-all flex items-center gap-1.5"><Receipt size={12} />Billing</TabsTrigger>
               </TabsList>
 
                <TabsContent value="profile" className="space-y-8 mt-0 outline-none">
@@ -856,6 +894,111 @@ export default function BeneficiaryProfilePage() {
                   )}
                 </div>
               </TabsContent>
+
+              {/* ─── BILLING TAB ─── */}
+              <TabsContent value="billing" className="space-y-4 mt-0 outline-none">
+                <div className="bg-white rounded-[32px] p-8 shadow-sm border border-[#E7DED6]">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                        <Receipt size={18} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-black text-gray-800">Billing &amp; Invoices</h3>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Invoices associated with this beneficiary</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-xl">
+                      {invoices.length} record{invoices.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+
+                  {invoicesLoading ? (
+                    <div className="flex items-center justify-center py-14 gap-3">
+                      <Loader2 className="animate-spin text-emerald-500" size={22} />
+                      <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading invoices...</span>
+                    </div>
+                  ) : invoices.length === 0 ? (
+                    <div className="text-center py-14 bg-gray-50/50 rounded-[24px] border border-dashed border-gray-200">
+                      <FileText className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                      <p className="font-bold text-gray-400 uppercase tracking-widest text-sm">No invoices found</p>
+                      <p className="text-xs text-gray-300 mt-1">Invoices are created automatically when payments are made</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {invoices.map((inv: any) => {
+                        const statusColors: Record<string, string> = {
+                          PAID: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                          PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
+                          CANCELLED: 'bg-red-50 text-red-600 border-red-200',
+                          DRAFT: 'bg-gray-50 text-gray-500 border-gray-200',
+                        };
+                        const typeLabels: Record<string, string> = {
+                          SUBSCRIPTION: 'Subscription',
+                          SERVICE: 'Add-on',
+                          ADDON: 'Add-on',
+                          RENEWAL: 'Renewal',
+                        };
+                        const issuedDate = inv.issuedAt
+                          ? new Date(inv.issuedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : '—';
+                        const statusClass = statusColors[inv.status] || 'bg-gray-50 text-gray-500 border-gray-200';
+
+                        return (
+                          <div
+                            key={inv.id}
+                            className="flex items-center justify-between p-5 rounded-2xl border border-gray-100 bg-[#FDFBF9] hover:border-emerald-200 hover:bg-emerald-50/20 transition-all group"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
+                                <Receipt size={16} />
+                              </div>
+                              <div>
+                                <p className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors">
+                                  {inv.invoiceNumber}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${statusClass}`}>
+                                    {inv.status}
+                                  </span>
+                                  <span className="text-[9px] font-bold text-gray-400 uppercase">
+                                    {typeLabels[inv.invoiceType] || inv.invoiceType}
+                                  </span>
+                                  <span className="text-[9px] text-gray-300">·</span>
+                                  <span className="text-[9px] font-bold text-gray-400">{issuedDate}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <p className="text-base font-black text-gray-800">₹{Number(inv.totalAmount).toFixed(2)}</p>
+                                {Number(inv.taxAmount) > 0 && (
+                                  <p className="text-[9px] font-bold text-gray-400">incl. ₹{Number(inv.taxAmount).toFixed(2)} GST</p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleViewInvoice(inv.id)}
+                                disabled={openingInvoiceId === inv.id}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E7DED6] text-gray-600 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
+                                title="View / Print Invoice"
+                              >
+                                {openingInvoiceId === inv.id ? (
+                                  <Loader2 size={13} className="animate-spin text-emerald-600" />
+                                ) : (
+                                  <ExternalLink size={13} />
+                                )}
+                                <span>View</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
             </Tabs>
 
             {/* Visit Details / Edit Modal */}

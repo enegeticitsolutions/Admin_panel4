@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { validateCouponCode, createRazorpayOrder, purchaseSubscription, fetchCheckoutPreview } from "../services/api";
+import InvoiceModal from "../components/modals/InvoiceModal";
 import logo from "../assets/logo.svg";
 
 const fallbackPackage = {
@@ -78,6 +79,7 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
 
   const [purchaseError, setPurchaseError] = useState("");
   const [purchaseSuccess, setPurchaseSuccess] = useState(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   const baseMonthlyPrice = pkg.basePrice || pkg.price || 4999;
 
@@ -310,6 +312,51 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
                 <li>Start scheduling Care Mitra visits and track health vitals in real time!</li>
               </ul>
             </div>
+
+            {/* GST Tax Invoice Card */}
+            {(purchaseSuccess?.invoiceNumber || purchaseSuccess?.invoiceId) && (
+              <div style={{
+                background: "#f0fdf4",
+                border: "1px dashed #22c55e",
+                borderRadius: "16px",
+                padding: "18px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "24px",
+                textAlign: "left",
+              }}>
+                <div>
+                  <span style={{ fontSize: "0.8rem", color: "#166534", display: "block", fontWeight: "600" }}>
+                    GST Tax Invoice Ready
+                  </span>
+                  <strong style={{ fontSize: "1rem", color: "#14532d" }}>
+                    {purchaseSuccess.invoiceNumber || purchaseSuccess.invoiceId}
+                  </strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowInvoiceModal(true)}
+                  style={{
+                    background: "#166534",
+                    color: "#ffffff",
+                    border: "none",
+                    padding: "10px 18px",
+                    borderRadius: "10px",
+                    fontSize: "0.88rem",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    boxShadow: "0 2px 6px rgba(22, 101, 52, 0.2)",
+                  }}
+                >
+                  📄 View Invoice
+                </button>
+              </div>
+            )}
+
             <button onClick={onGoBack} style={{
               width: "100%", padding: "16px", borderRadius: "14px",
               background: "#fe6700", color: "#ffffff", fontWeight: "700",
@@ -604,6 +651,14 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
           </div>
         )}
       </main>
+
+      {/* Statutory GST Invoice Preview & Print Modal */}
+      <InvoiceModal
+        isOpen={showInvoiceModal}
+        onClose={() => setShowInvoiceModal(false)}
+        invoiceId={purchaseSuccess?.invoiceId || purchaseSuccess?.invoiceNumber}
+        token={token || purchaseSuccess?.token}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ const { prisma } = require('../lib/prisma');
 const bcrypt = require('bcryptjs');
 const { calculateAge } = require('../utils/age');
 const { publishPackageVersion } = require('../utils/packageVersionHelper');
+const { invoiceService } = require('../modules/invoices/invoice.service');
 
 function normalizeUnit(unitLabel) {
   if (!unitLabel) return 'visits';
@@ -713,15 +714,33 @@ router.post('/admin-enroll', async (req, res) => {
       }
 
       // ──────────────────────────────────────────────────────────────────
-      // 7. Create Payment record (offline / admin-enrolled)
+      // 7. Create Invoice & Payment record (offline / admin-enrolled)
       // In CSA mode, payment is deferred until subscriber activates the plan.
       // ──────────────────────────────────────────────────────────────────
-      const invoiceNumber = `ADM-${Date.now()}`;
+      let invoice = null;
+      let invoiceNumber = null;
       if (!csaMode) {
         const paid = parseFloat(amountPaid) || pkg.basePrice;
+        const discount = pkg.basePrice - paid > 0 ? pkg.basePrice - paid : 0;
+        const customerState = beneficiary.state || 'Haryana';
+
+        invoice = await invoiceService.generateSubscriptionInvoice(tx, {
+          subscription: sub,
+          subPackage: pkg,
+          packageVersion: pVersion,
+          durationMonths: 1,
+          customerState,
+          discountAmount: discount,
+          subscriberId: subscriberUser.id,
+          beneficiaryId: beneficiary.id,
+          status: 'PAID',
+        });
+        invoiceNumber = invoice.invoiceNumber;
+
         await tx.payment.create({
           data: {
-            invoiceNumber,
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
             subscriberId: subscriberUser.id,
             beneficiaryId: beneficiary.id,
             subscriptionId: sub.id,
@@ -736,7 +755,7 @@ router.post('/admin-enroll', async (req, res) => {
             })),
             baseAmount: pkg.basePrice,
             amountPaid: paid,
-            discountAmount: pkg.basePrice - paid > 0 ? pkg.basePrice - paid : 0,
+            discountAmount: discount,
             paymentMethod: paymentMethod,
             paymentStatus: 'success',
             planStartDate: start,
@@ -780,7 +799,8 @@ router.post('/admin-enroll', async (req, res) => {
           basePrice: pkg.basePrice,
           isGlobal: pkg.isGlobal
         },
-        invoiceNumber,
+        invoiceId: invoice?.id || null,
+        invoiceNumber: invoiceNumber || null,
       };
     });
 
@@ -1086,13 +1106,26 @@ router.post('/:id/addons/allocate', async (req, res) => {
         });
       }
 
-      // 2. Record Payment if amountPaid > 0
+      // 2. Record Invoice and Payment if amountPaid > 0
       const numericAmount = parseFloat(amountPaid);
+      let invoice = null;
       if (numericAmount > 0) {
-        const invoiceNumber = `ADDON-${Date.now()}`;
+        const customerState = subscription.beneficiary?.state || 'Haryana';
+        invoice = await invoiceService.generateAddonInvoice(tx, {
+          subscriptionId,
+          benefit,
+          units: Number(units) || 1,
+          unitPrice: numericAmount / (Number(units) || 1),
+          customerState,
+          subscriberId: subscription.subscriberId,
+          beneficiaryId: subscription.beneficiaryId || undefined,
+          status: 'PAID',
+        });
+
         await tx.payment.create({
           data: {
-            invoiceNumber,
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
             subscriptionId,
             subscriberId: subscription.subscriberId,
             beneficiaryId: subscription.beneficiaryId || undefined,
@@ -1114,7 +1147,11 @@ router.post('/:id/addons/allocate', async (req, res) => {
         });
       }
 
-      return balance;
+      return {
+        ...balance,
+        invoiceNumber: invoice?.invoiceNumber || null,
+        invoiceId: invoice?.id || null,
+      };
     });
 
     res.json({
@@ -1642,10 +1679,26 @@ router.post('/:id/renew', async (req, res) => {
       }
 
       // 6. Create new Payment & Invoice
-      const invoiceNumber = `REN-${Date.now()}`;
       const amountPaid = parseFloat(payment.amountPaid) || pkg.basePrice;
+      const discount = pkg.basePrice - amountPaid > 0 ? pkg.basePrice - amountPaid : 0;
+      const customerState = currentSub.beneficiary?.state || 'Haryana';
+
+      const invoice = await invoiceService.generateRenewalInvoice(tx, {
+        newSubscription: newSub,
+        pkg,
+        packageVersion: pVersion,
+        durationMonths: duration === 'YEARLY' ? 12 : duration === 'QUARTERLY' ? 3 : 1,
+        customerState,
+        discountAmount: discount,
+        subscriberId: currentSub.subscriberId,
+        beneficiaryId: currentSub.beneficiaryId,
+        status: 'PAID',
+      });
+      const invoiceNumber = invoice.invoiceNumber;
+
       const newPayment = await tx.payment.create({
         data: {
+          invoiceId: invoice.id,
           invoiceNumber,
           subscriberId: currentSub.subscriberId,
           beneficiaryId: currentSub.beneficiaryId,
@@ -1661,7 +1714,7 @@ router.post('/:id/renew', async (req, res) => {
           })),
           baseAmount: pkg.basePrice,
           amountPaid,
-          discountAmount: pkg.basePrice - amountPaid > 0 ? pkg.basePrice - amountPaid : 0,
+          discountAmount: discount,
           paymentMethod: payment.paymentMethod || 'Cash',
           paymentStatus: 'success',
           transactionId: payment.transactionId || `TXN-${Date.now()}`,
@@ -1687,6 +1740,7 @@ router.post('/:id/renew', async (req, res) => {
             renewalMode,
             changedFields,
             amountPaid,
+            invoiceId: invoice.id,
             invoiceNumber,
             renewedBy: req.user?.name || 'Admin',
             ip: req.ip,
@@ -1696,6 +1750,7 @@ router.post('/:id/renew', async (req, res) => {
 
       return {
         newSubscription: newSub,
+        invoiceId: invoice.id,
         invoiceNumber,
         payment: newPayment,
         package: pkg,

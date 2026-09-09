@@ -109,6 +109,7 @@ app.use('/api/regions', adminsOnly, require('./routes/regions'));
 app.use('/api/config', mastersOnly, require('./routes/config'));
 app.use('/api/saathi-guide', adminsOnly, require('./routes/saathi-guide'));
 app.use('/api/payments', require('./routes/payments'));
+app.use('/api/invoices', staffOnly, require('./modules/invoices/invoice.routes'));
 
 // ─── Secure File Access — Presigned URL (all authenticated staff) ─────────────────
 // Route never changes. New file types are registered in the block below.

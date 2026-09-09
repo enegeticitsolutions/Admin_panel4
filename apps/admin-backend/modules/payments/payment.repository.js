@@ -1,6 +1,7 @@
 const { prisma } = require('../../lib/prisma');
 const { v4: uuidv4 } = require('uuid');
 const { dispatchPaymentSuccessful } = require('../../services/notification.dispatcher');
+const { invoiceService } = require('../invoices/invoice.service');
 
 /**
  * Resolves a valid User ID for subscriber. Creates pending subscriber if not found.
@@ -187,6 +188,17 @@ async function markPaymentSuccessfulTransaction(paymentId, gatewayPaymentId, pai
     ]);
 
     console.log(`[Payment Repository Transaction OK] Payment ${paymentId} & Subscription ${existing.subscriptionId} ACTIVATED!`);
+
+    // Ensure statutory GST invoice is generated and attached to this payment
+    try {
+      await invoiceService.ensurePaymentInvoice(prisma, {
+        ...updatedPayment,
+        subscriber: existing.subscriber,
+        beneficiary: existing.beneficiary,
+      });
+    } catch (invErr) {
+      console.warn('[Payment Webhook Invoice Warning]:', invErr.message);
+    }
 
     // Fire notifications asynchronously so it doesn't block the request response
     if (existing.subscriber && existing.subscriber.phone) {

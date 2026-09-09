@@ -15,11 +15,13 @@ import { enrollmentApi, subscriptionApi, packageApi, staffOnboardingApi, vitalAp
 import { PaymentMethodSelector } from '../components/payment/PaymentMethodSelector';
 import { toast } from 'sonner';
 import { AddonBenefitModal } from '../components/addons/AddonBenefitModal';
+import { InvoiceViewModal } from '../components/InvoiceViewModal';
 import {
   UserPlus, ArrowLeft, ArrowRight, Check, Phone, User, Package,
   CreditCard, CheckCircle2, Loader2, AlertCircle, Users,
   Info, Calendar, Activity, ShieldAlert, Plus, Trash2, HeartPulse,
   Mail, MapPin, Camera, UserSquare, Stethoscope, Heart, Building, X, Clock,
+  Printer,
 } from 'lucide-react';
 import { PincodeCheck } from '../components/enrollment/PincodeCheck';
 import { Badge } from '../components/ui/badge';
@@ -75,6 +77,7 @@ export default function EnrollmentWizardPage() {
   const [enrolling, setEnrolling] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [enrolledResult, setEnrolledResult] = useState<any>(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   const [enrollingMode, setEnrollingMode] = useState<'new' | 'existing'>('existing');
   const [existingSubscriberId, setExistingSubscriberId] = useState('');
@@ -568,9 +571,21 @@ export default function EnrollmentWizardPage() {
 
         <Card className="mb-6 text-left">
           <CardContent className="p-5 space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Invoice</span>
-              <span className="font-bold font-mono text-primary">{enrolledResult.invoiceNumber}</span>
+            <div className="flex justify-between items-center text-sm bg-orange-50/50 p-2.5 rounded-xl border border-orange-100">
+              <div>
+                <span className="text-muted-foreground text-xs block font-semibold">Statutory GST Invoice</span>
+                <span className="font-bold font-mono text-[#FF7A00] text-sm">{enrolledResult.invoiceNumber}</span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setShowInvoiceModal(true)}
+                className="h-8 border-[#FF7A00]/40 text-[#FF7A00] hover:bg-[#FF7A00] hover:text-white font-bold text-xs gap-1.5 shadow-sm"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                View &amp; Print Invoice
+              </Button>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subscriber</span>
@@ -636,6 +651,13 @@ export default function EnrollmentWizardPage() {
             <UserPlus className="w-4 h-4 mr-2" /> Enroll Another
           </Button>
         </div>
+
+        {/* Statutory Invoice Modal */}
+        <InvoiceViewModal
+          isOpen={showInvoiceModal}
+          onClose={() => setShowInvoiceModal(false)}
+          invoiceId={enrolledResult.invoiceId || enrolledResult.invoiceNumber}
+        />
       </div>
     );
   }
