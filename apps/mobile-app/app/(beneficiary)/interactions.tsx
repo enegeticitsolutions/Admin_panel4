@@ -116,6 +116,9 @@ export default function InteractionsScreen() {
     const safeBack = useSafeBack();
     const { visitId: paramVisitId } = useLocalSearchParams();
 
+    const MAX_CONTENT_WIDTH = 440;
+    const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
+
     const [interactions, setInteractions] = useState<Interaction[]>([]);
     const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(true);

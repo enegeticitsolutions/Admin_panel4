@@ -809,6 +809,29 @@ export default function SathiDashboard() {
           </TouchableOpacity>
         </View>
 
+        {/* Additional Stats Grid (from DB) */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <View style={[styles.statIconContainer, { backgroundColor: '#EAF2FF' }]}>
+              <Ionicons name="time-outline" size={22} color="#4B93FF" />
+            </View>
+            <View>
+              <Text style={styles.statVal}>{(dashboard?.totalCreditHours || 0).toFixed(1)}</Text>
+              <Text style={styles.statLbl}>Total Hours</Text>
+            </View>
+          </View>
+
+          <View style={styles.statCard}>
+            <View style={[styles.statIconContainer, { backgroundColor: '#E6F7F1' }]}>
+              <Ionicons name="people-outline" size={22} color="#1FB474" />
+            </View>
+            <View>
+              <Text style={styles.statVal}>{dashboard?.beneficiariesCount || 0}</Text>
+              <Text style={styles.statLbl}>Beneficiaries</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
@@ -816,7 +839,7 @@ export default function SathiDashboard() {
               <Ionicons name="checkmark-done-outline" size={22} color="#1FB474" />
             </View>
             <View>
-              <Text style={styles.statVal}>{dashboard?.visitsThisMonth || 0}</Text>
+              <Text style={styles.statVal}>{dashboard?.totalVisits || 0}</Text>
               <Text style={styles.statLbl}>Total Visits</Text>
             </View>
           </View>

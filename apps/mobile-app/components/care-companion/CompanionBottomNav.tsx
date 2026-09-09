@@ -2,12 +2,14 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const DEEP_ORANGE = '#FE6700';
 
 export function CompanionBottomNav() {
     const router = useRouter();
     const pathname = usePathname();
+    const insets = useSafeAreaInsets();
 
     const isActive = (route: string) => {
         if (route === '/' && pathname === '/') return true;
@@ -16,7 +18,10 @@ export function CompanionBottomNav() {
     };
 
     return (
-        <View style={styles.bottomTabBar}>
+        <View style={[styles.bottomTabBar, {
+            height: (Platform.OS === 'ios' ? 85 : 70) + (Platform.OS === 'android' ? insets.bottom : 0),
+            paddingBottom: (Platform.OS === 'ios' ? 20 : 0) + (Platform.OS === 'android' ? insets.bottom : 0)
+        }]}>
             <View style={styles.tabContainer}>
                 {/* Home Tab */}
                 <TouchableOpacity

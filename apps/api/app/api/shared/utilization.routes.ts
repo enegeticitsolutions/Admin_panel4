@@ -284,7 +284,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // Helper function to build detailed utilization response for a single beneficiary
-async function buildDetailedUtilization(beneficiary: any) {
+export async function buildDetailedUtilization(beneficiary: any) {
   const activeSub = beneficiary.subscriptions?.[0] || null;
   
   let formattedBenefits: any[] = [];
@@ -315,9 +315,24 @@ async function buildDetailedUtilization(beneficiary: any) {
 
       if (periodBalances.length > 0) {
         formattedBenefits = periodBalances.map((pb: any) => {
-          const remaining = pb.remainingQuantity;
+          // Check if subscriptionBenefitBalance has tracked usage that wasn't synced to period balance
+          const matchingBal = (activeSub.benefitBalances || []).find((b: any) => b.benefitId === pb.benefitId);
+          const effectiveUsed = Math.max(pb.usedQuantity, matchingBal?.usedUnits || 0);
           const total = pb.totalAllocation;
-          const usagePercent = total > 0 ? Math.round((pb.usedQuantity / total) * 100) : 0;
+          const remaining = Math.max(0, total - effectiveUsed);
+          const usagePercent = total > 0 ? Math.round((effectiveUsed / total) * 100) : 0;
+
+          // Auto-sync period balance in background if legacy balance tracked higher usage
+          if (matchingBal && matchingBal.usedUnits > pb.usedQuantity) {
+            prisma.benefitPeriodBalance.update({
+              where: { id: pb.id },
+              data: {
+                usedQuantity: matchingBal.usedUnits,
+                remainingQuantity: Math.max(0, pb.totalAllocation - matchingBal.usedUnits)
+              }
+            }).catch(e => console.error('[utilization.routes] Auto-sync period balance failed:', e));
+          }
+
           return {
             benefitId: pb.benefitId,
             benefitName: pb.snapshotName || pb.benefit?.name,
@@ -326,7 +341,7 @@ async function buildDetailedUtilization(beneficiary: any) {
             baseAllocation: pb.baseAllocation,
             rolloverAllocation: pb.rolloverAllocation,
             totalUnits: total,
-            usedUnits: pb.usedQuantity,
+            usedUnits: effectiveUsed,
             remainingUnits: remaining,
             usagePercent,
             isLowBalance: total > 0 && (remaining / total) < 0.2,
@@ -413,6 +428,42 @@ async function buildDetailedUtilization(beneficiary: any) {
       };
     });
 
+    // Fetch completed Sathi volunteer visits
+    const rawVolLogs = await prisma.volunteerVisitLog.findMany({
+      where: {
+        beneficiaryId: beneficiary.id,
+        status: 'completed'
+      },
+      orderBy: { checkOutTime: 'desc' },
+      take: 30,
+      include: {
+        volunteer: {
+          select: { name: true, phone: true }
+        }
+      }
+    });
+
+    const mappedVolLogs = rawVolLogs.map(vl => {
+      let actualMinutes = vl.minutesLogged ? Math.round(vl.minutesLogged) : null;
+      if (!actualMinutes && vl.checkInTime && vl.checkOutTime) {
+        actualMinutes = Math.round((new Date(vl.checkOutTime).getTime() - new Date(vl.checkInTime).getTime()) / 60000);
+      }
+      return {
+        id: vl.id,
+        visitId: vl.id,
+        hoursConsumed: vl.hoursEarned || (actualMinutes ? actualMinutes / 60 : 0),
+        balanceBefore: vl.beneficiaryBalanceBefore,
+        balanceAfter: vl.beneficiaryBalanceAfter,
+        description: vl.notes ? `Sathi Visit: ${vl.notes}` : `Sathi Companion Visit (${(vl.hoursEarned || 0).toFixed(1)} hrs)`,
+        loggedAt: vl.checkOutTime || vl.createdAt,
+        careCompanionName: vl.volunteer?.name || 'Sathi Volunteer',
+        ccType: 'SATHI_COMPANION',
+        visitStatus: 'COMPLETED',
+        actualMinutes,
+        isRequest: false
+      };
+    });
+
     // Fetch service requests as activity logs
     const serviceReqs = await prisma.serviceRequest.findMany({
       where: { beneficiaryId: beneficiary.id },
@@ -445,7 +496,17 @@ async function buildDetailedUtilization(beneficiary: any) {
       };
     });
 
-    recentLogs = [...mappedLogs, ...mappedRequests].sort(
+    // Combine logs and deduplicate by referenceId or id
+    const combinedLogs = [...mappedLogs, ...mappedVolLogs, ...mappedUsage, ...mappedRequests];
+    const seenKeys = new Set<string>();
+    const dedupedLogs = combinedLogs.filter(item => {
+      const key = item.visitId || item.id;
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
+
+    recentLogs = dedupedLogs.sort(
       (a, b) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime()
     ).slice(0, 30);
   }

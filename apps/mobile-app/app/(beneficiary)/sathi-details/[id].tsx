@@ -14,6 +14,7 @@ import { Feather, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
 
 export default function SathiDetailsScreen() {
   const { id, status } = useLocalSearchParams();
@@ -38,9 +39,10 @@ export default function SathiDetailsScreen() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
+      console.log('[SathiDetails] API response:', JSON.stringify(data?.data?.phone));
       
-      if (res.ok && data.success) {
-        setProfile(data.data);
+      if (res.ok && (data.success || data.data)) {
+        setProfile(data.data || data);
       }
     } catch (err) {
       console.error('Error fetching sathi profile:', err);
@@ -154,13 +156,27 @@ export default function SathiDetailsScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity 
-              style={styles.headerActionBtnWhite}
-              onPress={() => router.push({ pathname: '/(beneficiary)/sathi-request', params: { sathiId: id } })}
-            >
-              <Feather name="calendar" size={18} color="#FF6A00" />
-              <Text style={styles.headerActionBtnWhiteText}>Book Visit</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+              <TouchableOpacity 
+                style={styles.headerActionBtnWhite}
+                onPress={() => router.push({ pathname: '/(beneficiary)/sathi-request', params: { sathiId: id } })}
+              >
+                <Feather name="calendar" size={18} color="#FF6A00" />
+                <Text style={styles.headerActionBtnWhiteText}>Book Visit</Text>
+              </TouchableOpacity>
+
+              <ConnectContactButton
+                name={profile.name}
+                role="Sathi"
+                phone={profile.phone || null}
+                photo={profile.photo}
+                trigger={
+                  <View style={{ backgroundColor: '#FFF', width: 50, height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                    <Feather name="phone" size={20} color="#FF6A00" />
+                  </View>
+                }
+              />
+            </View>
           )}
         </View>
       </View>

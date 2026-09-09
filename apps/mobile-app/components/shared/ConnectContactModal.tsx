@@ -71,7 +71,7 @@ export const ConnectContactButton = ({ name, role, phone, photo, trigger }: Conn
                         </View>
 
                         {/* Title Role Tag */}
-                        <Text style={styles.roleTag}>CONNECT WITH {role.toUpperCase()}</Text>
+                        <Text style={styles.roleTag}>CALL {role.toUpperCase()}</Text>
 
                         {/* Name */}
                         <Text style={styles.nameText}>{name}</Text>
@@ -98,7 +98,7 @@ export const ConnectContactButton = ({ name, role, phone, photo, trigger }: Conn
                                 onPress={handleCall}
                                 disabled={!phone}
                             >
-                                <Text style={styles.callBtnText}>Connect</Text>
+                                <Text style={styles.callBtnText}>Call</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

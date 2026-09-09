@@ -171,7 +171,10 @@ export default function DashboardScreen() {
                             <Text style={styles.headerSub}>Welcome back, {dashboardData.user.firstName}</Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <NotificationBell />
+                            <NotificationBell 
+                                style={[styles.profileBtn, { marginRight: 12 }]} 
+                                iconColor={DEEP_ORANGE} 
+                            />
                             <TouchableOpacity style={styles.profileBtn} onPress={() => push('/(care-companion)/profile' as any)}>
                                 <Ionicons name="person-outline" size={24} color={DEEP_ORANGE} />
                             </TouchableOpacity>

@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Alert, Platform, useWindowDimensions } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    TouchableOpacity,
+    ActivityIndicator,
+    TextInput,
+    Modal,
+    Alert,
+    Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather, Ionicons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,11 +29,6 @@ interface EmergencyContact {
 }
 
 export default function EmergencyContactsScreen() {
-    const { width } = useWindowDimensions();
-    const MAX_CONTENT_WIDTH = 440;
-    const BASE_HORIZONTAL_PADDING = 16;
-    const contentWidth = Math.min(Math.max(width - BASE_HORIZONTAL_PADDING * 2, 0), MAX_CONTENT_WIDTH);
-    const responsiveContentStyle = { width: contentWidth, alignSelf: 'center' as const };
     const router = useRouter();
     const { push, replace, pop } = useNavigationStack();
     useAndroidBackHandler();
@@ -64,13 +70,15 @@ export default function EmergencyContactsScreen() {
             if (result.success && result.data && result.data.emergencyContacts) {
                 const ec = result.data.emergencyContacts;
                 if (ec.length > 0) {
-                    setContacts(ec.map((c: any) => ({
-                        name: c.name,
-                        phone: c.phone,
-                        email: c.email || '',
-                        relationship: c.relationship,
-                        isPrimary: !!c.isPrimary
-                    })));
+                    setContacts(
+                        ec.map((c: any) => ({
+                            name: c.name,
+                            phone: c.phone,
+                            email: c.email || '',
+                            relationship: c.relationship,
+                            isPrimary: !!c.isPrimary,
+                        }))
+                    );
                 } else {
                     useFallbackContacts();
                 }
@@ -92,15 +100,15 @@ export default function EmergencyContactsScreen() {
                 phone: '+1 (555) 123-4567',
                 email: 'robert.williams@email.com',
                 relationship: 'Son',
-                isPrimary: true
+                isPrimary: true,
             },
             {
                 name: 'Sonali Jain',
                 phone: '+1 (555) 234-5678',
                 email: 'jennifer.davis@email.com',
                 relationship: 'Daughter',
-                isPrimary: false
-            }
+                isPrimary: false,
+            },
         ]);
     };
 
@@ -116,7 +124,7 @@ export default function EmergencyContactsScreen() {
                         'Content-Type': 'application/json',
                         Authorization: `Bearer ${token}`,
                     },
-                    body: JSON.stringify({ contacts: updatedContacts })
+                    body: JSON.stringify({ contacts: updatedContacts }),
                 });
 
                 const result = await response.json();
@@ -161,7 +169,7 @@ export default function EmergencyContactsScreen() {
     const handleSetPrimary = (index: number) => {
         const updated = contacts.map((c, i) => ({
             ...c,
-            isPrimary: i === index
+            isPrimary: i === index,
         }));
         handleSaveContacts(updated);
     };
@@ -181,7 +189,7 @@ export default function EmergencyContactsScreen() {
 
         // If setting this one as primary, ensure all others are marked false
         if (isPrimaryContact) {
-            updated = updated.map(c => ({ ...c, isPrimary: false }));
+            updated = updated.map((c) => ({ ...c, isPrimary: false }));
         }
 
         const newContact: EmergencyContact = {
@@ -189,7 +197,7 @@ export default function EmergencyContactsScreen() {
             phone: phoneClean,
             email: emailClean || undefined,
             relationship: relationClean,
-            isPrimary: isPrimaryContact || (contacts.length === 0) // force true if first contact
+            isPrimary: isPrimaryContact || contacts.length === 0, // force true if first contact
         };
 
         if (editIndex !== null) {
@@ -232,8 +240,8 @@ export default function EmergencyContactsScreen() {
                             updated[0].isPrimary = true;
                         }
                         handleSaveContacts(updated);
-                    }
-                }
+                    },
+                },
             ]
         );
     };
@@ -248,96 +256,109 @@ export default function EmergencyContactsScreen() {
     }
 
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <View style={[styles.header, responsiveContentStyle]}>
-                <TouchableOpacity onPress={() => safeBack()} style={styles.backBtn}>
-                    <Feather name="arrow-left" size={20} color="#000000" />
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+            {/* Top Navigation Bar / Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => safeBack()} style={styles.backBtn} activeOpacity={0.7}>
+                    <Feather name="arrow-left" size={22} color="#000000" />
                 </TouchableOpacity>
 
                 <Text style={styles.headerTitle}>Emergency Contacts</Text>
 
                 <TouchableOpacity onPress={handleOpenAdd} style={styles.addCircleHeaderBtn} activeOpacity={0.8}>
-                    <Feather name="plus" size={20} color="#FFFFFF" />
+                    <Feather name="plus" size={22} color="#FFFFFF" />
                 </TouchableOpacity>
             </View>
 
-            <ScrollView
-                contentContainerStyle={styles.content}
-                showsVerticalScrollIndicator={false}
-                bounces={false}
-            >
-                {contacts.length === 0 ? (
-                    <View style={styles.emptyBox}>
-                        <MaterialCommunityIcons name="phone-off" size={48} color="#D1D5DB" />
-                        <Text style={styles.emptyText}>No emergency contacts found. Tap + to add one.</Text>
-                    </View>
-                ) : (
-                    contacts.map((c, idx) => (
-                        <View key={idx} style={styles.contactCard}>
-                            <View style={styles.cardHeader}>
-                                <View style={styles.leftLabelCol}>
-                                    <View style={styles.nameRow}>
-                                        <Text style={styles.contactName}>{c.name}</Text>
-                                        {c.isPrimary && (
-                                            <View style={styles.primaryBadge}>
-                                                <Text style={styles.primaryBadgeText}>Primary</Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                    <Text style={styles.relationshipText}>{c.relationship}</Text>
-                                </View>
-
-                                <View style={styles.cardHeaderRight}>
-                                    <TouchableOpacity onPress={() => handleOpenEdit(idx)} style={styles.iconActionBtn}>
-                                        <Feather name="edit-2" size={16} color="#333333" />
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity onPress={() => handleDeleteContact(idx)} style={styles.iconActionBtn}>
-                                        <Feather name="trash-2" size={16} color="#EF4444" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            <View style={styles.cardBody}>
-                                <View style={styles.infoLine}>
-                                    <Feather name="phone" size={16} color="#333333" style={styles.infoIcon} />
-                                    <Text style={styles.orangeLinkText}>{c.phone}</Text>
-                                </View>
-
-                                {c.email ? (
-                                    <View style={styles.infoLine}>
-                                        <Feather name="mail" size={16} color="#333333" style={styles.infoIcon} />
-                                        <Text style={styles.orangeLinkText}>{c.email}</Text>
-                                    </View>
-                                ) : null}
-                            </View>
-
-                            {!c.isPrimary && (
-                                <TouchableOpacity
-                                    style={styles.setPrimaryBtn}
-                                    onPress={() => handleSetPrimary(idx)}
-                                    activeOpacity={0.8}
-                                >
-                                    <Text style={styles.setPrimaryBtnText}>Set as Primary</Text>
-                                </TouchableOpacity>
-                            )}
+            {/* Page Content Body */}
+            <View style={styles.bodyWrapper}>
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    showsVerticalScrollIndicator={false}
+                    bounces={false}
+                >
+                    {contacts.length === 0 ? (
+                        <View style={styles.emptyBox}>
+                            <MaterialCommunityIcons name="phone-off" size={48} color="#D1D5DB" />
+                            <Text style={styles.emptyText}>No emergency contacts found. Tap + to add one.</Text>
                         </View>
-                    ))
-                )}
+                    ) : (
+                        contacts.map((c, idx) => (
+                            <View key={idx} style={styles.contactCard}>
+                                <View style={styles.cardHeader}>
+                                    <View style={styles.leftLabelCol}>
+                                        <View style={styles.nameRow}>
+                                            <Text style={styles.contactName}>{c.name}</Text>
+                                            {c.isPrimary && (
+                                                <FontAwesome
+                                                    name="star"
+                                                    size={16}
+                                                    color="#FFB800"
+                                                    style={styles.primaryStarIcon}
+                                                />
+                                            )}
+                                        </View>
+                                        <Text style={styles.relationshipText}>{c.relationship}</Text>
+                                    </View>
 
-                <View style={styles.infoNoteCard}>
-                    <Text style={styles.infoNoteTitle}>Emergency Contact Info</Text>
-                    <Text style={styles.infoNoteDesc}>
-                        These contacts will be notified in case of emergency. The primary contact will be called first.
-                    </Text>
-                </View>
+                                    <View style={styles.cardHeaderRight}>
+                                        <TouchableOpacity
+                                            onPress={() => handleDeleteContact(idx)}
+                                            style={styles.trashBtn}
+                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Feather name="trash-2" size={20} color="#DC2626" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
 
-                <View style={{ height: Platform.OS === 'ios' ? 112 : 96 }} />
-            </ScrollView>
+                                <TouchableOpacity
+                                    activeOpacity={0.7}
+                                    onPress={() => handleOpenEdit(idx)}
+                                    style={styles.cardBody}
+                                >
+                                    <View style={styles.infoLine}>
+                                        <Feather name="phone" size={16} color="#374151" style={styles.infoIcon} />
+                                        <Text style={styles.orangeLinkText}>{c.phone}</Text>
+                                    </View>
 
+                                    {c.email ? (
+                                        <View style={styles.infoLine}>
+                                            <Feather name="mail" size={16} color="#374151" style={styles.infoIcon} />
+                                            <Text style={styles.orangeLinkText}>{c.email}</Text>
+                                        </View>
+                                    ) : null}
+                                </TouchableOpacity>
+
+                                {!c.isPrimary && (
+                                    <TouchableOpacity
+                                        style={styles.setPrimaryBtn}
+                                        onPress={() => handleSetPrimary(idx)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={styles.setPrimaryBtnText}>Set as Primary</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        ))
+                    )}
+
+                    <View style={styles.infoNoteCard}>
+                        <Text style={styles.infoNoteTitle}>Emergency Contact Info</Text>
+                        <Text style={styles.infoNoteDesc}>
+                            These contacts will be notified in case of emergency. The primary contact will be called first.
+                        </Text>
+                    </View>
+
+                    <View style={{ height: Platform.OS === 'ios' ? 112 : 96 }} />
+                </ScrollView>
+            </View>
+
+            {/* Add / Edit Contact Modal */}
             <Modal visible={modalVisible} animationType="slide" transparent={true}>
                 <View style={styles.backdrop}>
-                    <View style={[styles.modalCard, responsiveContentStyle]}>
+                    <View style={styles.modalCard}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>
                                 {editIndex !== null ? 'Edit Emergency Contact' : 'Add Emergency Contact'}
@@ -389,7 +410,7 @@ export default function EmergencyContactsScreen() {
 
                             <TouchableOpacity
                                 style={styles.checkboxRow}
-                                onPress={() => setIsPrimaryContact(prev => !prev)}
+                                onPress={() => setIsPrimaryContact((prev) => !prev)}
                                 activeOpacity={0.8}
                                 disabled={editIndex !== null && contacts[editIndex].isPrimary}
                             >
@@ -397,7 +418,7 @@ export default function EmergencyContactsScreen() {
                                     style={[
                                         styles.checkbox,
                                         (isPrimaryContact || (editIndex !== null && contacts[editIndex].isPrimary)) &&
-                                        styles.checkboxActive,
+                                            styles.checkboxActive,
                                     ]}
                                 >
                                     {(isPrimaryContact || (editIndex !== null && contacts[editIndex].isPrimary)) && (
@@ -426,49 +447,54 @@ export default function EmergencyContactsScreen() {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#FFF0E6',
+        backgroundColor: '#FFFFFF',
     },
     header: {
-        height: Platform.OS === 'ios' ? 88 : 70,
-        paddingTop: Platform.OS === 'ios' ? 18 : 0,
-        paddingHorizontal: 0,
+        height: 56,
+        paddingHorizontal: 16,
         backgroundColor: '#FFFFFF',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
     },
     backBtn: {
         width: 40,
         height: 40,
         justifyContent: 'center',
-        alignItems: 'center',
+        alignItems: 'flex-start',
     },
     headerTitle: {
         flex: 1,
         textAlign: 'center',
         fontFamily: 'Poppins-Regular',
-        fontSize: 16,
+        fontSize: 17,
         lineHeight: 24,
         color: '#000000',
     },
     addCircleHeaderBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 999,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         backgroundColor: '#FE6700',
         justifyContent: 'center',
         alignItems: 'center',
     },
+    bodyWrapper: {
+        flex: 1,
+        backgroundColor: '#FEF3EC',
+    },
     content: {
-        paddingHorizontal: 0,
+        paddingHorizontal: 16,
         paddingTop: 16,
-        paddingBottom: 96,
+        paddingBottom: 110,
     },
     loadingWrap: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#FFF0E6',
+        backgroundColor: '#FEF3EC',
     },
     loadingText: {
         marginTop: 12,
@@ -494,18 +520,20 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
         padding: 16,
-        marginBottom: 12,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
         shadowColor: '#000000',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 1.5,
-        elevation: 2,
+        shadowOpacity: 0.04,
+        shadowRadius: 2,
+        elevation: 1,
     },
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 12,
+        marginBottom: 8,
     },
     leftLabelCol: {
         flex: 1,
@@ -513,58 +541,43 @@ const styles = StyleSheet.create({
     nameRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        flexWrap: 'wrap',
     },
     contactName: {
         fontSize: 18,
-        lineHeight: 27,
+        lineHeight: 26,
         color: '#000000',
         fontFamily: 'Poppins-Medium',
+        fontWeight: '600',
     },
-    primaryBadge: {
-        height: 24,
-        borderRadius: 999,
-        backgroundColor: '#DCFCE7',
-        paddingHorizontal: 10,
-        justifyContent: 'center',
+    primaryStarIcon: {
         marginLeft: 8,
-    },
-    primaryBadgeText: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        lineHeight: 16,
-        color: '#16A34A',
     },
     relationshipText: {
         fontSize: 14,
         lineHeight: 20,
-        color: '#4A5565',
+        color: '#4B5563',
         fontFamily: 'Poppins-Regular',
         marginTop: 2,
     },
     cardHeaderRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
     },
-    iconActionBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 12,
-        backgroundColor: '#F3F4F6',
+    trashBtn: {
+        padding: 4,
         justifyContent: 'center',
         alignItems: 'center',
     },
     cardBody: {
         gap: 8,
-        marginBottom: 14,
+        marginVertical: 4,
     },
     infoLine: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     infoIcon: {
-        width: 18,
+        width: 20,
         marginRight: 8,
     },
     orangeLinkText: {
@@ -575,42 +588,42 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins-Regular',
     },
     setPrimaryBtn: {
-        height: 46,
-        borderWidth: 1.18,
-        borderColor: '#FE6700',
-        borderRadius: 14,
+        height: 44,
+        borderWidth: 1,
+        borderColor: '#D1D5DB',
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#FFFFFF',
+        marginTop: 12,
     },
     setPrimaryBtnText: {
-        color: '#FE6700',
-        fontSize: 16,
-        lineHeight: 24,
+        color: '#000000',
+        fontSize: 15,
+        lineHeight: 22,
         fontFamily: 'Poppins-Medium',
+        fontWeight: '600',
     },
     infoNoteCard: {
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
         padding: 16,
         marginTop: 4,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 1.5,
-        elevation: 2,
+        borderWidth: 1,
+        borderColor: '#9CA3AF',
     },
     infoNoteTitle: {
-        fontSize: 16,
-        lineHeight: 24,
+        fontSize: 15,
+        lineHeight: 22,
         color: '#000000',
         fontFamily: 'Poppins-Medium',
+        fontWeight: '600',
         marginBottom: 6,
     },
     infoNoteDesc: {
         fontSize: 14,
         lineHeight: 20,
-        color: '#333333',
+        color: '#374151',
         fontFamily: 'Poppins-Regular',
     },
     backdrop: {

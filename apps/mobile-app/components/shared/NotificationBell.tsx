@@ -7,7 +7,12 @@ import { useFocusEffect } from 'expo-router';
 import { addNotificationReceivedListener } from '@/services/notifications';
 import { API_URL } from '@/constants/api';
 
-export default function NotificationBell() {
+interface NotificationBellProps {
+  style?: any;
+  iconColor?: string;
+}
+
+export default function NotificationBell({ style, iconColor = '#111827' }: NotificationBellProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -66,8 +71,8 @@ export default function NotificationBell() {
   };
 
   return (
-    <TouchableOpacity style={styles.container} onPress={handlePress} activeOpacity={0.7}>
-      <Ionicons name="notifications-outline" size={24} color="#111827" />
+    <TouchableOpacity style={[styles.container, style]} onPress={handlePress} activeOpacity={0.7}>
+      <Ionicons name="notifications-outline" size={24} color={iconColor} />
       {unreadCount > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>

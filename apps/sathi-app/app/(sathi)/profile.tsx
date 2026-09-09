@@ -23,6 +23,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { deleteSathiAccount } from '@/utils/deleteAccount';
+import CareSupportModal from '@/components/shared/CareSupportModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const scale = (size: number) => Math.round((SCREEN_WIDTH / 390) * size);
@@ -37,6 +38,7 @@ export default function SathiProfile() {
   const [uploading, setUploading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [supportModalVisible, setSupportModalVisible] = useState(false);
   const [reviewsModalVisible, setReviewsModalVisible] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
   const [fetchingReviews, setFetchingReviews] = useState(false);
@@ -195,21 +197,7 @@ export default function SathiProfile() {
   };
 
   const handleOpenSupport = () => {
-    Alert.alert(
-      'Sathi Care Support',
-      'Need assistance with your companion visits, earnings, or verification?\n\n✉️ Email: info@maihoonna.com\n⏱️ Hours: Mon–Sat, 9:00 AM – 7:00 PM IST\n📍 Service Hub: Gurugram, Haryana, India',
-      [
-        {
-          text: 'Send Email',
-          onPress: () => {
-            Linking.openURL('mailto:info@maihoonna.com?subject=Sathi%20Network%20Companion%20Support').catch(() => {
-              Alert.alert('Email Support', 'Please write to us directly at:\ninfo@maihoonna.com');
-            });
-          }
-        },
-        { text: 'Close', style: 'cancel' }
-      ]
-    );
+    setSupportModalVisible(true);
   };
 
   if (loading && !profile) {
@@ -497,6 +485,11 @@ export default function SathiProfile() {
           </View>
         </View>
       </Modal>
+
+      <CareSupportModal
+        visible={supportModalVisible}
+        onClose={() => setSupportModalVisible(false)}
+      />
 
       <SathiBottomNav />
     </View>

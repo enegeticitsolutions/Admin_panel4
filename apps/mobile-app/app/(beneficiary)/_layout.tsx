@@ -2,10 +2,13 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const visibleTabs = ['index', 'schedule', 'meds', 'inbox', 'more'];
 
 export default function BeneficiaryLayout() {
+    const insets = useSafeAreaInsets();
+
     return (
         <Tabs
             screenOptions={({ route }) => {
@@ -19,18 +22,17 @@ export default function BeneficiaryLayout() {
                     tabBarItemStyle: showInTabBar ? undefined : { display: 'none' },
                     tabBarStyle: {
                         backgroundColor: '#FFFFFF',
-                        borderTopWidth: 0,
-                        height: Platform.OS === 'ios' ? 88 : Platform.OS === 'web' ? 68 : 72,
-                        paddingBottom: Platform.OS === 'ios' ? 32 : Platform.OS === 'web' ? 8 : 12,
-                        paddingTop: Platform.OS === 'web' ? 8 : 10,
-                        elevation: 10,
+                        borderTopWidth: 1,
+                        borderTopColor: '#E5E7EB',
+                        height: Platform.OS === 'ios' ? 88 : Platform.OS === 'web' ? 68 : 60 + insets.bottom,
+                        paddingBottom: Platform.OS === 'ios' ? 32 : Platform.OS === 'web' ? 8 : 8 + insets.bottom,
+                        paddingTop: Platform.OS === 'web' ? 8 : 8,
+                        elevation: 0,
                         shadowColor: '#000000',
-                        shadowOpacity: 0.08,
-                        shadowOffset: { width: 0, height: -4 },
-                        shadowRadius: 12,
+                        shadowOpacity: 0.04,
+                        shadowOffset: { width: 0, height: -2 },
+                        shadowRadius: 4,
                         width: '100%',
-                        maxWidth: 440,
-                        alignSelf: 'center',
                     },
                     tabBarLabelStyle: {
                         fontFamily: 'Poppins-Medium',

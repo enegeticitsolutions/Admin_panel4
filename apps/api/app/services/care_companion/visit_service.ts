@@ -1,7 +1,9 @@
 import prisma from '../../core/database';
 import { generateUUID, generateEncounterId, generateVisitCode } from '../../utils/helpers';
-import { Prisma } from '@prisma/client';
+import { Prisma, UsageType } from '@prisma/client';
 import { benefitLedgerService } from '../shared/benefit_ledger_service';
+import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
+import { benefitLedgerEngine } from '../benefit/BenefitLedgerEngine';
 import { notificationProducer } from '@maihoonna/notifications';
 
 
@@ -564,6 +566,47 @@ export const checkOut = async (data: {
                   performedByUserId: existingVisit.careCompanionId,
                 }
               });
+
+              // Synchronize BenefitPeriodBalance & BenefitUsage ledger
+              try {
+                const activePeriod = await benefitPeriodManager.evaluateAndTransitionJIT(activeSubscription.id);
+                if (activePeriod) {
+                  try {
+                    await benefitLedgerEngine.deductUnits({
+                      subscriptionId: activeSubscription.id,
+                      periodId: activePeriod.id,
+                      benefitId: targetBenefitId,
+                      quantity: unitsToDeduct,
+                      usageType: UsageType.VISIT_COMPLETED,
+                      referenceId: visit.id,
+                      notes: `Direct Visit Checkout Completed. Encounter: ${visit.encounterId}`,
+                      performedByUserId: existingVisit.careCompanionId || undefined,
+                    }, tx);
+                  } catch (pe) {
+                    console.error('[VisitService] Period balance deduction warning:', pe);
+                    const pb = await tx.benefitPeriodBalance.findUnique({
+                      where: {
+                        periodId_benefitId: {
+                          periodId: activePeriod.id,
+                          benefitId: targetBenefitId,
+                        }
+                      }
+                    });
+                    if (pb) {
+                      const qty = Math.min(unitsToDeduct, pb.remainingQuantity);
+                      await tx.benefitPeriodBalance.update({
+                        where: { id: pb.id },
+                        data: {
+                          usedQuantity: pb.usedQuantity + qty,
+                          remainingQuantity: Math.max(0, pb.remainingQuantity - qty)
+                        }
+                      });
+                    }
+                  }
+                }
+              } catch (periodErr) {
+                console.error('[VisitService] Period evaluation warning:', periodErr);
+              }
             }
           }
 

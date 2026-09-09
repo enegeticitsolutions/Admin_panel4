@@ -442,36 +442,34 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                                         ) : (
                                             <View style={styles.btnRow}>
                                                 <TouchableOpacity
-                                                    onPress={() => !isMarked && handleLogAdherence(item, true)}
-                                                    disabled={isMarked}
-                                                    activeOpacity={isMarked ? 1 : 0.7}
+                                                    onPress={() => item.status !== 'taken' && handleLogAdherence(item, true)}
+                                                    disabled={item.status === 'taken'}
+                                                    activeOpacity={0.7}
                                                     style={[
                                                         styles.actionBtn,
                                                         styles.checkBtn,
                                                         item.status === 'taken' && styles.activeCheck,
-                                                        isMarked && item.status !== 'taken' && styles.disabledBtn,
                                                     ]}
                                                 >
                                                     <CustomCheckIcon
                                                         size={18}
-                                                        color={item.status === 'taken' ? '#FFFFFF' : (isMarked ? '#9CA3AF' : '#16A34A')}
+                                                        color={item.status === 'taken' ? '#FFFFFF' : '#16A34A'}
                                                     />
                                                 </TouchableOpacity>
 
                                                 <TouchableOpacity
-                                                    onPress={() => !isMarked && handleLogAdherence(item, false)}
-                                                    disabled={isMarked}
-                                                    activeOpacity={isMarked ? 1 : 0.7}
+                                                    onPress={() => item.status !== 'missed' && handleLogAdherence(item, false)}
+                                                    disabled={item.status === 'missed'}
+                                                    activeOpacity={0.7}
                                                     style={[
                                                         styles.actionBtn,
                                                         styles.crossBtn,
                                                         item.status === 'missed' && styles.activeCross,
-                                                        isMarked && item.status !== 'missed' && styles.disabledBtn,
                                                     ]}
                                                 >
                                                     <CustomCrossIcon
                                                         size={18}
-                                                        color={item.status === 'missed' ? '#FFFFFF' : (isMarked ? '#9CA3AF' : '#EF4444')}
+                                                        color={item.status === 'missed' ? '#FFFFFF' : '#EF4444'}
                                                     />
                                                 </TouchableOpacity>
                                             </View>

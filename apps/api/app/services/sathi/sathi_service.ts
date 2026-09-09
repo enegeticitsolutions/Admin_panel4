@@ -5,6 +5,9 @@ import { createToken } from '../../core/security';
 import { ApiError } from '../../utils/ApiError';
 import { OtpFactory } from '../../core/otp/OtpFactory';
 import { getBeneficiarySathiEligibility } from '../beneficiary/beneficiary_sathi_service';
+import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
+import { benefitLedgerEngine } from '../benefit/BenefitLedgerEngine';
+import { UsageType } from '@prisma/client';
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371; // Radius of the earth in km
@@ -400,6 +403,13 @@ export const getVolunteerDashboard = async (id: string) => {
   const visitsThisMonth = monthLogs.length;
   const hoursThisMonth = monthLogs.reduce((acc, log) => acc + (log.hoursEarned || 0), 0);
 
+  const totalVisits = await prisma.volunteerVisitLog.count({
+    where: {
+      volunteerId: id,
+      status: 'completed'
+    }
+  });
+
   return {
     applicationStatus: volunteer.applicationStatus,
     rejectionReason: volunteer.rejectionReason,
@@ -415,6 +425,7 @@ export const getVolunteerDashboard = async (id: string) => {
     monthlyGoalHours: volunteer.monthlyGoalHours,
     visitsThisMonth,
     hoursThisMonth,
+    totalVisits,
     beneficiariesCount: volunteer.assignments.length,
     activeVisit: volunteer.visitLogs[0] || null,
     assignedBeneficiaries: volunteer.assignments.map(a => ({
@@ -489,6 +500,9 @@ export const getVolunteerMatches = async (id: string) => {
           hobbiesInterests: true,
           latitude: true,
           longitude: true,
+          user: {
+            select: { phone: true }
+          }
         }
       },
       visitLogs: {
@@ -687,6 +701,64 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
       where: { id: visitLog.subscriptionBenefitBalanceId! },
       data: { usedUnits: { increment: hoursEarned } }
     });
+
+    // Synchronize BenefitPeriodBalance & BenefitUsage ledger
+    const unitsToDeduct = Math.max(1, Math.round(hoursEarned));
+    if (visitLog.subscriptionId) {
+      try {
+        const activePeriod = await benefitPeriodManager.evaluateAndTransitionJIT(visitLog.subscriptionId);
+        if (activePeriod) {
+          try {
+            await benefitLedgerEngine.deductUnits({
+              subscriptionId: visitLog.subscriptionId,
+              periodId: activePeriod.id,
+              benefitId: sathiBalance.benefitId,
+              quantity: unitsToDeduct,
+              usageType: UsageType.SATHI_HOURS,
+              referenceId: visitLog.id,
+              notes: `Sathi Companion Visit Completed (${hoursEarned.toFixed(1)} hrs)`,
+              performedByUserId: volunteerId,
+            }, tx);
+          } catch (deductErr) {
+            console.error('[Sathi Checkout] BenefitLedger deduction warning:', deductErr);
+            const pb = await tx.benefitPeriodBalance.findUnique({
+              where: {
+                periodId_benefitId: {
+                  periodId: activePeriod.id,
+                  benefitId: sathiBalance.benefitId,
+                }
+              }
+            });
+            if (pb) {
+              const qty = Math.min(unitsToDeduct, pb.remainingQuantity);
+              await tx.benefitPeriodBalance.update({
+                where: { id: pb.id },
+                data: {
+                  usedQuantity: pb.usedQuantity + qty,
+                  remainingQuantity: Math.max(0, pb.remainingQuantity - qty)
+                }
+              });
+            }
+          }
+        }
+      } catch (periodErr) {
+        console.error('[Sathi Checkout] Period evaluation warning:', periodErr);
+      }
+    }
+
+    // Create PackageHoursLog for audit & activity feeds
+    if (visitLog.subscriptionId && visitLog.beneficiaryId) {
+      await tx.packageHoursLog.create({
+        data: {
+          subscriptionId: visitLog.subscriptionId,
+          beneficiaryId: visitLog.beneficiaryId,
+          hoursConsumed: hoursEarned,
+          balanceBefore: currentRemaining,
+          balanceAfter: Math.max(0, currentRemaining - hoursEarned),
+          description: `Sathi companion visit completed (${hoursEarned.toFixed(1)} hrs). Notes: ${notes || 'Completed'}`
+        }
+      });
+    }
 
     const volunteer = await tx.volunteer.findUnique({
       where: { id: volunteerId }

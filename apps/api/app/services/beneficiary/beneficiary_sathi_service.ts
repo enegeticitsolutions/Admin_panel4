@@ -235,6 +235,7 @@ export const getVolunteerDetailedProfile = async (beneficiaryId: string, volunte
   return {
     id: v.id,
     name: v.name,
+    phone: v.phone,
     photo: v.profilePhoto || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120',
     rating: rating.toFixed(1),
     reviewCount: reviewCount,

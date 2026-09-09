@@ -14,6 +14,7 @@ import { VisitImageGallery } from '../../components/care-companion/VisitImageGal
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { NavigationService } from '@/utils/NavigationService';
+import CustomAlertModal, { AlertType } from '@/components/shared/CustomAlertModal';
 
 const DEEP_ORANGE = '#FE6700';
 const LIGHT_BEIGE = '#FAF3EB';
@@ -25,6 +26,44 @@ export default function VisitDetailsScreen() {
     useAndroidBackHandler();
     const scrollViewRef = useRef<ScrollView>(null);
     const { width } = useWindowDimensions();
+
+    // Custom Alert State
+    const [alertConfig, setAlertConfig] = useState<{
+        visible: boolean;
+        title: string;
+        message: string;
+        type?: AlertType;
+        primaryText?: string;
+        onPrimary?: () => void;
+        secondaryText?: string;
+        onSecondary?: () => void;
+    }>({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+    });
+
+    const showAlert = (
+        title: string,
+        message: string,
+        type: AlertType = 'info',
+        primaryText: string = 'OK',
+        onPrimary?: () => void,
+        secondaryText?: string,
+        onSecondary?: () => void
+    ) => {
+        setAlertConfig({
+            visible: true,
+            title,
+            message,
+            type,
+            primaryText,
+            onPrimary,
+            secondaryText,
+            onSecondary,
+        });
+    };
 
     const MAX_CONTENT_WIDTH = 440;
     const BASE_HORIZONTAL_PADDING = 20;
@@ -57,6 +96,7 @@ export default function VisitDetailsScreen() {
     const [visitNotes, setVisitNotes] = useState('');
     const [mood, setMood] = useState('Neutral');
     const [isLocallySaved, setIsLocallySaved] = useState(false);
+    const [showVitalsErrors, setShowVitalsErrors] = useState(false);
 
     // Geo-fencing state
     const [currentLat, setCurrentLat] = useState<number | null>(null);
@@ -146,7 +186,7 @@ export default function VisitDetailsScreen() {
             }
         } catch (error) {
             console.error("Error loading dynamic visit details:", error);
-            Alert.alert("Connection Error", "Failed to retrieve live encounter details. Working with cached records.");
+            showAlert("Connection Error", "Failed to retrieve live encounter details. Working with cached records.", "error");
             
             // Premium mock fallback
             setVisitDetail({
@@ -184,7 +224,7 @@ export default function VisitDetailsScreen() {
         try {
             const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Location access is required for geo-verified check-in.');
+                showAlert('Permission Denied', 'Location access is required for geo-verified check-in.', 'warning');
                 return null;
             }
             const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
@@ -199,7 +239,7 @@ export default function VisitDetailsScreen() {
             }
             return { latitude, longitude };
         } catch {
-            Alert.alert('Location Error', 'Could not get your current GPS location.');
+            showAlert('Location Error', 'Could not get your current GPS location.', 'error');
             return null;
         } finally {
             setLocationLoading(false);
@@ -234,18 +274,18 @@ export default function VisitDetailsScreen() {
                 const geoVerified = json.data?.isGeoVerified;
                 const dist = json.data?.geoDistanceMeters;
                 if (geoVerified) {
-                    Alert.alert('✅ Checked In', `Location verified! You are ${dist ?? '—'}m from the beneficiary's home.`);
+                    showAlert('Checked In', `Location verified! You are ${dist ?? '—'}m from the beneficiary's home.`, 'success');
                 } else if (dist !== null && dist !== undefined) {
-                    Alert.alert('⚠️ Checked In', `You are ${dist}m away — outside the geo-fence. This check-in is flagged.`);
+                    showAlert('Checked In (Flagged)', `You are ${dist}m away — outside the geo-fence. This check-in is flagged.`, 'warning');
                 } else {
-                    Alert.alert('ℹ️ Checked In', 'Check-in recorded. No beneficiary GPS on file for verification.');
+                    showAlert('Checked In', 'Check-in recorded. No beneficiary GPS on file for verification.', 'info');
                 }
                 fetchVisitDetails();
             } else {
-                Alert.alert('Error', json.message || 'Failed to check-in.');
+                showAlert('Error', json.message || 'Failed to check-in.', 'error');
             }
         } catch {
-            Alert.alert('Check-in Error', 'Unable to complete auto geo-fence check-in.');
+            showAlert('Check-in Error', 'Unable to complete auto geo-fence check-in.', 'error');
         } finally {
             setActionLoading(false);
         }
@@ -254,7 +294,7 @@ export default function VisitDetailsScreen() {
     const handleCheckIn = async () => {
         if (!visitId) return;
         if (!manualRemarks.trim()) {
-            Alert.alert('Remarks Required', 'Please enter a reason for manual check-in.');
+            showAlert('Remarks Required', 'Please enter a reason for manual check-in.', 'warning');
             return;
         }
         setActionLoading(true);
@@ -284,13 +324,13 @@ export default function VisitDetailsScreen() {
             const json = await response.json();
             if (json.success) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert('Manual Check-in Recorded', 'Your check-in has been flagged as manual. The field manager will be notified.');
+                showAlert('Manual Check-in Recorded', 'Your check-in has been flagged as manual. The field manager will be notified.', 'success');
                 fetchVisitDetails();
             } else {
-                Alert.alert('Error', json.message || 'Failed to check-in.');
+                showAlert('Error', json.message || 'Failed to check-in.', 'error');
             }
         } catch {
-            Alert.alert('Check-in Error', 'Unable to communicate with check-in endpoint.');
+            showAlert('Check-in Error', 'Unable to communicate with check-in endpoint.', 'error');
         } finally {
             setActionLoading(false);
         }
@@ -332,8 +372,91 @@ export default function VisitDetailsScreen() {
         };
     };
 
+    const validateRequiredVitals = (): { isValid: boolean; message?: string } => {
+        if (!requiredVitals || requiredVitals.length === 0) {
+            return { isValid: true };
+        }
+
+        for (const v of requiredVitals) {
+            const val = vitalsValues[v.id];
+            const name = v.name || 'Vital sign';
+
+            if (v.dataType === 'numeric') {
+                const num = val?.valueNumeric ? String(val.valueNumeric).trim() : '';
+                if (!num) {
+                    return {
+                        isValid: false,
+                        message: `"${name}" cannot be blank. Please enter a valid number.`
+                    };
+                }
+                if (isNaN(Number(num))) {
+                    return {
+                        isValid: false,
+                        message: `Please enter a valid numeric value for "${name}".`
+                    };
+                }
+            } else if (v.dataType === 'dual_numeric') {
+                const num1 = val?.valueNumeric ? String(val.valueNumeric).trim() : '';
+                const num2 = val?.valueNumeric2 ? String(val.valueNumeric2).trim() : '';
+                const label1 = v.value1Label || 'Systolic';
+                const label2 = v.value2Label || 'Diastolic';
+
+                if (!num1) {
+                    return {
+                        isValid: false,
+                        message: `"${name} (${label1})" cannot be blank. Please enter a valid number.`
+                    };
+                }
+                if (isNaN(Number(num1))) {
+                    return {
+                        isValid: false,
+                        message: `Please enter a valid numeric value for "${name} (${label1})".`
+                    };
+                }
+                if (!num2) {
+                    return {
+                        isValid: false,
+                        message: `"${name} (${label2})" cannot be blank. Please enter a valid number.`
+                    };
+                }
+                if (isNaN(Number(num2))) {
+                    return {
+                        isValid: false,
+                        message: `Please enter a valid numeric value for "${name} (${label2})".`
+                    };
+                }
+            } else if (v.dataType === 'text') {
+                const text = val?.valueText ? String(val.valueText).trim() : '';
+                if (!text) {
+                    return {
+                        isValid: false,
+                        message: `"${name}" cannot be blank. Please provide a value.`
+                    };
+                }
+            } else if (v.dataType === 'boolean') {
+                const boolVal = val?.valueText ? String(val.valueText).trim() : '';
+                if (!boolVal) {
+                    return {
+                        isValid: false,
+                        message: `Please select an option for "${name}".`
+                    };
+                }
+            }
+        }
+
+        return { isValid: true };
+    };
+
     const handleSaveEncounter = async () => {
         if (!visitId) return;
+
+        const validation = validateRequiredVitals();
+        if (!validation.isValid) {
+            setShowVitalsErrors(true);
+            showAlert("Vitals Required", `${validation.message} All required patient vitals must have values before saving the encounter.`, "warning");
+            return;
+        }
+
         setActionLoading(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
@@ -349,13 +472,14 @@ export default function VisitDetailsScreen() {
             const json = await response.json();
             if (json.success) {
                 setIsLocallySaved(true);
+                setShowVitalsErrors(false);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                Alert.alert("Encounter Saved", "The visit details have been saved securely.");
+                showAlert("Encounter Saved", "The visit details have been saved securely.", "success");
             } else {
-                Alert.alert("Error", json.message || "Failed to save details.");
+                showAlert("Save Failed", json.message || "Failed to save details.", "error");
             }
         } catch (error) {
-            Alert.alert("Error Saving Records", "Communication failed during records sync transaction.");
+            showAlert("Error Saving Records", "Communication failed during records sync transaction.", "error");
         } finally {
             setActionLoading(false);
         }
@@ -363,6 +487,14 @@ export default function VisitDetailsScreen() {
 
     const handleAutoCheckOut = async () => {
         if (!visitId) return;
+
+        const validation = validateRequiredVitals();
+        if (!validation.isValid) {
+            setShowVitalsErrors(true);
+            showAlert("Vitals Required", `${validation.message} All required patient vitals must have values before check-out.`, "warning");
+            return;
+        }
+
         setActionLoading(true);
         try {
             const location = await getMyLocation();
@@ -386,20 +518,20 @@ export default function VisitDetailsScreen() {
 
             const json = await response.json();
             if (json.success) {
+                setShowVitalsErrors(false);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                if (Platform.OS === 'web') {
-                    window.alert("Check-out Complete: The encounter is now completed and logged.");
-                    replace('/(care-companion)');
-                } else {
-                    Alert.alert("Check-out Complete", "The encounter is now completed and logged.", [
-                        { text: "Done", onPress: () => replace('/(care-companion)') }
-                    ]);
-                }
+                showAlert(
+                    "Check-out Complete",
+                    "The encounter is now completed and logged.",
+                    "success",
+                    "Done",
+                    () => replace('/(care-companion)')
+                );
             } else {
-                Alert.alert("Error", json.message || "Failed to complete checkout.");
+                showAlert("Checkout Failed", json.message || "Failed to complete checkout.", "error");
             }
         } catch {
-            Alert.alert("Check-out Error", "Unable to complete auto geo-fence check-out.");
+            showAlert("Check-out Error", "Unable to complete auto geo-fence check-out.", "error");
         } finally {
             setActionLoading(false);
         }
@@ -407,8 +539,16 @@ export default function VisitDetailsScreen() {
 
     const handleManualCheckOut = async () => {
         if (!visitId) return;
+
+        const validation = validateRequiredVitals();
+        if (!validation.isValid) {
+            setShowVitalsErrors(true);
+            showAlert("Vitals Required", `${validation.message} All required patient vitals must have values before check-out.`, "warning");
+            return;
+        }
+
         if (!manualRemarks.trim()) {
-            Alert.alert('Remarks Required', 'Please enter a reason for manual check-out.');
+            showAlert('Remarks Required', 'Please enter a reason for manual check-out.', 'warning');
             return;
         }
         setActionLoading(true);
@@ -437,20 +577,20 @@ export default function VisitDetailsScreen() {
 
             const json = await response.json();
             if (json.success) {
+                setShowVitalsErrors(false);
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                if (Platform.OS === 'web') {
-                    window.alert("Check-out Complete: Your manual check-out has been recorded.");
-                    replace('/(care-companion)');
-                } else {
-                    Alert.alert("Check-out Complete", "Your manual check-out has been recorded.", [
-                        { text: "Done", onPress: () => replace('/(care-companion)') }
-                    ]);
-                }
+                showAlert(
+                    "Check-out Complete",
+                    "Your manual check-out has been recorded.",
+                    "success",
+                    "Done",
+                    () => replace('/(care-companion)')
+                );
             } else {
-                Alert.alert("Error", json.message || "Failed to complete checkout.");
+                showAlert("Checkout Failed", json.message || "Failed to complete checkout.", "error");
             }
         } catch {
-            Alert.alert("Check-out Error", "Unable to communicate with check-out endpoint.");
+            showAlert("Check-out Error", "Unable to communicate with check-out endpoint.", "error");
         } finally {
             setActionLoading(false);
         }
@@ -458,15 +598,15 @@ export default function VisitDetailsScreen() {
 
     const handleCcRequestService = async () => {
         if (!selectedBenefit) {
-            Alert.alert('Selection Required', 'Please select a benefit to request.');
+            showAlert('Selection Required', 'Please select a benefit to request.', 'warning');
             return;
         }
         if (selectedBenefit.isExhausted || selectedBenefit.remainingUnits <= 0) {
-            Alert.alert('Benefit Exhausted', `Benefit "${selectedBenefit.benefitName}" is exhausted. Connect with support team to renew or upgrade your package.`);
+            showAlert('Benefit Exhausted', `Benefit "${selectedBenefit.benefitName}" is exhausted. Connect with support team to renew or upgrade your package.`, 'warning');
             return;
         }
         if (!reqPreferredDate.trim()) {
-            Alert.alert('Date Required', 'Preferred date is required.');
+            showAlert('Date Required', 'Preferred date is required.', 'warning');
             return;
         }
         
@@ -490,14 +630,14 @@ export default function VisitDetailsScreen() {
             });
             const result = await res.json();
             if (result.success) {
-                Alert.alert('Success', 'Service request submitted successfully.');
+                showAlert('Success', 'Service request submitted successfully.', 'success');
                 setSelectedBenefit(null);
                 setReqPreferredDate(new Date().toISOString().split('T')[0]);
             } else {
                 throw new Error(result.message || 'Failed to submit request');
             }
         } catch (e: any) {
-            Alert.alert('Error', e.message);
+            showAlert('Error', e.message, 'error');
         } finally {
             setSubmittingServiceRequest(false);
         }
@@ -724,27 +864,40 @@ export default function VisitDetailsScreen() {
                                 <View style={styles.vitalsGrid}>
                                     {requiredVitals.map((v) => {
                                         if (v.dataType === 'numeric') {
+                                            const val = vitalsValues[v.id]?.valueNumeric || '';
+                                            const isMissing = !val.trim() || isNaN(Number(val));
                                             return (
                                                 <View key={v.id} style={styles.vitalCol}>
                                                     <Text style={styles.inputLabel}>
                                                         {v.name} {v.unit ? `(${v.unit})` : ''}
                                                     </Text>
                                                     <TextInput 
-                                                        style={styles.gridInput} 
-                                                        placeholder={v.description || "Enter..."} 
-                                                        keyboardType="numeric" 
+                                                        style={[styles.gridInput, showVitalsErrors && isMissing && styles.gridInputError]} 
+                                                        placeholder={v.description || "Enter number..."} 
+                                                        keyboardType="decimal-pad" 
                                                         placeholderTextColor="#9CA3AF" 
-                                                        value={vitalsValues[v.id]?.valueNumeric || ''} 
-                                                        onChangeText={t => setVitalsValues({
-                                                            ...vitalsValues,
-                                                            [v.id]: { ...(vitalsValues[v.id] || { valueNumeric: '', valueNumeric2: '', valueText: '' }), valueNumeric: t }
-                                                        })} 
+                                                        value={val} 
+                                                        onChangeText={t => {
+                                                            let sanitized = t.replace(/[^0-9.]/g, '');
+                                                            const parts = sanitized.split('.');
+                                                            if (parts.length > 2) {
+                                                                sanitized = parts[0] + '.' + parts.slice(1).join('');
+                                                            }
+                                                            setVitalsValues({
+                                                                ...vitalsValues,
+                                                                [v.id]: { ...(vitalsValues[v.id] || { valueNumeric: '', valueNumeric2: '', valueText: '' }), valueNumeric: sanitized }
+                                                            });
+                                                        }} 
                                                     />
                                                 </View>
                                             );
                                         }
 
                                         if (v.dataType === 'dual_numeric') {
+                                            const val1 = vitalsValues[v.id]?.valueNumeric || '';
+                                            const val2 = vitalsValues[v.id]?.valueNumeric2 || '';
+                                            const isMissing1 = !val1.trim() || isNaN(Number(val1));
+                                            const isMissing2 = !val2.trim() || isNaN(Number(val2));
                                             return (
                                                 <View key={v.id} style={styles.vitalColFull}>
                                                     <Text style={styles.inputLabel}>{v.name}</Text>
@@ -752,29 +905,35 @@ export default function VisitDetailsScreen() {
                                                         <View style={{ width: '48%' }}>
                                                             <Text style={styles.subInputLabel}>{v.value1Label || 'Systolic'}</Text>
                                                             <TextInput 
-                                                                style={styles.gridInput} 
+                                                                style={[styles.gridInput, showVitalsErrors && isMissing1 && styles.gridInputError]} 
                                                                 placeholder="e.g. 120" 
                                                                 keyboardType="numeric" 
                                                                 placeholderTextColor="#9CA3AF" 
-                                                                value={vitalsValues[v.id]?.valueNumeric || ''} 
-                                                                onChangeText={t => setVitalsValues({
-                                                                    ...vitalsValues,
-                                                                    [v.id]: { ...(vitalsValues[v.id] || { valueNumeric: '', valueNumeric2: '', valueText: '' }), valueNumeric: t }
-                                                                })} 
+                                                                value={val1} 
+                                                                onChangeText={t => {
+                                                                    const sanitized = t.replace(/[^0-9]/g, '');
+                                                                    setVitalsValues({
+                                                                        ...vitalsValues,
+                                                                        [v.id]: { ...(vitalsValues[v.id] || { valueNumeric: '', valueNumeric2: '', valueText: '' }), valueNumeric: sanitized }
+                                                                    });
+                                                                }} 
                                                             />
                                                         </View>
                                                         <View style={{ width: '48%' }}>
                                                             <Text style={styles.subInputLabel}>{v.value2Label || 'Diastolic'}</Text>
                                                             <TextInput 
-                                                                style={styles.gridInput} 
+                                                                style={[styles.gridInput, showVitalsErrors && isMissing2 && styles.gridInputError]} 
                                                                 placeholder="e.g. 80" 
                                                                 keyboardType="numeric" 
                                                                 placeholderTextColor="#9CA3AF" 
-                                                                value={vitalsValues[v.id]?.valueNumeric2 || ''} 
-                                                                onChangeText={t => setVitalsValues({
-                                                                    ...vitalsValues,
-                                                                    [v.id]: { ...(vitalsValues[v.id] || { valueNumeric: '', valueNumeric2: '', valueText: '' }), valueNumeric2: t }
-                                                                })} 
+                                                                value={val2} 
+                                                                onChangeText={t => {
+                                                                    const sanitized = t.replace(/[^0-9]/g, '');
+                                                                    setVitalsValues({
+                                                                        ...vitalsValues,
+                                                                        [v.id]: { ...(vitalsValues[v.id] || { valueNumeric: '', valueNumeric2: '', valueText: '' }), valueNumeric2: sanitized }
+                                                                    });
+                                                                }} 
                                                             />
                                                         </View>
                                                     </View>
@@ -817,26 +976,41 @@ export default function VisitDetailsScreen() {
 
                                         if (v.dataType === 'text') {
                                             const currentText = vitalsValues[v.id]?.valueText || '';
+                                            const hasOptions = Array.isArray(v.textOptions) && v.textOptions.length > 0;
+                                            const isMissing = !currentText.trim();
                                             return (
                                                 <View key={v.id} style={styles.vitalColFull}>
                                                     <Text style={styles.inputLabel}>{v.name}</Text>
-                                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
-                                                        {(v.textOptions || []).map((opt: string) => {
-                                                            const isSelected = currentText === opt;
-                                                            return (
-                                                                <TouchableOpacity 
-                                                                    key={opt}
-                                                                    style={[styles.chipBtn, isSelected && styles.chipBtnActive]}
-                                                                    onPress={() => setVitalsValues({
-                                                                        ...vitalsValues,
-                                                                        [v.id]: { ...(vitalsValues[v.id] || { valueNumeric: '', valueNumeric2: '', valueText: '' }), valueText: opt }
-                                                                    })}
-                                                                >
-                                                                    <Text style={[styles.chipBtnText, isSelected && styles.chipBtnTextActive]}>{opt}</Text>
-                                                                </TouchableOpacity>
-                                                            );
-                                                        })}
-                                                    </View>
+                                                    {hasOptions ? (
+                                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                                                            {v.textOptions.map((opt: string) => {
+                                                                const isSelected = currentText === opt;
+                                                                return (
+                                                                    <TouchableOpacity 
+                                                                        key={opt}
+                                                                        style={[styles.chipBtn, isSelected && styles.chipBtnActive]}
+                                                                        onPress={() => setVitalsValues({
+                                                                            ...vitalsValues,
+                                                                            [v.id]: { ...(vitalsValues[v.id] || { valueNumeric: '', valueNumeric2: '', valueText: '' }), valueText: opt }
+                                                                        })}
+                                                                    >
+                                                                        <Text style={[styles.chipBtnText, isSelected && styles.chipBtnTextActive]}>{opt}</Text>
+                                                                    </TouchableOpacity>
+                                                                );
+                                                            })}
+                                                        </View>
+                                                    ) : (
+                                                        <TextInput 
+                                                            style={[styles.gridInput, showVitalsErrors && isMissing && styles.gridInputError]} 
+                                                            placeholder={v.description || `Enter ${v.name}...`} 
+                                                            placeholderTextColor="#9CA3AF" 
+                                                            value={currentText} 
+                                                            onChangeText={t => setVitalsValues({
+                                                                ...vitalsValues,
+                                                                [v.id]: { ...(vitalsValues[v.id] || { valueNumeric: '', valueNumeric2: '', valueText: '' }), valueText: t }
+                                                            })} 
+                                                        />
+                                                    )}
                                                 </View>
                                             );
                                         }
@@ -1084,9 +1258,9 @@ export default function VisitDetailsScreen() {
                             </TouchableOpacity>
                         )}
                         {isCheckedIn && (!isCompleted || isEdit) && isLocallySaved && (
-                            <View style={{ alignItems: 'flex-end', marginTop: 10 }}>
+                            <View style={{ alignItems: 'flex-end', marginTop: 10, marginBottom: 16 }}>
                                 <TouchableOpacity 
-                                    style={[styles.saveBtn, { paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#E5E7EB', shadowOpacity: 0 }]} 
+                                    style={[styles.saveBtn, { paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#E5E7EB', shadowOpacity: 0, marginTop: 0, marginBottom: 0 }]} 
                                     onPress={() => setIsLocallySaved(false)}
                                 >
                                     <Ionicons name="pencil-outline" size={16} color="#4B5563" style={{ marginRight: 6 }} />
@@ -1127,6 +1301,26 @@ export default function VisitDetailsScreen() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            <CustomAlertModal
+                visible={alertConfig.visible}
+                title={alertConfig.title}
+                message={alertConfig.message}
+                type={alertConfig.type}
+                primaryText={alertConfig.primaryText || 'OK'}
+                onPrimary={() => {
+                    const cb = alertConfig.onPrimary;
+                    setAlertConfig(prev => ({ ...prev, visible: false }));
+                    if (cb) cb();
+                }}
+                secondaryText={alertConfig.secondaryText}
+                onSecondary={() => {
+                    const cb = alertConfig.onSecondary;
+                    setAlertConfig(prev => ({ ...prev, visible: false }));
+                    if (cb) cb();
+                }}
+                onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+            />
         </SafeAreaView>
     );
 }
@@ -1224,7 +1418,8 @@ const styles = StyleSheet.create({
     vitalsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
     vitalCol: { width: '48%', marginBottom: 16 },
     vitalColFull: { width: '100%', marginBottom: 16 },
-    gridInput: { backgroundColor: INPUT_BG, borderRadius: 8, padding: 12, fontFamily: 'Poppins_500Medium', fontSize: 15, color: '#4B5563' },
+    gridInput: { backgroundColor: INPUT_BG, borderRadius: 8, padding: 12, fontFamily: 'Poppins_500Medium', fontSize: 15, color: '#4B5563', borderWidth: 1, borderColor: 'transparent' },
+    gridInputError: { borderColor: '#EF4444', borderWidth: 1, backgroundColor: '#FEF2F2' },
 
     booleanBtn: { flex: 1, paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: '#D1D5DB', alignItems: 'center', backgroundColor: '#FFFFFF' },
     booleanBtnActive: { backgroundColor: DEEP_ORANGE, borderColor: DEEP_ORANGE },
@@ -1256,7 +1451,7 @@ const styles = StyleSheet.create({
     dropdownItemSubText: { fontFamily: 'Poppins_400Regular', fontSize: 11, color: '#9CA3AF' },
     emptyDropdownText: { fontFamily: 'Poppins_400Regular', fontSize: 13, color: '#9CA3AF', padding: 8, textAlign: 'center' },
 
-    saveBtn: { backgroundColor: DEEP_ORANGE, flexDirection: 'row', borderRadius: 8, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', marginTop: 10, shadowColor: DEEP_ORANGE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
+    saveBtn: { backgroundColor: DEEP_ORANGE, flexDirection: 'row', borderRadius: 8, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', marginTop: 10, marginBottom: 16, shadowColor: DEEP_ORANGE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 4 },
     saveBtnText: { color: '#FFFFFF', fontSize: 16, fontFamily: 'Poppins_600SemiBold' },
 
     checkInBtn: { backgroundColor: '#059669', borderRadius: 8, paddingVertical: 14, alignItems: 'center' },

@@ -377,7 +377,8 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                                     ) : (
                                         <View style={styles.btnRow}>
                                             <TouchableOpacity
-                                                onPress={() => handleLogAdherence(item, true)}
+                                                onPress={() => item.status !== 'taken' && handleLogAdherence(item, true)}
+                                                disabled={item.status === 'taken'}
                                                 activeOpacity={0.7}
                                                 style={[
                                                     styles.actionBtn,
@@ -392,7 +393,8 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                                             </TouchableOpacity>
 
                                             <TouchableOpacity
-                                                onPress={() => handleLogAdherence(item, false)}
+                                                onPress={() => item.status !== 'missed' && handleLogAdherence(item, false)}
+                                                disabled={item.status === 'missed'}
                                                 activeOpacity={0.7}
                                                 style={[
                                                     styles.actionBtn,

@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
   Image,
   Alert,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -21,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { API_URL } from '@/constants/api';
 import { SathiBottomNav } from '@/components/shared/SathiBottomNav';
+import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 
@@ -159,8 +161,21 @@ export default function SathiMatches() {
                       <Text style={[styles.locationTextSmall, { flex: 1 }]} numberOfLines={1}>{ben.location || ben.address || 'Delhi'}</Text>
                     </View>
                   </View>
-                  <View style={styles.distanceBadge}>
-                    <Text style={styles.distanceText}>{distance}</Text>
+                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <View style={styles.distanceBadge}>
+                        <Text style={styles.distanceText}>{distance}</Text>
+                      </View>
+                      <ConnectContactButton
+                        name={ben.name}
+                        role="Beneficiary"
+                        phone={ben.phone || ben.user?.phone || ben.contactNumber || null}
+                        photo={ben.photo}
+                        trigger={
+                          <View style={{ padding: 6, backgroundColor: '#FFF0E6', borderRadius: 20 }}>
+                            <Ionicons name="call" size={18} color="#FF6A00" />
+                          </View>
+                        }
+                      />
                   </View>
                 </View>
 
