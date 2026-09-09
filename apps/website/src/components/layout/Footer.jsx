@@ -12,7 +12,14 @@ const Footer = ({ setActivePage }) => {
     <footer className="site-footer" role="contentinfo">
       <div className="footer-inner">
         <div className="footer-brand">
-          <a onClick={() => setActivePage && setActivePage("home")} href="#home" aria-label="MaiHoonNa home">
+          <a
+            onClick={(e) => {
+              e.preventDefault();
+              setActivePage && setActivePage("home");
+            }}
+            href="/"
+            aria-label="MaiHoonNa home"
+          >
             <img src={logo} alt="MaiHoonNa - Senior Care Ecosystem" loading="lazy" width="238" height="42" />
           </a>
           <p>
@@ -85,7 +92,16 @@ const Footer = ({ setActivePage }) => {
           <div>
             <h3>TERMS AND POLICIES</h3>
             {SITE_LINKS.policies.map((item, idx) => (
-              <a key={idx} href={item.href}>
+              <a
+                key={idx}
+                href={item.href}
+                onClick={(e) => {
+                  if (item.page && setActivePage) {
+                    e.preventDefault();
+                    setActivePage(item.page);
+                  }
+                }}
+              >
                 {item.label}
               </a>
             ))}

@@ -3,27 +3,15 @@ import { useEffect } from "react";
 const BASE_URL = "https://maihoonna.in";
 
 /**
- * Resolves the full absolute canonical URL dynamically based on the active page and browser location
+ * Resolves the full absolute canonical URL strictly pointing to https://maihoonna.in
+ * Eliminates URL hash fragments so search engines receive clean indexing targets.
  */
 const resolveCanonicalUrl = (activePage) => {
   if (!activePage || activePage === "home") {
     return `${BASE_URL}/`;
   }
-
-  if (typeof window !== "undefined") {
-    // If accessed via a clean pathname (e.g. /services, /plans, /story)
-    const pathname = window.location.pathname.replace(/\/+$/, "");
-    if (pathname && pathname !== "" && pathname !== "/") {
-      return `${BASE_URL}${pathname}`;
-    }
-    // If accessed via hash routing (e.g. #services, #story)
-    if (window.location.hash) {
-      const cleanHash = window.location.hash.replace(/^#/, "");
-      return `${BASE_URL}/#${cleanHash}`;
-    }
-  }
-
-  return `${BASE_URL}/#${activePage}`;
+  const cleanPath = activePage === "about" ? "about" : activePage;
+  return `${BASE_URL}/${cleanPath}`;
 };
 
 /**
@@ -31,16 +19,63 @@ const resolveCanonicalUrl = (activePage) => {
  */
 const SEO_CONFIG = {
   home: {
-    title: "MaiHoonNa | Connected Senior Care & Elder Companionship Platform",
+    title: "MaiHoonNa | Senior Care Companion in Gurugram & Delhi NCR",
     description:
-      "MaiHoonNa provides senior companionship, health monitoring, emotional wellness support, medication adherence tracking, and connected family care for elderly individuals in India.",
+      "Trusted care companions for elderly parents in Gurugram. Home visits, vitals checks & family updates. Book a free consultation for peace of mind today.",
+    keywords:
+      "senior care Gurugram, care for elderly parents Gurgaon, elder care for NRI families, Saathi volunteer senior care, elderly companionship India, senior health monitoring Gurugram",
     robots: "index, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "@id": "https://maihoonna.in/#localbusiness",
+        "name": "MaiHoonNa Eldercare",
+        "alternateName": "MaiHoonNa Senior Care",
+        "url": "https://maihoonna.in",
+        "logo": "https://maihoonna.in/logo.svg",
+        "image": "https://maihoonna.in/og-image.jpg",
+        "description":
+          "Trusted senior care companions and elder health monitoring in Gurugram & Delhi NCR. Care Mitra visits, Saathi companionship, and family updates.",
+        "priceRange": "₹₹",
+        "telephone": "+91-98765-43210",
+        "email": "info@maihoonna.in",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "Gurugram Sectors 53 to 57",
+          "addressLocality": "Gurugram",
+          "addressRegion": "Haryana",
+          "postalCode": "122002",
+          "addressCountry": "IN"
+        },
+        "geo": {
+          "@type": "GeoCoordinates",
+          "latitude": "28.4419",
+          "longitude": "77.0984"
+        },
+        "areaServed": [
+          {
+            "@type": "City",
+            "name": "Gurugram"
+          },
+          {
+            "@type": "AdministrativeArea",
+            "name": "Delhi NCR"
+          }
+        ],
+        "serviceType": [
+          "Senior Care Companion",
+          "Elder Health Monitoring",
+          "Medication Adherence Tracking",
+          "Saathi Volunteer Companionship"
+        ]
+      },
+      {
+        "@context": "https://schema.org",
         "@type": "Organization",
+        "@id": "https://maihoonna.in/#organization",
         "name": "MaiHoonNa Eldercare Private Limited",
         "url": "https://maihoonna.in",
         "logo": "https://maihoonna.in/logo.svg",
@@ -56,12 +91,14 @@ const SEO_CONFIG = {
         "contactPoint": {
           "@type": "ContactPoint",
           "email": "info@maihoonna.in",
-          "contactType": "customer service"
+          "contactType": "customer service",
+          "availableLanguage": ["en", "hi"]
         }
       },
       {
         "@context": "https://schema.org",
         "@type": "WebSite",
+        "@id": "https://maihoonna.in/#website",
         "name": "MaiHoonNa",
         "url": "https://maihoonna.in",
         "description":
@@ -73,47 +110,47 @@ const SEO_CONFIG = {
         "mainEntity": [
           {
             "@type": "Question",
-            "name": "What is a Care Mitra?",
+            "name": "What is a Care Mitra in Gurugram?",
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "A Care Mitra is a trained, background-verified care companion who visits your parent at home. Care Mitras are graded by skill level — from ANM to GNM, B.Sc Nurse, and Specialist Mitra — so your parent is matched with someone qualified for their specific health needs, not a one-size-fits-all attendant."
+                "A Care Mitra is a trained, background-verified care companion who visits your elderly parent at home in Gurugram. Care Mitras are graded by skill level — from ANM to GNM, B.Sc Nurse, and Specialist Mitra — ensuring your parent is matched with someone qualified for their specific health and companionship needs."
             }
           },
           {
             "@type": "Question",
-            "name": "How is MaiHoonNa different from hiring a caregiver directly?",
+            "name": "How is MaiHoonNa different from hiring a domestic caregiver directly in Gurgaon?",
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "When you hire independently, you're responsible for verifying background, training, backups when someone falls sick or quits, and you have no visibility into what actually happens during a visit. MaiHoonNa handles verification and training upfront, provides a replacement if your Care Mitra is unavailable, and gives you visit logs, health vitals, and mood tracking after every visit — plus an Emergency Response Coordinator on standby. You're paying for accountability and continuity, not just a person's time."
+                "When you hire independently, you are responsible for background checks, training, and managing sudden leaves with no real visibility. MaiHoonNa handles verification and clinical training upfront, provides guaranteed replacement companions, and sends live visit logs, health vitals, and mood tracking to your app after every visit — plus an Emergency Response Coordinator on standby."
             }
           },
           {
             "@type": "Question",
-            "name": "Can I manage care from abroad as an NRI?",
+            "name": "Can NRI adult children manage senior care for parents in India from abroad?",
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "Yes — this is one of the main reasons families use MaiHoonNa. The Family Connect app lets you track every visit, view health vitals, message the care team, and get emergency alerts in real time, from any time zone. Many of our subscribers are adult children living outside India who want a reliable, honest window into how their parent is actually doing."
+                "Yes — this is one of the primary reasons families choose MaiHoonNa. The Family Connect mobile app lets NRI adult children track every companion visit, view real-time health vitals, message the local Gurugram care team, and receive instant emergency SOS alerts across all global time zones."
             }
           },
           {
             "@type": "Question",
-            "name": "How does the Happiness Score work?",
+            "name": "How does elderly vitals monitoring and medication tracking work?",
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "At each visit, your Care Mitra logs simple signals about your parent's mood and engagement, which we combine into a running Happiness Score you can see on the app. It's designed to catch a gradual decline — not just a bad day — so if the trend dips, both you and our care team are alerted to check in, well before a small issue becomes a bigger one."
+                "During each scheduled visit, the Care Mitra checks and logs key parameters including blood pressure, pulse, blood sugar, and temperature. Prescription medication schedules are reviewed to ensure adherence, with automated logs visible on the family app."
             }
           },
           {
             "@type": "Question",
-            "name": "What does the Saathi Network do?",
+            "name": "What is the Saathi Volunteer Network for seniors?",
             "acceptedAnswer": {
               "@type": "Answer",
               "text":
-                "The Saathi Network is our community of volunteer companions who visit for conversation, company, and connection between your parent's scheduled Care Mitra visits — matched by gender, support needs, and proximity to keep visits comfortable and low-effort. It's built to address loneliness specifically, alongside the hands-on care your Care Mitra provides."
+                "The Saathi Network connects elderly citizens with verified community volunteers for meaningful conversation, walks, and hobby sharing. It directly combats loneliness and social isolation between clinical Care Mitra visits."
             }
           }
         ]
@@ -122,9 +159,11 @@ const SEO_CONFIG = {
   },
 
   services: {
-    title: "Senior Care Services & Elderly Health Monitoring | MaiHoonNa",
+    title: "Senior Care Services & Elderly Health Monitoring Gurugram | MaiHoonNa",
     description:
-      "Explore MaiHoonNa's senior care services in India: Care Mitra visits, vitals monitoring, medication adherence tracking, clinic accompaniment, and emergency response.",
+      "Explore senior care services in Gurugram & Delhi NCR: Care Mitra home visits, vitals tracking, medication adherence, clinic accompaniment, and 24/7 emergency response.",
+    keywords:
+      "senior care services Gurugram, elderly vitals monitoring Gurgaon, medication adherence seniors, Care Mitra visits Delhi NCR",
     robots: "index, follow",
     ogType: "website",
     ogImage: "https://maihoonna.in/og-image.jpg",
@@ -134,16 +173,22 @@ const SEO_CONFIG = {
         "@type": "Service",
         "serviceType": "Senior Home Care & Vitals Monitoring",
         "provider": {
-          "@type": "Organization",
-          "name": "MaiHoonNa",
+          "@type": "LocalBusiness",
+          "name": "MaiHoonNa Eldercare",
           "url": "https://maihoonna.in"
         },
-        "areaServed": {
-          "@type": "Country",
-          "name": "India"
-        },
+        "areaServed": [
+          {
+            "@type": "City",
+            "name": "Gurugram"
+          },
+          {
+            "@type": "AdministrativeArea",
+            "name": "Delhi NCR"
+          }
+        ],
         "description":
-          "In-home senior care including vitals tracking, prescription-linked medication reminders, mood logging, clinic accompaniment, and 24/7 emergency alert chain."
+          "In-home senior care in Gurugram including vitals tracking, prescription-linked medication reminders, mood logging, clinic accompaniment, and 24/7 emergency alert chain."
       }
     ]
   },
@@ -434,6 +479,9 @@ const SeoHead = ({ activePage = "home" }) => {
     // 3. Update Standard Meta Tags
     setMeta('meta[name="description"]', "name", "description", config.description);
     setMeta('meta[name="robots"]', "name", "robots", config.robots);
+    if (config.keywords) {
+      setMeta('meta[name="keywords"]', "name", "keywords", config.keywords);
+    }
 
     // 4. Update Open Graph Meta Tags
     setMeta('meta[property="og:title"]', "property", "og:title", config.title);

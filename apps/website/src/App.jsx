@@ -21,33 +21,52 @@ import LegalPage from "./pages/LegalPage";
  * App Component - Root Application Shell & Router
  */
 const App = () => {
-  const getPageFromHash = () => {
-    const rawHash = (window.location.hash || "").replace("#", "").toLowerCase();
-    if (!rawHash) return "home";
-    const validPages = ["home", "services", "saathi", "plans", "auth", "account", "checkout", "story", "terms", "privacy", "refund-policy", "cookie-policy"];
-    return validPages.includes(rawHash) ? rawHash : "not-found";
+  const getInitialPage = () => {
+    if (typeof window === "undefined") return "home";
+
+    const validPages = [
+      "home", "services", "saathi", "plans", "auth",
+      "account", "checkout", "story", "about", "terms",
+      "privacy", "refund-policy", "cookie-policy"
+    ];
+
+    // 1. Inspect direct pathname first (e.g., /services, /plans, /saathi, /about)
+    const pathname = window.location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
+    if (pathname && validPages.includes(pathname)) {
+      return pathname === "about" ? "story" : pathname;
+    }
+
+    // 2. Fallback to hash route (e.g., #services)
+    const rawHash = (window.location.hash || "").replace(/^#/, "").toLowerCase();
+    if (rawHash && validPages.includes(rawHash)) {
+      return rawHash === "about" ? "story" : rawHash;
+    }
+
+    if (!pathname && !rawHash) return "home";
+    return "not-found";
   };
 
-  const [activePage, setActiveStatePage] = useState(getPageFromHash);
+  const [activePage, setActiveStatePage] = useState(getInitialPage);
 
   const setActivePage = (page) => {
     setActiveStatePage(page);
     try {
-      if (window.location.hash !== `#${page}`) {
-        window.history.pushState(null, "", `#${page}`);
+      const targetUrl = page === "home" ? "/" : `/${page}`;
+      if (window.location.pathname !== targetUrl) {
+        window.history.pushState(null, "", targetUrl);
       }
     } catch (e) { }
   };
 
   useEffect(() => {
-    const handleHashChange = () => {
-      setActiveStatePage(getPageFromHash());
+    const handleNavigationChange = () => {
+      setActiveStatePage(getInitialPage());
     };
-    window.addEventListener("hashchange", handleHashChange);
-    window.addEventListener("popstate", handleHashChange);
+    window.addEventListener("hashchange", handleNavigationChange);
+    window.addEventListener("popstate", handleNavigationChange);
     return () => {
-      window.removeEventListener("hashchange", handleHashChange);
-      window.removeEventListener("popstate", handleHashChange);
+      window.removeEventListener("hashchange", handleNavigationChange);
+      window.removeEventListener("popstate", handleNavigationChange);
     };
   }, []);
 

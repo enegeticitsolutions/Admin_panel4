@@ -25,7 +25,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
         playsInline
       />
       <a
-        href="#home"
+        href="/"
         aria-label="MaiHoonNa home"
         className="topbar__brand"
         onClick={(e) => {
@@ -33,37 +33,53 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
           handleNavClick("home");
         }}
       >
-        <img src={logo} alt="MaiHoonNa - Connected Senior Care & Elder Companionship Platform" width="238" height="42" loading="eager" fetchpriority="high" />
+        <img src={logo} alt="MaiHoonNa - Senior Care Companion in Gurugram & Delhi NCR" width="238" height="42" loading="eager" fetchpriority="high" />
       </a>
 
       <nav className="topbar__nav" aria-label="Main navigation">
-        <button
+        <a
+          href="/"
           className={activePage === "home" ? "active" : ""}
-          onClick={() => handleNavClick("home")}
+          onClick={(e) => {
+            e.preventDefault();
+            handleNavClick("home");
+          }}
         >
           Home
-        </button>
-        <button
+        </a>
+        <a
+          href="/services"
           className={activePage === "services" ? "active" : ""}
-          onClick={() => handleNavClick("services")}
+          onClick={(e) => {
+            e.preventDefault();
+            handleNavClick("services");
+          }}
         >
           Our Services
-        </button>
-        <button
+        </a>
+        <a
+          href="/saathi"
           className={activePage === "saathi" ? "active" : ""}
-          onClick={() => handleNavClick("saathi")}
+          onClick={(e) => {
+            e.preventDefault();
+            handleNavClick("saathi");
+          }}
         >
           Saathi Network
-        </button>
+        </a>
       </nav>
 
       <div className="topbar__actions">
-        <button
+        <a
+          href="/plans"
           className={`view-plan-button ${activePage === "plans" ? "active" : ""}`}
-          onClick={() => handleNavClick("plans")}
+          onClick={(e) => {
+            e.preventDefault();
+            handleNavClick("plans");
+          }}
         >
           View Plans
-        </button>
+        </a>
 
 
 
@@ -113,30 +129,46 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
       {/* Mobile Navigation Drawer Dropdown */}
       {mobileMenuOpen && (
         <div className="topbar__mobile-menu">
-          <button
+          <a
+            href="/"
             className={activePage === "home" ? "active" : ""}
-            onClick={() => handleNavClick("home")}
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick("home");
+            }}
           >
             🏠 Home
-          </button>
-          <button
+          </a>
+          <a
+            href="/services"
             className={activePage === "services" ? "active" : ""}
-            onClick={() => handleNavClick("services")}
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick("services");
+            }}
           >
             ✨ Our Services
-          </button>
-          <button
+          </a>
+          <a
+            href="/saathi"
             className={activePage === "saathi" ? "active" : ""}
-            onClick={() => handleNavClick("saathi")}
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick("saathi");
+            }}
           >
             🤝 Saathi Network
-          </button>
-          <button
+          </a>
+          <a
+            href="/plans"
             className={activePage === "plans" ? "active" : ""}
-            onClick={() => handleNavClick("plans")}
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick("plans");
+            }}
           >
             📋 View Plans
-          </button>
+          </a>
 
         </div>
       )}
