@@ -303,3 +303,47 @@ export const fetchSubscriberDashboard = async (token) => {
   return data.data || data;
 };
 
+/**
+ * 9. Fetch Invoice Data & HTML
+ * Endpoint: GET /api/subscriber/invoices/:id
+ * Endpoint: GET /api/subscriber/invoices/:id/html
+ */
+export const fetchInvoice = async (token, invoiceId) => {
+  const response = await secureFetch(`${API_BASE}/subscriber/invoices/${encodeURIComponent(invoiceId)}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || 'Failed to fetch invoice.');
+  }
+  return data.data;
+};
+
+export const fetchInvoiceHtml = async (token, invoiceId) => {
+  const response = await secureFetch(`${API_BASE}/subscriber/invoices/${encodeURIComponent(invoiceId)}/html`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error('Failed to load invoice HTML preview.');
+  }
+  return await response.text();
+};
+
+export const fetchSubscriberInvoices = async (token) => {
+  const response = await secureFetch(`${API_BASE}/subscriber/invoices`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || 'Failed to fetch invoices.');
+  }
+  return data.data || [];
+};
+
+

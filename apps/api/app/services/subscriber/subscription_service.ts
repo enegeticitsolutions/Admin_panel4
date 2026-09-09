@@ -796,7 +796,9 @@ export const purchaseSubscription = async (
       subscriptionId: subscription.id,
       packageName: subscription.package.name,
       beneficiaryName: beneficiary?.name || null,
-      beneficiaryId: beneficiary?.id || null
+      beneficiaryId: beneficiary?.id || null,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
     };
   });
 
@@ -806,7 +808,9 @@ export const purchaseSubscription = async (
     subscriptionId: result.subscriptionId,
     package: result.packageName,
     beneficiaryName: result.beneficiaryName,
-    beneficiaryId: result.beneficiaryId
+    beneficiaryId: result.beneficiaryId,
+    invoiceId: result.invoiceId,
+    invoiceNumber: result.invoiceNumber,
   };
 };
 

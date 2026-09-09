@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate, validate } from '../shared/deps';
 import { createBeneficiarySchema, updateBeneficiarySchema } from '../../schemas/beneficiary';
 import * as beneficiaryController from '../../controllers/subscriber/beneficiary.controller';
+import * as invoicesController from '../../controllers/subscriber/invoices.controller';
 import multer from 'multer';
 
 const uploadMiddleware = multer({
@@ -48,5 +49,14 @@ router.delete('/medical-records/:recordId', authenticate, beneficiaryController.
 // Medication Management
 router.post('/:beneficiaryId/medications', authenticate, beneficiaryController.addMedication);
 router.delete('/medications/:medicationId', authenticate, beneficiaryController.deleteMedication);
+
+// ─── Beneficiary Billing / Invoices ─────────────────────────────────────────
+// Beneficiary sees ONLY invoices where beneficiaryId = :beneficiaryId
+// subscriber auth ensures the beneficiary belongs to the logged-in user
+router.get('/:beneficiaryId/invoices', authenticate, invoicesController.getBeneficiaryInvoices);
+router.get('/:beneficiaryId/invoices/:invoiceId/html', authenticate, async (req: any, res: any) => {
+  req.params.id = req.params.invoiceId;
+  return invoicesController.getInvoiceHtml(req, res);
+});
 
 export default router;
