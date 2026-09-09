@@ -40,6 +40,10 @@ export interface BeneficiaryItem {
   activePackage?: string | null;
   subscriberName?: string | null;
   hasUnreadRequests?: boolean;
+  hasActivePackage?: boolean;
+  isPackageExpired?: boolean;
+  packageEndDate?: string | null;
+  lastPackageName?: string | null;
 }
 
 interface Props {
@@ -61,6 +65,7 @@ export default function BeneficiaryList({
 }: Props) {
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'active' | 'expired' | 'all'>('active');
 
   const [scheduleState, setScheduleState] = useState<Record<string, {
     ccId: string;
@@ -88,18 +93,34 @@ export default function BeneficiaryList({
   // Available CCs (for dropdown)
   const availableCCs = team;
 
+  // Counts for tabs
+  const activeCount = useMemo(
+    () => beneficiaries.filter(b => (b.hasActivePackage !== undefined ? b.hasActivePackage : Boolean(b.activePackage))).length,
+    [beneficiaries]
+  );
+  const expiredCount = useMemo(
+    () => beneficiaries.filter(b => !(b.hasActivePackage !== undefined ? b.hasActivePackage : Boolean(b.activePackage))).length,
+    [beneficiaries]
+  );
+
   // Filtered & searched list
   const filtered = useMemo(() => {
     return beneficiaries.filter(b => {
+      const hasActive = b.hasActivePackage !== undefined ? b.hasActivePackage : Boolean(b.activePackage);
+      if (statusFilter === 'active' && !hasActive) return false;
+      if (statusFilter === 'expired' && hasActive) return false;
+
       if (!search.trim()) return true;
       const q = search.toLowerCase();
       return (
         b.name.toLowerCase().includes(q) ||
         b.phone?.includes(q) ||
-        b.city?.toLowerCase().includes(q)
+        b.city?.toLowerCase().includes(q) ||
+        b.activePackage?.toLowerCase().includes(q) ||
+        b.lastPackageName?.toLowerCase().includes(q)
       );
     });
-  }, [beneficiaries, search]);
+  }, [beneficiaries, search, statusFilter]);
 
   const checkAllCcAvailability = async (benId: string, state: any) => {
     if (!state.date || !state.time || !state.duration) return;
@@ -531,13 +552,13 @@ export default function BeneficiaryList({
         }
       />
 
-      {/* Search Bar */}
-      <div className="p-4 border-b border-[#F4EAE3] flex gap-3">
+      {/* Search Bar & Operational Filter Tabs */}
+      <div className="p-4 border-b border-[#F4EAE3] flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
           <input
             type="text"
-            placeholder="Search by name, phone, or city..."
+            placeholder="Search by name, phone, city, or package..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[#E7DED6] text-sm bg-[#FFFAF7] focus:outline-none focus:border-[#FF7A00] transition-colors"
@@ -551,6 +572,55 @@ export default function BeneficiaryList({
             </button>
           )}
         </div>
+
+        {/* Operational Filter Tabs */}
+        <div className="flex items-center gap-1.5 bg-[#FFFAF7] p-1 rounded-xl border border-[#E7DED6] self-start md:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('active')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+              statusFilter === 'active'
+                ? 'bg-[#FF7A00] text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <span>Active Package</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              statusFilter === 'active' ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-700'
+            }`}>
+              {activeCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('expired')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 ${
+              statusFilter === 'expired'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <span>Awaiting Renewal</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              statusFilter === 'expired' ? 'bg-white/25 text-white' : 'bg-gray-200 text-gray-700'
+            }`}>
+              {expiredCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              statusFilter === 'all'
+                ? 'bg-gray-800 text-white shadow-sm'
+                : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            All ({beneficiaries.length})
+          </button>
+        </div>
       </div>
 
       {/* List */}
@@ -561,7 +631,11 @@ export default function BeneficiaryList({
           message={
             search
               ? `No beneficiaries matching "${search}"`
-              : 'No beneficiaries found for this field manager.'
+              : statusFilter === 'active'
+                ? 'No beneficiaries with an active care package found.'
+                : statusFilter === 'expired'
+                  ? 'No expired or renewal-pending beneficiaries found.'
+                  : 'No beneficiaries found for this field manager.'
           }
           icon={<Users className="w-12 h-12" />}
         />
@@ -578,6 +652,8 @@ export default function BeneficiaryList({
               if (isNaN(selected.getTime())) return false;
               return selected.getTime() < Date.now() - 60000;
             })();
+
+            const hasActive = ben.hasActivePackage !== undefined ? ben.hasActivePackage : Boolean(ben.activePackage);
 
             return (
               <div key={ben.id} className="transition-colors">
@@ -603,9 +679,17 @@ export default function BeneficiaryList({
                       {ben.age && (
                         <span className="text-[10px] text-gray-400 font-bold">{ben.age}y</span>
                       )}
-                      {ben.activePackage && (
+                      {hasActive && ben.activePackage ? (
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
                           {ben.activePackage}
+                        </span>
+                      ) : ben.lastPackageName ? (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                          Expired: {ben.lastPackageName}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
+                          No Package
                         </span>
                       )}
                     </div>
@@ -634,6 +718,17 @@ export default function BeneficiaryList({
                 {/* Expanded: Schedule Panel */}
                 {isExpanded && (
                   <div className="px-5 pb-5 pt-4 bg-[#FFF5EE]/30 border-t border-[#F4EAE3]">
+                    {!hasActive && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 font-medium mb-4 flex items-start gap-2.5">
+                        <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-black text-amber-900">No Active Care Package</p>
+                          <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                            This beneficiary currently has no active subscription or their package has expired. Visit scheduling is paused until package renewal. Their assigned Field Manager and Care Companion team remain permanently preserved.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex flex-col lg:flex-row gap-8">
                       {/* Left: Schedule Form */}
                       <div className="flex-1 max-w-lg">
@@ -746,13 +841,18 @@ export default function BeneficiaryList({
                                   e.stopPropagation();
                                   handleSchedule(ben.id);
                                 }}
-                                disabled={!state.ccId || !state.date || !state.time || !state.benefitId || isPastDateTime || isSubmitting || !!conflicts[ben.id]}
+                                disabled={!hasActive || !state.ccId || !state.date || !state.time || !state.benefitId || isPastDateTime || isSubmitting || !!conflicts[ben.id]}
                                 className="w-full px-5 py-2.5 bg-[#FF7A00] text-white rounded-xl text-xs font-black uppercase tracking-wide hover:bg-[#E66E00] transition-all disabled:opacity-40 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm shadow-orange-200 h-[42px]"
                               >
                                 {isSubmitting ? (
                                   <>
                                     <Loader2 size={13} className="animate-spin" />
                                     Scheduling...
+                                  </>
+                                ) : !hasActive ? (
+                                  <>
+                                    <AlertCircle size={13} />
+                                    Awaiting Renewal
                                   </>
                                 ) : (
                                   <>

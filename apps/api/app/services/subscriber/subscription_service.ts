@@ -498,8 +498,21 @@ export const purchaseSubscription = async (
     }
     const versionObj = pVersion!;
 
-    // 2b. Compute subscription activation dates based on duration
-    const startDate = new Date();
+    // 2b. Compute subscription activation dates (chain from existing unexpired subscription if renewing early)
+    const now = new Date();
+    let existingActiveSub: any = null;
+    if (beneficiary?.id) {
+      existingActiveSub = await tx.subscription.findFirst({
+        where: {
+          beneficiaryId: beneficiary.id,
+          isActive: true,
+          endDate: { gte: now },
+        },
+        orderBy: { endDate: 'desc' },
+      });
+    }
+
+    const startDate = existingActiveSub ? new Date(existingActiveSub.endDate) : now;
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + months);
 
@@ -615,6 +628,8 @@ export const purchaseSubscription = async (
         name: vb.snapshotName || 'Benefit',
         unitLabel: vb.snapshotUnitLabel || null,
         monthlyUnits: vb.unitsIncluded || 1,
+        allowRollover: vb.allowRollover ?? false,
+        maxRolloverUnits: vb.maxRolloverUnits ?? null,
       }));
 
       await benefitPeriodManager.generatePeriodsForSubscription(
@@ -624,6 +639,15 @@ export const purchaseSubscription = async (
         periodBenefits,
         tx
       );
+
+      // Level 2: If renewing an unexpired subscription, carry over eligible unused rollover units
+      if (existingActiveSub) {
+        await benefitPeriodManager.rolloverFromPreviousSubscription(
+          existingActiveSub.id,
+          subscription.id,
+          tx
+        );
+      }
     }
 
     // 3. Generate Invoice for this purchase
@@ -1074,6 +1098,8 @@ export const linkBeneficiaryToSubscription = async (
           name: vb.snapshotName || 'Benefit',
           unitLabel: vb.snapshotUnitLabel || null,
           monthlyUnits: vb.unitsIncluded || 1,
+          allowRollover: vb.allowRollover ?? false,
+          maxRolloverUnits: vb.maxRolloverUnits ?? null,
         }));
 
         await benefitPeriodManager.generatePeriodsForSubscription(
@@ -1551,6 +1577,8 @@ export const activateSubscription = async (
         name: vb.snapshotName || 'Benefit',
         unitLabel: vb.snapshotUnitLabel || null,
         monthlyUnits: vb.unitsIncluded || 1,
+        allowRollover: vb.allowRollover ?? false,
+        maxRolloverUnits: vb.maxRolloverUnits ?? null,
       }));
 
       await benefitPeriodManager.generatePeriodsForSubscription(

@@ -98,9 +98,12 @@ export class BenefitPeriodManager {
       if (isFirst) {
         for (const b of benefits) {
           const base = Math.max(0, b.monthlyUnits || 0);
-          const cap = b.maxRolloverUnits !== undefined && b.maxRolloverUnits !== null
-            ? b.maxRolloverUnits
-            : Math.round(base * rolloverMultiplier);
+          const isRolloverAllowed = b.allowRollover !== false;
+          const cap = !isRolloverAllowed
+            ? 0
+            : b.maxRolloverUnits !== undefined && b.maxRolloverUnits !== null
+              ? b.maxRolloverUnits
+              : Math.round(base * rolloverMultiplier);
 
           await client.benefitPeriodBalance.create({
             data: {
@@ -202,7 +205,7 @@ export class BenefitPeriodManager {
         ? prevBal.rolloverCap
         : Math.round(prevBal.baseAllocation * rolloverMultiplier);
 
-      const rolloverUnits = Math.min(unused, cap);
+      const rolloverUnits = cap > 0 ? Math.min(unused, cap) : 0;
       const base = prevBal.baseAllocation;
       const total = base + rolloverUnits;
 
@@ -228,6 +231,78 @@ export class BenefitPeriodManager {
       where: { id: activatedPeriod.id },
       include: { balances: true }
     });
+  }
+
+  /**
+   * Cross-Subscription Renewal Rollover (Level 2)
+   * Transfers eligible unused rollover balances from an expiring subscription to a renewed subscription.
+   * Injects the rollover units into Period 1 of the new subscription and updates SubscriptionBenefitBalance.
+   */
+  public async rolloverFromPreviousSubscription(
+    previousSubscriptionId: string,
+    newSubscriptionId: string,
+    client: TxClient = prisma
+  ): Promise<number> {
+    const prevActivePeriod = await client.benefitPeriod.findFirst({
+      where: {
+        subscriptionId: previousSubscriptionId,
+        status: { in: [PeriodStatus.ACTIVE, PeriodStatus.CLOSED] },
+      },
+      orderBy: { periodNumber: 'desc' },
+      include: { balances: true },
+    });
+
+    if (!prevActivePeriod || !prevActivePeriod.balances.length) return 0;
+
+    const newFirstPeriod = await client.benefitPeriod.findFirst({
+      where: {
+        subscriptionId: newSubscriptionId,
+        periodNumber: 1,
+      },
+      include: { balances: true },
+    });
+
+    if (!newFirstPeriod) return 0;
+
+    let totalRolledOver = 0;
+
+    for (const prevBal of prevActivePeriod.balances) {
+      const cap = prevBal.rolloverCap ?? 0;
+      if (cap <= 0) continue; // Rollover not permitted for this benefit
+
+      const unused = Math.max(0, prevBal.remainingQuantity);
+      const unitsToRoll = Math.min(unused, cap);
+      if (unitsToRoll <= 0) continue;
+
+      const targetBal = newFirstPeriod.balances.find((b) => b.benefitId === prevBal.benefitId);
+      if (targetBal) {
+        await client.benefitPeriodBalance.update({
+          where: { id: targetBal.id },
+          data: {
+            rolloverAllocation: targetBal.rolloverAllocation + unitsToRoll,
+            totalAllocation: targetBal.totalAllocation + unitsToRoll,
+            remainingQuantity: targetBal.remainingQuantity + unitsToRoll,
+          },
+        });
+        totalRolledOver += unitsToRoll;
+      }
+
+      // Also update master ledger SubscriptionBenefitBalance if present
+      const targetSubBal = await client.subscriptionBenefitBalance.findFirst({
+        where: { subscriptionId: newSubscriptionId, benefitId: prevBal.benefitId },
+      });
+      if (targetSubBal) {
+        await client.subscriptionBenefitBalance.update({
+          where: { id: targetSubBal.id },
+          data: {
+            totalUnits: targetSubBal.totalUnits + unitsToRoll,
+            availableUnits: targetSubBal.availableUnits + unitsToRoll,
+          },
+        });
+      }
+    }
+
+    return totalRolledOver;
   }
 }
 

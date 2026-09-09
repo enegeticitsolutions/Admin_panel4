@@ -1622,14 +1622,17 @@ router.post('/:id/renew', async (req, res) => {
         }
       }
 
-      // 2. Deactivate previous subscription
-      await tx.subscription.update({
-        where: { id: currentSub.id },
-        data: {
-          isActive: false,
-          cancellationNote: renewalMode === 'today' ? 'Terminated early for immediate renewal' : undefined,
-        },
-      });
+      // 2. Deactivate previous subscription only if renewing immediately or if already expired
+      const isEarlyRenewal = renewalMode === 'from_expiry' && new Date(currentSub.endDate) > now;
+      if (!isEarlyRenewal) {
+        await tx.subscription.update({
+          where: { id: currentSub.id },
+          data: {
+            isActive: false,
+            cancellationNote: renewalMode === 'today' ? 'Terminated early for immediate renewal' : undefined,
+          },
+        });
+      }
 
       // 3. Find or publish package version
       let pVersion = await tx.packageVersion.findFirst({
@@ -1661,21 +1664,114 @@ router.post('/:id/renew', async (req, res) => {
         },
       });
 
-      // 5. Create Subscription Benefit Balances for new subscription
+      // Fetch previous subscription benefit balances to compute rollover
+      const prevBalances = await tx.subscriptionBenefitBalance.findMany({
+        where: { subscriptionId: currentSub.id },
+      });
+
+      // 5. Create Subscription Benefit Balances with Rollover for new subscription
+      const durationMonths = duration === 'annual' || duration === 'YEARLY' ? 12 : duration === 'six_months' ? 6 : duration === 'QUARTERLY' ? 3 : 1;
+
       if (pVersion.versionBenefits && pVersion.versionBenefits.length > 0) {
-        await tx.subscriptionBenefitBalance.createMany({
-          data: pVersion.versionBenefits.map((vb) => ({
-            subscriptionId: newSub.id,
-            benefitId: vb.benefitId,
-            packageVersionBenefitId: vb.id,
-            snapshotBenefitName: vb.snapshotName,
-            snapshotUnitLabel: vb.snapshotUnitLabel,
-            totalUnits: vb.unitsIncluded,
-            usedUnits: 0,
-            unit: vb.snapshotUnitLabel ? normalizeUnit(vb.snapshotUnitLabel) : 'visits',
-          })),
-          skipDuplicates: true,
-        });
+        for (const vb of pVersion.versionBenefits) {
+          let rolloverUnits = 0;
+          if (vb.allowRollover) {
+            const prevBal = prevBalances.find((b) => b.benefitId === vb.benefitId);
+            if (prevBal) {
+              const unusedUnits = Math.max(0, (prevBal.totalUnits || 0) - (prevBal.usedUnits || 0) - (prevBal.reservedUnits || 0));
+              const cap = vb.maxRolloverUnits != null ? vb.maxRolloverUnits : vb.unitsIncluded;
+              rolloverUnits = Math.min(unusedUnits, cap);
+            }
+          }
+
+          const totalUnits = (vb.unitsIncluded || 1) + rolloverUnits;
+
+          const createdBalance = await tx.subscriptionBenefitBalance.create({
+            data: {
+              subscriptionId: newSub.id,
+              benefitId: vb.benefitId,
+              packageVersionBenefitId: vb.id,
+              snapshotBenefitName: vb.snapshotName,
+              snapshotUnitLabel: vb.snapshotUnitLabel,
+              totalUnits,
+              usedUnits: 0,
+              reservedUnits: 0,
+              availableUnits: totalUnits,
+              unit: vb.snapshotUnitLabel ? normalizeUnit(vb.snapshotUnitLabel) : 'visits',
+            },
+          });
+
+          if (rolloverUnits > 0) {
+            await tx.benefitTransaction.create({
+              data: {
+                balanceId: createdBalance.id,
+                transactionType: 'RENEWED',
+                units: rolloverUnits,
+                totalBefore: vb.unitsIncluded,
+                totalAfter: totalUnits,
+                reservedBefore: 0,
+                reservedAfter: 0,
+                usedBefore: 0,
+                usedAfter: 0,
+                availableBefore: vb.unitsIncluded,
+                availableAfter: totalUnits,
+                reason: `Rolled over ${rolloverUnits} unused units from previous subscription`,
+                performedByUserId: req.user?.id || null,
+              },
+            });
+          }
+        }
+
+        // Generate Benefit Periods and balances for multi-month tracking
+        for (let i = 1; i <= durationMonths; i++) {
+          const pStart = new Date(newStartDate);
+          pStart.setMonth(pStart.getMonth() + (i - 1));
+          const pEnd = new Date(pStart);
+          pEnd.setMonth(pEnd.getMonth() + 1);
+
+          const period = await tx.benefitPeriod.create({
+            data: {
+              subscriptionId: newSub.id,
+              periodNumber: i,
+              startDate: pStart,
+              endDate: pEnd,
+              status: i === 1 ? 'ACTIVE' : 'UPCOMING',
+            },
+          });
+
+          if (i === 1) {
+            for (const vb of pVersion.versionBenefits) {
+              const base = vb.unitsIncluded || 1;
+              let rolloverUnits = 0;
+              if (vb.allowRollover) {
+                const prevBal = prevBalances.find((b) => b.benefitId === vb.benefitId);
+                if (prevBal) {
+                  const unusedUnits = Math.max(0, (prevBal.totalUnits || 0) - (prevBal.usedUnits || 0) - (prevBal.reservedUnits || 0));
+                  const cap = vb.maxRolloverUnits != null ? vb.maxRolloverUnits : base;
+                  rolloverUnits = Math.min(unusedUnits, cap);
+                }
+              }
+              const total = base + rolloverUnits;
+              const cap = vb.allowRollover ? (vb.maxRolloverUnits != null ? vb.maxRolloverUnits : base) : 0;
+
+              await tx.benefitPeriodBalance.create({
+                data: {
+                  periodId: period.id,
+                  benefitId: vb.benefitId,
+                  snapshotName: vb.snapshotName,
+                  snapshotUnitLabel: vb.snapshotUnitLabel || null,
+                  baseAllocation: base,
+                  rolloverAllocation: rolloverUnits,
+                  totalAllocation: total,
+                  usedQuantity: 0,
+                  reservedQuantity: 0,
+                  remainingQuantity: total,
+                  rolloverCap: cap,
+                },
+              });
+            }
+          }
+        }
       }
 
       // 6. Create new Payment & Invoice
@@ -1687,7 +1783,7 @@ router.post('/:id/renew', async (req, res) => {
         newSubscription: newSub,
         pkg,
         packageVersion: pVersion,
-        durationMonths: duration === 'YEARLY' ? 12 : duration === 'QUARTERLY' ? 3 : 1,
+        durationMonths,
         customerState,
         discountAmount: discount,
         subscriberId: currentSub.subscriberId,

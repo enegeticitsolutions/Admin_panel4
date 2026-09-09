@@ -259,15 +259,18 @@ router.get('/beneficiaries', async (req, res) => {
       where = { isActive: true, teamId: { in: targetTeamIds } };
     }
 
+    const now = new Date();
+    const { status } = req.query; // 'active' | 'expired' | 'all'
+
     const beneficiaries = await prisma.beneficiary.findMany({
       where,
       include: {
         primaryCC: { select: { id: true, userId: true, name: true, isAvailable: true } },
         secondaryCC: { select: { id: true, userId: true, name: true, isAvailable: true } },
         subscriptions: {
-          where: { isActive: true },
-          include: { package: { select: { name: true } } },
-          take: 1,
+          orderBy: { endDate: 'desc' },
+          include: { package: { select: { id: true, name: true, type: true } } },
+          take: 3,
         },
         serviceRequests: {
           where: { isRead: false },
@@ -277,26 +280,48 @@ router.get('/beneficiaries', async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
-    const mapped = beneficiaries.map((b) => ({
-      id: b.id,
-      userId: b.userId,
-      name: b.name,
-      age: b.age,
-      gender: b.gender,
-      address: b.address,
-      city: b.city,
-      pincode: b.pincode,
-      primaryCcId: b.primaryCcId,
-      primaryCcUserId: b.primaryCC?.userId || null,
-      primaryCcName: b.primaryCC?.name || null,
-      secondaryCcId: b.secondaryCcId,
-      secondaryCcUserId: b.secondaryCC?.userId || null,
-      secondaryCcName: b.secondaryCC?.name || null,
-      teamId: b.teamId,
-      activePackage: b.subscriptions?.[0]?.package?.name || null,
-      subscriptionId: b.subscriptions?.[0]?.id || null,
-      hasUnreadRequests: (b.serviceRequests || []).length > 0,
-    }));
+    let mapped = beneficiaries.map((b) => {
+      // Find active, unexpired subscription
+      const activeSub = (b.subscriptions || []).find(
+        (s) => s.isActive && new Date(s.endDate) >= now && !s.cancelledAt
+      );
+      // Latest subscription regardless of expiry
+      const latestSub = (b.subscriptions || [])[0] || null;
+
+      const hasActivePackage = Boolean(activeSub);
+      const isPackageExpired = Boolean(!activeSub && latestSub);
+
+      return {
+        id: b.id,
+        userId: b.userId,
+        name: b.name,
+        age: b.age,
+        gender: b.gender,
+        address: b.address,
+        city: b.city,
+        pincode: b.pincode,
+        primaryCcId: b.primaryCcId,
+        primaryCcUserId: b.primaryCC?.userId || null,
+        primaryCcName: b.primaryCC?.name || null,
+        secondaryCcId: b.secondaryCcId,
+        secondaryCcUserId: b.secondaryCC?.userId || null,
+        secondaryCcName: b.secondaryCC?.name || null,
+        teamId: b.teamId,
+        activePackage: activeSub?.package?.name || null,
+        subscriptionId: activeSub?.id || null,
+        packageEndDate: activeSub?.endDate || latestSub?.endDate || null,
+        lastPackageName: latestSub?.package?.name || null,
+        hasActivePackage,
+        isPackageExpired,
+        hasUnreadRequests: (b.serviceRequests || []).length > 0,
+      };
+    });
+
+    if (status === 'active') {
+      mapped = mapped.filter((b) => b.hasActivePackage);
+    } else if (status === 'expired') {
+      mapped = mapped.filter((b) => !b.hasActivePackage);
+    }
 
     res.json({ success: true, data: mapped });
   } catch (err) {
