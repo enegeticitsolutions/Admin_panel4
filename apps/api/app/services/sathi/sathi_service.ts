@@ -8,6 +8,7 @@ import { getBeneficiarySathiEligibility } from '../beneficiary/beneficiary_sathi
 import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
 import { benefitLedgerEngine } from '../benefit/BenefitLedgerEngine';
 import { UsageType } from '@prisma/client';
+import { notificationProducer } from '@maihoonna/notifications';
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371; // Radius of the earth in km
@@ -55,6 +56,15 @@ export const registerVolunteer = async (data: any) => {
   });
 
   const token = createToken({ sub: volunteer.id, role: 'volunteer' });
+  if (volunteer.phone) {
+    notificationProducer.publish({
+      idempotencyKey: `sathi-reg-${volunteer.id}`,
+      channel: 'whatsapp',
+      event: 'SAATHI_REGISTRATION_SUBMITTED',
+      recipient: { phone: volunteer.phone },
+      variables: { volunteerName: volunteer.name || 'Volunteer' },
+    }).catch((err: any) => console.error('[SathiService:Register] Notification Error:', err.message));
+  }
 
   return {
     token,
@@ -98,6 +108,15 @@ export const registerVolunteerWithOtp = async (data: any) => {
   });
 
   const token = createToken({ sub: volunteer.id, role: 'volunteer' });
+  if (volunteer.phone) {
+    notificationProducer.publish({
+      idempotencyKey: `sathi-reg-${volunteer.id}`,
+      channel: 'whatsapp',
+      event: 'SAATHI_REGISTRATION_SUBMITTED',
+      recipient: { phone: volunteer.phone },
+      variables: { volunteerName: volunteer.name || 'Volunteer' },
+    }).catch((err: any) => console.error('[SathiService:RegisterOtp] Notification Error:', err.message));
+  }
 
   return {
     token,
@@ -1056,7 +1075,52 @@ export const proposeRescheduleForSathiRequest = async (
       proposedBy: volunteerId,
       rejectionReason: message || null
     },
-    include: { beneficiary: true }
+    include: { beneficiary: { include: { user: true, subscriber: true } } }
+  });
+
+  // Asynchronous fire-and-forget notification (runs in background to prevent API latency)
+  setImmediate(async () => {
+    try {
+      let volName = 'Saathi companion';
+      const vol = await prisma.volunteer.findUnique({
+        where: { id: volunteerId },
+        select: { name: true }
+      });
+      if (vol?.name) {
+        volName = vol.name;
+      } else {
+        const u = await prisma.user.findUnique({
+          where: { id: volunteerId },
+          select: { name: true }
+        });
+        if (u?.name) volName = u.name;
+      }
+      const recipientPhone = updatedRequest.beneficiary?.user?.phone || updatedRequest.beneficiary?.subscriber?.phone;
+      if (recipientPhone) {
+        const formattedDate = proposed.toLocaleDateString('en-IN', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'Asia/Kolkata'
+        });
+        await notificationProducer.publish({
+          idempotencyKey: `sathi-reschedule-${requestId}-${Date.now()}`,
+          channel: 'whatsapp',
+          event: 'APPOINTMENT_RESCHEDULED_CANCELLED',
+          recipient: { phone: recipientPhone },
+          variables: {
+            appointmentType: 'Saathi visit',
+            status: `rescheduled by ${volName}`,
+            newDetails: `Proposed for ${formattedDate}. Tap your app to confirm or pick another slot.`
+          }
+        });
+      }
+    } catch (notifErr: any) {
+      console.error('[SathiService] Background WhatsApp notification error:', notifErr.message);
+    }
   });
 
   return { request: updatedRequest, message: 'Reschedule proposal sent to beneficiary.' };

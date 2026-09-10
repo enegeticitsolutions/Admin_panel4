@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../lib/prisma');
+const { dispatchSaathiProfileApproved } = require('../services/events/community-event.dispatcher');
 
 // GET /api/volunteers — list volunteers with optional status filter
 router.get('/', async (req, res) => {
@@ -84,6 +85,15 @@ router.patch('/:id/verify', async (req, res) => {
         verifiedAt: new Date(),
         verifiedById: req.user ? req.user.id : null, // req.user is set by verifyToken middleware
       }
+    });
+
+    // Zero latency impact: fire notification in background
+    setImmediate(() => {
+      dispatchSaathiProfileApproved({
+        volunteerName: volunteer.name,
+        volunteerPhone: volunteer.phone,
+        volunteerUserId: volunteer.userId,
+      }).catch(err => console.error('[VolunteersRoute] Notification Error:', err.message));
     });
 
     res.json({ success: true, data: volunteer, message: 'Volunteer profile verified successfully' });
