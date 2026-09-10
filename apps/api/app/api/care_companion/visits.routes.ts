@@ -156,6 +156,8 @@ router.get('/history', authenticate, async (req: Request, res: Response) => {
           return `${m.medication.name}${suffix}`;
         });
 
+      const formattedMood = v.mood ? (v.mood.charAt(0).toUpperCase() + v.mood.slice(1).toLowerCase()) : null;
+
       return {
         id: v.id,
         visitCode: v.visitCode,
@@ -170,11 +172,13 @@ router.get('/history', authenticate, async (req: Request, res: Response) => {
             ? ['Home Visit', 'Cancelled Visit']
             : ['Home Visit', 'Missed Visit'],
         status: v.status,
+        mood: formattedMood,
+        followUpRequired: !!v.followUpRequired,
         isExpanded: false,
         details: v.status === 'completed' ? {
           vitals: vitalsList,
           meds,
-          mood: v.mood || 'N/A',
+          mood: formattedMood || 'N/A',
           notes: v.notes || 'No visit notes captured.',
         } : null
       };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator, useWindowDimensions, PanResponder } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -374,11 +374,10 @@ export default function DashboardScreen() {
                         </View>
                     ) : (
                         <View style={styles.card}>
-                            <View style={styles.nextVisitHeader}>
-                                <Ionicons name="notifications-off-outline" size={20} color="#9CA3AF" />
-                                <Text style={styles.nextVisitTitle}>No Upcoming Visits</Text>
+                            <View style={styles.emptyVisitHeader}>
+                                <Text style={styles.nextVisitTitle}>Upcoming Visit</Text>
                             </View>
-                            <Text style={[styles.addressText, { marginTop: 12, color: '#6B7280' }]}>
+                            <Text style={[styles.addressText, { color: '#6B7280' }]}>
                                 You have no upcoming scheduled visits at this time. Enjoy your rest!
                             </Text>
                         </View>
@@ -398,12 +397,6 @@ export default function DashboardScreen() {
                                 <Ionicons name="pulse-outline" size={24} color="#16A34A" style={{ marginBottom: 8 }} />
                                 <Text style={styles.actionText}>History</Text>
                             </TouchableOpacity>
-
-                            <TouchableOpacity style={styles.actionBox}>
-                                <MaterialCommunityIcons name="cake-variant-outline" size={24} color="#DB2777" style={{ marginBottom: 8 }} />
-                                <Text style={styles.actionText}>Celebrations</Text>
-                            </TouchableOpacity>
-
                         </View>
                     </View>
 
@@ -489,6 +482,7 @@ const styles = StyleSheet.create({
 
     // --- Next Visit Card ---
     nextVisitHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+    emptyVisitHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
     nextVisitTitle: { fontFamily: 'Poppins_500Medium', fontSize: 15, color: '#111827' },
 
     switcherContainer: {
@@ -572,7 +566,7 @@ const styles = StyleSheet.create({
     quickActionsTitle: { fontFamily: 'Poppins_600SemiBold', fontSize: 16, color: '#111827', marginBottom: 16 },
     quickActionsGrid: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     actionBox: {
-        width: '31%', borderWidth: 1, borderColor: '#F3F4F6', borderRadius: 12,
+        width: '48%', borderWidth: 1, borderColor: '#F3F4F6', borderRadius: 12,
         paddingVertical: 14, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center',
         backgroundColor: '#FFFFFF',
         shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.02, shadowRadius: 3, elevation: 1,

@@ -9,6 +9,7 @@ import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
 import { benefitLedgerEngine } from '../benefit/BenefitLedgerEngine';
 import { UsageType } from '@prisma/client';
 import { notificationProducer } from '@maihoonna/notifications';
+import { findSathiBenefitBalance } from '../../constants/systemBenefits';
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371; // Radius of the earth in km
@@ -641,9 +642,7 @@ export const checkinVolunteerVisit = async (volunteerId: string, data: any) => {
     throw new ApiError(400, 'Beneficiary does not have an active subscription with Sathi Companion benefits.');
   }
 
-  const sathiBalance = subscription.benefitBalances.find(
-    b => b.benefit.benefitType.code === 'SATHI_COMPANION' || b.benefit.benefitType.name.toLowerCase().includes('sathi')
-  );
+  const sathiBalance = findSathiBenefitBalance(subscription.benefitBalances);
 
   if (!sathiBalance || (sathiBalance.totalUnits - sathiBalance.usedUnits) <= 0) {
     throw new ApiError(400, 'Beneficiary has exhausted their Sathi Companion benefit hours.');
@@ -688,42 +687,84 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
   const rawMinutes = (checkOutTime.getTime() - visitLog.checkInTime.getTime()) / 60000;
 
   const billableMinutes = rawMinutes;
-  const hoursEarned = billableMinutes / 60;
+  // If visit is less than 1 hr (60 min), credit and hours worth 1 hr are added.
+  // If greater than 1 hr (60 min), credit and hours accrue per minute (rawMinutes / 60).
+  const hoursEarned = rawMinutes < 60 ? 1 : rawMinutes / 60;
 
-  if (!visitLog.subscriptionBenefitBalanceId) {
-    throw new ApiError(400, 'No linked benefit balance found for this session.');
+  let sathiBalance: any = null;
+  if (visitLog.subscriptionBenefitBalanceId) {
+    sathiBalance = await prisma.subscriptionBenefitBalance.findUnique({
+      where: { id: visitLog.subscriptionBenefitBalanceId }
+    });
   }
 
-  const sathiBalance = await prisma.subscriptionBenefitBalance.findUnique({
-    where: { id: visitLog.subscriptionBenefitBalanceId }
+  const activeSub = await prisma.subscription.findFirst({
+    where: { beneficiaryId: visitLog.beneficiaryId, isActive: true },
+    include: {
+      benefitBalances: {
+        include: { benefit: { include: { benefitType: true } } }
+      }
+    }
   });
 
-  if (!sathiBalance) {
-    throw new ApiError(404, 'Beneficiary benefit balance not found.');
+  // Prefer hour-specific Sathi benefit if present
+  const hourSpecificBalance = findSathiBenefitBalance(activeSub?.benefitBalances || []);
+  if (hourSpecificBalance && (!sathiBalance || !((sathiBalance.snapshotUnitLabel || sathiBalance.unit || '').toLowerCase().includes('hour')))) {
+    sathiBalance = hourSpecificBalance;
+  } else if (!sathiBalance) {
+    sathiBalance = hourSpecificBalance;
   }
 
-  const currentRemaining = sathiBalance.totalUnits - sathiBalance.usedUnits;
-  if (currentRemaining < hoursEarned) {
-    throw new ApiError(400, `Insufficient Sathi benefits remaining. Beneficiary has only ${currentRemaining.toFixed(2)} hours left, visit clocked ${hoursEarned.toFixed(2)} hours.`);
-  }
+  const label = (sathiBalance?.snapshotUnitLabel || sathiBalance?.unit || sathiBalance?.benefit?.unitLabel || '').toLowerCase();
+  const isHourBenefit = label.includes('hour') || label.includes('hr');
+  const unitsToDeduct = isHourBenefit ? Math.max(1, Math.ceil(hoursEarned)) : 1;
+
+  const currentRemaining = sathiBalance ? Math.max(0, sathiBalance.totalUnits - sathiBalance.usedUnits) : 0;
+  const newRemaining = sathiBalance ? Math.max(0, currentRemaining - unitsToDeduct) : 0;
 
   const creditRateStr = await getSystemConfig('SATHI_CREDIT_RATE', '10');
   const creditRate = parseFloat(creditRateStr);
   
   let pointsEarned = 0;
   if (rawMinutes > 0) {
-    pointsEarned = (rawMinutes / 60) * creditRate;
+    pointsEarned = hoursEarned * creditRate;
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    await tx.subscriptionBenefitBalance.update({
-      where: { id: visitLog.subscriptionBenefitBalanceId! },
-      data: { usedUnits: { increment: hoursEarned } }
-    });
+    if (sathiBalance) {
+      const updatedUsed = sathiBalance.usedUnits + unitsToDeduct;
+      const updatedAvailable = Math.max(0, sathiBalance.totalUnits - sathiBalance.reservedUnits - updatedUsed);
+
+      await tx.subscriptionBenefitBalance.update({
+        where: { id: sathiBalance.id },
+        data: {
+          usedUnits: updatedUsed,
+          availableUnits: updatedAvailable
+        }
+      });
+
+      // Immutable benefit transaction ledger
+      await tx.benefitTransaction.create({
+        data: {
+          balanceId: sathiBalance.id,
+          transactionType: 'CONSUMED',
+          units: unitsToDeduct,
+          totalBefore: sathiBalance.totalUnits,
+          totalAfter: sathiBalance.totalUnits,
+          reservedBefore: sathiBalance.reservedUnits,
+          reservedAfter: sathiBalance.reservedUnits,
+          usedBefore: sathiBalance.usedUnits,
+          usedAfter: updatedUsed,
+          availableBefore: currentRemaining,
+          availableAfter: newRemaining,
+          reason: `Sathi Companion Visit Completed (${Math.round(rawMinutes)} mins)`,
+          performedByUserId: volunteerId,
+        }
+      });
+    }
 
     // Synchronize BenefitPeriodBalance & BenefitUsage ledger
-    const unitsToDeduct = Math.max(1, Math.round(hoursEarned));
-    if (visitLog.subscriptionId) {
+    if (visitLog.subscriptionId && sathiBalance) {
       try {
         const activePeriod = await benefitPeriodManager.evaluateAndTransitionJIT(visitLog.subscriptionId);
         if (activePeriod) {
@@ -735,7 +776,7 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
               quantity: unitsToDeduct,
               usageType: UsageType.SATHI_HOURS,
               referenceId: visitLog.id,
-              notes: `Sathi Companion Visit Completed (${hoursEarned.toFixed(1)} hrs)`,
+              notes: `Sathi Companion Visit Completed (${Math.round(rawMinutes)} mins)`,
               performedByUserId: volunteerId,
             }, tx);
           } catch (deductErr) {
@@ -765,7 +806,7 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
       }
     }
 
-    // Create PackageHoursLog for audit & activity feeds
+    // Create PackageHoursLog for audit & activity feeds (preserved for analytics)
     if (visitLog.subscriptionId && visitLog.beneficiaryId) {
       await tx.packageHoursLog.create({
         data: {
@@ -773,7 +814,7 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
           beneficiaryId: visitLog.beneficiaryId,
           hoursConsumed: hoursEarned,
           balanceBefore: currentRemaining,
-          balanceAfter: Math.max(0, currentRemaining - hoursEarned),
+          balanceAfter: newRemaining,
           description: `Sathi companion visit completed (${hoursEarned.toFixed(1)} hrs). Notes: ${notes || 'Completed'}`
         }
       });
@@ -818,7 +859,8 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
         hoursEarned,
         creditPointsEarned: pointsEarned,
         beneficiaryBalanceBefore: currentRemaining,
-        beneficiaryBalanceAfter: currentRemaining - hoursEarned,
+        beneficiaryBalanceAfter: newRemaining,
+        subscriptionBenefitBalanceId: sathiBalance?.id || visitLog.subscriptionBenefitBalanceId,
         status: 'completed',
         notes: notes ? `${visitLog.notes || ''}\n\nCheckout Notes: ${notes}`.trim() : visitLog.notes
       }
@@ -1271,14 +1313,7 @@ export const verifySathiVisitOtp = async (volunteerId: string, requestId: string
   const subscription = await prisma.subscription.findFirst({
     where: {
       beneficiaryId: request.beneficiaryId,
-      isActive: true,
-      benefitBalances: {
-        some: {
-          benefit: {
-            benefitType: { name: 'Sathi Companion' }
-          }
-        }
-      }
+      isActive: true
     },
     include: {
       benefitBalances: {
@@ -1288,12 +1323,10 @@ export const verifySathiVisitOtp = async (volunteerId: string, requestId: string
   });
 
   if (!subscription) {
-    throw new ApiError(400, 'Beneficiary does not have an active subscription with Sathi Companion benefits.');
+    throw new ApiError(400, 'Beneficiary does not have an active subscription.');
   }
 
-  const sathiBalance = subscription.benefitBalances.find(
-    b => b.benefit.benefitType.code === 'SATHI_COMPANION' || b.benefit.benefitType.name.toLowerCase().includes('sathi')
-  );
+  const sathiBalance = findSathiBenefitBalance(subscription.benefitBalances);
 
   if (!sathiBalance || (sathiBalance.totalUnits - sathiBalance.usedUnits) <= 0) {
     throw new ApiError(400, 'Beneficiary has exhausted their Sathi Companion benefit hours.');

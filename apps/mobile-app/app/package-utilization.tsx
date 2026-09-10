@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform, Modal, TextInput, Alert } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, Platform, Modal, TextInput, Alert, RefreshControl } from 'react-native';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
@@ -183,11 +183,13 @@ export default function PackageUtilizationScreen() {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) throw new Error('No auth token found');
 
+      let currentRole = userRole;
       const userDataStr = await AsyncStorage.getItem('userData');
       if (userDataStr) {
         try {
           const userData = JSON.parse(userDataStr);
-          setUserRole(userData.role || null);
+          currentRole = userData.role || null;
+          setUserRole(currentRole);
         } catch (e) {}
       }
 
@@ -204,9 +206,126 @@ export default function PackageUtilizationScreen() {
       }
 
       if (Array.isArray(data.data)) {
-        setSummaryList(data.data);
+        // Enrich subscriber summaries with live database ledger balances
+        const rawSummaries = data.data;
+        const enrichedSummaries = await Promise.all(
+          rawSummaries.map(async (item: SummaryData) => {
+            if (item.beneficiaryId && !item.beneficiaryId.startsWith('unlinked-')) {
+              try {
+                const ledgerRes = await fetch(`${API_URL}/shared/utilization/ledger/${item.beneficiaryId}`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const ledgerJson = await ledgerRes.json();
+                if (ledgerJson.success && Array.isArray(ledgerJson.data?.balances) && ledgerJson.data.balances.length > 0) {
+                  const balances = ledgerJson.data.balances;
+                  const hasExhausted = balances.some((b: any) => {
+                    const total = b.totalUnits ?? 0;
+                    const used = b.usedUnits ?? 0;
+                    const remaining = Math.max(0, total - used);
+                    return total > 0 && (used >= total || remaining === 0 || (b.availableUnits !== undefined && b.availableUnits <= 0 && used > 0));
+                  });
+                  const hasLowBalance = balances.some((b: any) => {
+                    const total = b.totalUnits ?? 0;
+                    const used = b.usedUnits ?? 0;
+                    const remaining = Math.max(0, total - used);
+                    return total > 0 && !hasExhausted && remaining > 0 && (remaining / total) < 0.2;
+                  });
+                  return {
+                    ...item,
+                    hasExhausted,
+                    hasLowBalance,
+                  };
+                }
+              } catch (e) {
+                // Fallback to original item
+              }
+            }
+            return item;
+          })
+        );
+        setSummaryList(enrichedSummaries);
+        setDetailData(null);
       } else {
-        setDetailData(data.data);
+        const rawDetail: DetailedUtilization = data.data;
+        const targetBeneficiaryId = rawDetail?.beneficiaryId || beneficiaryId;
+
+        // Fetch live authoritative database ledger balances to guarantee 100% accurate data
+        let authoritativeBenefits = rawDetail?.benefits || [];
+        let authoritativeLogs = rawDetail?.recentLogs || [];
+
+        if (targetBeneficiaryId && !String(targetBeneficiaryId).startsWith('unlinked-')) {
+          try {
+            const ledgerRes = await fetch(`${API_URL}/shared/utilization/ledger/${targetBeneficiaryId}`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const ledgerJson = await ledgerRes.json();
+
+            if (ledgerJson.success && Array.isArray(ledgerJson.data?.balances) && ledgerJson.data.balances.length > 0) {
+              const existingBenefitTypeMap = new Map<string, string | null>();
+              (rawDetail?.benefits || []).forEach((b: any) => {
+                if (b.benefitId) existingBenefitTypeMap.set(b.benefitId, b.benefitTypeName || null);
+              });
+
+              authoritativeBenefits = ledgerJson.data.balances.map((bal: any) => {
+                const total = bal.totalUnits ?? 0;
+                const used = bal.usedUnits ?? 0;
+                const remaining = Math.max(0, total - used);
+                const isExhausted = total > 0 && (used >= total || remaining === 0 || (bal.availableUnits !== undefined && bal.availableUnits <= 0 && used > 0));
+                const isLowBalance = total > 0 && !isExhausted && (remaining / total) < 0.2;
+                const usagePercent = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+
+                return {
+                  benefitId: bal.benefitId,
+                  benefitName: bal.benefitName || 'Benefit',
+                  unitLabel: bal.unitLabel || 'units',
+                  benefitTypeName: existingBenefitTypeMap.get(bal.benefitId) || null,
+                  totalUnits: total,
+                  usedUnits: used,
+                  remainingUnits: remaining,
+                  usagePercent,
+                  isLowBalance,
+                  isExhausted,
+                };
+              });
+
+              // Merge transaction ledger entries if present
+              if (Array.isArray(ledgerJson.data?.transactions) && ledgerJson.data.transactions.length > 0) {
+                const txLogs = ledgerJson.data.transactions.map((tx: any) => ({
+                  id: tx.id,
+                  visitId: tx.reservationId || tx.id,
+                  hoursConsumed: tx.units,
+                  balanceBefore: tx.availableBefore,
+                  balanceAfter: tx.availableAfter,
+                  description: tx.reason || `${tx.transactionType}: ${tx.benefitName || 'Benefit'}`,
+                  loggedAt: tx.createdAt,
+                  careCompanionName: 'Care Team',
+                  ccType: tx.unitLabel,
+                  visitStatus: tx.transactionType,
+                  actualMinutes: null,
+                  isRequest: false
+                }));
+
+                const combined = [...authoritativeLogs, ...txLogs];
+                const seenKeys = new Set<string>();
+                authoritativeLogs = combined.filter((item: any) => {
+                  const key = item.visitId || item.id;
+                  if (seenKeys.has(key)) return false;
+                  seenKeys.add(key);
+                  return true;
+                }).sort((a: any, b: any) => new Date(b.loggedAt).getTime() - new Date(a.loggedAt).getTime());
+              }
+            }
+          } catch (ledgerErr) {
+            console.warn('[package-utilization] Ledger live sync fallback error:', ledgerErr);
+          }
+        }
+
+        setDetailData({
+          ...rawDetail,
+          benefits: authoritativeBenefits,
+          recentLogs: authoritativeLogs
+        });
+        setSummaryList(null);
       }
     } catch (e: any) {
       setError(e.message || 'An error occurred');
@@ -418,6 +537,14 @@ export default function PackageUtilizationScreen() {
     }
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchUtilization();
+    }, [beneficiaryId])
+  );
+
   useEffect(() => {
     fetchUtilization();
   }, [beneficiaryId]);
@@ -484,7 +611,23 @@ export default function PackageUtilizationScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await fetchUtilization();
+                setRefreshing(false);
+              }}
+              colors={['#FF5B0A']}
+              tintColor="#FF5B0A"
+            />
+          }
+        >
           {userRole !== 'beneficiary' && ((beneficiaryId && String(beneficiaryId).startsWith('unlinked-')) || (!beneficiaryId && detailData)) && (
             <TouchableOpacity 
               style={styles.addBeneficiaryCta}

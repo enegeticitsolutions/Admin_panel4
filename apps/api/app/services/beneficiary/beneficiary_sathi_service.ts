@@ -1,7 +1,9 @@
 import prisma from '../../core/database';
 import { ApiError } from '../../utils/ApiError';
-
-import { isSathiBenefit } from '../../constants/systemBenefits';
+import { UsageType } from '@prisma/client';
+import { isSathiBenefit, findSathiBenefitBalance } from '../../constants/systemBenefits';
+import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
+import { benefitLedgerEngine } from '../benefit/BenefitLedgerEngine';
 
 export const getBeneficiarySathiEligibility = async (beneficiaryId: string) => {
   const activeSubscriptions = await prisma.subscription.findMany({
@@ -49,39 +51,75 @@ export const getBeneficiarySathiEligibility = async (beneficiaryId: string) => {
   for (const sub of activeSubscriptions) {
     if (sub.benefitBalances && sub.benefitBalances.length > 0) {
       for (const bal of sub.benefitBalances) {
-        if (isSathiBenefit(bal.benefit)) {
+        const isSathi = isSathiBenefit(bal.benefit) ||
+          bal.benefitId === 'sathi-companion-benefit' ||
+          (bal.snapshotBenefitName && bal.snapshotBenefitName.toLowerCase().includes('sathi')) ||
+          (bal.benefit?.name && bal.benefit.name.toLowerCase().includes('sathi')) ||
+          (bal.benefit?.code && bal.benefit.code.toUpperCase().includes('SATHI'));
+
+        if (isSathi) {
+          eligible = true;
           const remaining = bal.totalUnits - bal.usedUnits;
-          if (remaining > 0 || (bal.availableUnits || 0) > 0) {
-            eligible = true;
-            remainingUnits += remaining > 0 ? remaining : (bal.availableUnits || 0);
-            if (!sathiBalanceId) sathiBalanceId = bal.id;
+          const available = (bal.availableUnits !== null && bal.availableUnits !== undefined) ? bal.availableUnits : remaining;
+          const balanceValue = available > 0 ? available : remaining;
+          if (balanceValue > 0) {
+            remainingUnits += balanceValue;
           }
+          if (!sathiBalanceId) sathiBalanceId = bal.id;
         }
       }
     }
 
-    if (!eligible && sub.packageVersion?.versionBenefits) {
+    if (sub.packageVersion?.versionBenefits) {
       for (const pvb of sub.packageVersion.versionBenefits) {
-        if (isSathiBenefit(pvb.benefit)) {
-          const remaining = pvb.unitsIncluded;
-          if (remaining > 0 || pvb.isUnlimited) {
-            eligible = true;
-            remainingUnits += pvb.isUnlimited ? 999 : remaining;
+        const isSathi = isSathiBenefit(pvb.benefit) ||
+          pvb.benefitId === 'sathi-companion-benefit' ||
+          (pvb.snapshotName && pvb.snapshotName.toLowerCase().includes('sathi')) ||
+          (pvb.benefit?.name && pvb.benefit.name.toLowerCase().includes('sathi')) ||
+          (pvb.benefit?.code && pvb.benefit.code.toUpperCase().includes('SATHI'));
+
+        if (isSathi) {
+          eligible = true;
+          if (!sathiBalanceId) {
+            const remaining = pvb.unitsIncluded;
+            if (remaining > 0 || pvb.isUnlimited) {
+              remainingUnits += pvb.isUnlimited ? 999 : remaining;
+            }
           }
         }
       }
     }
 
-    if (!eligible && sub.package?.packageBenefits) {
+    if (sub.package?.packageBenefits) {
       for (const pb of sub.package.packageBenefits) {
-        if (isSathiBenefit(pb.benefit)) {
-          const remaining = pb.unitsIncluded;
-          if (remaining > 0 || pb.isUnlimited) {
-            eligible = true;
-            remainingUnits += pb.isUnlimited ? 999 : remaining;
+        const isSathi = isSathiBenefit(pb.benefit) ||
+          pb.benefitId === 'sathi-companion-benefit' ||
+          (pb.benefit?.name && pb.benefit.name.toLowerCase().includes('sathi')) ||
+          (pb.benefit?.code && pb.benefit.code.toUpperCase().includes('SATHI'));
+
+        if (isSathi) {
+          eligible = true;
+          if (!sathiBalanceId && remainingUnits === 0) {
+            const remaining = pb.unitsIncluded;
+            if (remaining > 0 || pb.isUnlimited) {
+              remainingUnits += pb.isUnlimited ? 999 : remaining;
+            }
           }
         }
       }
+    }
+  }
+
+  // Safety: If the beneficiary has any active or in-progress Sathi requests, they must always be eligible to view the screen
+  if (!eligible) {
+    const activeRequestsCount = await prisma.sathiVisitRequest.count({
+      where: {
+        beneficiaryId,
+        status: { in: ['IN_PROGRESS', 'ACCEPTED', 'PENDING'] }
+      }
+    });
+    if (activeRequestsCount > 0) {
+      eligible = true;
     }
   }
 
@@ -89,9 +127,12 @@ export const getBeneficiarySathiEligibility = async (beneficiaryId: string) => {
 };
 
 export const createSathiVisitRequest = async (beneficiaryId: string, dateTime: string, reason: string, targetVolunteerId?: string) => {
-  const { eligible } = await getBeneficiarySathiEligibility(beneficiaryId);
+  const { eligible, remainingUnits } = await getBeneficiarySathiEligibility(beneficiaryId);
   if (!eligible) {
-    throw new ApiError(400, 'Your active subscription does not include Sathi Companion hours/benefits, or you have run out of units.');
+    throw new ApiError(400, 'Your active subscription does not include Sathi Companion hours/benefits.');
+  }
+  if (remainingUnits <= 0) {
+    throw new ApiError(400, 'You have 0 remaining Sathi hours. Please contact your coordinator to renew or top up.');
   }
 
   const request = await prisma.sathiVisitRequest.create({
@@ -278,7 +319,22 @@ export const getBeneficiarySathiRequests = async (beneficiaryId: string) => {
     },
     orderBy: { dateTime: 'desc' }
   });
-  return requests;
+
+  const now = Date.now();
+  const thirtyMinutesMs = 30 * 60 * 1000;
+
+  const sanitizedRequests = requests.map(req => {
+    const timeUntilVisitMs = new Date(req.dateTime).getTime() - now;
+    if (timeUntilVisitMs > thirtyMinutesMs) {
+      return {
+        ...req,
+        otpCode: null
+      };
+    }
+    return req;
+  });
+
+  return sanitizedRequests;
 };
 
 export const respondToSathiReschedule = async (beneficiaryId: string, requestId: string, action: 'ACCEPT' | 'REJECT') => {
@@ -298,11 +354,13 @@ export const respondToSathiReschedule = async (beneficiaryId: string, requestId:
     if (!request.proposedDateTime) {
       throw new ApiError(400, 'No proposed date time available to accept.');
     }
+    const otpCode = request.otpCode || Math.floor(1000 + Math.random() * 9000).toString();
     const updatedRequest = await prisma.sathiVisitRequest.update({
       where: { id: requestId },
       data: {
         status: 'ACCEPTED',
         dateTime: request.proposedDateTime,
+        otpCode,
         rejectionReason: null
       }
     });
@@ -336,87 +394,221 @@ export const completeSathiVisit = async (beneficiaryId: string, requestId: strin
     throw new ApiError(400, 'This visit is not in progress and cannot be completed.');
   }
 
-  // First update SathiVisitRequest to COMPLETED (without actualDurationMinutes yet)
-  const updatedRequest = await prisma.sathiVisitRequest.update({
-    where: { id: requestId },
-    data: {
-      status: 'COMPLETED'
+  // Find the in_progress log session
+  let activeLog = await prisma.volunteerVisitLog.findFirst({
+    where: {
+      beneficiaryId,
+      ...(request.volunteerId ? { volunteerId: request.volunteerId } : {}),
+      status: 'in_progress'
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const checkOutTime = new Date();
+  let rawMinutes = 40;
+  if (activeLog?.checkInTime) {
+    rawMinutes = Math.max(1, (checkOutTime.getTime() - activeLog.checkInTime.getTime()) / 60000);
+  } else if (request.updatedAt) {
+    rawMinutes = Math.max(1, (checkOutTime.getTime() - new Date(request.updatedAt).getTime()) / 60000);
+  }
+  // If visit is less than 1 hr (60 min), credit and hours worth 1 hr are added.
+  // If greater than 1 hr (60 min), credit and hours accrue per minute (rawMinutes / 60).
+  const hoursEarned = rawMinutes < 60 ? 1 : rawMinutes / 60;
+
+  // Find active subscription & Sathi benefit balance to deduct from
+  const activeSubscription = await prisma.subscription.findFirst({
+    where: { beneficiaryId, isActive: true },
+    include: {
+      benefitBalances: {
+        include: { benefit: { include: { benefitType: true } } }
+      }
     }
   });
 
-  // Automatically check out the Saathi's active visit log with exact time
-  if (request.volunteerId) {
-    const activeLog = await prisma.volunteerVisitLog.findFirst({
-      where: {
-        beneficiaryId,
-        volunteerId: request.volunteerId,
-        status: 'in_progress'
+  let sathiBalance: any = null;
+  if (activeLog?.subscriptionBenefitBalanceId) {
+    sathiBalance = activeSubscription?.benefitBalances.find(b => b.id === activeLog.subscriptionBenefitBalanceId);
+  }
+  const hourSpecificBalance = findSathiBenefitBalance(activeSubscription?.benefitBalances || []);
+  if (hourSpecificBalance && (!sathiBalance || !((sathiBalance.snapshotUnitLabel || sathiBalance.unit || '').toLowerCase().includes('hour')))) {
+    sathiBalance = hourSpecificBalance;
+  } else if (!sathiBalance) {
+    sathiBalance = hourSpecificBalance;
+  }
+
+  const label = (sathiBalance?.snapshotUnitLabel || sathiBalance?.unit || sathiBalance?.benefit?.unitLabel || '').toLowerCase();
+  const isHourBenefit = label.includes('hour') || label.includes('hr');
+  const unitsToDeduct = isHourBenefit ? Math.max(1, Math.ceil(hoursEarned)) : 1;
+
+  const currentRemaining = sathiBalance ? Math.max(0, sathiBalance.totalUnits - sathiBalance.usedUnits) : 0;
+  const newRemaining = sathiBalance ? Math.max(0, currentRemaining - unitsToDeduct) : 0;
+
+  const config = await prisma.systemConfig.findUnique({ where: { key: 'SATHI_CREDIT_RATE' } });
+  const creditRate = parseFloat(config ? config.value : '10');
+  const pointsEarned = hoursEarned * creditRate;
+
+  const updatedRequest = await prisma.$transaction(async (tx) => {
+    // 1. Update SathiVisitRequest to COMPLETED
+    const completedReq = await tx.sathiVisitRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'COMPLETED',
+        actualDurationMinutes: Math.round(rawMinutes)
       }
     });
 
-    if (activeLog) {
-      const checkOutTime = new Date();
-      const rawMinutes = (checkOutTime.getTime() - activeLog.checkInTime.getTime()) / 60000;
-      const hoursEarned = rawMinutes / 60;
-      
-      const config = await prisma.systemConfig.findUnique({ where: { key: 'SATHI_CREDIT_RATE' } });
-      const creditRate = parseFloat(config ? config.value : '10');
-      const pointsEarned = hoursEarned * creditRate;
-      await prisma.$transaction(async (tx) => {
-        // Update the actualDurationMinutes
-        await tx.sathiVisitRequest.update({
-          where: { id: requestId },
-          data: { actualDurationMinutes: rawMinutes }
-        });
+    // 2. Update SubscriptionBenefitBalance & Ledger if Sathi balance exists
+    if (sathiBalance && activeSubscription) {
+      const updatedUsed = sathiBalance.usedUnits + unitsToDeduct;
+      const updatedAvailable = Math.max(0, sathiBalance.totalUnits - sathiBalance.reservedUnits - updatedUsed);
 
-        if (activeLog.subscriptionBenefitBalanceId) {
-          await tx.subscriptionBenefitBalance.update({
-            where: { id: activeLog.subscriptionBenefitBalanceId },
-            data: { usedUnits: { increment: hoursEarned } }
-          });
+      await tx.subscriptionBenefitBalance.update({
+        where: { id: sathiBalance.id },
+        data: {
+          usedUnits: updatedUsed,
+          availableUnits: updatedAvailable
         }
+      });
 
-        const volunteer = await tx.volunteer.findUnique({
-          where: { id: activeLog.volunteerId }
-        });
-
-        if (volunteer) {
-          await tx.volunteer.update({
-            where: { id: volunteer.id },
-            data: {
-              totalCreditHours: volunteer.totalCreditHours + hoursEarned,
-              totalCreditPoints: volunteer.totalCreditPoints + pointsEarned
-            }
-          });
-
-          await tx.volunteerCreditTransaction.create({
-            data: {
-              volunteerId: volunteer.id,
-              visitLogId: activeLog.id,
-              type: 'earned',
-              minutesDelta: rawMinutes,
-              pointsDelta: pointsEarned,
-              balanceAfter: volunteer.totalCreditPoints + pointsEarned,
-              description: `Visit Verified`
-            }
-          });
+      // Immutable benefit transaction ledger
+      await tx.benefitTransaction.create({
+        data: {
+          balanceId: sathiBalance.id,
+          transactionType: 'CONSUMED',
+          units: unitsToDeduct,
+          totalBefore: sathiBalance.totalUnits,
+          totalAfter: sathiBalance.totalUnits,
+          reservedBefore: sathiBalance.reservedUnits,
+          reservedAfter: sathiBalance.reservedUnits,
+          usedBefore: sathiBalance.usedUnits,
+          usedAfter: updatedUsed,
+          availableBefore: currentRemaining,
+          availableAfter: newRemaining,
+          reason: `Sathi Companion Visit Completed (${Math.round(rawMinutes)} mins)`,
+          performedByUserId: request.volunteerId || beneficiaryId,
         }
+      });
 
-        await tx.volunteerVisitLog.update({
-          where: { id: activeLog.id },
+      // Sync BenefitPeriodBalance & BenefitLedgerEngine
+      try {
+        const activePeriod = await benefitPeriodManager.evaluateAndTransitionJIT(activeSubscription.id);
+        if (activePeriod) {
+          try {
+            await benefitLedgerEngine.deductUnits({
+              subscriptionId: activeSubscription.id,
+              periodId: activePeriod.id,
+              benefitId: sathiBalance.benefitId,
+              quantity: unitsToDeduct,
+              usageType: UsageType.SATHI_HOURS,
+              referenceId: activeLog?.id || requestId,
+              notes: `Sathi Companion Visit Completed (${Math.round(rawMinutes)} mins)`,
+              performedByUserId: request.volunteerId || beneficiaryId,
+            }, tx);
+          } catch (deductErr) {
+            console.error('[Beneficiary Sathi Complete] BenefitLedger deduction warning:', deductErr);
+            const pb = await tx.benefitPeriodBalance.findUnique({
+              where: {
+                periodId_benefitId: {
+                  periodId: activePeriod.id,
+                  benefitId: sathiBalance.benefitId,
+                }
+              }
+            });
+            if (pb) {
+              const qty = Math.min(unitsToDeduct, pb.remainingQuantity);
+              await tx.benefitPeriodBalance.update({
+                where: { id: pb.id },
+                data: {
+                  usedQuantity: pb.usedQuantity + qty,
+                  remainingQuantity: Math.max(0, pb.remainingQuantity - qty)
+                }
+              });
+            }
+          }
+        }
+      } catch (periodErr) {
+        console.error('[Beneficiary Sathi Complete] Period evaluation warning:', periodErr);
+      }
+    }
+
+
+    // 3. Update volunteer points & credit transaction
+    const targetVolId = request.volunteerId || activeLog?.volunteerId;
+    if (targetVolId) {
+      const volunteer = await tx.volunteer.findUnique({
+        where: { id: targetVolId }
+      });
+
+      if (volunteer) {
+        const newHoursTotal = volunteer.totalCreditHours + hoursEarned;
+        const newPointsTotal = volunteer.totalCreditPoints + pointsEarned;
+
+        await tx.volunteer.update({
+          where: { id: targetVolId },
           data: {
+            totalCreditHours: newHoursTotal,
+            totalCreditPoints: newPointsTotal
+          }
+        });
+
+        await tx.volunteerCreditTransaction.create({
+          data: {
+            volunteerId: targetVolId,
+            visitLogId: activeLog?.id || requestId,
+            type: 'earned',
+            minutesDelta: rawMinutes,
+            pointsDelta: pointsEarned,
+            balanceAfter: newPointsTotal,
+            description: `Visit Verified (${Math.round(rawMinutes)}m)`
+          }
+        });
+      }
+    }
+
+    // 4. Update or create volunteer visit log
+    if (activeLog) {
+      await tx.volunteerVisitLog.update({
+        where: { id: activeLog.id },
+        data: {
+          checkOutTime,
+          minutesLogged: rawMinutes,
+          hoursEarned,
+          creditPointsEarned: pointsEarned,
+          beneficiaryBalanceBefore: currentRemaining,
+          beneficiaryBalanceAfter: newRemaining,
+          subscriptionBenefitBalanceId: sathiBalance?.id || activeLog.subscriptionBenefitBalanceId,
+          status: 'completed'
+        }
+      });
+    } else if (targetVolId) {
+      const assignment = await tx.volunteerAssignment.findFirst({
+        where: { volunteerId: targetVolId, beneficiaryId }
+      });
+      if (assignment) {
+        await tx.volunteerVisitLog.create({
+          data: {
+            volunteerId: targetVolId,
+            beneficiaryId,
+            assignmentId: assignment.id,
+            subscriptionId: activeSubscription?.id,
+            subscriptionBenefitBalanceId: sathiBalance?.id,
+            checkInTime: new Date(Date.now() - rawMinutes * 60000),
             checkOutTime,
             minutesLogged: rawMinutes,
             hoursEarned,
             creditPointsEarned: pointsEarned,
+            beneficiaryBalanceBefore: currentRemaining,
+            beneficiaryBalanceAfter: newRemaining,
             status: 'completed'
           }
         });
-      });
+      }
     }
-  }
 
-  return { request: updatedRequest, message: 'Visit marked as completed successfully and Sathi hours logged.' };
+    return completedReq;
+  });
+
+  return { request: updatedRequest, message: `Visit marked as completed successfully. Logged ${hoursEarned.toFixed(1)} hours.` };
 };
 
 export const submitVolunteerReview = async (volunteerId: string, beneficiaryId: string, rating: number, reviewText?: string) => {
@@ -473,4 +665,58 @@ export const updateAssignmentStatus = async (beneficiaryId: string, volunteerId:
   });
 
   return { success: true };
+};
+
+export const generateSathiVisitOtp = async (beneficiaryId: string, requestId: string) => {
+  const request = await prisma.sathiVisitRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      volunteer: {
+        select: {
+          id: true,
+          name: true,
+          profilePhoto: true
+        }
+      }
+    }
+  });
+
+  if (!request) {
+    throw new ApiError(404, 'Sathi visit request not found.');
+  }
+
+  if (request.beneficiaryId !== beneficiaryId) {
+    throw new ApiError(403, 'You do not have permission to access this visit request.');
+  }
+
+  if (request.status !== 'ACCEPTED') {
+    throw new ApiError(400, 'OTP can only be generated for accepted visit requests.');
+  }
+
+  const now = Date.now();
+  const visitTime = new Date(request.dateTime).getTime();
+  const timeUntilVisitMs = visitTime - now;
+  const thirtyMinutesMs = 30 * 60 * 1000;
+
+  if (timeUntilVisitMs > thirtyMinutesMs) {
+    const minutesLeft = Math.ceil(timeUntilVisitMs / (60 * 1000));
+    throw new ApiError(400, `OTP will only be available 30 minutes before the scheduled visit time (in approx ${minutesLeft} mins).`);
+  }
+
+  let otpCode = request.otpCode;
+  if (!otpCode) {
+    otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    await prisma.sathiVisitRequest.update({
+      where: { id: requestId },
+      data: { otpCode }
+    });
+  }
+
+  return {
+    requestId: request.id,
+    otpCode,
+    status: request.status,
+    dateTime: request.dateTime,
+    volunteer: request.volunteer
+  };
 };

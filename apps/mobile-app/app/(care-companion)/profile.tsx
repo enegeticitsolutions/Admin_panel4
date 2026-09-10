@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator, useWindowDimensions, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator, useWindowDimensions, Modal, TextInput, Alert, KeyboardAvoidingView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -66,16 +66,22 @@ const CustomToggle = ({ value, onValueChange }: { value: boolean, onValueChange:
 
 export default function ProfileScreen() {
     const router = useRouter();
-    const { replace, pop } = useNavigationStack();
+    const { push, replace, pop } = useNavigationStack();
     useAndroidBackHandler();
     
     const [loading, setLoading] = useState(true);
     const [profileData, setProfileData] = useState<any>(null);
 
-    // Edit Name Modal State
-    const [isEditNameModalVisible, setIsEditNameModalVisible] = useState(false);
-    const [editedName, setEditedName] = useState('');
-    const [savingName, setSavingName] = useState(false);
+    // Edit Profile Modal State
+    const [isEditProfileModalVisible, setIsEditProfileModalVisible] = useState(false);
+    const [editForm, setEditForm] = useState({
+        name: '',
+        phone: '',
+        email: '',
+        location: '',
+        bio: '',
+    });
+    const [savingProfile, setSavingProfile] = useState(false);
 
     // Toggle States for Notifications (Persistent)
     const [toggles, setToggles] = useState({
@@ -152,6 +158,7 @@ export default function ProfileScreen() {
                             email: "",
                             phone: "",
                             location: "",
+                            bio: "",
                             memberSince: "",
                             impact: { visits: 0, hours: 0, clients: 0 }
                         });
@@ -166,18 +173,34 @@ export default function ProfileScreen() {
         }, [fontsLoaded])
     );
 
-    // Save Name Handler
-    const handleSaveName = async () => {
-        if (!editedName.trim()) {
-            Alert.alert('Required', 'Please enter a valid name.');
+    // Open Edit Profile Modal with current values
+    const handleOpenEditProfile = () => {
+        setEditForm({
+            name: profileData?.name || '',
+            phone: profileData?.phone || '',
+            email: profileData?.email || '',
+            location: profileData?.location === 'N/A' ? '' : (profileData?.location || ''),
+            bio: profileData?.bio || '',
+        });
+        setIsEditProfileModalVisible(true);
+    };
+
+    // Save Profile Handler
+    const handleSaveProfile = async () => {
+        if (!editForm.name.trim()) {
+            Alert.alert('Required', 'Please enter your full name.');
             return;
         }
 
-        setSavingName(true);
+        setSavingProfile(true);
         try {
             const token = await AsyncStorage.getItem('userToken');
-            const newName = editedName.trim();
-            const initials = newName.split(' ').map(n => n[0]).join('').toUpperCase() || 'CC';
+            const trimmedName = editForm.name.trim();
+            const trimmedPhone = editForm.phone.trim();
+            const trimmedEmail = editForm.email.trim();
+            const trimmedLocation = editForm.location.trim();
+            const trimmedBio = editForm.bio.trim();
+            const initials = trimmedName.split(' ').map(n => n[0]).join('').toUpperCase() || 'CC';
 
             if (token) {
                 const res = await fetch(`${API_BASE_URL}/care-companion/profile`, {
@@ -186,33 +209,50 @@ export default function ProfileScreen() {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ name: newName })
+                    body: JSON.stringify({
+                        name: trimmedName,
+                        phone: trimmedPhone || undefined,
+                        email: trimmedEmail || undefined,
+                        location: trimmedLocation,
+                        bio: trimmedBio,
+                    })
                 });
 
+                const resData = await res.json();
                 if (!res.ok) {
-                    throw new Error('Failed to update name on server');
+                    throw new Error(resData.message || 'Failed to update profile on server');
                 }
+
+                if (resData.data) {
+                    setProfileData((prev: any) => ({
+                        ...prev,
+                        name: resData.data.name,
+                        phone: resData.data.phone || prev.phone,
+                        email: resData.data.email ?? prev.email,
+                        location: resData.data.location || prev.location,
+                        bio: resData.data.bio ?? prev.bio,
+                        initials,
+                    }));
+                }
+            } else {
+                setProfileData((prev: any) => ({
+                    ...prev,
+                    name: trimmedName,
+                    phone: trimmedPhone || prev.phone,
+                    email: trimmedEmail || prev.email,
+                    location: trimmedLocation || prev.location,
+                    bio: trimmedBio || prev.bio,
+                    initials,
+                }));
             }
 
-            // Update local profile state
-            setProfileData((prev: any) => ({
-                ...prev,
-                name: newName,
-                initials,
-            }));
-
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setIsEditNameModalVisible(false);
+            setIsEditProfileModalVisible(false);
         } catch (err: any) {
-            console.log('Error saving name:', err.message);
-            // Optimistic update so user feels responsive UI
-            setProfileData((prev: any) => ({
-                ...prev,
-                name: editedName.trim(),
-            }));
-            setIsEditNameModalVisible(false);
+            console.log('Error saving profile:', err.message);
+            Alert.alert('Update Failed', err.message || 'Could not update profile. Please try again.');
         } finally {
-            setSavingName(false);
+            setSavingProfile(false);
         }
     };
 
@@ -280,11 +320,17 @@ export default function ProfileScreen() {
                         <View style={styles.infoList}>
                             <View style={styles.infoRow}>
                                 <Ionicons name="call-outline" size={16} color="#333333" />
-                                <Text style={styles.infoText}>{profileData.phone}</Text>
+                                <Text style={styles.infoText}>{profileData.phone || 'No phone provided'}</Text>
                             </View>
+                            {profileData.email ? (
+                                <View style={styles.infoRow}>
+                                    <Ionicons name="mail-outline" size={16} color="#333333" />
+                                    <Text style={styles.infoText}>{profileData.email}</Text>
+                                </View>
+                            ) : null}
                             <View style={styles.infoRow}>
                                 <Ionicons name="location-outline" size={16} color="#333333" />
-                                <Text style={styles.infoText}>{profileData.location}</Text>
+                                <Text style={styles.infoText}>{profileData.location || 'Location not provided'}</Text>
                             </View>
                             <View style={styles.infoRow}>
                                 <Ionicons name="calendar-outline" size={16} color="#333333" />
@@ -292,6 +338,17 @@ export default function ProfileScreen() {
                             </View>
                         </View>
                     </Animated.View>
+
+                    {/* About Me Section (if bio is present) */}
+                    {profileData?.bio ? (
+                        <Animated.View entering={FadeInUp.delay(300).duration(600)} style={styles.card}>
+                            <View style={styles.cardHeaderRow}>
+                                <Ionicons name="information-circle-outline" size={20} color="#111827" />
+                                <Text style={styles.cardSectionTitle}>About Me</Text>
+                            </View>
+                            <Text style={styles.bioText}>{profileData.bio}</Text>
+                        </Animated.View>
+                    ) : null}
 
                     {/* Notifications Section (Visit Reminders & Celebration Alerts only) */}
                     <Animated.View entering={FadeInUp.delay(400).duration(600)} style={styles.card}>
@@ -316,7 +373,7 @@ export default function ProfileScreen() {
                         </View>
                     </Animated.View>
 
-                    {/* Settings Section (Edit Profile & Privacy Security - App Preferences removed) */}
+                    {/* Settings Section (Edit Profile & Privacy Security) */}
                     <Animated.View entering={FadeInUp.delay(600).duration(600)} style={styles.card}>
                         <View style={styles.cardHeaderRow}>
                             <Ionicons name="settings-outline" size={20} color="#111827" />
@@ -326,10 +383,7 @@ export default function ProfileScreen() {
                         <TouchableOpacity
                             style={styles.settingsButton}
                             activeOpacity={0.75}
-                            onPress={() => {
-                                setEditedName(profileData.name || '');
-                                setIsEditNameModalVisible(true);
-                            }}
+                            onPress={handleOpenEditProfile}
                         >
                             <View style={styles.settingsRowLeft}>
                                 <Ionicons name="person-outline" size={16} color="#0A0A0A" />
@@ -338,7 +392,11 @@ export default function ProfileScreen() {
                             <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={[styles.settingsButton, styles.lastRow]} activeOpacity={0.75}>
+                        <TouchableOpacity
+                            style={[styles.settingsButton, styles.lastRow]}
+                            activeOpacity={0.75}
+                            onPress={() => push('/(care-companion)/privacy-security' as any)}
+                        >
                             <View style={styles.settingsRowLeft}>
                                 <Ionicons name="shield-outline" size={16} color="#0A0A0A" />
                                 <Text style={styles.settingsText}>Privacy & Security</Text>
@@ -375,55 +433,108 @@ export default function ProfileScreen() {
                 </View>
             </ScrollView>
 
-            {/* Edit Name Modal */}
+            {/* Edit Profile Modal */}
             <Modal
-                visible={isEditNameModalVisible}
+                visible={isEditProfileModalVisible}
                 transparent
                 animationType="fade"
-                onRequestClose={() => setIsEditNameModalVisible(false)}
+                onRequestClose={() => setIsEditProfileModalVisible(false)}
             >
-                <View style={styles.modalOverlay}>
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    style={styles.modalOverlay}
+                >
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Edit Profile Name</Text>
-                            <TouchableOpacity onPress={() => setIsEditNameModalVisible(false)}>
+                            <Text style={styles.modalTitle}>Edit Profile Information</Text>
+                            <TouchableOpacity
+                                onPress={() => setIsEditProfileModalVisible(false)}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
                                 <Ionicons name="close" size={22} color="#6B7280" />
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={styles.inputLabel}>Full Name</Text>
-                        <TextInput
-                            style={styles.nameInput}
-                            value={editedName}
-                            onChangeText={setEditedName}
-                            placeholder="Enter your full name"
-                            placeholderTextColor="#9CA3AF"
-                            autoFocus
-                        />
+                        <ScrollView
+                            style={styles.modalScrollView}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                        >
+                            <Text style={styles.inputLabel}>Full Name *</Text>
+                            <TextInput
+                                style={styles.formInput}
+                                value={editForm.name}
+                                onChangeText={(text) => setEditForm(prev => ({ ...prev, name: text }))}
+                                placeholder="Enter your full name"
+                                placeholderTextColor="#9CA3AF"
+                            />
+
+                            <Text style={styles.inputLabel}>Phone Number *</Text>
+                            <TextInput
+                                style={styles.formInput}
+                                value={editForm.phone}
+                                onChangeText={(text) => setEditForm(prev => ({ ...prev, phone: text }))}
+                                placeholder="Enter 10-digit phone number"
+                                placeholderTextColor="#9CA3AF"
+                                keyboardType="phone-pad"
+                            />
+
+                            <Text style={styles.inputLabel}>Email Address</Text>
+                            <TextInput
+                                style={styles.formInput}
+                                value={editForm.email}
+                                onChangeText={(text) => setEditForm(prev => ({ ...prev, email: text }))}
+                                placeholder="Enter your email address"
+                                placeholderTextColor="#9CA3AF"
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                            />
+
+                            <Text style={styles.inputLabel}>Location / Society / Area</Text>
+                            <TextInput
+                                style={styles.formInput}
+                                value={editForm.location}
+                                onChangeText={(text) => setEditForm(prev => ({ ...prev, location: text }))}
+                                placeholder="e.g. City Heights Society, Sector 45"
+                                placeholderTextColor="#9CA3AF"
+                            />
+
+                            <Text style={styles.inputLabel}>About Me</Text>
+                            <TextInput
+                                style={[styles.formInput, styles.textAreaInput]}
+                                value={editForm.bio}
+                                onChangeText={(text) => setEditForm(prev => ({ ...prev, bio: text }))}
+                                placeholder="Share a short note about your caregiving experience or interests..."
+                                placeholderTextColor="#9CA3AF"
+                                multiline
+                                numberOfLines={3}
+                                textAlignVertical="top"
+                            />
+                        </ScrollView>
 
                         <View style={styles.modalActionRow}>
                             <TouchableOpacity
                                 style={styles.cancelBtn}
-                                onPress={() => setIsEditNameModalVisible(false)}
-                                disabled={savingName}
+                                onPress={() => setIsEditProfileModalVisible(false)}
+                                disabled={savingProfile}
                             >
                                 <Text style={styles.cancelBtnText}>Cancel</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
                                 style={styles.saveBtn}
-                                onPress={handleSaveName}
-                                disabled={savingName}
+                                onPress={handleSaveProfile}
+                                disabled={savingProfile}
                             >
-                                {savingName ? (
+                                {savingProfile ? (
                                     <ActivityIndicator size="small" color="#FFFFFF" />
                                 ) : (
-                                    <Text style={styles.saveBtnText}>Save</Text>
+                                    <Text style={styles.saveBtnText}>Save Changes</Text>
                                 )}
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </KeyboardAvoidingView>
             </Modal>
 
             <CompanionBottomNav />
@@ -696,22 +807,37 @@ const styles = StyleSheet.create({
         fontSize: 17,
         color: '#111827',
     },
+    bioText: {
+        fontFamily: 'Poppins_400Regular',
+        fontSize: 14,
+        lineHeight: 22,
+        color: '#4B5563',
+    },
+    modalScrollView: {
+        maxHeight: 380,
+        marginBottom: 16,
+    },
     inputLabel: {
         fontFamily: 'Poppins_500Medium',
         fontSize: 13,
         color: '#374151',
         marginBottom: 6,
     },
-    nameInput: {
+    formInput: {
         borderWidth: 1,
         borderColor: '#D1D5DB',
         borderRadius: 10,
         paddingHorizontal: 14,
         paddingVertical: 10,
         fontFamily: 'Poppins_400Regular',
-        fontSize: 15,
+        fontSize: 14,
         color: '#111827',
-        marginBottom: 20,
+        backgroundColor: '#F9FAFB',
+        marginBottom: 14,
+    },
+    textAreaInput: {
+        minHeight: 70,
+        paddingTop: 10,
     },
     modalActionRow: {
         flexDirection: 'row',
@@ -734,7 +860,7 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         borderRadius: 8,
         backgroundColor: DEEP_ORANGE,
-        minWidth: 80,
+        minWidth: 110,
         alignItems: 'center',
     },
     saveBtnText: {

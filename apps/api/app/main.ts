@@ -78,6 +78,15 @@ const app = express();
 // Trust proxy is required if the API is behind a load balancer (Nginx, AWS, Cloudflare, etc.)
 // Without this, rate limiting will block the load balancer's IP for everyone!
 app.set('trust proxy', 1);
+app.set('etag', false);
+
+// Prevent 304 Not Modified caching on dynamic mobile API routes
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({

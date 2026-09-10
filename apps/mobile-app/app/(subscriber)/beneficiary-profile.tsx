@@ -234,13 +234,17 @@ export default function BeneficiaryProfileScreen() {
                                 <Text style={styles.statValue}>{happinessScore}</Text>
                                 <Text style={styles.statLabel}>Happiness Score</Text>
                             </View>
-                            <View style={styles.statItem}>
+                            <TouchableOpacity 
+                                style={styles.statItem}
+                                activeOpacity={0.75}
+                                onPress={() => push({ pathname: '/package-utilization', params: { beneficiaryId: beneficiary.id } })}
+                            >
                                 <View style={[styles.statIconBox, styles.hoursIconBox]}>
                                     <Ionicons name="hourglass-outline" size={scale(25)} color="#1F6BFF" />
                                 </View>
                                 <Text style={styles.statValue}>{beneficiary.hoursUsedPercent || 0}%</Text>
-                                <Text style={styles.statLabel}>Hours Used</Text>
-                            </View>
+                                <Text style={styles.statLabel}>Hours Used →</Text>
+                            </TouchableOpacity>
                             {beneficiary.vitalsData?.slice(0, 4).map((v: any, i: number) => (
                                 <View key={v.label} style={styles.statItem}>
                                     <View style={[styles.statIconBox, { backgroundColor: getVitalBgColor(v.code || '', v.label) }]}>

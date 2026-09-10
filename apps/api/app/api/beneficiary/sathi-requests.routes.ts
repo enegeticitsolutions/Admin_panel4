@@ -126,6 +126,17 @@ router.post(
   })
 );
 
+// Route to generate / retrieve OTP for an accepted Sathi visit request
+router.post(
+  '/:beneficiaryId/sathi/visit-requests/:requestId/generate-otp',
+  authenticate,
+  asyncHandler(async (req: any, res: Response) => {
+    const resolvedId = await resolveBeneficiaryId(req.params.beneficiaryId, req);
+    const result = await beneficiarySathiService.generateSathiVisitOtp(resolvedId, req.params.requestId);
+    res.json(new ApiResponse(200, result, 'OTP generated successfully.'));
+  })
+);
+
 // Route to complete a Sathi visit
 router.post(
   '/:beneficiaryId/sathi/visit-requests/:requestId/complete',

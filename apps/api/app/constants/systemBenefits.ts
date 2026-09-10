@@ -49,3 +49,28 @@ export function isSathiBenefit(benefit: any): boolean {
     bName.includes('saathi')
   );
 }
+
+export function findSathiBenefitBalance(benefitBalances: any[]) {
+  if (!benefitBalances || benefitBalances.length === 0) return null;
+
+  // 1. Highest priority: explicit hour-based Sathi benefit
+  const hourMatch = benefitBalances.find((b: any) => {
+    const bId = (b.benefitId || '').toLowerCase();
+    const bName = (b.snapshotBenefitName || b.benefit?.name || '').toLowerCase();
+    const unit = (b.snapshotUnitLabel || b.unit || b.benefit?.unitLabel || '').toLowerCase();
+    const isSathi = isSathiBenefit(b.benefit) || bId.includes('sathi') || bName.includes('sathi') || bName.includes('companion');
+    const isHour = unit.includes('hour') || unit.includes('hr') || bName.includes('hour') || bId.includes('hour');
+    return isSathi && isHour;
+  });
+  if (hourMatch) return hourMatch;
+
+  // 2. Secondary priority: any Sathi benefit
+  return benefitBalances.find((b: any) => {
+    const bId = (b.benefitId || '').toLowerCase();
+    const bName = (b.snapshotBenefitName || b.benefit?.name || '').toLowerCase();
+    const typeCode = (b.benefit?.benefitType?.code || '').toLowerCase();
+    const typeName = (b.benefit?.benefitType?.name || '').toLowerCase();
+    return isSathiBenefit(b.benefit) || bId.includes('sathi') || bName.includes('sathi') || typeCode.includes('sathi') || typeName.includes('sathi') || bName.includes('companion');
+  }) || null;
+}
+
