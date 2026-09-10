@@ -25,7 +25,7 @@ const App = () => {
     if (typeof window === "undefined") return "home";
 
     const validPages = [
-      "home", "services", "saathi", "plans", "auth",
+      "home", "services", "saathi", /* "plans", "auth", */
       "account", "checkout", "story", "about", "terms",
       "privacy", "refund-policy", "cookie-policy"
     ];
@@ -208,8 +208,8 @@ const App = () => {
 
         {activePage === "home" ? (
           <HomePage openForm={openForm} />
-        ) : activePage === "auth" ? (
-          <AuthPage onAuthSuccess={handleAuthSuccess} onGoBack={() => setActivePage("home")} />
+        /* ) : activePage === "auth" ? (
+          <AuthPage onAuthSuccess={handleAuthSuccess} onGoBack={() => setActivePage("home")} /> */
         ) : activePage === "account" ? (
           <AccountPage
             user={user}
@@ -224,12 +224,12 @@ const App = () => {
           <SaathiPage />
         ) : activePage === "story" ? (
           <AboutPage openForm={openForm} setActivePage={setActivePage} />
-        ) : activePage === "plans" ? (
+        /* ) : activePage === "plans" ? (
           <PlansPage
             livePackages={livePackages}
             onSelectPackage={handleSelectPackageForBuy}
             openForm={openForm}
-          />
+          /> */
         ) : ["terms", "privacy", "refund-policy", "cookie-policy"].includes(activePage) ? (
           <LegalPage initialTab={activePage} setActivePage={setActivePage} />
         ) : (

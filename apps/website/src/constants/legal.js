@@ -6,7 +6,7 @@
 export const LEGAL_CONFIG = {
   PRIVACY_POLICY_URL: "https://maihoonna.in/privacy",
   TERMS_OF_SERVICE_URL: "https://maihoonna.in/terms",
-  SUPPORT_EMAIL: "info@maihoonna.in",
+  SUPPORT_EMAIL: "info@maihoonna.com",
   WEBSITE_URL: "https://maihoonna.in/",
 };
 

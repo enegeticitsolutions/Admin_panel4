@@ -42,14 +42,33 @@ const Footer = ({ setActivePage }) => {
             </a>
           </div>
 
-          {/* App Store Download Badges */}
-          <div className="footer-store-row">
-            <a href={SITE_LINKS.appStore.googlePlay} className="store-badge-card" target="_blank" rel="noopener noreferrer">
-              <img src={googlePlayImg} alt="Get MaiHoonNa Family Connect App on Google Play" loading="lazy" width="135" height="40" />
-            </a>
-            <a href={SITE_LINKS.appStore.appleAppStore} className="store-badge-card" target="_blank" rel="noopener noreferrer">
-              <img src={appStoreImg} alt="Download MaiHoonNa Family Connect App on Apple App Store" loading="lazy" width="135" height="40" />
-            </a>
+          {/* App Store Download Cards */}
+          <div className="footer-download-cards">
+            {/* Card 1: Family Connect App */}
+            <div className="footer-download-card">
+              <div className="footer-download-card__badges">
+                <a href={SITE_LINKS.appStore.familyConnect.googlePlay} className="store-badge-card" target="_blank" rel="noopener noreferrer">
+                  <img src={googlePlayImg} alt="Get MaiHoonNa Family Connect App on Google Play" loading="lazy" width="115" height="34" />
+                </a>
+                <a href={SITE_LINKS.appStore.familyConnect.appleAppStore} className="store-badge-card" target="_blank" rel="noopener noreferrer">
+                  <img src={appStoreImg} alt="Download MaiHoonNa Family Connect App on Apple App Store" loading="lazy" width="115" height="34" />
+                </a>
+              </div>
+              <span className="footer-download-card__label">Family Connect App</span>
+            </div>
+
+            {/* Card 2: Saathi App */}
+            <div className="footer-download-card">
+              <div className="footer-download-card__badges">
+                <a href={SITE_LINKS.appStore.saathi.googlePlay} className="store-badge-card" target="_blank" rel="noopener noreferrer">
+                  <img src={googlePlayImg} alt="Get MaiHoonNa Saathi App on Google Play" loading="lazy" width="115" height="34" />
+                </a>
+                <a href={SITE_LINKS.appStore.saathi.appleAppStore} className="store-badge-card" target="_blank" rel="noopener noreferrer">
+                  <img src={appStoreImg} alt="Download MaiHoonNa Saathi App on Apple App Store" loading="lazy" width="115" height="34" />
+                </a>
+              </div>
+              <span className="footer-download-card__label">Saathi App</span>
+            </div>
           </div>
         </div>
 

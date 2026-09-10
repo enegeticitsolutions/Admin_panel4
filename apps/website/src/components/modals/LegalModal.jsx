@@ -185,8 +185,8 @@ export default function LegalModal({ isOpen, onClose, initialTab = "terms", onAc
               <h4 style={{ color: "#0f172a", margin: "16px 0 6px" }}>6. Contact & Grievances</h4>
               <p>
                 For questions regarding these Terms, contact our legal team at{" "}
-                <a href="mailto:info@maihoonna.in" style={{ color: "#fe6700", fontWeight: "600" }}>
-                  info@maihoonna.in
+                <a href="mailto:info@maihoonna.com" style={{ color: "#fe6700", fontWeight: "600" }}>
+                  info@maihoonna.com
                 </a>
                 .
               </p>
@@ -293,7 +293,7 @@ export default function LegalModal({ isOpen, onClose, initialTab = "terms", onAc
           }}
         >
           <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
-            Questions? Contact <a href="mailto:info@maihoonna.in" style={{ color: "#fe6700" }}>info@maihoonna.in</a>
+            Questions? Contact <a href="mailto:info@maihoonna.com" style={{ color: "#fe6700" }}>info@maihoonna.com</a>
           </span>
 
           <div style={{ display: "flex", gap: "10px" }}>

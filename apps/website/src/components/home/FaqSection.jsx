@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 const faqs = [
   {
-    question: "What is a Care Mitra?",
+    question: "Who is a Care Mitra?",
     answer:
       "A Care Mitra is a trained, background-verified care companion who visits your parent at home. Care Mitras are graded by skill level — from ANM to GNM, B.Sc Nurse, and Specialist Mitra — so your parent is matched with someone qualified for their specific health needs, not a one-size-fits-all attendant.",
   },
@@ -60,7 +60,7 @@ const FaqSection = () => {
         <h2>Questions we hear often</h2>
         <p>
           Can't find what you're looking for? Write to us at{" "}
-          <a href="mailto:info@maihoonna.in">info@maihoonna.in</a>
+          <a href="mailto:info@maihoonna.com">info@maihoonna.com</a>
         </p>
       </div>
 

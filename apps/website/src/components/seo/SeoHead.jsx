@@ -41,7 +41,7 @@ const SEO_CONFIG = {
           "Trusted senior care companions and elder health monitoring in Gurugram & Delhi NCR. Care Mitra visits, Saathi companionship, and family updates.",
         "priceRange": "₹₹",
         "telephone": "+91-98765-43210",
-        "email": "info@maihoonna.in",
+        "email": "info@maihoonna.com",
         "address": {
           "@type": "PostalAddress",
           "streetAddress": "Gurugram Sectors 53 to 57",
@@ -90,7 +90,7 @@ const SEO_CONFIG = {
         },
         "contactPoint": {
           "@type": "ContactPoint",
-          "email": "info@maihoonna.in",
+          "email": "info@maihoonna.com",
           "contactType": "customer service",
           "availableLanguage": ["en", "hi"]
         }
@@ -296,7 +296,7 @@ const SEO_CONFIG = {
         "mainEntity": [
           {
             "@type": "Question",
-            "name": "What is a Care Mitra?",
+            "name": "Who is a Care Mitra?",
             "acceptedAnswer": {
               "@type": "Answer",
               "text":

@@ -14,13 +14,21 @@ export const SITE_LINKS = {
 
   // Mobile App Download Links
   appStore: {
-    googlePlay: "https://play.google.com/store/apps/details?id=com.rajeev_23.maihoonna",
+    familyConnect: {
+      googlePlay: "https://play.google.com/store/apps/details?id=com.maihoonna.app",
+      appleAppStore: "https://apps.apple.com/app/maihoonna/id1234567890",
+    },
+    saathi: {
+      googlePlay: "https://play.google.com/store/apps/details?id=com.maihoonna.sathiapp",
+      appleAppStore: "https://apps.apple.com/app/maihoonna-saathi/id1234567890",
+    },
+    googlePlay: "https://play.google.com/store/apps/details?id=com.maihoonna.app",
     appleAppStore: "https://apps.apple.com/app/maihoonna/id1234567890",
   },
 
   // Contact Info
   contact: {
-    email: "info@maihoonna.in",
+    email: "info@maihoonna.com",
     phone: "+91 98765 43210",
     supportEmail: "support@maihoonna.in",
     address: "Gurugram Sectors 53 to 57, Haryana, India",
@@ -29,14 +37,14 @@ export const SITE_LINKS = {
   // About Us Links
   about: [
     { label: "Our Story", page: "story", href: "/story" },
-    { label: "Contact Us", href: "mailto:info@maihoonna.in" },
+    { label: "Contact Us", href: "mailto:info@maihoonna.com" },
   ],
 
   // Services Links
   services: [
     { label: "Care Mitra Visits", page: "services", href: "/services" },
     { label: "Saathi Network", page: "saathi", href: "/saathi" },
-    { label: "Plans and Pricing", page: "plans", href: "/plans" },
+    // { label: "Plans and Pricing", page: "plans", href: "/plans" },
   ],
 
   // Legal & Terms Policies

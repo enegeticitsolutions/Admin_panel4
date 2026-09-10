@@ -15,14 +15,14 @@ const ServicesPage = ({ setActivePage, openForm }) => {
         <div className="services-hero__inner">
           <div className="services-hero__copy">
             <div className="services-hero__eyebrow">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
               <span>Our Services</span>
             </div>
             <h1>
               Everything your <br />
               loved one needs, <br />
               <em>delivered at their <br />
-              door.</em>
+                door.</em>
             </h1>
             <p>
               A full ecosystem of in-home care, health monitoring, community connection, and family transparency — all in one subscription.
@@ -32,9 +32,9 @@ const ServicesPage = ({ setActivePage, openForm }) => {
                 Explore Services
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
               </button>
-              <button className="services-btn-plans" onClick={() => setActivePage("plans")}>
+              {/* <button className="services-btn-plans" onClick={() => setActivePage("plans")}>
                 View Plans
-              </button>
+              </button> */}
             </div>
           </div>
           <div className="services-hero__features">
@@ -45,7 +45,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
                 color: "#10B981",
                 bg: "rgba(16, 185, 129, 0.133)",
                 icon: (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>
                 )
               },
               {
@@ -54,7 +54,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
                 color: "#0EA5E9",
                 bg: "rgba(14, 165, 233, 0.133)",
                 icon: (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0EA5E9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0EA5E9" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
                 )
               },
               {
@@ -63,7 +63,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
                 color: "#FE6700",
                 bg: "rgba(254, 103, 0, 0.133)",
                 icon: (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
                 )
               },
               {
@@ -72,7 +72,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
                 color: "#7C3AED",
                 bg: "rgba(124, 58, 237, 0.133)",
                 icon: (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2" /><line x1="12" y1="18" x2="12.01" y2="18" /></svg>
                 )
               },
               {
@@ -81,7 +81,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
                 color: "#EF4444",
                 bg: "rgba(239, 68, 68, 0.133)",
                 icon: (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
                 )
               }
             ].map((item, idx) => (
@@ -190,7 +190,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
             </div>
 
             {/* Hobby Circles */}
-            <div className="svc-eco-small-card">
+            {/* <div className="svc-eco-small-card">
               <span className="small-card-icon">🎨</span>
               <h3>Hobby Circles</h3>
               <p>
@@ -202,7 +202,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
                 <span>Interests</span>
                 <span>Privacy-first</span>
               </div>
-            </div>
+            </div> */}
 
             {/* Healthcare Partner Network */}
             <div className="svc-eco-small-card">
@@ -246,7 +246,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
             Join the waitlist for Gurugram Sectors 53 to 57. Limited early access. We'll match your first Care Mitra within 24 hours of onboarding.
           </p>
           <div className="svc-cta__actions">
-            <button className="svc-cta-btn-plans" onClick={() => setActivePage("plans")}>View Plans</button>
+            {/* <button className="svc-cta-btn-plans" onClick={() => setActivePage("plans")}>View Plans</button> */}
             <button className="svc-cta-btn-callback" onClick={openForm}>Request a Callback</button>
           </div>
         </div>

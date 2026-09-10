@@ -5,7 +5,7 @@ import planBgVideo from "../assets/Plan-Header-Background-Video.mp4";
 
 
 const defaultFaqs = [
-  "What is a Care Mitra?",
+  "Who is a Care Mitra?",
   "How is MaiHoonNa different from hiring a caregiver directly?",
   "What happens if I am not happy with my Care Mitra?",
   "How does the Happiness Score work?",
@@ -449,7 +449,7 @@ export default function PlansPage({
           <h2>Questions we hear often</h2>
           <p>
             Can't find what you're looking for? Write to us at{" "}
-            <a href="mailto:info@maihoonna.in">info@maihoonna.in</a>
+            <a href="mailto:info@maihoonna.com">info@maihoonna.com</a>
           </p>
         </div>
 

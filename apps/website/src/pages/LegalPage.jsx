@@ -191,8 +191,8 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
               </h2>
               <p>
                 For questions, clarifications, or grievances regarding these terms, please contact our support team at{" "}
-                <a href="mailto:info@maihoonna.in" style={{ color: "#fe6700", fontWeight: "700" }}>
-                  info@maihoonna.in
+                <a href="mailto:info@maihoonna.com" style={{ color: "#fe6700", fontWeight: "700" }}>
+                  info@maihoonna.com
                 </a>
                 .
               </p>

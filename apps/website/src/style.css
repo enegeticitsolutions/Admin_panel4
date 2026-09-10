@@ -1744,6 +1744,84 @@ a {
   object-fit: contain;
 }
 
+.app-download-cards {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin-top: 28px;
+  width: 100%;
+  max-width: 560px;
+}
+
+.app-download-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border: 1.5px solid rgba(0, 0, 0, 0.07);
+  border-radius: 16px;
+  padding: 16px 12px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.app-download-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(254, 103, 0, 0.1);
+  border-color: rgba(254, 103, 0, 0.35);
+}
+
+.app-download-card__badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.app-download-card .store-badge-card {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.app-download-card .store-badge-card:hover {
+  transform: scale(1.03);
+}
+
+.app-download-card .store-badge-card img {
+  width: 118px;
+  height: 36px;
+  object-fit: contain;
+  display: block;
+}
+
+.app-download-card__label {
+  margin-top: 10px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1E293B;
+  letter-spacing: 0.2px;
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .app-download-cards {
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .app-download-card {
+    width: 100%;
+    padding: 14px;
+  }
+}
+
 .phone-mock {
   display: flex;
   flex-direction: row;
@@ -2138,6 +2216,90 @@ a {
   object-fit: contain;
   display: block;
   filter: none !important;
+}
+
+.footer-download-cards {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  margin-top: 24px;
+  width: 100%;
+  max-width: 440px;
+}
+
+.footer-download-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border: 1.5px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  padding: 14px 10px 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.footer-download-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(254, 103, 0, 0.15);
+  border-color: rgba(254, 103, 0, 0.4);
+}
+
+.footer-download-card__badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.footer-download-card .store-badge-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: transform 0.15s ease;
+}
+
+.footer-download-card .store-badge-card:hover {
+  transform: scale(1.03);
+}
+
+.footer-download-card .store-badge-card img {
+  width: 110px;
+  height: 35px;
+  object-fit: contain;
+  display: block;
+  filter: none !important;
+}
+
+.footer-download-card__label {
+  margin-top: 10px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: 0.2px;
+  text-align: center;
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .footer-download-cards {
+    flex-direction: column;
+    gap: 12px;
+    max-width: 100%;
+  }
+
+  .footer-download-card {
+    width: 100%;
+    padding: 14px;
+  }
 }
 
 .footer-links {
@@ -3374,11 +3536,13 @@ a {
     width: 100%;
     max-width: 500px;
     height: auto;
-    bottom: -60px; /* Offset the 60px bottom padding of hero to still touch bottom if needed, or 0 */
+    bottom: -60px;
+    /* Offset the 60px bottom padding of hero to still touch bottom if needed, or 0 */
   }
 
   .hero {
-    padding-bottom: 0; /* Removing bottom padding since image will handle it */
+    padding-bottom: 0;
+    /* Removing bottom padding since image will handle it */
     min-height: auto;
   }
 

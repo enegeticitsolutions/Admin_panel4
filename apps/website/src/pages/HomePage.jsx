@@ -19,7 +19,7 @@ const HomePage = ({ openForm }) => {
       <ChallengeSection />
       <ProcessSection />
       <ServicesSection openForm={openForm} />
-      <TestimonialsSection />
+      {/* <TestimonialsSection /> */}
       <AppCtaSection />
       <FaqSection />
     </main>

@@ -9,7 +9,7 @@ const SaathiPage = () => {
   const [saathis, setSaathis] = useState([]);
   const [liveStats, setLiveStats] = useState({ activeCount: 0, totalHours: 0 });
   const [loading, setLoading] = useState(true);
-  
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -24,13 +24,13 @@ const SaathiPage = () => {
     dob: '',
     interests: []
   });
-  
+
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [termsChecked, setTermsChecked] = useState(false);
   const [dpdpChecked, setDpdpChecked] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState(null);
-  
+
   // Accordion state for How It Works
   const [expandedStep, setExpandedStep] = useState(0);
 
@@ -38,7 +38,7 @@ const SaathiPage = () => {
     try {
       const res = await fetch(`${API_BASE}/website/content/sathi`);
       const data = await res.json();
-      
+
       if (data.success) {
         setContent(data.data.content);
         setSaathis(data.data.saathis || []);
@@ -68,7 +68,7 @@ const SaathiPage = () => {
             const postOffices = data[0].PostOffice;
             const state = postOffices[0].State;
             const city = postOffices[0].District;
-            
+
             setFormData(prev => ({
               ...prev,
               state: state,
@@ -80,13 +80,13 @@ const SaathiPage = () => {
         }
       }
     };
-    
+
     fetchLocation();
   }, [formData.pincode]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name === 'phone') {
       const numericValue = value.replace(/\D/g, '').slice(0, 10);
       setFormData(prev => ({ ...prev, [name]: numericValue }));
@@ -98,7 +98,7 @@ const SaathiPage = () => {
       setFormData(prev => ({ ...prev, pincode: numericValue }));
       return;
     }
-    
+
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -132,7 +132,7 @@ const SaathiPage = () => {
 
     setIsSubmitting(true);
     setSubmitMessage(null);
-    
+
     // Calculate age from dob
     let age = null;
     if (formData.dob) {
@@ -144,16 +144,16 @@ const SaathiPage = () => {
         age--;
       }
     }
-    
+
     const payload = { ...formData, age };
-    
+
     try {
       const res = await fetch(`${API_BASE}/website/saathi-enrollment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
+
       const data = await res.json();
       if (res.ok && data.success) {
         setSubmitMessage({ type: 'success', text: "Thank you! Your application has been submitted successfully." });
@@ -298,9 +298,8 @@ const SaathiPage = () => {
             {[
               {
                 num: "01",
-                title: "Apply & submit documents",
-                description: "Fill in the enrollment form below. Submit your Aadhaar card, a recent photo, and two references. Takes under 10 minutes.",
-                note: "💡 Required: Aadhaar, passport photo, 2 references. We review within 24 hours.",
+                title: "Apply for Saathi and take an Empathy Assessment",
+                description: "Fill in the enrolment form below or register yourself as a Saathi through the Saathi app.",
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -313,7 +312,8 @@ const SaathiPage = () => {
               {
                 num: "02",
                 title: "Background verification",
-                description: "We run a thorough BGV — Aadhaar-linked identity check, police verification, and reference calls. Fully confidential.",
+                description: "We run a thorough BackGround Verification - Identity check, Address check, and Court check. Fully confidential.",
+                note: "💡 Required: Identity and address proof (PAN, Aadhaar, Voter ID or/ and Passport).",
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -323,8 +323,8 @@ const SaathiPage = () => {
               },
               {
                 num: "03",
-                title: "Care Manager approval & onboarding",
-                description: "Our Care Manager reviews your profile, conducts a short video call, and walks you through the Saathi code of conduct.",
+                title: "Saathi Coordinator approval & onboarding",
+                description: "Our Saathi Coordinator reviews your profile, conducts a short video call, and walks you through the Saathi code of conduct.",
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -495,7 +495,7 @@ const SaathiPage = () => {
               const preset = tierPresets[idx % tierPresets.length];
               const creditHours = Math.round(Number(saathi.totalCreditHours || 0) * 10) / 10;
               const locationText = saathi.area ? saathi.area : [saathi.city, saathi.state].filter(Boolean).join(', ') || "Gurugram";
-              
+
               // Dynamic tier based on live credit hours
               let tierName = preset.tier;
               let tierBg = preset.tierBg;
@@ -606,7 +606,7 @@ const SaathiPage = () => {
       {/* ── SAATHI ENROLLMENT APPLICATION FORM (FIGMA EXACT) ── */}
       <section id="enrollment-form" className="saathi-enrollment">
         <div className="saathi-enrollment__container">
-          
+
           {/* Left Sidebar Steps */}
           <div className="saathi-enrollment__sidebar">
             <span className="saathi-enrollment__eyebrow">READY TO JOIN?</span>
@@ -631,11 +631,27 @@ const SaathiPage = () => {
                 <div>
                   <span className="saathi-enroll-step__badge">STEP 1</span>
                   <h4 className="saathi-enroll-step__title">Share your info</h4>
-                  <p className="saathi-enroll-step__subtitle">Fill the form · 10 mins</p>
+                  <p className="saathi-enroll-step__subtitle">Fill the form · 05 mins</p>
                 </div>
               </div>
 
               {/* Step 2 */}
+              <div className="saathi-enroll-step">
+                <div className="saathi-enroll-step__icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                    <path d="m9 14 2 2 4-4" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="saathi-enroll-step__badge">STEP 2</span>
+                  <h4 className="saathi-enroll-step__title">Take the empathy assessment</h4>
+                  <p className="saathi-enroll-step__subtitle">Short online assessment · 15–20 mins</p>
+                </div>
+              </div>
+
+              {/* Step 3 */}
               <div className="saathi-enroll-step">
                 <div className="saathi-enroll-step__icon">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -644,13 +660,13 @@ const SaathiPage = () => {
                   </svg>
                 </div>
                 <div>
-                  <span className="saathi-enroll-step__badge">STEP 2</span>
+                  <span className="saathi-enroll-step__badge">STEP 3</span>
                   <h4 className="saathi-enroll-step__title">Background verification</h4>
-                  <p className="saathi-enroll-step__subtitle">3–5 working days</p>
+                  <p className="saathi-enroll-step__subtitle">5–7 working days</p>
                 </div>
               </div>
 
-              {/* Step 3 */}
+              {/* Step 4 */}
               <div className="saathi-enroll-step">
                 <div className="saathi-enroll-step__icon">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -661,7 +677,7 @@ const SaathiPage = () => {
                   </svg>
                 </div>
                 <div>
-                  <span className="saathi-enroll-step__badge">STEP 3</span>
+                  <span className="saathi-enroll-step__badge">STEP 4</span>
                   <h4 className="saathi-enroll-step__title">You go live</h4>
                   <p className="saathi-enroll-step__subtitle">First assignments begin</p>
                 </div>
@@ -1006,7 +1022,7 @@ const SaathiPage = () => {
             <h2 className="saathi-faq__title">Questions about Saathi Network</h2>
             <p className="saathi-faq__desc">
               Have questions about volunteering or senior visits? Reach out to us at{" "}
-              <a href="mailto:info@maihoonna.in">info@maihoonna.in</a>
+              <a href="mailto:info@maihoonna.com">info@maihoonna.com</a>
             </p>
           </div>
 

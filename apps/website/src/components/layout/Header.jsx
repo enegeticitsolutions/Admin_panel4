@@ -70,7 +70,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
       </nav>
 
       <div className="topbar__actions">
-        <a
+        {/* <a
           href="/plans"
           className={`view-plan-button ${activePage === "plans" ? "active" : ""}`}
           onClick={(e) => {
@@ -79,7 +79,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
           }}
         >
           View Plans
-        </a>
+        </a> */}
 
 
 
@@ -104,12 +104,13 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             👤 {user.name || "My Account"}
           </button>
         ) : (
-          <button
+          /* <button
             className="pill-button pill-button--light"
             onClick={() => handleNavClick("auth")}
           >
             Sign Up
-          </button>
+          </button> */
+          null
         )}
 
         {/* Mobile Hamburger Menu Button */}
@@ -159,7 +160,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
           >
             🤝 Saathi Network
           </a>
-          <a
+          {/* <a
             href="/plans"
             className={activePage === "plans" ? "active" : ""}
             onClick={(e) => {
@@ -168,7 +169,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             }}
           >
             📋 View Plans
-          </a>
+          </a> */}
 
         </div>
       )}
