@@ -22,7 +22,7 @@
       "env": {
         "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T5r7EAjfxEsAtl",
         "EXPO_PUBLIC_APP_SECRET": "MaiHoonNaSecureApp2026!",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDPrFpN29FZ786mTWjIbeQvW3y6ztjx3xU",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0",
         "EXPO_PUBLIC_PRODUCTION_API_URL": "https://api.maihoonna.com/app-api"
       }
     },
@@ -33,7 +33,7 @@
       "env": {
         "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_live_TZ3KKOCt6TIiSt",
         "EXPO_PUBLIC_APP_SECRET": "MaiHoonNaSecureApp2026!",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyDPrFpN29FZ786mTWjIbeQvW3y6ztjx3xU",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0",
         "EXPO_PUBLIC_PRODUCTION_API_URL": "https://api.maihoonna.com/app-api"
       }
     }

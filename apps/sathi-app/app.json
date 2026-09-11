@@ -16,7 +16,7 @@
       "supportsTablet": false,
       "buildNumber": "11",
       "config": {
-        "googleMapsApiKey": "AIzaSyDPrFpN29FZ786mTWjIbeQvW3y6ztjx3xU"
+        "googleMapsApiKey": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU"
       },
       "bundleIdentifier": "com.maihoonna.sathiapp",
       "googleServicesFile": "./GoogleService-Info.plist"
@@ -32,7 +32,7 @@
       "predictiveBackGestureEnabled": false,
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyDPrFpN29FZ786mTWjIbeQvW3y6ztjx3xU"
+          "apiKey": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0"
         }
       }
     },
