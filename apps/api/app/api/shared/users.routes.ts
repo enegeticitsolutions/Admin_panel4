@@ -271,6 +271,76 @@ const getUnreadCountHandler = async (req: any, res: any, next: any) => {
   }
 };
 
+// Helper handler for deleting a single notification
+const deleteNotificationHandler = async (req: any, res: any, next: any) => {
+  try {
+    const authReq = req as AuthRequest;
+    const id = authReq.params.id as string;
+    const userId = authReq.userId;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const userIds = await resolveLinkedUserIds(userId);
+
+    const notification = await prisma.notification.findFirst({
+      where: { id, userId: { in: userIds } },
+    });
+
+    if (!notification) {
+      return res.status(404).json({ success: false, message: 'Notification not found' });
+    }
+
+    await prisma.notification.delete({
+      where: { id },
+    });
+
+    res.json({ success: true, message: 'Notification deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Helper handler for clearing all notifications
+const clearAllNotificationsHandler = async (req: any, res: any, next: any) => {
+  try {
+    const authReq = req as AuthRequest;
+    const userId = authReq.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const isVolunteer = authReq.userRole === 'volunteer';
+    const userIds = await resolveLinkedUserIds(userId);
+
+    const notifications = await prisma.notification.findMany({
+      where: { userId: { in: userIds } },
+      select: { id: true, data: true, title: true },
+    });
+
+    const idsToDelete = notifications.filter(n => {
+      const d = (n.data || {}) as any;
+      const isSaathi = Boolean(
+        d.templateId?.startsWith('ST-') ||
+        d.eventKey?.startsWith('SAATHI_') ||
+        d.screen?.startsWith('/(sathi)')
+      );
+      return isVolunteer ? isSaathi : !isSaathi;
+    }).map(n => n.id);
+
+    if (idsToDelete.length > 0) {
+      await prisma.notification.deleteMany({
+        where: { id: { in: idsToDelete } },
+      });
+    }
+
+    res.json({ success: true, message: 'All notifications cleared successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Mount handlers for both /notifications and /
 router.get('/', authenticate, getNotificationsHandler);
 router.get('/notifications', authenticate, getNotificationsHandler);
@@ -278,10 +348,16 @@ router.get('/notifications', authenticate, getNotificationsHandler);
 router.patch('/read-all', authenticate, markAllReadHandler);
 router.patch('/notifications/read-all', authenticate, markAllReadHandler);
 
+router.delete('/clear-all', authenticate, clearAllNotificationsHandler);
+router.delete('/notifications/clear-all', authenticate, clearAllNotificationsHandler);
+
 router.get('/unread-count', authenticate, getUnreadCountHandler);
 router.get('/notifications/unread-count', authenticate, getUnreadCountHandler);
 
 router.patch('/:id/read', authenticate, markReadHandler);
 router.patch('/notifications/:id/read', authenticate, markReadHandler);
+
+router.delete('/:id', authenticate, deleteNotificationHandler);
+router.delete('/notifications/:id', authenticate, deleteNotificationHandler);
 
 export default router;
