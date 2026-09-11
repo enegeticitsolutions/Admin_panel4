@@ -99,7 +99,7 @@ export async function registerForPushNotifications(explicitAuthToken?: string): 
       Constants.expoConfig?.extra?.eas?.projectId ??
       (Constants as any).easConfig?.projectId ??
       process.env.EXPO_PUBLIC_EAS_PROJECT_ID ??
-      '7c449368-29dc-48a2-9387-83f1e3858fbb';
+      'dfb5a3f3-6dfe-47b6-8418-df1bd2e27bc3';
 
     if (!projectId) {
       console.warn('[Notifications] No EAS projectId found in app config.');

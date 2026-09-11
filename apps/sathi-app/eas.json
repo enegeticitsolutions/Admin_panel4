@@ -42,7 +42,10 @@
       "env": {
         "EXPO_PUBLIC_ENV": "production",
         "EXPO_PUBLIC_PRODUCTION_API_URL": "https://api.maihoonna.com/app-api",
-        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_live_TZ3KKOCt6TIiSt"
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_live_TZ3KKOCt6TIiSt",
+        "EXPO_PUBLIC_APP_SECRET": "MaiHoonNaSecureApp2026!",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0"
       }
     }
   },
