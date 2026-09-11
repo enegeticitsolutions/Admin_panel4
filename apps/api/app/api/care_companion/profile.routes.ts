@@ -46,9 +46,10 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
         photo: cc.careCompanionProfile.photo || null,
         role: 'Care Companion',
         verified: cc.isVerified,
-        email: cc.email,
+        email: cc.email || '',
         phone: cc.phone,
-        location: cc.careCompanionProfile.zone || 'N/A',
+        location: cc.careCompanionProfile.zone || cc.location || 'N/A',
+        bio: cc.careCompanionProfile.bio || '',
         memberSince: cc.createdAt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
         impact: {
           visits: totalVisits,
@@ -62,35 +63,99 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/care-companion/profile - Update Care Companion Profile (Name)
+// PUT /api/care-companion/profile - Update Care Companion Profile (Name, Phone, Email, Location, Bio)
 router.put('/', authenticate, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const { name } = req.body;
+    const { name, email, phone, location, bio } = req.body;
 
     if (!name || typeof name !== 'string' || !name.trim()) {
-      return res.status(400).json({ success: false, message: 'Name is required' });
+      return res.status(400).json({ success: false, message: 'Full name is required' });
     }
 
     const trimmedName = name.trim();
+    const trimmedEmail = email !== undefined && typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+    const trimmedPhone = phone !== undefined && typeof phone === 'string' ? phone.trim() : undefined;
+    const trimmedLocation = location !== undefined && typeof location === 'string' ? location.trim() : undefined;
+    const trimmedBio = bio !== undefined && typeof bio === 'string' ? bio.trim() : undefined;
+
+    // Validate phone uniqueness if changing
+    if (trimmedPhone) {
+      const existingPhoneUser = await prisma.user.findFirst({
+        where: {
+          phone: trimmedPhone,
+          id: { not: userId },
+        },
+      });
+      if (existingPhoneUser) {
+        return res.status(400).json({ success: false, message: 'This phone number is already registered to another account' });
+      }
+    }
+
+    // Validate email uniqueness if changing
+    if (trimmedEmail) {
+      const existingEmailUser = await prisma.user.findFirst({
+        where: {
+          email: trimmedEmail,
+          id: { not: userId },
+        },
+      });
+      if (existingEmailUser) {
+        return res.status(400).json({ success: false, message: 'This email address is already registered to another account' });
+      }
+    }
+
+    // Build User update data
+    const userUpdateData: any = { name: trimmedName };
+    if (trimmedPhone !== undefined) {
+      userUpdateData.phone = trimmedPhone;
+    }
+    if (trimmedEmail !== undefined) {
+      userUpdateData.email = trimmedEmail || null;
+    }
+    if (trimmedLocation !== undefined) {
+      userUpdateData.location = trimmedLocation;
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { name: trimmedName },
+      data: userUpdateData,
     });
 
+    // Update CareCompanion record
     const cc = await prisma.careCompanion.findUnique({ where: { userId } });
     if (cc) {
+      const ccUpdateData: any = { name: trimmedName };
+      if (trimmedLocation !== undefined) {
+        ccUpdateData.zone = trimmedLocation;
+      }
+      if (trimmedBio !== undefined) {
+        ccUpdateData.bio = trimmedBio;
+      }
       await prisma.careCompanion.update({
         where: { userId },
-        data: { name: trimmedName },
+        data: ccUpdateData,
       });
     }
+
+    const finalLocation = trimmedLocation !== undefined
+      ? trimmedLocation
+      : (cc?.zone || updatedUser.location || 'N/A');
+
+    const finalBio = trimmedBio !== undefined
+      ? trimmedBio
+      : (cc?.bio || '');
 
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      data: { name: updatedUser.name },
+      data: {
+        name: updatedUser.name,
+        email: updatedUser.email || '',
+        phone: updatedUser.phone,
+        location: finalLocation,
+        bio: finalBio,
+      },
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

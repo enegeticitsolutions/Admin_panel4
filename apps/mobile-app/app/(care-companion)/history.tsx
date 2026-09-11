@@ -59,6 +59,7 @@ export default function HistoryScreen() {
         { key: 'Neutral', label: 'Neutral' },
         { key: 'Sad', label: 'Sad' },
         { key: 'Anxious', label: 'Anxious' },
+        { key: 'Depressed', label: 'Depressed' },
     ];
 
     let [fontsLoaded] = useFonts({
@@ -152,6 +153,7 @@ export default function HistoryScreen() {
         if (key === 'this_week') {
             const start = new Date(now);
             start.setDate(now.getDate() - now.getDay());
+            start.setHours(0, 0, 0, 0);
             return d >= start;
         }
 
@@ -163,14 +165,21 @@ export default function HistoryScreen() {
     };
 
     const filteredVisits = useMemo(() => {
-        if (!historyData) return [];
+        if (!historyData || !historyData.visits) return [];
 
         return historyData.visits.filter((v: any) => {
             if (selDate.length > 0 && !selDate.some(d => dateMatchesFilter(v.rawDate || v.date, d))) return false;
-            if (selMood.length > 0 && !selMood.includes(v.details?.mood)) return false;
-            if (selHasVitals.length > 0 && !v.details?.vitals) return false;
+            if (selMood.length > 0) {
+                const visitMood = (v.details?.mood || v.mood || '').toLowerCase();
+                const matchesMood = selMood.some(m => m.toLowerCase() === visitMood);
+                if (!matchesMood) return false;
+            }
+            if (selHasVitals.length > 0) {
+                const hasVitals = v.details?.vitals && v.details.vitals.some((vt: any) => vt.value && vt.value !== 'N/A');
+                if (!hasVitals) return false;
+            }
             if (selFollowUp.length > 0 && !v.followUpRequired) return false;
-            if (selStatus.length > 0 && !selStatus.includes(v.status)) return false;
+            if (selStatus.length > 0 && !selStatus.some(s => s.toLowerCase() === (v.status || '').toLowerCase())) return false;
             return true;
         });
     }, [historyData, selDate, selMood, selHasVitals, selFollowUp, selStatus]);
@@ -400,7 +409,9 @@ export default function HistoryScreen() {
                                         <View style={styles.detailBlock}>
                                             <Text style={styles.detailTitleNoIcon}>Mood</Text>
                                             <View style={styles.moodBadge}>
-                                                <Text style={styles.moodText}>{visit.details.mood}</Text>
+                                                <Text style={styles.moodText}>
+                                                    {visit.details.mood ? (visit.details.mood.charAt(0).toUpperCase() + visit.details.mood.slice(1).toLowerCase()) : 'N/A'}
+                                                </Text>
                                             </View>
                                         </View>
 

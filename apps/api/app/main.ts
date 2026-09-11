@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { config } from './core/config';
 import { ApiError } from './utils/ApiError';
+import { checkRedisHealth } from '@maihoonna/notifications';
 
 // Auth Routes
 import authRouter from './api/auth/auth.routes';
@@ -78,6 +79,15 @@ const app = express();
 // Trust proxy is required if the API is behind a load balancer (Nginx, AWS, Cloudflare, etc.)
 // Without this, rate limiting will block the load balancer's IP for everyone!
 app.set('trust proxy', 1);
+app.set('etag', false);
+
+// Prevent 304 Not Modified caching on dynamic mobile API routes
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
@@ -137,6 +147,18 @@ fileResourceRegistry.register(new BeneficiaryPhotoResource());
 
 app.get(`${API}`, (_req, res) => {
   res.json({ message: 'MaiHoonNa Role-Based API', version: '2.0.0', status: 'active' });
+});
+
+app.get(`${API}/health/redis`, async (_req, res) => {
+  const isHealthy = await checkRedisHealth();
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'healthy' : 'degraded',
+    service: 'redis',
+    connected: isHealthy,
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: process.env.REDIS_PORT || 6379,
+    mode: isHealthy ? 'redis_streams' : 'in_process_fallback',
+  });
 });
 
 // Auth Route

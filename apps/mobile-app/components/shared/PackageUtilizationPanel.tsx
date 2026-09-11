@@ -112,6 +112,79 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
         </View>
       )}
 
+      {/* Circular Quick-Stat Summary Rings Carousel */}
+      {benefits.length > 0 && (
+        <View style={styles.carouselContainer}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carouselScroll}
+          >
+            {benefits.map((b) => {
+              const isSelected = selectedBenefitId === b.benefitId;
+              const isHour = (b.unitLabel || '').toLowerCase().includes('hour') || (b.unitLabel || '').toLowerCase().includes('hr');
+              const remainDisplay = isHour ? formatHours(b.remainingUnits) : `${b.remainingUnits}`;
+              const totalDisplay = isHour ? formatHours(b.totalUnits) : `${b.totalUnits}`;
+
+              const ringBorderColor = b.isExhausted 
+                ? '#EF4444' 
+                : b.isLowBalance 
+                  ? '#F59E0B' 
+                  : isSelected 
+                    ? '#FF5B0A' 
+                    : '#10B981';
+
+              const ringBg = b.isExhausted 
+                ? '#FEF2F2' 
+                : b.isLowBalance 
+                  ? '#FEFCE8' 
+                  : isSelected 
+                    ? '#FFF7ED' 
+                    : '#F0FDF4';
+
+              return (
+                <TouchableOpacity
+                  key={`ring-${b.benefitId}`}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    if (b.isExhausted || b.remainingUnits <= 0) {
+                      const msg = `Benefit "${b.benefitName}" is exhausted. Please connect with support team to renew or top up your package.`;
+                      if (Platform.OS === 'web') {
+                        window.alert(`Benefit Exhausted\n\n${msg}`);
+                      } else {
+                        Alert.alert('Benefit Exhausted', msg);
+                      }
+                      return;
+                    }
+                    onSelectBenefit?.(b);
+                  }}
+                  style={styles.ringCard}
+                >
+                  <View style={[styles.ringCircle, { borderColor: ringBorderColor, backgroundColor: ringBg }]}>
+                    <Text style={[styles.ringValue, b.isExhausted && { color: '#DC2626' }]}>
+                      {remainDisplay}
+                    </Text>
+                    <Text style={styles.ringSubValue} numberOfLines={1}>
+                      / {totalDisplay} {b.unitLabel?.replace(/^per\s+/i, '')}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.ringName} numberOfLines={2}>
+                    {b.benefitName}
+                  </Text>
+
+                  {b.isExhausted ? (
+                    <Text style={styles.ringExhaustedBadge}>EXHAUSTED</Text>
+                  ) : isSelected ? (
+                    <Text style={styles.ringSelectedBadge}>SELECTED</Text>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       {/* Benefits List */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -120,7 +193,7 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
         </View>
 
         {benefits.length > 0 ? (
-          benefits.map((b, i) => {
+          benefits.map((b) => {
             const isSelected = selectedBenefitId === b.benefitId;
             const hasRollover = (b.rolloverAllocation ?? 0) > 0;
 
@@ -174,7 +247,7 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
                       style={[
                         styles.progressFill, 
                         { 
-                          width: `${Math.min(100, Math.max(0, b.usagePercent))}%`,
+                          width: `${b.isExhausted ? 100 : Math.min(100, Math.max(0, b.usagePercent))}%`,
                           backgroundColor: b.isExhausted ? '#EF4444' : (b.isLowBalance ? '#F59E0B' : '#10B981')
                         }
                       ]} 
@@ -184,7 +257,6 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
 
                 <View style={styles.benefitFooter}>
                   {
-                    // Detect hour-type benefits by their unit label
                     (() => {
                       const lbl = (b.unitLabel || '').toLowerCase();
                       const isHourType = lbl.includes('hour') || lbl.includes('hr');
@@ -215,9 +287,15 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
 
         {recentLogs.length > 0 ? (
           recentLogs.map((log) => {
-            const isHours = (log.hoursConsumed ?? 0) > 0;
-            const billMinutes = log.actualMinutes ? Math.max(60, log.actualMinutes) : null;
+            const isHours = (log.hoursConsumed ?? 0) > 0 || log.ccType === 'SATHI_COMPANION' || log.ccType === 'SATHI_HOURS';
+            const billMinutes = log.actualMinutes != null
+              ? log.actualMinutes
+              : (log.hoursConsumed ? Math.round(log.hoursConsumed * 60) : null);
             
+            const companionLabel = (log.careCompanionName && log.careCompanionName !== 'Unknown')
+              ? log.careCompanionName
+              : (log.description?.toLowerCase().includes('sathi') ? 'Sathi Volunteer' : 'Care Team');
+
             return (
               <View key={log.id} style={styles.logItem}>
                 <View style={[styles.logIconBox, log.isRequest && { backgroundColor: '#EFF6FF' }]}>
@@ -230,7 +308,7 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
                 <View style={styles.logContent}>
                   <Text style={styles.logDesc} numberOfLines={1}>{log.description || 'Manual deduction'}</Text>
                   <Text style={styles.logMeta}>
-                    {log.careCompanionName} {log.ccType ? `· ${log.ccType.replace('_', ' ')}` : ''}
+                    {companionLabel} {log.ccType ? `· ${log.ccType.replace('_', ' ')}` : ''}
                   </Text>
                 </View>
                 <View style={styles.logRight}>
@@ -242,7 +320,9 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
                       {log.visitStatus}
                     </Text>
                   ) : (
-                    <Text style={styles.logValue}>{isHours ? `${billMinutes}m billed` : '−1 visit'}</Text>
+                    <Text style={styles.logValue}>
+                      {isHours ? `${billMinutes ?? 60}m billed` : '−1 visit'}
+                    </Text>
                   )}
                   <Text style={styles.logDate}>
                     {new Date(log.loggedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -250,6 +330,7 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
                 </View>
               </View>
             );
+
           })
         ) : (
           <Text style={styles.emptySubText}>No usage logged yet. Activity will appear once visits are completed.</Text>
@@ -385,6 +466,69 @@ const styles = StyleSheet.create({
   benefitFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   benefitStats: { fontSize: 12, color: '#6B7280', fontWeight: '500' },
   benefitUnit: { fontSize: 10, color: '#9CA3AF', fontWeight: '800', textTransform: 'uppercase' },
+
+  carouselContainer: {
+    marginBottom: 20,
+  },
+  carouselScroll: {
+    paddingVertical: 6,
+    gap: 12,
+  },
+  ringCard: {
+    width: 96,
+    alignItems: 'center',
+  },
+  ringCircle: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 3.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+    marginBottom: 8,
+  },
+  ringValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  ringSubValue: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#6B7280',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  ringName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#374151',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+  ringExhaustedBadge: {
+    marginTop: 4,
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#DC2626',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    textTransform: 'uppercase',
+  },
+  ringSelectedBadge: {
+    marginTop: 4,
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#EA580C',
+    backgroundColor: '#FFEDD5',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    textTransform: 'uppercase',
+  },
 
   logItem: {
     flexDirection: 'row',

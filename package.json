@@ -16,6 +16,11 @@
     "dev:admin-ui": "npm run dev --workspace=apps/admin-frontend",
     "dev:notifications": "npm run dev:service --workspace=packages/notifications",
     "service:notifications": "npm run service --workspace=packages/notifications",
+    "worker": "npm run dev:service --workspace=packages/notifications",
+    "redis:up": "docker compose up -d redis",
+    "redis:down": "docker compose down",
+    "redis:logs": "docker logs -f maihoonna-redis",
+    "redis:check": "npx ts-node packages/notifications/check-redis.ts",
     "build:packages": "npm run build --workspaces --if-present"
   },
   "dependencies": {

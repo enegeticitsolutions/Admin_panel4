@@ -5,6 +5,8 @@ DEVOPS_DATABASE_CONNECTION_GUIDE.md
 sync-app.ps1
 scripts/
 .claude
+scratch/
+
 
 
 # Backend seed/scratch files

@@ -1,10 +1,8 @@
 import { Platform } from 'react-native';
 
 // ─── Environment Switch ────────────────────────────────────────────────────
-// If EXPO_PUBLIC_ENV is explicitly set, use it. Otherwise, auto-detect!
-// Built APKs will automatically be 'production', Expo Go will automatically be 'local'
-const AUTO_ENV = __DEV__ ? 'local' : 'production';
-const ENV = process.env.EXPO_PUBLIC_ENV || AUTO_ENV;
+// If EXPO_PUBLIC_ENV is explicitly set to 'local', use local. Otherwise default to 'production'
+const ENV = process.env.EXPO_PUBLIC_ENV || 'production';
 const USE_LOCAL = ENV === 'local';
 
 const PRODUCTION_URL = (process.env.EXPO_PUBLIC_PRODUCTION_API_URL ?? 'https://api.maihoonna.com/app-api').replace(/\/+$/, '');

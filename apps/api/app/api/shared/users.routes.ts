@@ -19,10 +19,38 @@ router.post('/push-token', authenticate, async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { fcmToken: token },
-    });
+    // 1. If user is volunteer, sync to Volunteer model
+    if (authReq.userRole === 'volunteer') {
+      await prisma.volunteer.updateMany({
+        where: { id: userId },
+        data: { fcmToken: token },
+      });
+    }
+
+    // 2. Sync to User model (if exists) or create shadow user
+    const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (existingUser) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { fcmToken: token },
+      });
+    } else if (authReq.userRole === 'volunteer') {
+      const vol = await prisma.volunteer.findUnique({ where: { id: userId } });
+      if (vol) {
+        await prisma.user.upsert({
+          where: { id: vol.id },
+          update: { fcmToken: token },
+          create: {
+            id: vol.id,
+            phone: vol.phone,
+            name: vol.name,
+            role: 'volunteer',
+            fcmToken: token,
+            isActive: vol.isActive,
+          },
+        });
+      }
+    }
 
     res.json({ success: true, message: 'Push token synced successfully' });
   } catch (error) {
@@ -39,10 +67,17 @@ router.delete('/push-token', authenticate, async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    await prisma.user.update({
+    await prisma.user.updateMany({
       where: { id: userId },
       data: { fcmToken: null },
     });
+
+    if (authReq.userRole === 'volunteer') {
+      await prisma.volunteer.updateMany({
+        where: { id: userId },
+        data: { fcmToken: null },
+      });
+    }
 
     res.json({ success: true, message: 'Push token cleared successfully' });
   } catch (error) {

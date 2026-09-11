@@ -188,10 +188,41 @@ async function dispatchLegacyCircleBioPublished({ beneficiaryId }) {
   }
 }
 
+/**
+ * 6. Dispatch SAATHI_PROFILE_APPROVED (ST-003) — WhatsApp template: saathi_volunteer
+ */
+async function dispatchSaathiProfileApproved({ volunteerName, volunteerPhone, volunteerUserId }) {
+  try {
+    if (volunteerUserId) {
+      notifyUser(prisma, {
+        userId: volunteerUserId,
+        type: 'success',
+        title: '🎉 Welcome to the Saathi Network!',
+        body: `Congratulations ${volunteerName}! Your Saathi profile is approved. Head to the Match tab to view beneficiaries near you.`,
+        data: { event: 'SAATHI_PROFILE_APPROVED' },
+      }).catch(err => console.error('[CommunityDispatcher] Push Error:', err.message));
+    }
+
+    const validPhone = getValidPhone(volunteerPhone);
+    if (validPhone) {
+      notificationService.send({
+        channel: 'whatsapp',
+        event: 'SAATHI_PROFILE_APPROVED',
+        to: validPhone,
+        variables: { volunteerName: volunteerName || 'Volunteer' }
+      }).catch(err => console.error('[CommunityDispatcher] WhatsApp Error:', err.message));
+    }
+  } catch (err) {
+    console.error('[CommunityDispatcher] dispatchSaathiProfileApproved Exception:', err.message);
+  }
+}
+
 module.exports = {
   dispatchSaathiInteractionRequest,
   dispatchSaathiVisitCompleted,
   dispatchHobbyCircleMessage,
   dispatchCommunityEventUpcoming,
   dispatchLegacyCircleBioPublished,
+  dispatchSaathiProfileApproved,
 };
+

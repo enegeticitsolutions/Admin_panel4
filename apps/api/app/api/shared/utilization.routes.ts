@@ -29,6 +29,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         },
         select: {
           id: true,
+          name: true,
           subscriptions: {
             where: { isActive: true },
             orderBy: { createdAt: 'desc' },
@@ -76,18 +77,19 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
         const formattedBenefits = (unlinkedSubscription.benefitBalances || []).map((bal: any) => {
           const remaining = Math.max(0, bal.totalUnits - bal.usedUnits);
-          const usagePercent = bal.totalUnits > 0 ? Math.round((bal.usedUnits / bal.totalUnits) * 100) : 0;
+          const isExhausted = bal.totalUnits > 0 && (bal.usedUnits >= bal.totalUnits || remaining === 0);
+          const usagePercent = bal.totalUnits > 0 ? Math.min(100, Math.round((bal.usedUnits / bal.totalUnits) * 100)) : 0;
           return {
             benefitId: bal.benefitId,
-            benefitName: bal.benefit?.name,
-            unitLabel: bal.benefit?.unitLabel || 'units',
+            benefitName: bal.snapshotBenefitName || bal.benefit?.name || 'Benefit',
+            unitLabel: bal.snapshotUnitLabel || bal.benefit?.unitLabel || 'units',
             benefitTypeName: bal.benefit?.benefitType?.name || null,
             totalUnits: bal.totalUnits,
             usedUnits: bal.usedUnits,
             remainingUnits: remaining,
             usagePercent,
-            isLowBalance: bal.totalUnits > 0 && (remaining / bal.totalUnits) < 0.2,
-            isExhausted: bal.totalUnits > 0 && remaining === 0,
+            isLowBalance: bal.totalUnits > 0 && !isExhausted && (remaining / bal.totalUnits) < 0.2,
+            isExhausted,
           };
         });
 
@@ -118,6 +120,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         },
         select: {
           id: true,
+          name: true,
           subscriptions: {
             where: { isActive: true },
             orderBy: { createdAt: 'desc' },
@@ -135,17 +138,17 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       });
 
       if (!beneficiary) {
-        return res.status(404).json({ success: false, message: 'Beneficiary not found or unauthorized' });
+        return res.status(404).json({ success: false, message: 'Beneficiary not found or inactive' });
       }
 
       return res.json({ success: true, data: await buildDetailedUtilization(beneficiary) });
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // SCENARIO 3: Subscriber requesting summary of all beneficiaries
+    // SCENARIO 3: Subscriber dashboard list (all beneficiaries & plans)
     // ─────────────────────────────────────────────────────────────────
-    if (userRole === 'subscriber' && !beneficiaryId) {
-      // 1. Fetch normal beneficiaries
+    if (userRole === 'subscriber') {
+      // 1. Fetch normal linked beneficiaries
       const beneficiaries = await prisma.beneficiary.findMany({
         where: { subscriberId: userId, isActive: true },
         select: {
@@ -157,7 +160,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
             orderBy: { createdAt: 'desc' },
             take: 1,
             include: {
-              package: { select: { id: true, name: true, type: true } },
+              package: { select: { id: true, name: true } },
               benefitBalances: {
                 include: {
                   benefit: { select: { id: true, name: true, unitLabel: true } }
@@ -168,14 +171,27 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         }
       });
 
-      // 2. Fetch unlinked active subscriptions
+      // 2. Fetch unlinked subscriptions directly owned by this subscriber
       const unlinkedSubscriptions = await prisma.subscription.findMany({
-        where: { subscriberId: userId, isActive: true, beneficiaryId: null },
-        include: { package: { select: { name: true } } }
+        where: {
+          subscriberId: userId,
+          beneficiaryId: null,
+          isActive: true
+        },
+        select: {
+          id: true,
+          packageType: true,
+          package: { select: { id: true, name: true } },
+          benefitBalances: {
+            include: {
+              benefit: { select: { id: true, name: true, unitLabel: true } }
+            }
+          }
+        }
       });
 
-      // If they have no beneficiaries at all, AND have an unlinked sub, return unlinked detailed view
-      if (beneficiaries.length === 0 && unlinkedSubscriptions.length > 0) {
+      // Edge case: Subscriber has only 1 unlinked plan and 0 beneficiaries
+      if (beneficiaries.length === 0 && unlinkedSubscriptions.length === 1) {
         const unlinkedSubscription = unlinkedSubscriptions[0];
         const detailedSubscription = await prisma.subscription.findUnique({
           where: { id: unlinkedSubscription.id },
@@ -192,18 +208,19 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         if (detailedSubscription) {
           const formattedBenefits = (detailedSubscription.benefitBalances || []).map((bal: any) => {
             const remaining = Math.max(0, bal.totalUnits - bal.usedUnits);
-            const usagePercent = bal.totalUnits > 0 ? Math.round((bal.usedUnits / bal.totalUnits) * 100) : 0;
+            const isExhausted = bal.totalUnits > 0 && (bal.usedUnits >= bal.totalUnits || remaining === 0);
+            const usagePercent = bal.totalUnits > 0 ? Math.min(100, Math.round((bal.usedUnits / bal.totalUnits) * 100)) : 0;
             return {
               benefitId: bal.benefitId,
-              benefitName: bal.benefit?.name,
-              unitLabel: bal.benefit?.unitLabel || 'units',
+              benefitName: bal.snapshotBenefitName || bal.benefit?.name || 'Benefit',
+              unitLabel: bal.snapshotUnitLabel || bal.benefit?.unitLabel || 'units',
               benefitTypeName: bal.benefit?.benefitType?.name || null,
               totalUnits: bal.totalUnits,
               usedUnits: bal.usedUnits,
               remainingUnits: remaining,
               usagePercent,
-              isLowBalance: bal.totalUnits > 0 && (remaining / bal.totalUnits) < 0.2,
-              isExhausted: bal.totalUnits > 0 && remaining === 0,
+              isLowBalance: bal.totalUnits > 0 && !isExhausted && (remaining / bal.totalUnits) < 0.2,
+              isExhausted,
             };
           });
 
@@ -242,16 +259,18 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         const activeSub = b.subscriptions?.[0] || null;
         const benefits = (activeSub?.benefitBalances || []).map(bal => {
           const remaining = Math.max(0, bal.totalUnits - bal.usedUnits);
-          const usagePercent = bal.totalUnits > 0 ? Math.round((bal.usedUnits / bal.totalUnits) * 100) : 0;
+          const isExhausted = bal.totalUnits > 0 && (bal.usedUnits >= bal.totalUnits || remaining === 0);
+          const usagePercent = bal.totalUnits > 0 ? Math.min(100, Math.round((bal.usedUnits / bal.totalUnits) * 100)) : 0;
           return {
             benefitId: bal.benefitId,
-            benefitName: bal.benefit?.name,
+            benefitName: bal.snapshotBenefitName || bal.benefit?.name || 'Benefit',
+            unitLabel: bal.snapshotUnitLabel || bal.benefit?.unitLabel || 'units',
             totalUnits: bal.totalUnits,
             usedUnits: bal.usedUnits,
             remainingUnits: remaining,
             usagePercent,
-            isLowBalance: bal.totalUnits > 0 && remaining / bal.totalUnits < 0.2,
-            isExhausted: bal.totalUnits > 0 && remaining === 0,
+            isLowBalance: bal.totalUnits > 0 && !isExhausted && remaining / bal.totalUnits < 0.2,
+            isExhausted,
           };
         });
         return {
@@ -278,8 +297,8 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     return res.status(400).json({ success: false, message: 'Invalid request parameters' });
   } catch (error: any) {
-    console.error('GET /api/shared/utilization error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    console.error('[utilization.routes] Error fetching utilization data:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
   }
 });
 
@@ -294,6 +313,7 @@ export async function buildDetailedUtilization(beneficiary: any) {
   if (activeSub) {
     // 1. Evaluate Just-In-Time active monthly period
     const activePeriod = await benefitPeriodManager.evaluateAndTransitionJIT(activeSub.id);
+    let periodBalances: any[] = [];
 
     if (activePeriod) {
       const totalPeriods = await prisma.benefitPeriod.count({ where: { subscriptionId: activeSub.id } });
@@ -306,60 +326,55 @@ export async function buildDetailedUtilization(beneficiary: any) {
         status: activePeriod.status,
       };
 
-      const periodBalances = await prisma.benefitPeriodBalance.findMany({
+      periodBalances = await prisma.benefitPeriodBalance.findMany({
         where: { periodId: activePeriod.id },
         include: {
           benefit: { select: { id: true, name: true, unitLabel: true, benefitType: { select: { name: true } } } }
         }
       });
-
-      if (periodBalances.length > 0) {
-        formattedBenefits = periodBalances.map((pb: any) => {
-          // Check if subscriptionBenefitBalance has tracked usage that wasn't synced to period balance
-          const matchingBal = (activeSub.benefitBalances || []).find((b: any) => b.benefitId === pb.benefitId);
-          const effectiveUsed = Math.max(pb.usedQuantity, matchingBal?.usedUnits || 0);
-          const total = pb.totalAllocation;
-          const remaining = Math.max(0, total - effectiveUsed);
-          const usagePercent = total > 0 ? Math.round((effectiveUsed / total) * 100) : 0;
-
-          // Auto-sync period balance in background if legacy balance tracked higher usage
-          if (matchingBal && matchingBal.usedUnits > pb.usedQuantity) {
-            prisma.benefitPeriodBalance.update({
-              where: { id: pb.id },
-              data: {
-                usedQuantity: matchingBal.usedUnits,
-                remainingQuantity: Math.max(0, pb.totalAllocation - matchingBal.usedUnits)
-              }
-            }).catch(e => console.error('[utilization.routes] Auto-sync period balance failed:', e));
-          }
-
-          return {
-            benefitId: pb.benefitId,
-            benefitName: pb.snapshotName || pb.benefit?.name,
-            unitLabel: pb.snapshotUnitLabel || pb.benefit?.unitLabel || 'units',
-            benefitTypeName: pb.benefit?.benefitType?.name || null,
-            baseAllocation: pb.baseAllocation,
-            rolloverAllocation: pb.rolloverAllocation,
-            totalUnits: total,
-            usedUnits: effectiveUsed,
-            remainingUnits: remaining,
-            usagePercent,
-            isLowBalance: total > 0 && (remaining / total) < 0.2,
-            isExhausted: total > 0 && remaining === 0,
-          };
-        });
-      }
     }
 
-    // Fallback to subscriptionBenefitBalance if no period balances generated yet
-    if (formattedBenefits.length === 0) {
-      formattedBenefits = (activeSub.benefitBalances || []).map((bal: any) => {
-        const remaining = Math.max(0, bal.totalUnits - bal.usedUnits);
-        const usagePercent = bal.totalUnits > 0 ? Math.round((bal.usedUnits / bal.totalUnits) * 100) : 0;
+    if (periodBalances.length > 0) {
+      // Map monthly period-governed benefits
+      const periodBenefitIds = new Set<string>();
+      formattedBenefits = periodBalances.map((pb: any) => {
+        periodBenefitIds.add(pb.benefitId);
+        const matchingBal = (activeSub.benefitBalances || []).find((b: any) => b.benefitId === pb.benefitId);
+        const total = pb.totalAllocation;
+        const remaining = pb.remainingQuantity;
+        const used = pb.usedQuantity;
+        const isExhausted = total > 0 && (used >= total || remaining === 0);
+        const usagePercent = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+        const isLowBalance = total > 0 && !isExhausted && (remaining / total) < 0.2;
+
         return {
+          benefitId: pb.benefitId,
+          benefitName: pb.snapshotName || pb.benefit?.name || matchingBal?.snapshotBenefitName || 'Benefit',
+          unitLabel: pb.snapshotUnitLabel || pb.benefit?.unitLabel || matchingBal?.snapshotUnitLabel || 'units',
+          benefitTypeName: pb.benefit?.benefitType?.name || matchingBal?.benefit?.benefitType?.name || null,
+          baseAllocation: pb.baseAllocation,
+          rolloverAllocation: pb.rolloverAllocation,
+          totalUnits: total,
+          usedUnits: used,
+          remainingUnits: remaining,
+          usagePercent,
+          isLowBalance,
+          isExhausted,
+        };
+      });
+
+      // Also append any non-period benefits (e.g. Sathi Companion or Add-on benefits)
+      const nonPeriodBalances = (activeSub.benefitBalances || []).filter((bal: any) => !periodBenefitIds.has(bal.benefitId));
+      for (const bal of nonPeriodBalances) {
+        const remaining = Math.max(0, bal.totalUnits - bal.usedUnits);
+        const isExhausted = bal.totalUnits > 0 && (bal.usedUnits >= bal.totalUnits || remaining === 0);
+        const usagePercent = bal.totalUnits > 0 ? Math.min(100, Math.round((bal.usedUnits / bal.totalUnits) * 100)) : 0;
+        const isLowBalance = bal.totalUnits > 0 && !isExhausted && (remaining / bal.totalUnits) < 0.2;
+
+        formattedBenefits.push({
           benefitId: bal.benefitId,
-          benefitName: bal.benefit?.name,
-          unitLabel: bal.benefit?.unitLabel || 'units',
+          benefitName: bal.snapshotBenefitName || bal.benefit?.name || 'Benefit',
+          unitLabel: bal.snapshotUnitLabel || bal.benefit?.unitLabel || 'units',
           benefitTypeName: bal.benefit?.benefitType?.name || null,
           baseAllocation: bal.totalUnits,
           rolloverAllocation: 0,
@@ -367,28 +382,53 @@ export async function buildDetailedUtilization(beneficiary: any) {
           usedUnits: bal.usedUnits,
           remainingUnits: remaining,
           usagePercent,
-          isLowBalance: bal.totalUnits > 0 && (remaining / bal.totalUnits) < 0.2,
-          isExhausted: bal.totalUnits > 0 && remaining === 0,
+          isLowBalance,
+          isExhausted,
+        });
+      }
+    } else {
+      // Fallback to subscriptionBenefitBalance if no period balances generated yet
+      formattedBenefits = (activeSub.benefitBalances || []).map((bal: any) => {
+        const remaining = Math.max(0, bal.totalUnits - bal.usedUnits);
+        const isExhausted = bal.totalUnits > 0 && (bal.usedUnits >= bal.totalUnits || remaining === 0);
+        const usagePercent = bal.totalUnits > 0 ? Math.min(100, Math.round((bal.usedUnits / bal.totalUnits) * 100)) : 0;
+        const isLowBalance = bal.totalUnits > 0 && !isExhausted && (remaining / bal.totalUnits) < 0.2;
+        return {
+          benefitId: bal.benefitId,
+          benefitName: bal.snapshotBenefitName || bal.benefit?.name || 'Benefit',
+          unitLabel: bal.snapshotUnitLabel || bal.benefit?.unitLabel || 'units',
+          benefitTypeName: bal.benefit?.benefitType?.name || null,
+          baseAllocation: bal.totalUnits,
+          rolloverAllocation: 0,
+          totalUnits: bal.totalUnits,
+          usedUnits: bal.usedUnits,
+          remainingUnits: remaining,
+          usagePercent,
+          isLowBalance,
+          isExhausted,
         };
       });
     }
 
     // Fetch immutable usage ledger logs
     const usageLedger = await benefitLedgerEngine.getSubscriptionLedger(activeSub.id);
-    const mappedUsage = usageLedger.map((u: any) => ({
-      id: u.id,
-      visitId: u.referenceId,
-      hoursConsumed: u.quantity,
-      balanceBefore: u.balanceBefore,
-      balanceAfter: u.balanceAfter,
-      description: u.notes || `${u.usageType.replace(/_/g, ' ')} (${u.quantity > 0 ? `-${u.quantity}` : `+${Math.abs(u.quantity)}`})`,
-      loggedAt: u.createdAt,
-      careCompanionName: 'Care Team',
-      ccType: u.usageType,
-      visitStatus: 'COMPLETED',
-      actualMinutes: null,
-      isRequest: false
-    }));
+    const mappedUsage = usageLedger.map((u: any) => {
+      const isSathi = u.usageType === 'SATHI_HOURS' || (u.notes && u.notes.toLowerCase().includes('sathi'));
+      return {
+        id: u.id,
+        visitId: u.referenceId,
+        hoursConsumed: u.quantity,
+        balanceBefore: u.balanceBefore,
+        balanceAfter: u.balanceAfter,
+        description: u.notes || `${u.usageType.replace(/_/g, ' ')} (${u.quantity > 0 ? `-${u.quantity}` : `+${Math.abs(u.quantity)}`})`,
+        loggedAt: u.createdAt,
+        careCompanionName: isSathi ? 'Sathi Volunteer' : 'Care Team',
+        ccType: u.usageType,
+        visitStatus: 'COMPLETED',
+        actualMinutes: u.quantity ? Math.round(u.quantity * 60) : null,
+        isRequest: false
+      };
+    });
 
     const rawLogs = await prisma.packageHoursLog.findMany({
       where: { subscriptionId: activeSub.id, beneficiaryId: beneficiary.id },
@@ -411,7 +451,10 @@ export async function buildDetailedUtilization(beneficiary: any) {
       if (log.visit?.checkInTime && log.visit?.checkOutTime) {
         const ms = new Date(log.visit.checkOutTime).getTime() - new Date(log.visit.checkInTime).getTime();
         actualMinutes = Math.round(ms / 60000);
+      } else if (log.hoursConsumed) {
+        actualMinutes = Math.round(log.hoursConsumed * 60);
       }
+      const isSathiDesc = log.description?.toLowerCase().includes('sathi');
       return {
         id: log.id,
         visitId: log.visitId,
@@ -420,9 +463,9 @@ export async function buildDetailedUtilization(beneficiary: any) {
         balanceAfter: log.balanceAfter,
         description: log.description,
         loggedAt: log.loggedAt,
-        careCompanionName: log.visit?.careCompanion?.user?.name || 'Unknown',
-        ccType: log.visit?.careCompanion?.ccType || null,
-        visitStatus: log.visit?.status || null,
+        careCompanionName: log.visit?.careCompanion?.user?.name || (isSathiDesc ? 'Sathi Volunteer' : 'Care Team'),
+        ccType: log.visit?.careCompanion?.ccType || (isSathiDesc ? 'SATHI_COMPANION' : null),
+        visitStatus: log.visit?.status || 'COMPLETED',
         actualMinutes,
         isRequest: false
       };
@@ -451,10 +494,10 @@ export async function buildDetailedUtilization(beneficiary: any) {
       return {
         id: vl.id,
         visitId: vl.id,
-        hoursConsumed: vl.hoursEarned || (actualMinutes ? actualMinutes / 60 : 0),
+        hoursConsumed: vl.hoursEarned || (actualMinutes ? (actualMinutes < 60 ? 1 : actualMinutes / 60) : 0),
         balanceBefore: vl.beneficiaryBalanceBefore,
         balanceAfter: vl.beneficiaryBalanceAfter,
-        description: vl.notes ? `Sathi Visit: ${vl.notes}` : `Sathi Companion Visit (${(vl.hoursEarned || 0).toFixed(1)} hrs)`,
+        description: vl.notes ? `Sathi Visit: ${vl.notes}` : `Sathi Companion Visit (${actualMinutes ? `${actualMinutes}m` : `${(vl.hoursEarned || 0).toFixed(1)} hrs`})`,
         loggedAt: vl.checkOutTime || vl.createdAt,
         careCompanionName: vl.volunteer?.name || 'Sathi Volunteer',
         ccType: 'SATHI_COMPANION',
@@ -496,13 +539,23 @@ export async function buildDetailedUtilization(beneficiary: any) {
       };
     });
 
-    // Combine logs and deduplicate by referenceId or id
-    const combinedLogs = [...mappedLogs, ...mappedVolLogs, ...mappedUsage, ...mappedRequests];
+    // Combine logs and deduplicate
+    // mappedVolLogs is prioritized first to preserve volunteer name and precise minutes
+    const combinedLogs = [...mappedVolLogs, ...mappedLogs, ...mappedUsage, ...mappedRequests];
     const seenKeys = new Set<string>();
+    const seenSathiTimes = new Set<number>();
     const dedupedLogs = combinedLogs.filter(item => {
       const key = item.visitId || item.id;
-      if (seenKeys.has(key)) return false;
-      seenKeys.add(key);
+      if (key && seenKeys.has(key)) return false;
+
+      const isSathi = item.ccType === 'SATHI_COMPANION' || item.ccType === 'SATHI_HOURS' || (item.description && item.description.toLowerCase().includes('sathi'));
+      if (isSathi) {
+        const timeMinute = Math.floor(new Date(item.loggedAt).getTime() / 60000);
+        if (seenSathiTimes.has(timeMinute)) return false;
+        seenSathiTimes.add(timeMinute);
+      }
+
+      if (key) seenKeys.add(key);
       return true;
     });
 

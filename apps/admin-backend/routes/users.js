@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 
 const { prisma } = require('../lib/prisma');
+const { dispatchCMOnboardingCleared } = require('../services/events/account-event.dispatcher');
 
 const SUPPORTED_ONBOARDING_ROLES = new Set([
   'care_companion',
@@ -1037,6 +1038,30 @@ router.post('/staff/onboard', async (req, res) => {
         roleRecord,
       };
     });
+
+    if (role === 'care_companion' && created.user) {
+      (async () => {
+        try {
+          let fmName = 'Care Operations Team';
+          if (teamId) {
+            const team = await prisma.team.findUnique({
+              where: { id: teamId },
+              include: { fieldManager: true },
+            });
+            if (team?.fieldManager?.name) {
+              fmName = team.fieldManager.name;
+            }
+          }
+          await dispatchCMOnboardingCleared({
+            ccUserId: created.user.id,
+            ccName: created.user.name || fullName,
+            fmName,
+          });
+        } catch (dispatchErr) {
+          console.error('[StaffOnboard:Notify] Notification error:', dispatchErr.message);
+        }
+      })();
+    }
 
     res.status(201).json({
       success: true,

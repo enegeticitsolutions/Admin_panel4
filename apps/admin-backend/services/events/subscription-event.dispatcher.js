@@ -93,8 +93,15 @@ async function dispatchSubscriptionRenewalReminder({ subscriberId, phone, subscr
 /**
  * 3. Dispatch PAYMENT_FAILED (NT-045)
  */
-async function dispatchPaymentFailed({ subscriberId, phone, amount, beneficiaryName, paymentLink }) {
+async function dispatchPaymentFailed({ subscriberId, phone, subscriberName, amount, beneficiaryName, paymentLink }) {
   try {
+    let name = subscriberName;
+    if (!name && subscriberId) {
+      const user = await prisma.user.findUnique({ where: { id: subscriberId }, select: { name: true } });
+      name = user?.name || 'Valued Subscriber';
+    }
+    if (!name) name = 'Valued Subscriber';
+
     // A. Notify Subscriber (Push)
     if (subscriberId) {
       notifyUser(prisma, {
@@ -113,7 +120,7 @@ async function dispatchPaymentFailed({ subscriberId, phone, amount, beneficiaryN
         channel: 'whatsapp',
         event: 'PAYMENT_FAILED',
         to: validPhone,
-        variables: { amount: amount.toString(), beneficiaryName, paymentLink }
+        variables: { subscriberName: name, amount: amount.toString(), beneficiaryName, paymentLink }
       }).catch(err => console.error('[SubscriptionDispatcher] WhatsApp Error:', err.message));
     }
   } catch (err) {

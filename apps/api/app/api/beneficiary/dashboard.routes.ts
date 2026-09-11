@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../core/database';
 import { authenticate, AuthRequest } from '../shared/deps';
+import { notificationProducer } from '@maihoonna/notifications';
 
 const router = Router();
 
@@ -383,8 +384,45 @@ router.post('/visits/:visitId/request-change', authenticate, async (req: AuthReq
                 changeResolutionReason: null
             }
         });
-        
+
+        // Respond to client immediately to eliminate API latency
         res.json({ success: true, message: 'Change request submitted successfully.' });
+
+        // Asynchronous fire-and-forget notification in background task
+        setImmediate(async () => {
+            try {
+                const fullVisit = await prisma.visit.findUnique({
+                    where: { id: visitId },
+                    include: {
+                        beneficiary: {
+                            include: {
+                                subscriber: true,
+                                user: true
+                            }
+                        },
+                        careCompanion: true
+                    }
+                });
+                const recipientPhone = fullVisit?.beneficiary?.subscriber?.phone || fullVisit?.beneficiary?.user?.phone;
+                if (recipientPhone) {
+                    const companionName = fullVisit?.careCompanion?.name || 'Care Mitra';
+                    const formattedDetails = `${preferredDate || 'New date'} at ${preferredTime || 'New time'}`;
+                    await notificationProducer.publish({
+                        idempotencyKey: `visit-change-req-${visitId}-${Date.now()}`,
+                        channel: 'whatsapp',
+                        event: 'APPOINTMENT_RESCHEDULED_CANCELLED',
+                        recipient: { phone: recipientPhone },
+                        variables: {
+                            appointmentType: `care visit with ${companionName}`,
+                            status: 'submitted for rescheduling',
+                            newDetails: `Requested for ${formattedDetails}. Care team will confirm shortly.`
+                        }
+                    });
+                }
+            } catch (notifErr: any) {
+                console.error('[DashboardRoutes] Background WhatsApp notification error:', notifErr.message);
+            }
+        });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }

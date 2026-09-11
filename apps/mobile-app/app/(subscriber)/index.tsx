@@ -401,7 +401,16 @@ export default function SubscriberDashboardScreen() {
                     </View>
 
                     {/* Total Care Plans */}
-                    <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('/package-utilization')}>
+                    <TouchableOpacity 
+                        activeOpacity={0.85} 
+                        onPress={() => {
+                            if (selectedBeneficiaryId) {
+                                router.push({ pathname: '/package-utilization', params: { beneficiaryId: selectedBeneficiaryId } });
+                            } else {
+                                router.push('/package-utilization');
+                            }
+                        }}
+                    >
                         <LinearGradient colors={['#FF6900', '#F54900']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.statCard, { overflow: 'hidden' }]}>
                             <View style={styles.statTopRow}>
                                 <View style={styles.planIconCircle}>

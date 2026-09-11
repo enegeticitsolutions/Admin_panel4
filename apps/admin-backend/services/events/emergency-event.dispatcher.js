@@ -223,9 +223,43 @@ async function dispatchEmergencyAcknowledged({ requestId, beneficiaryId }) {
 }
 
 
+/**
+ * 5. Dispatch EMERGENCY_SUPPORT_ALERT / SAATHI_EMERGENCY_SUPPORT_ALERT (ST-051)
+ */
+async function dispatchEmergencySupportAlert({ volunteerPhone, volunteerUserId, beneficiaryName, coordinatorName }) {
+  try {
+    if (volunteerUserId) {
+      notifyUser(prisma, {
+        userId: volunteerUserId,
+        type: 'alert',
+        title: '🚨 Emergency Alert Received',
+        body: `Your emergency alert regarding ${beneficiaryName} has been received. Program Coordinator ${coordinatorName} has been notified and will call you shortly.`,
+        data: { event: 'SAATHI_EMERGENCY_SUPPORT_ALERT' },
+      }).catch(err => console.error('[EmergencyDispatcher] Push Error:', err.message));
+    }
+
+    const validPhone = getValidPhone(volunteerPhone);
+    if (validPhone) {
+      notificationService.send({
+        channel: 'whatsapp',
+        event: 'SAATHI_EMERGENCY_SUPPORT_ALERT',
+        to: validPhone,
+        variables: {
+          beneficiaryName: beneficiaryName || 'the senior beneficiary',
+          coordinatorName: coordinatorName || 'MaiHoonNa Operations'
+        }
+      }).catch(err => console.error('[EmergencyDispatcher] Emergency Support Alert WhatsApp Error:', err.message));
+    }
+  } catch (err) {
+    console.error('[EmergencyDispatcher] dispatchEmergencySupportAlert Exception:', err.message);
+  }
+}
+
 module.exports = {
   dispatchEmergencyTriggered,
   dispatchAmbulanceDispatched,
   dispatchEmergencyResolved,
   dispatchEmergencyAcknowledged,
+  dispatchEmergencySupportAlert,
 };
+

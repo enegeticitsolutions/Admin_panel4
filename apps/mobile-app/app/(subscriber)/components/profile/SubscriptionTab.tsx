@@ -38,7 +38,16 @@ const SubscriptionTab = ({ plan, beneficiaries }: SubscriptionTabProps) => {
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
             {/* Current Plan Card */}
             {plan ? (
-                <TouchableOpacity onPress={() => push('/package-utilization')} activeOpacity={0.9}>
+                <TouchableOpacity 
+                    onPress={() => {
+                        if (beneficiaries && beneficiaries.length === 1) {
+                            push({ pathname: '/package-utilization', params: { beneficiaryId: beneficiaries[0].id } });
+                        } else {
+                            push('/package-utilization');
+                        }
+                    }} 
+                    activeOpacity={0.9}
+                >
                     <LinearGradient colors={['#F97316', '#EA580C']} style={styles.planCard}>
                         <View style={styles.planHeader}>
                             <View style={styles.planTitleContainer}>

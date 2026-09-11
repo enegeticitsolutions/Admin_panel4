@@ -21,8 +21,10 @@ export * from './channels/push.channel';
 export * from './channels/email.channel';
 export * from './services/notification.service';
 export * from './services/care-mitra-notification.service';
+export * from './services/sathi-notification.service';
 export * from './registry/whatsapp.registry';
 export * from './registry/care-mitra-templates.registry';
+export * from './registry/sathi-templates.registry';
 export * from './pubsub/notification-event-bus';
 
 // Redis Streams Microservice Exports

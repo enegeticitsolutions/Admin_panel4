@@ -98,12 +98,86 @@ export function SaathiView({
   const [selectedReviews, setSelectedReviews] = useState<any[]>([]);
   const [fetchingReviews, setFetchingReviews] = useState(false);
 
+  // OTP Modal State
+  const [otpModalVisible, setOtpModalVisible] = useState(false);
+  const [activeOtpData, setActiveOtpData] = useState<{
+    otpCode: string;
+    requestId: string;
+    volunteerName?: string;
+    dateTime?: string;
+  } | null>(null);
+  const [generatingOtpId, setGeneratingOtpId] = useState<string | null>(null);
+
   // Removed native showAlert in favor of useCustomAlert
   const [currentTime, setCurrentTime] = useState(new Date());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const isOtpAvailableForRequest = (req: any): boolean => {
+    if (!req || req.status !== 'ACCEPTED') return false;
+    const visitTime = new Date(req.dateTime).getTime();
+    const now = currentTime.getTime();
+    const diffMs = visitTime - now;
+    // Available if scheduled visit is in <= 30 mins, or visit is already underway / past scheduled time
+    return diffMs <= 30 * 60 * 1000;
+  };
+
+  const handleOpenOtpModal = async (req: any) => {
+    const isAvailable = isOtpAvailableForRequest(req);
+    if (!isAvailable) {
+      const visitTime = new Date(req.dateTime).getTime();
+      const otpAvailableAt = new Date(visitTime - 30 * 60 * 1000);
+      showAlert(
+        'OTP Not Available Yet',
+        `Verification OTP will be available 30 minutes before your scheduled visit (at ${safeFormat(otpAvailableAt, 'h:mm a, MMM d')}).`
+      );
+      return;
+    }
+
+    if (req.otpCode) {
+      setActiveOtpData({
+        otpCode: req.otpCode,
+        requestId: req.id,
+        volunteerName: req.volunteer?.name,
+        dateTime: req.dateTime,
+      });
+      setOtpModalVisible(true);
+      return;
+    }
+
+    try {
+      setGeneratingOtpId(req.id);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+
+      const res = await fetch(`${API_URL}/beneficiary/sathi-requests/${beneficiaryId}/sathi/visit-requests/${req.id}/generate-otp`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.data?.otpCode) {
+        setMyRequests(prev => prev.map(r => r.id === req.id ? { ...r, otpCode: data.data.otpCode } : r));
+        setActiveOtpData({
+          otpCode: data.data.otpCode,
+          requestId: req.id,
+          volunteerName: req.volunteer?.name || data.data.volunteer?.name,
+          dateTime: req.dateTime || data.data.dateTime,
+        });
+        setOtpModalVisible(true);
+      } else {
+        showAlert('OTP Not Available', data.message || 'Failed to generate OTP.');
+      }
+    } catch (err: any) {
+      showAlert('Error', err.message || 'Failed to generate OTP.');
+    } finally {
+      setGeneratingOtpId(null);
+    }
+  };
 
   useEffect(() => {
     if (beneficiaryId) {
@@ -118,7 +192,7 @@ export function SaathiView({
   const onRefresh = React.useCallback(async () => {
     if (!beneficiaryId) return;
     setRefreshing(true);
-    await checkEligibility();
+    await checkEligibility(true);
     setRefreshing(false);
   }, [beneficiaryId]);
 
@@ -135,54 +209,73 @@ export function SaathiView({
     }
   }, [initialVolunteerId, connectedVolunteers]);
 
-  const checkEligibility = async () => {
+  const checkEligibility = async (isPullToRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isPullToRefresh) setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
 
       if (!token) {
         showAlert('Error', 'Session Expired');
-        setLoading(false);
+        if (!isPullToRefresh) setLoading(false);
         return;
       }
 
       const res = await fetch(`${API_URL}/beneficiary/sathi-requests/${beneficiaryId}/sathi/eligibility`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
       });
+
+      if (!res.ok) {
+        console.warn(`[SathiEligibility] Received status ${res.status}`);
+        return;
+      }
+
       const data = await res.json();
 
-      if (res.ok && data.success) {
+      if (data && data.success) {
         setEligible(data.data.eligible);
         setRemainingUnits(data.data.remainingUnits);
         
         if (data.data.eligible) {
           // Fetch linked volunteers
           const volRes = await fetch(`${API_URL}/beneficiary/sathi-requests/${beneficiaryId}/sathi/volunteers`, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
           });
-          const volData = await volRes.json();
-          if (volData.success) {
-            setPendingVolunteers(volData.data.pending || []);
-            setConnectedVolunteers(volData.data.connected || []);
+          if (volRes.ok) {
+            const volData = await volRes.json();
+            if (volData.success) {
+              setPendingVolunteers(volData.data.pending || []);
+              setConnectedVolunteers(volData.data.connected || []);
+            }
           }
 
           // Fetch my requests
           const reqRes = await fetch(`${API_URL}/beneficiary/sathi-requests/${beneficiaryId}/sathi/my-requests`, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache'
+            },
           });
-          const reqData = await reqRes.json();
-          if (reqData.success) {
-            setMyRequests(reqData.data);
+          if (reqRes.ok) {
+            const reqData = await reqRes.json();
+            if (reqData.success) {
+              setMyRequests(reqData.data);
+            }
           }
         }
-      } else {
-        setEligible(false);
       }
     } catch (err) {
       console.error('[SathiEligibility] Error checking eligibility:', err);
-      setEligible(false);
     } finally {
-      setLoading(false);
+      if (!isPullToRefresh) setLoading(false);
     }
   };
 
@@ -415,16 +508,29 @@ export function SaathiView({
           </View>
         )}
 
-        <View style={[styles.content, styles.centerContent, responsiveStyle]}>
+        <ScrollView
+          contentContainerStyle={[styles.content, styles.centerContent, responsiveStyle, { flexGrow: 1 }]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FF6A00']} tintColor="#FF6A00" />
+          }
+        >
           <MaterialCommunityIcons name="account-group-outline" size={64} color={accentColor} style={{ marginBottom: 16 }} />
           <Text style={styles.errorTitle}>Not Eligible</Text>
           <Text style={styles.errorDesc}>
             Your active subscription package does not include Sathi Companion hours. Please contact your coordinator to upgrade your package benefits.
           </Text>
-          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: accentColor }]} onPress={() => onBackPress ? onBackPress() : safeBack()}>
-            <Text style={styles.closeBtnText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+            <TouchableOpacity
+              style={[styles.closeBtn, { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' }]}
+              onPress={() => onRefresh()}
+            >
+              <Text style={[styles.closeBtnText, { color: '#374151' }]}>Refresh</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: accentColor }]} onPress={() => onBackPress ? onBackPress() : safeBack()}>
+              <Text style={styles.closeBtnText}>Go Back</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -699,12 +805,31 @@ export function SaathiView({
                         </View>
                       )}
 
-                      {req.status === 'ACCEPTED' && req.otpCode && (
-                        <View style={{ backgroundColor: '#F0FDF4', padding: 12, borderRadius: 8, marginTop: 4, marginBottom: 12, borderWidth: 1, borderColor: '#BBF7D0', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 13, color: '#166534', marginBottom: 4 }}>Share this PIN when your Sathi arrives:</Text>
-                          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#15803D', letterSpacing: 4 }}>{req.otpCode}</Text>
-                        </View>
-                      )}
+                      {req.status === 'ACCEPTED' && (() => {
+                        const isAvailable = isOtpAvailableForRequest(req);
+                        return (
+                          <TouchableOpacity
+                            style={[styles.generateOtpBtn, !isAvailable && styles.generateOtpBtnDisabled]}
+                            onPress={() => handleOpenOtpModal(req)}
+                            disabled={generatingOtpId === req.id}
+                            activeOpacity={0.85}
+                          >
+                            {generatingOtpId === req.id ? (
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : isAvailable ? (
+                              <>
+                                <Feather name="shield" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.generateOtpBtnText}>Generate OTP</Text>
+                              </>
+                            ) : (
+                              <>
+                                <Feather name="clock" size={15} color="#92400E" style={{ marginRight: 6 }} />
+                                <Text style={styles.generateOtpBtnTextDisabled}>OTP available 30 mins before visit</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })()}
 
                       {req.status === 'IN_PROGRESS' && (
                         <TouchableOpacity
@@ -792,12 +917,31 @@ export function SaathiView({
                       </View>
                       <Text style={styles.reqReason} numberOfLines={2}>{req.reason}</Text>
 
-                      {req.status === 'ACCEPTED' && req.otpCode && (
-                        <View style={{ backgroundColor: '#F0FDF4', padding: 12, borderRadius: 8, marginTop: 4, marginBottom: 12, borderWidth: 1, borderColor: '#BBF7D0', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 13, color: '#166534', marginBottom: 4 }}>Share this PIN when your Sathi arrives:</Text>
-                          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#15803D', letterSpacing: 4 }}>{req.otpCode}</Text>
-                        </View>
-                      )}
+                      {req.status === 'ACCEPTED' && (() => {
+                        const isAvailable = isOtpAvailableForRequest(req);
+                        return (
+                          <TouchableOpacity
+                            style={[styles.generateOtpBtn, !isAvailable && styles.generateOtpBtnDisabled]}
+                            onPress={() => handleOpenOtpModal(req)}
+                            disabled={generatingOtpId === req.id}
+                            activeOpacity={0.85}
+                          >
+                            {generatingOtpId === req.id ? (
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : isAvailable ? (
+                              <>
+                                <Feather name="shield" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.generateOtpBtnText}>Generate OTP</Text>
+                              </>
+                            ) : (
+                              <>
+                                <Feather name="clock" size={15} color="#92400E" style={{ marginRight: 6 }} />
+                                <Text style={styles.generateOtpBtnTextDisabled}>OTP available 30 mins before visit</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })()}
 
                       {req.status === 'IN_PROGRESS' && (
                         <TouchableOpacity
@@ -1072,6 +1216,83 @@ export function SaathiView({
             )}
             <TouchableOpacity style={[styles.modalDoneBtn, { width: '100%', marginTop: 12 }]} onPress={() => setShowReviewsModal(false)}>
               <Text style={styles.modalDoneBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Visit Verification OTP Modal */}
+      {otpModalVisible && activeOtpData && (
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, styles.otpModalCard]}>
+            {/* Top Close Icon */}
+            <TouchableOpacity 
+              style={styles.modalCloseBtn}
+              onPress={() => {
+                setOtpModalVisible(false);
+                setActiveOtpData(null);
+              }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Feather name="x" size={22} color="#9CA3AF" />
+            </TouchableOpacity>
+
+            {/* Security Icon Badge */}
+            <View style={styles.otpIconBadge}>
+              <Feather name="shield" size={28} color="#FF6A00" />
+            </View>
+
+            <Text style={styles.otpModalTitle}>Visit Verification OTP</Text>
+            <Text style={styles.otpModalSubtitle}>
+              Share this 4-digit PIN with your Sathi companion upon arrival to start your visit.
+            </Text>
+
+            {/* Companion & Visit Info (if available) */}
+            {(activeOtpData.volunteerName || activeOtpData.dateTime) && (
+              <View style={styles.otpVisitInfoBox}>
+                {activeOtpData.volunteerName ? (
+                  <View style={styles.otpVisitInfoRow}>
+                    <Feather name="user" size={13} color="#D97706" style={{ marginRight: 6 }} />
+                    <Text style={styles.otpVisitInfoText}>
+                      Companion: <Text style={{ fontWeight: '700', color: '#92400E' }}>{activeOtpData.volunteerName}</Text>
+                    </Text>
+                  </View>
+                ) : null}
+                {activeOtpData.dateTime ? (
+                  <View style={[styles.otpVisitInfoRow, activeOtpData.volunteerName ? { marginTop: 4 } : null]}>
+                    <Feather name="calendar" size={13} color="#D97706" style={{ marginRight: 6 }} />
+                    <Text style={styles.otpVisitInfoText}>
+                      {safeFormat(activeOtpData.dateTime, 'EEE, d MMM yyyy • h:mm a')}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            )}
+
+            {/* 4-Digit Display */}
+            <View style={styles.otpDigitsContainer}>
+              {activeOtpData.otpCode.split('').map((digit: string, idx: number) => (
+                <View key={idx} style={styles.otpDigitBox}>
+                  <Text style={styles.otpDigitText}>{digit}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.otpWarningBox}>
+              <Feather name="info" size={13} color="#059669" style={{ marginRight: 6, marginTop: 1 }} />
+              <Text style={styles.otpWarningText}>
+                Do not share this PIN until your companion is physically present with you.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.otpDoneBtn}
+              onPress={() => {
+                setOtpModalVisible(false);
+                setActiveOtpData(null);
+              }}
+            >
+              <Text style={styles.otpDoneBtnText}>Done</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1723,6 +1944,155 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalDoneBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  generateOtpBtn: {
+    backgroundColor: '#FF6A00',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 10,
+    shadowColor: '#FF6A00',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  generateOtpBtnDisabled: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  generateOtpBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 0.3,
+  },
+  generateOtpBtnTextDisabled: {
+    color: '#92400E',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  modalCloseBtn: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+    padding: 4,
+  },
+  otpModalCard: {
+    paddingTop: 28,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    position: 'relative',
+    maxWidth: 380,
+  },
+  otpIconBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF0E6',
+    borderWidth: 2,
+    borderColor: '#FFDCC4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  otpModalTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  otpModalSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  otpVisitInfoBox: {
+    width: '100%',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  otpVisitInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  otpVisitInfoText: {
+    fontSize: 12,
+    color: '#92400E',
+    fontWeight: '500',
+  },
+  otpDigitsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 18,
+  },
+  otpDigitBox: {
+    width: 52,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 2,
+    borderColor: '#86EFAC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#15803D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  otpDigitText: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  otpWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#ECFDF5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 20,
+    width: '100%',
+  },
+  otpWarningText: {
+    fontSize: 11,
+    color: '#047857',
+    flex: 1,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  otpDoneBtn: {
+    backgroundColor: '#FF6A00',
+    paddingVertical: 13,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpDoneBtnText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 15,

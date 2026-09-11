@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_URL } from '@/constants/api';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import { CompanionBottomNav } from '../../components/care-companion/CompanionBottomNav';
+import { CompanionBackButton } from '../../components/care-companion/CompanionBackButton';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { NavigationService } from '@/utils/NavigationService';
@@ -133,7 +134,8 @@ export default function ScheduleScreen() {
         {/* Header */}
         <View style={styles.deepOrangeHeader}>
           <View style={styles.headerTitleRow}>
-            <View>
+            <CompanionBackButton style={styles.backBtn} />
+            <View style={styles.headerTextBlock}>
               <Text style={styles.headerTitle}>Schedule</Text>
               <Text style={styles.headerSub}>Manage your visits</Text>
             </View>
@@ -405,7 +407,9 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
   },
-  headerTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center' },
+  headerTextBlock: { flex: 1 },
+  backBtn: { marginRight: 12 },
   headerTitle: { fontFamily: 'Poppins_600SemiBold', color: '#FFFFFF', fontSize: 22 },
   headerSub: { fontFamily: 'Poppins_400Regular', color: '#FFFFFF', fontSize: 14, opacity: 0.9 },
   filterBtn: { width: 40, height: 40, alignItems: 'flex-end', justifyContent: 'center', position: 'relative' },

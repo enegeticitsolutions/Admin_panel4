@@ -12,6 +12,8 @@ export default function CareCompanionLayout() {
             <Stack.Screen name="schedule" options={{ headerShown: false }} />
             <Stack.Screen name="history" options={{ headerShown: false }} />
             <Stack.Screen name="profile" options={{ headerShown: false }} />
+            <Stack.Screen name="privacy-security" options={{ headerShown: false }} />
+            <Stack.Screen name="settings/change-password" options={{ headerShown: false }} />
             <Stack.Screen name="visit-details" options={{ headerShown: false }} />
         </Stack>
     );

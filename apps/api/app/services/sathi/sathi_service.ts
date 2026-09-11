@@ -8,6 +8,38 @@ import { getBeneficiarySathiEligibility } from '../beneficiary/beneficiary_sathi
 import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
 import { benefitLedgerEngine } from '../benefit/BenefitLedgerEngine';
 import { UsageType } from '@prisma/client';
+import { notificationProducer } from '@maihoonna/notifications';
+import { findSathiBenefitBalance } from '../../constants/systemBenefits';
+import {
+  dispatchSaathiOtp,
+  dispatchSaathiRegistrationSubmitted,
+  dispatchSaathiProfileApproved,
+  dispatchSaathiProfileUpdated,
+  dispatchSaathiBeneficiaryMatched,
+  dispatchSaathiBeneficiaryUnmatched,
+  dispatchSaathiVisitRequestReceived,
+  dispatchSaathiVisitInactiveNudge,
+  dispatchSaathiCheckInConfirmed,
+  dispatchSaathiVisitCheckedOut,
+  dispatchSaathiFeedbackReminder,
+  dispatchSaathiVisitConfirmedByBeneficiary,
+  dispatchSaathiMonthlyGoalAchieved,
+  dispatchSaathiMonthlyGoalAtRisk,
+  dispatchSaathiVisitNotCheckedOut,
+  dispatchSaathiCreditsEarned,
+  dispatchSaathiRedemptionRequested,
+  dispatchSaathiGiftCardDelivered,
+  dispatchSaathiCreditBalanceMilestone,
+  dispatchSaathiAddressUpdated,
+  dispatchSaathiAvailabilityUpdated,
+  dispatchSaathiIncompleteProfileNudge,
+  dispatchSaathiGuideTipPublished,
+  dispatchSaathiEmergencyAcknowledged,
+  dispatchSaathiFeedbackConcernFlagged,
+  dispatchCoordinatorNewVolunteerRegistered,
+  dispatchCoordinatorRedemptionAwaitingApproval,
+  dispatchCoordinatorVolunteerInactiveAlert,
+} from './sathi-notification.dispatcher';
 
 function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371; // Radius of the earth in km
@@ -56,6 +88,35 @@ export const registerVolunteer = async (data: any) => {
 
   const token = createToken({ sub: volunteer.id, role: 'volunteer' });
 
+  // ST-002: In-App & Push Notification to Volunteer
+  dispatchSaathiRegistrationSubmitted(volunteer.id, volunteer.name).catch((err: any) =>
+    console.warn('[Register:ST-002 Error]:', err.message)
+  );
+
+  // ST-060: In-App & Push Notification to Coordinator
+  prisma.user.findFirst({
+    where: { role: { in: ['admin', 'operations_manager', 'master_admin'] } },
+    select: { id: true }
+  }).then(adminUser => {
+    if (adminUser) {
+      dispatchCoordinatorNewVolunteerRegistered(adminUser.id, {
+        volunteerName: volunteer.name,
+        zoneCity: volunteer.city || 'Delhi NCR',
+        volunteerId: volunteer.id,
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+
+  if (volunteer.phone) {
+    notificationProducer.publish({
+      idempotencyKey: `sathi-reg-${volunteer.id}`,
+      channel: 'whatsapp',
+      event: 'SAATHI_REGISTRATION_SUBMITTED',
+      recipient: { phone: volunteer.phone },
+      variables: { volunteerName: volunteer.name || 'Volunteer' },
+    }).catch((err: any) => console.error('[SathiService:Register] Notification Error:', err.message));
+  }
+
   return {
     token,
     volunteer: {
@@ -98,6 +159,35 @@ export const registerVolunteerWithOtp = async (data: any) => {
   });
 
   const token = createToken({ sub: volunteer.id, role: 'volunteer' });
+
+  // ST-002: In-App & Push Notification to Volunteer
+  dispatchSaathiRegistrationSubmitted(volunteer.id, volunteer.name).catch((err: any) =>
+    console.warn('[RegisterOtp:ST-002 Error]:', err.message)
+  );
+
+  // ST-060: In-App & Push Notification to Coordinator
+  prisma.user.findFirst({
+    where: { role: { in: ['admin', 'operations_manager', 'master_admin'] } },
+    select: { id: true }
+  }).then(adminUser => {
+    if (adminUser) {
+      dispatchCoordinatorNewVolunteerRegistered(adminUser.id, {
+        volunteerName: volunteer.name,
+        zoneCity: volunteer.city || 'Delhi NCR',
+        volunteerId: volunteer.id,
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+
+  if (volunteer.phone) {
+    notificationProducer.publish({
+      idempotencyKey: `sathi-reg-${volunteer.id}`,
+      channel: 'whatsapp',
+      event: 'SAATHI_REGISTRATION_SUBMITTED',
+      recipient: { phone: volunteer.phone },
+      variables: { volunteerName: volunteer.name || 'Volunteer' },
+    }).catch((err: any) => console.error('[SathiService:RegisterOtp] Notification Error:', err.message));
+  }
 
   return {
     token,
@@ -164,7 +254,17 @@ export const sendVolunteerOtp = async (rawPhone: string) => {
   }
 
   const provider = OtpFactory.getProvider();
-  return await provider.send(phone);
+  const res = await provider.send(phone);
+
+  // ST-001: OTP for login / signup in-app & push notification
+  if (volunteer.id) {
+    const otpCode = (res as any)?.otp || (res as any)?.code || '******';
+    dispatchSaathiOtp(phone, otpCode, volunteer.id).catch((err: any) =>
+      console.warn('[sendVolunteerOtp:ST-001 Error]:', err.message)
+    );
+  }
+
+  return res;
 };
 
 export const verifyVolunteerOtp = async (rawPhone: string, otpCode: string) => {
@@ -249,6 +349,18 @@ export const updateVolunteerProfile = async (id: string, data: any) => {
     where: { id },
     data
   });
+
+  // ST-040, ST-041, ST-005: In-App & Push Notification based on updated attributes
+  if (data.address || data.city || data.flatPlot || data.streetArea) {
+    const newAddr = [data.flatPlot, data.streetArea, data.city, data.pincode].filter(Boolean).join(', ') || data.address || 'Updated Address';
+    dispatchSaathiAddressUpdated(id, { volunteerName: updated.name, newAddress: newAddr }).catch(() => {});
+  } else if (data.availability && data.availability.length > 0) {
+    const availSummary = Array.isArray(data.availability) ? data.availability.join(', ') : String(data.availability);
+    dispatchSaathiAvailabilityUpdated(id, { volunteerName: updated.name, availabilitySummary: availSummary }).catch(() => {});
+  } else if (!data.lastLoginAt && !data.fcmToken && !data.refreshToken && !data.verifiedAt && !data.verifiedById) {
+    dispatchSaathiProfileUpdated(id, updated.name).catch(() => {});
+  }
+
   return updated;
 };
 
@@ -622,9 +734,7 @@ export const checkinVolunteerVisit = async (volunteerId: string, data: any) => {
     throw new ApiError(400, 'Beneficiary does not have an active subscription with Sathi Companion benefits.');
   }
 
-  const sathiBalance = subscription.benefitBalances.find(
-    b => b.benefit.benefitType.code === 'SATHI_COMPANION' || b.benefit.benefitType.name.toLowerCase().includes('sathi')
-  );
+  const sathiBalance = findSathiBenefitBalance(subscription.benefitBalances);
 
   if (!sathiBalance || (sathiBalance.totalUnits - sathiBalance.usedUnits) <= 0) {
     throw new ApiError(400, 'Beneficiary has exhausted their Sathi Companion benefit hours.');
@@ -653,6 +763,19 @@ export const checkinVolunteerVisit = async (volunteerId: string, data: any) => {
     return log;
   });
 
+  // ST-020: Check-In Confirmed push & in-app notification
+  prisma.beneficiary.findUnique({
+    where: { id: beneficiaryId },
+    select: { name: true }
+  }).then(b => {
+    const checkInTimeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    dispatchSaathiCheckInConfirmed(volunteerId, {
+      beneficiaryName: b?.name || 'Beneficiary',
+      checkInTime: checkInTimeStr,
+      visitId: visitLog.id,
+    }).catch(err => console.warn('[checkinVolunteerVisit:ST-020 Error]:', err.message));
+  }).catch(() => {});
+
   return visitLog;
 };
 
@@ -669,42 +792,84 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
   const rawMinutes = (checkOutTime.getTime() - visitLog.checkInTime.getTime()) / 60000;
 
   const billableMinutes = rawMinutes;
-  const hoursEarned = billableMinutes / 60;
+  // If visit is less than 1 hr (60 min), credit and hours worth 1 hr are added.
+  // If greater than 1 hr (60 min), credit and hours accrue per minute (rawMinutes / 60).
+  const hoursEarned = rawMinutes < 60 ? 1 : rawMinutes / 60;
 
-  if (!visitLog.subscriptionBenefitBalanceId) {
-    throw new ApiError(400, 'No linked benefit balance found for this session.');
+  let sathiBalance: any = null;
+  if (visitLog.subscriptionBenefitBalanceId) {
+    sathiBalance = await prisma.subscriptionBenefitBalance.findUnique({
+      where: { id: visitLog.subscriptionBenefitBalanceId }
+    });
   }
 
-  const sathiBalance = await prisma.subscriptionBenefitBalance.findUnique({
-    where: { id: visitLog.subscriptionBenefitBalanceId }
+  const activeSub = await prisma.subscription.findFirst({
+    where: { beneficiaryId: visitLog.beneficiaryId, isActive: true },
+    include: {
+      benefitBalances: {
+        include: { benefit: { include: { benefitType: true } } }
+      }
+    }
   });
 
-  if (!sathiBalance) {
-    throw new ApiError(404, 'Beneficiary benefit balance not found.');
+  // Prefer hour-specific Sathi benefit if present
+  const hourSpecificBalance = findSathiBenefitBalance(activeSub?.benefitBalances || []);
+  if (hourSpecificBalance && (!sathiBalance || !((sathiBalance.snapshotUnitLabel || sathiBalance.unit || '').toLowerCase().includes('hour')))) {
+    sathiBalance = hourSpecificBalance;
+  } else if (!sathiBalance) {
+    sathiBalance = hourSpecificBalance;
   }
 
-  const currentRemaining = sathiBalance.totalUnits - sathiBalance.usedUnits;
-  if (currentRemaining < hoursEarned) {
-    throw new ApiError(400, `Insufficient Sathi benefits remaining. Beneficiary has only ${currentRemaining.toFixed(2)} hours left, visit clocked ${hoursEarned.toFixed(2)} hours.`);
-  }
+  const label = (sathiBalance?.snapshotUnitLabel || sathiBalance?.unit || sathiBalance?.benefit?.unitLabel || '').toLowerCase();
+  const isHourBenefit = label.includes('hour') || label.includes('hr');
+  const unitsToDeduct = isHourBenefit ? Math.max(1, Math.ceil(hoursEarned)) : 1;
+
+  const currentRemaining = sathiBalance ? Math.max(0, sathiBalance.totalUnits - sathiBalance.usedUnits) : 0;
+  const newRemaining = sathiBalance ? Math.max(0, currentRemaining - unitsToDeduct) : 0;
 
   const creditRateStr = await getSystemConfig('SATHI_CREDIT_RATE', '10');
   const creditRate = parseFloat(creditRateStr);
   
   let pointsEarned = 0;
   if (rawMinutes > 0) {
-    pointsEarned = (rawMinutes / 60) * creditRate;
+    pointsEarned = hoursEarned * creditRate;
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    await tx.subscriptionBenefitBalance.update({
-      where: { id: visitLog.subscriptionBenefitBalanceId! },
-      data: { usedUnits: { increment: hoursEarned } }
-    });
+    if (sathiBalance) {
+      const updatedUsed = sathiBalance.usedUnits + unitsToDeduct;
+      const updatedAvailable = Math.max(0, sathiBalance.totalUnits - sathiBalance.reservedUnits - updatedUsed);
+
+      await tx.subscriptionBenefitBalance.update({
+        where: { id: sathiBalance.id },
+        data: {
+          usedUnits: updatedUsed,
+          availableUnits: updatedAvailable
+        }
+      });
+
+      // Immutable benefit transaction ledger
+      await tx.benefitTransaction.create({
+        data: {
+          balanceId: sathiBalance.id,
+          transactionType: 'CONSUMED',
+          units: unitsToDeduct,
+          totalBefore: sathiBalance.totalUnits,
+          totalAfter: sathiBalance.totalUnits,
+          reservedBefore: sathiBalance.reservedUnits,
+          reservedAfter: sathiBalance.reservedUnits,
+          usedBefore: sathiBalance.usedUnits,
+          usedAfter: updatedUsed,
+          availableBefore: currentRemaining,
+          availableAfter: newRemaining,
+          reason: `Sathi Companion Visit Completed (${Math.round(rawMinutes)} mins)`,
+          performedByUserId: volunteerId,
+        }
+      });
+    }
 
     // Synchronize BenefitPeriodBalance & BenefitUsage ledger
-    const unitsToDeduct = Math.max(1, Math.round(hoursEarned));
-    if (visitLog.subscriptionId) {
+    if (visitLog.subscriptionId && sathiBalance) {
       try {
         const activePeriod = await benefitPeriodManager.evaluateAndTransitionJIT(visitLog.subscriptionId);
         if (activePeriod) {
@@ -716,7 +881,7 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
               quantity: unitsToDeduct,
               usageType: UsageType.SATHI_HOURS,
               referenceId: visitLog.id,
-              notes: `Sathi Companion Visit Completed (${hoursEarned.toFixed(1)} hrs)`,
+              notes: `Sathi Companion Visit Completed (${Math.round(rawMinutes)} mins)`,
               performedByUserId: volunteerId,
             }, tx);
           } catch (deductErr) {
@@ -746,7 +911,7 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
       }
     }
 
-    // Create PackageHoursLog for audit & activity feeds
+    // Create PackageHoursLog for audit & activity feeds (preserved for analytics)
     if (visitLog.subscriptionId && visitLog.beneficiaryId) {
       await tx.packageHoursLog.create({
         data: {
@@ -754,7 +919,7 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
           beneficiaryId: visitLog.beneficiaryId,
           hoursConsumed: hoursEarned,
           balanceBefore: currentRemaining,
-          balanceAfter: Math.max(0, currentRemaining - hoursEarned),
+          balanceAfter: newRemaining,
           description: `Sathi companion visit completed (${hoursEarned.toFixed(1)} hrs). Notes: ${notes || 'Completed'}`
         }
       });
@@ -799,7 +964,8 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
         hoursEarned,
         creditPointsEarned: pointsEarned,
         beneficiaryBalanceBefore: currentRemaining,
-        beneficiaryBalanceAfter: currentRemaining - hoursEarned,
+        beneficiaryBalanceAfter: newRemaining,
+        subscriptionBenefitBalanceId: sathiBalance?.id || visitLog.subscriptionBenefitBalanceId,
         status: 'completed',
         notes: notes ? `${visitLog.notes || ''}\n\nCheckout Notes: ${notes}`.trim() : visitLog.notes
       }
@@ -807,6 +973,51 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
 
     return completedLog;
   });
+
+  // ST-021, ST-030, ST-024: In-App & Push notifications on visit checkout
+  prisma.volunteer.findUnique({
+    where: { id: volunteerId },
+    select: { name: true, monthlyGoalHours: true, totalCreditPoints: true, totalCreditHours: true }
+  }).then(vol => {
+    prisma.beneficiary.findUnique({
+      where: { id: visitLog.beneficiaryId },
+      select: { name: true }
+    }).then(b => {
+      const volName = vol?.name || 'Volunteer';
+      const benName = b?.name || 'Beneficiary';
+      const hours = Math.floor(rawMinutes / 60);
+      const mins = Math.round(rawMinutes % 60);
+      const durationStr = `${hours > 0 ? `${hours}h ` : ''}${mins}m`;
+
+      // ST-021: Visit Completed
+      dispatchSaathiVisitCheckedOut(volunteerId, {
+        volunteerName: volName,
+        beneficiaryName: benName,
+        duration: durationStr,
+        points: pointsEarned.toFixed(0),
+        visitId: result.id,
+      }).catch(err => console.warn('[checkoutVolunteerVisit:ST-021 Error]:', err.message));
+
+      // ST-030: Credits Earned
+      const totalPts = vol?.totalCreditPoints || pointsEarned;
+      dispatchSaathiCreditsEarned(volunteerId, {
+        points: pointsEarned.toFixed(0),
+        beneficiaryName: benName,
+        totalBalance: totalPts.toFixed(0),
+        visitId: result.id,
+      }).catch(err => console.warn('[checkoutVolunteerVisit:ST-030 Error]:', err.message));
+
+      // ST-024: Monthly Goal Achieved (100%)
+      const monthlyGoal = vol?.monthlyGoalHours || 10;
+      if (vol && vol.totalCreditHours >= monthlyGoal) {
+        dispatchSaathiMonthlyGoalAchieved(volunteerId, {
+          volunteerName: volName,
+          hoursLogged: vol.totalCreditHours.toFixed(1),
+          goalHours: monthlyGoal.toFixed(0),
+        }).catch(err => console.warn('[checkoutVolunteerVisit:ST-024 Error]:', err.message));
+      }
+    }).catch(() => {});
+  }).catch(() => {});
 
   return {
     result,
@@ -919,7 +1130,7 @@ export const redeemVolunteerCredits = async (
     throw new ApiError(400, 'Please enter a positive number of credits to redeem.');
   }
 
-  return await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const volunteer = await tx.volunteer.findUnique({
       where: { id: volunteerId }
     });
@@ -987,6 +1198,49 @@ export const redeemVolunteerCredits = async (
       coupon: generatedCoupon
     };
   });
+
+  // ST-031, ST-032, ST-061: Dual In-App & Push Notifications on Redemption
+  prisma.volunteer.findUnique({
+    where: { id: volunteerId },
+    select: { name: true, phone: true }
+  }).then(vol => {
+    if (vol) {
+      // ST-031: Redemption Received
+      dispatchSaathiRedemptionRequested(volunteerId, {
+        volunteerName: vol.name,
+        credits: points,
+        giftCardBrand: details?.brand || 'MaiHoonNa',
+      }).catch(err => console.warn('[redeemVolunteerCredits:ST-031 Error]:', err.message));
+
+      // ST-032: Gift Card Delivered (if coupon was generated)
+      if (result.coupon) {
+        dispatchSaathiGiftCardDelivered(volunteerId, {
+          amount: points * 10,
+          giftCardBrand: details?.brand || 'MaiHoonNa',
+          recipientContact: vol.phone,
+          code: result.coupon.code,
+        }).catch(err => console.warn('[redeemVolunteerCredits:ST-032 Error]:', err.message));
+      }
+
+      // ST-061: Coordinator Alert: Redemption Awaiting Approval
+      prisma.user.findFirst({
+        where: { role: { in: ['admin', 'operations_manager', 'master_admin'] } },
+        select: { id: true }
+      }).then(adminUser => {
+        if (adminUser) {
+          dispatchCoordinatorRedemptionAwaitingApproval(adminUser.id, {
+            volunteerName: vol.name,
+            credits: points,
+            estimatedValue: points * 10,
+            giftCardBrand: details?.brand || 'MaiHoonNa',
+            redemptionId: result.coupon?.id || result.transaction?.id,
+          }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+
+  return result;
 };
 
 export const validateVolunteerCoupon = async (code: string) => {
@@ -1056,7 +1310,52 @@ export const proposeRescheduleForSathiRequest = async (
       proposedBy: volunteerId,
       rejectionReason: message || null
     },
-    include: { beneficiary: true }
+    include: { beneficiary: { include: { user: true, subscriber: true } } }
+  });
+
+  // Asynchronous fire-and-forget notification (runs in background to prevent API latency)
+  setImmediate(async () => {
+    try {
+      let volName = 'Saathi companion';
+      const vol = await prisma.volunteer.findUnique({
+        where: { id: volunteerId },
+        select: { name: true }
+      });
+      if (vol?.name) {
+        volName = vol.name;
+      } else {
+        const u = await prisma.user.findUnique({
+          where: { id: volunteerId },
+          select: { name: true }
+        });
+        if (u?.name) volName = u.name;
+      }
+      const recipientPhone = updatedRequest.beneficiary?.user?.phone || updatedRequest.beneficiary?.subscriber?.phone;
+      if (recipientPhone) {
+        const formattedDate = proposed.toLocaleDateString('en-IN', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'Asia/Kolkata'
+        });
+        await notificationProducer.publish({
+          idempotencyKey: `sathi-reschedule-${requestId}-${Date.now()}`,
+          channel: 'whatsapp',
+          event: 'APPOINTMENT_RESCHEDULED_CANCELLED',
+          recipient: { phone: recipientPhone },
+          variables: {
+            appointmentType: 'Saathi visit',
+            status: `rescheduled by ${volName}`,
+            newDetails: `Proposed for ${formattedDate}. Tap your app to confirm or pick another slot.`
+          }
+        });
+      }
+    } catch (notifErr: any) {
+      console.error('[SathiService] Background WhatsApp notification error:', notifErr.message);
+    }
   });
 
   return { request: updatedRequest, message: 'Reschedule proposal sent to beneficiary.' };
@@ -1207,14 +1506,7 @@ export const verifySathiVisitOtp = async (volunteerId: string, requestId: string
   const subscription = await prisma.subscription.findFirst({
     where: {
       beneficiaryId: request.beneficiaryId,
-      isActive: true,
-      benefitBalances: {
-        some: {
-          benefit: {
-            benefitType: { name: 'Sathi Companion' }
-          }
-        }
-      }
+      isActive: true
     },
     include: {
       benefitBalances: {
@@ -1224,12 +1516,10 @@ export const verifySathiVisitOtp = async (volunteerId: string, requestId: string
   });
 
   if (!subscription) {
-    throw new ApiError(400, 'Beneficiary does not have an active subscription with Sathi Companion benefits.');
+    throw new ApiError(400, 'Beneficiary does not have an active subscription.');
   }
 
-  const sathiBalance = subscription.benefitBalances.find(
-    b => b.benefit.benefitType.code === 'SATHI_COMPANION' || b.benefit.benefitType.name.toLowerCase().includes('sathi')
-  );
+  const sathiBalance = findSathiBenefitBalance(subscription.benefitBalances);
 
   if (!sathiBalance || (sathiBalance.totalUnits - sathiBalance.usedUnits) <= 0) {
     throw new ApiError(400, 'Beneficiary has exhausted their Sathi Companion benefit hours.');
@@ -1292,6 +1582,28 @@ export const submitSathiVisitFeedback = async (
     }
   });
 
+  // ST-052: Visit feedback flags a concern
+  const isConcern = (feedbackRating && feedbackRating <= 2) ||
+    (feedbackNotes && /(concern|issue|problem|uncomfortable|difficult|emergency|complaint)/i.test(feedbackNotes));
+
+  if (isConcern) {
+    prisma.user.findFirst({
+      where: { role: { in: ['admin', 'operations_manager', 'master_admin'] } },
+      select: { id: true }
+    }).then(async (adminUser) => {
+      if (adminUser) {
+        const vol = await prisma.volunteer.findUnique({ where: { id: volunteerId }, select: { name: true } });
+        const ben = await prisma.beneficiary.findUnique({ where: { id: request.beneficiaryId }, select: { name: true } });
+        dispatchSaathiFeedbackConcernFlagged(adminUser.id, {
+          volunteerName: vol?.name || 'Volunteer',
+          beneficiaryName: ben?.name || 'Beneficiary',
+          feedbackExcerpt: feedbackNotes.slice(0, 100),
+          visitId: requestId,
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+  }
+
   return { request: updatedRequest, message: 'Feedback submitted successfully.' };
 };
 
@@ -1313,5 +1625,173 @@ export const updateVolunteerVisitFeedback = async (volunteerId: string, visitId:
     data: { feedback }
   });
 
+  // ST-052: Flag concern if feedback text indicates an issue
+  if (feedback && /(concern|issue|problem|uncomfortable|difficult|emergency|complaint)/i.test(feedback)) {
+    prisma.user.findFirst({
+      where: { role: { in: ['admin', 'operations_manager', 'master_admin'] } },
+      select: { id: true }
+    }).then(async (adminUser) => {
+      if (adminUser) {
+        const vol = await prisma.volunteer.findUnique({ where: { id: volunteerId }, select: { name: true } });
+        const ben = await prisma.beneficiary.findUnique({ where: { id: visit.beneficiaryId }, select: { name: true } });
+        dispatchSaathiFeedbackConcernFlagged(adminUser.id, {
+          volunteerName: vol?.name || 'Volunteer',
+          beneficiaryName: ben?.name || 'Beneficiary',
+          feedbackExcerpt: feedback.slice(0, 100),
+          visitId,
+        }).catch(() => {});
+      }
+    }).catch(() => {});
+  }
+
   return updated;
 };
+
+// ─── Automated Reminders, Nudges & Coordinator Alert Helpers ───────────────────
+
+/**
+ * ST-013: No visits logged in 14 days — nudge
+ */
+export const triggerSaathiInactive14DaysNudge = async (volunteerId: string) => {
+  const vol = await prisma.volunteer.findUnique({
+    where: { id: volunteerId },
+    include: {
+      assignments: {
+        where: { isActive: true },
+        include: { beneficiary: { select: { name: true } } },
+        take: 1
+      }
+    }
+  });
+  if (!vol) return;
+  const benName = vol.assignments[0]?.beneficiary?.name || 'your beneficiaries';
+  return dispatchSaathiVisitInactiveNudge(volunteerId, {
+    volunteerName: vol.name,
+    beneficiaryName: benName
+  });
+};
+
+/**
+ * ST-022: Feedback not yet submitted — reminder
+ */
+export const triggerSaathiFeedbackReminder = async (volunteerId: string, visitLogId: string) => {
+  const log = await prisma.volunteerVisitLog.findUnique({
+    where: { id: visitLogId },
+    include: {
+      volunteer: { select: { name: true } },
+      beneficiary: { select: { name: true } }
+    }
+  });
+  if (!log) return;
+  const visitDateStr = new Date(log.checkInTime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return dispatchSaathiFeedbackReminder(volunteerId, {
+    volunteerName: log.volunteer.name,
+    beneficiaryName: log.beneficiary.name,
+    visitDate: visitDateStr,
+    visitId: visitLogId
+  });
+};
+
+/**
+ * ST-025: Monthly goal at-risk — mid-month reminder
+ */
+export const triggerSaathiMonthlyGoalAtRiskReminder = async (volunteerId: string) => {
+  const vol = await prisma.volunteer.findUnique({ where: { id: volunteerId } });
+  if (!vol) return;
+  return dispatchSaathiMonthlyGoalAtRisk(volunteerId, {
+    volunteerName: vol.name,
+    hoursLogged: vol.totalCreditHours.toFixed(1),
+    goalHours: vol.monthlyGoalHours.toFixed(0)
+  });
+};
+
+/**
+ * ST-026: Visit checked in but never checked out
+ */
+export const triggerSaathiVisitNotCheckedOutAlert = async (volunteerId: string, visitLogId: string) => {
+  const log = await prisma.volunteerVisitLog.findUnique({
+    where: { id: visitLogId },
+    include: {
+      volunteer: { select: { name: true } },
+      beneficiary: { select: { name: true } }
+    }
+  });
+  if (!log) return;
+  const visitDateStr = new Date(log.checkInTime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return dispatchSaathiVisitNotCheckedOut(volunteerId, {
+    volunteerName: log.volunteer.name,
+    beneficiaryName: log.beneficiary.name,
+    visitDate: visitDateStr,
+    visitId: visitLogId
+  });
+};
+
+/**
+ * ST-033: Credit balance milestone / low-balance nudge
+ */
+export const triggerSaathiCreditMilestoneNudge = async (volunteerId: string) => {
+  const vol = await prisma.volunteer.findUnique({ where: { id: volunteerId } });
+  if (!vol) return;
+  const estValue = vol.totalCreditPoints * 10;
+  return dispatchSaathiCreditBalanceMilestone(volunteerId, {
+    volunteerName: vol.name,
+    credits: vol.totalCreditPoints.toFixed(0),
+    estimatedValue: estValue.toFixed(0)
+  });
+};
+
+/**
+ * ST-042: Incomplete profile nudge
+ */
+export const triggerSaathiIncompleteProfileNudge = async (volunteerId: string) => {
+  const vol = await prisma.volunteer.findUnique({ where: { id: volunteerId } });
+  if (!vol) return;
+  return dispatchSaathiIncompleteProfileNudge(volunteerId, {
+    volunteerName: vol.name
+  });
+};
+
+/**
+ * ST-050: New guide tip / best practice published
+ */
+export const triggerSaathiGuideTipPublished = async (volunteerId: string, tipTitle: string, tipId?: string) => {
+  const vol = await prisma.volunteer.findUnique({ where: { id: volunteerId } });
+  if (!vol) return;
+  return dispatchSaathiGuideTipPublished(volunteerId, {
+    volunteerName: vol.name,
+    tipTitle,
+    tipId
+  });
+};
+
+/**
+ * ST-051: Emergency support alert acknowledged
+ */
+export const triggerSaathiEmergencyAcknowledged = async (
+  volunteerId: string,
+  beneficiaryName: string,
+  coordinatorName: string = 'Aastha'
+) => {
+  return dispatchSaathiEmergencyAcknowledged(volunteerId, {
+    beneficiaryName,
+    coordinatorName
+  });
+};
+
+/**
+ * ST-062: Volunteer inactive 30+ days (Coordinator alert)
+ */
+export const triggerCoordinatorVolunteerInactive30dAlert = async (volunteerId: string) => {
+  const vol = await prisma.volunteer.findUnique({ where: { id: volunteerId } });
+  if (!vol) return;
+  const adminUser = await prisma.user.findFirst({
+    where: { role: { in: ['admin', 'operations_manager', 'master_admin'] } },
+    select: { id: true }
+  });
+  if (!adminUser) return;
+  return dispatchCoordinatorVolunteerInactiveAlert(adminUser.id, {
+    volunteerName: vol.name,
+    volunteerId
+  });
+};
+
