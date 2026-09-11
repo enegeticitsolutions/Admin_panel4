@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
   Modal,
   Image,
   Linking,
+  AppState,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -35,12 +37,13 @@ type ApplicationStatus = 'NOT_APPLIED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' |
 
 export default function ApplyVolunteerScreen() {
   const { replace } = useNavigationStack();
-  const { logout } = useAuth();
+  const { logout, user, updateUser } = useAuth();
   useAndroidBackHandler();
 
   // ─── Status State ────────────────────────────────────────────────────────────
   const [applicationStatus, setApplicationStatus] = useState<ApplicationStatus | null>(null);
   const [isFetchingProfile, setIsFetchingProfile] = useState(true);
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
 
   // ─── Form State ──────────────────────────────────────────────────────────────
@@ -73,38 +76,45 @@ export default function ApplyVolunteerScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // ─── Fetch Profile on Mount ──────────────────────────────────────────────────
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const token = await AsyncStorage.getItem('userToken');
-        if (!token) {
-          replace('/(auth)');
+  // ─── Fetch Profile and Hobbies ──────────────────────────────────────────────
+  const fetchProfile = useCallback(async (silent = false) => {
+    try {
+      if (!silent) setIsRefreshingStatus(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        replace('/(auth)');
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/sathi/profile`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const res = await response.json();
+        const profile = res.data || res;
+
+        setApplicationStatus(profile.applicationStatus as ApplicationStatus);
+        setRejectionReason(profile.rejectionReason || null);
+
+        // If approved, update user session and redirect directly to dashboard
+        if (profile.applicationStatus === 'APPROVED') {
+          if (user) {
+            await updateUser(token, {
+              ...user,
+              applicationStatus: 'APPROVED',
+              role: 'volunteer',
+            });
+          }
+          replace('/(sathi)');
           return;
         }
 
-        const response = await fetch(`${API_URL}/sathi/profile`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (response.ok) {
-          const res = await response.json();
-          const profile = res.data || res;
-
-          // Set applicationStatus from DB
-          setApplicationStatus(profile.applicationStatus as ApplicationStatus);
-          setRejectionReason(profile.rejectionReason || null);
-
-          // If approved, redirect to dashboard
-          if (profile.applicationStatus === 'APPROVED') {
-            replace('/(sathi)');
-            return;
-          }
-
-          // Prefill form fields
+        // Prefill form fields if not already submitted
+        if (profile.applicationStatus !== 'SUBMITTED') {
           setForm({
             name: profile.name || '',
             email: profile.email || '',
@@ -123,35 +133,64 @@ export default function ApplyVolunteerScreen() {
           if (profile.latitude) setLatitude(profile.latitude);
           if (profile.longitude) setLongitude(profile.longitude);
           if (profile.interests?.length > 0) setSelectedInterests(profile.interests);
-        } else {
-          // Token may be invalid
-          setApplicationStatus('NOT_APPLIED');
         }
-      } catch (error) {
-        console.error('Error fetching profile:', error);
+      } else {
+        if (!silent) setApplicationStatus('NOT_APPLIED');
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      if (!silent) {
         setApplicationStatus('NOT_APPLIED');
-      } finally {
-        setIsFetchingProfile(false);
       }
-    };
+    } finally {
+      setIsFetchingProfile(false);
+      setIsRefreshingStatus(false);
+    }
+  }, [user, updateUser, replace]);
 
-    const fetchHobbies = async () => {
-      try {
-        const response = await fetch(`${API_URL}/public/hobbies?activeOnly=true`);
-        if (response.ok) {
-          const res = await response.json();
-          if (res.success && res.data) {
-            setAvailableInterests(res.data.map((h: any) => h.name));
-          }
+  const fetchHobbies = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/public/hobbies?activeOnly=true`);
+      if (response.ok) {
+        const res = await response.json();
+        if (res.success && res.data) {
+          setAvailableInterests(res.data.map((h: any) => h.name));
         }
-      } catch (error) {
-        console.error('Error fetching hobbies:', error);
       }
-    };
-
-    fetchProfile();
-    fetchHobbies();
+    } catch (error) {
+      console.error('Error fetching hobbies:', error);
+    }
   }, []);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchProfile(false);
+    fetchHobbies();
+  }, [fetchProfile, fetchHobbies]);
+
+  // Polling interval when in SUBMITTED state (auto-checks every 12 seconds)
+  useEffect(() => {
+    if (applicationStatus !== 'SUBMITTED') return;
+
+    const intervalId = setInterval(() => {
+      fetchProfile(true);
+    }, 12000);
+
+    return () => clearInterval(intervalId);
+  }, [applicationStatus, fetchProfile]);
+
+  // AppState listener (re-checks immediately when user returns from background / notification)
+  useEffect(() => {
+    if (applicationStatus !== 'SUBMITTED') return;
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        fetchProfile(true);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [applicationStatus, fetchProfile]);
 
   // ─── Interest Helpers ────────────────────────────────────────────────────────
   const toggleInterest = (tag: string) => {
@@ -258,11 +297,21 @@ export default function ApplyVolunteerScreen() {
     );
   }
 
-  // ─── UNDER REVIEW screen (SUBMITTED / APPROVED pending) ──────────────────────
-  if (applicationStatus === 'SUBMITTED' || applicationStatus === 'APPROVED') {
+  // ─── UNDER REVIEW screen (SUBMITTED pending) ──────────────────────────────
+  if (applicationStatus === 'SUBMITTED') {
     return (
       <SafeAreaView style={styles.reviewSafeArea}>
-        <ScrollView contentContainerStyle={styles.reviewContent}>
+        <ScrollView
+          contentContainerStyle={styles.reviewContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshingStatus}
+              onRefresh={() => fetchProfile(false)}
+              colors={['#FE6700']}
+              tintColor="#FE6700"
+            />
+          }
+        >
           {/* Success Banner */}
           <View style={styles.reviewIconWrapper}>
             <View style={styles.reviewIconCircle}>
@@ -333,6 +382,22 @@ export default function ApplyVolunteerScreen() {
           </View>
 
           {/* Action Buttons */}
+          <TouchableOpacity
+            style={styles.checkStatusBtn}
+            onPress={() => fetchProfile(false)}
+            disabled={isRefreshingStatus}
+            activeOpacity={0.8}
+          >
+            {isRefreshingStatus ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <MaterialCommunityIcons name="refresh" size={scale(18)} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.checkStatusBtnText}>Check Approval Status</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.supportBtn}
             onPress={() =>
@@ -1146,6 +1211,27 @@ const styles = StyleSheet.create({
   nextStep: { flexDirection: 'row', alignItems: 'center', gap: scale(10) },
   stepDot: { width: scale(8), height: scale(8), borderRadius: scale(4) },
   stepText: { fontSize: scale(13), color: '#4B5563', flex: 1 },
+  checkStatusBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FE6700',
+    paddingVertical: scale(14),
+    paddingHorizontal: scale(24),
+    borderRadius: scale(12),
+    marginBottom: scale(12),
+    width: '100%',
+    shadowColor: '#FE6700',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  checkStatusBtnText: {
+    fontSize: scale(15),
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   supportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
