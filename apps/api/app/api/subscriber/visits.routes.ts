@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../../core/database';
 import { authenticate, AuthRequest } from '../shared/deps';
+import { resolveFileUrl, resolveFileUrls } from '../../services/storage';
 
 const router = Router();
 
@@ -179,7 +180,7 @@ router.get('/:visitId/details', authenticate, async (req: AuthRequest, res: Resp
         }
 
         // Photos extraction
-        const photos = (() => {
+        const rawPhotos = (() => {
             const raw = visit.imageUrls;
             if (!raw) return [];
             if (Array.isArray(raw)) return raw;
@@ -193,6 +194,11 @@ router.get('/:visitId/details', authenticate, async (req: AuthRequest, res: Resp
             }
             return [];
         })();
+
+        const [photos, companionPhoto] = await Promise.all([
+            resolveFileUrls(rawPhotos, 1800),
+            resolveFileUrl(visit.careCompanion?.photo, 1800),
+        ]);
 
         const is3rdParty = Boolean(visit.is3rdParty || (!visit.careCompanionId && !visit.careCompanion));
         const benefitName = visit.benefit?.name || null;
@@ -212,7 +218,7 @@ router.get('/:visitId/details', authenticate, async (req: AuthRequest, res: Resp
                 benefitCategory,
                 thirdPartyNotes: visit.thirdPartyNotes || null,
                 companionName: is3rdParty ? (benefitName || 'Third-Party Partner Service') : (visit.careCompanion?.name || 'Care Companion'),
-                companionPhoto: is3rdParty ? null : (visit.careCompanion?.photo || null),
+                companionPhoto: is3rdParty ? null : companionPhoto,
                 companionPhone: is3rdParty ? null : (visit.careCompanion?.user?.phone || null),
                 scheduledDate: schedDateStr,
                 scheduledTime: visit.scheduledTime,

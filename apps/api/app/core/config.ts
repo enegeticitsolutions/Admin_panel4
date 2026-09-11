@@ -14,7 +14,7 @@ export const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   databaseUrl: process.env.DATABASE_URL || '',
   corsOrigin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : '*',
-  jsonLimit: process.env.JSON_PAYLOAD_LIMIT || '2mb',
+  jsonLimit: process.env.JSON_PAYLOAD_LIMIT || '50mb',
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 mins
   rateLimitMaxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000', 10),
   expoPushUrl: process.env.EXPO_PUSH_URL || 'https://exp.host/--/api/v2/push/send',

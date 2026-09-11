@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../../core/database';
 import { authenticate, AuthRequest } from '../shared/deps';
+import { resolveFileUrl, resolveFileUrls } from '../../services/storage';
 
 const router = Router();
 
@@ -97,7 +98,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
 
     const defaultTitles = ['Medication Review', 'Regular Check-up', 'Wellness Visit', 'Physiotherapy Session'];
 
-    const formattedVisits = completedVisits.map((v: any, index: number) => {
+    const formattedVisits = await Promise.all(completedVisits.map(async (v: any, index: number) => {
       const scheduledTime: Date | null = v.scheduledTime ? new Date(v.scheduledTime) : null;
       const checkInTime: Date | null = v.checkInTime ? new Date(v.checkInTime) : null;
       const checkOutTime: Date | null = v.checkOutTime ? new Date(v.checkOutTime) : null;
@@ -119,18 +120,19 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
       let actualDurationMinutes: number | null = null;
       let durationText = '';
       if (checkInTime && checkOutTime) {
-        const diffMins = Math.max(1, Math.round((checkOutTime.getTime() - checkInTime.getTime()) / 60000));
+        const diffMs = checkOutTime.getTime() - checkInTime.getTime();
+        let diffMins = Math.round(diffMs / 60000);
+        if (diffMins <= 0 && diffMs > 0) diffMins = 1;
         actualDurationMinutes = diffMins;
         if (diffMins < 60) {
           durationText = `${diffMins} min${diffMins !== 1 ? 's' : ''}`;
         } else {
-          const hrs = Math.floor(diffMins / 60);
-          const mins = diffMins % 60;
-          durationText = mins > 0 ? `${hrs}h ${mins}min` : `${hrs} hr${hrs !== 1 ? 's' : ''}`;
+          const durationHours = parseFloat((diffMins / 60).toFixed(1));
+          durationText = `${durationHours} hour${durationHours !== 1 ? 's' : ''}`;
         }
       }
 
-      const dateObj = checkOutTime || scheduledTime || new Date();
+      const dateObj = scheduledTime || checkInTime || new Date(v.createdAt);
       const dateStr = formatDateIST(dateObj);
       const isExternalService = Boolean(v.is3rdParty || (!v.careCompanionId && !v.careCompanion));
       const benefitName = v.benefit?.name || null;
@@ -159,7 +161,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         taken: mar.taken === true,
       }));
 
-      const photos: string[] = (() => {
+      const rawPhotos = (() => {
         const raw = (v as any).imageUrls;
         if (!raw) return [];
         if (Array.isArray(raw)) return raw;
@@ -169,6 +171,11 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         }
         return [];
       })();
+
+      const [photos, companionPhoto] = await Promise.all([
+        resolveFileUrls(rawPhotos, 1800),
+        resolveFileUrl(v.careCompanion?.photo || v.careCompanion?.photoUrl, 1800),
+      ]);
 
       return {
         id: v.id,
@@ -183,7 +190,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         title: benefitName || v.visitSummary || defaultTitles[index % defaultTitles.length],
         companionName: isExternalService ? (benefitName || '3rd Party Partner Service') : (v.careCompanion?.name || 'Care Companion'),
         companionPhone: isExternalService ? null : (v.careCompanion?.phone || null),
-        companionPhoto: isExternalService ? null : (v.careCompanion?.photoUrl || null),
+        companionPhoto: isExternalService ? null : companionPhoto,
         isExternalService,
         scheduledDate: dateStr,
         scheduledStartTime: scheduledStartStr,
@@ -215,12 +222,13 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         rated: !!v.rating,
         timestamp: dateObj.getTime(),
       };
-    });
+    }));
 
-    const formattedSathiVisits = completedSathiVisits.map((s: any) => {
+    const formattedSathiVisits = await Promise.all(completedSathiVisits.map(async (s: any) => {
       const dateObj = new Date(s.dateTime);
       const dateStr = formatDateIST(dateObj);
       const timeStr = formatIST(dateObj);
+      const companionPhoto = s.volunteer?.profilePhoto ? await resolveFileUrl(s.volunteer.profilePhoto, 1800) : null;
       return {
         id: s.id,
         encounterId: null,
@@ -228,7 +236,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         title: 'Saathi Companionship Visit',
         companionName: s.volunteer?.name || 'Saathi Volunteer',
         companionPhone: null,
-        companionPhoto: null,
+        companionPhoto,
         isExternalService: false,
         isSathiVisit: true,
         scheduledDate: dateStr,
@@ -252,7 +260,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         rated: false,
         timestamp: dateObj.getTime(),
       };
-    });
+    }));
 
     const all = [...formattedVisits, ...formattedSathiVisits].sort((a, b) => b.timestamp - a.timestamp);
     res.json({ success: true, data: all });

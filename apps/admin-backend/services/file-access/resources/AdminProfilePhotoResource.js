@@ -23,16 +23,30 @@ class AdminProfilePhotoResource extends FileResource {
     // Try User first
     const user = await prisma.user.findUnique({
       where: { id: resourceId },
-      select: { profilePhotoKey: true },
+      select: { profilePhoto: true },
     });
-    if (user?.profilePhotoKey) return user.profilePhotoKey;
+    if (user?.profilePhoto) return user.profilePhoto;
+
+    // Try Volunteer (Sathi)
+    const volunteer = await prisma.volunteer.findUnique({
+      where: { id: resourceId },
+      select: { profilePhoto: true },
+    });
+    if (volunteer?.profilePhoto) return volunteer.profilePhoto;
 
     // Try CareCompanion by its ID directly
     const cc = await prisma.careCompanion.findUnique({
       where: { id: resourceId },
-      select: { photoKey: true },
+      select: { photo: true },
     });
-    if (cc?.photoKey) return cc.photoKey;
+    if (cc?.photo) return cc.photo;
+
+    // Try Beneficiary
+    const beneficiary = await prisma.beneficiary.findUnique({
+      where: { id: resourceId },
+      select: { photo: true },
+    });
+    if (beneficiary?.photo) return beneficiary.photo;
 
     return null;
   }

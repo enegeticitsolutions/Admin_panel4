@@ -1,35 +1,59 @@
 import { FileResource } from '../FileResource';
 import prisma from '../../../core/database';
+import { extractStorageKey } from '../../storage/urlResolver';
 
 /**
  * ProfilePhotoResource
  *
  * Authorization rule:
- *   The requesting user can view their own profile photo.
- *   The resourceId is the userId whose photo is being requested.
- *
- * Note: Profile photos are lower sensitivity than medical docs, but we keep
- * them behind the presigned URL system for consistency and future-proofing.
- * Profile photos are stored in User.profilePhotoKey.
+ *   Authenticated users can view profile photos.
+ *   resourceId can be:
+ *     - 'me' (resolves to the requesting user's own photo)
+ *     - a User.id (User.profilePhoto)
+ *     - a Volunteer.id (Volunteer.profilePhoto)
+ *     - a CareCompanion.id (CareCompanion.photo)
  *
  * Usage:
- *   GET /api/files/presigned?type=profile_photo&id=<userId>
+ *   GET /api/files/presigned?type=profile_photo&id=<userId|me>
  */
 export class ProfilePhotoResource extends FileResource {
   readonly resourceType = 'profile_photo';
-  // Profile photos — slightly longer TTL (30 min) since they're used in many list views
+  // Profile photos — 30 min TTL
   readonly ttlSeconds = 1800;
 
   async getFileKey(resourceId: string, userId: string): Promise<string | null> {
-    // Users can only access their own profile photo via this endpoint
-    // For admin access to other users' photos, use StaffProfilePhotoResource (admin-backend)
-    if (resourceId !== userId) return null;
+    const targetId = resourceId === 'me' ? userId : resourceId;
 
+    // 1. Check User table
     const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { profilePhotoKey: true } as any,
+      where: { id: targetId },
+      select: { profilePhoto: true },
     });
 
-    return (user as any)?.profilePhotoKey ?? null;
+    if (user?.profilePhoto) {
+      return extractStorageKey(user.profilePhoto);
+    }
+
+    // 2. Check Volunteer (Sathi) table
+    const volunteer = await prisma.volunteer.findUnique({
+      where: { id: targetId },
+      select: { profilePhoto: true },
+    });
+
+    if (volunteer?.profilePhoto) {
+      return extractStorageKey(volunteer.profilePhoto);
+    }
+
+    // 3. Check CareCompanion table by CC id
+    const careCompanion = await prisma.careCompanion.findUnique({
+      where: { id: targetId },
+      select: { photo: true },
+    });
+
+    if (careCompanion?.photo) {
+      return extractStorageKey(careCompanion.photo);
+    }
+
+    return null;
   }
 }

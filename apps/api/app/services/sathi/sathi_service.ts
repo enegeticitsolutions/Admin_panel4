@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import prisma from '../../core/database';
+import { resolveFileUrl } from '../storage/urlResolver';
 import { createToken } from '../../core/security';
 import { ApiError } from '../../utils/ApiError';
 import { OtpFactory } from '../../core/otp/OtpFactory';
@@ -340,8 +341,9 @@ export const getVolunteerProfile = async (id: string) => {
   });
 
   const rating = ratingAggregate._avg.rating ? Number(ratingAggregate._avg.rating.toFixed(1)) : 0;
+  const resolvedPhoto = volunteer.profilePhoto ? await resolveFileUrl(volunteer.profilePhoto) : volunteer.profilePhoto;
 
-  return { ...volunteer, totalVisits, rating };
+  return { ...volunteer, profilePhoto: resolvedPhoto, totalVisits, rating };
 };
 
 export const updateVolunteerProfile = async (id: string, data: any) => {

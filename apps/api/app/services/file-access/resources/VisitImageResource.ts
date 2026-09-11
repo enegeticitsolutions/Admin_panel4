@@ -1,23 +1,26 @@
 import { FileResource } from '../FileResource';
 import prisma from '../../../core/database';
+import { extractStorageKey } from '../../storage/urlResolver';
 
 /**
  * VisitImageResource
  *
  * Authorization rule:
  *   The user must be either:
- *     (a) the Care Companion assigned to the visit (CC's userId matches)
- *     (b) an admin or field manager (role-based access — handled by middleware before this)
+ *     (a) the Care Companion assigned to the visit
+ *     (b) the Subscriber whose beneficiary received the visit
+ *     (c) the Beneficiary who received the visit
+ *     (d) an admin or staff member
  *
- * The imageKey encodes both visitId and image index:
- *   id format: "<visitId>/<imageIndex>"   e.g. "abc-123/2"
+ * The resourceId format:
+ *   "<visitId>/<imageIndex>"   e.g. "abc-123/0"
  *
  * Usage:
  *   GET /api/files/presigned?type=visit_image&id=<visitId>/<imageIndex>
  */
 export class VisitImageResource extends FileResource {
   readonly resourceType = 'visit_image';
-  // Visit images — 15 minutes (same as medical records)
+  // Visit images — 15 minutes
   readonly ttlSeconds = 900;
 
   async getFileKey(resourceId: string, userId: string): Promise<string | null> {
@@ -32,20 +35,57 @@ export class VisitImageResource extends FileResource {
     const visit = await prisma.visit.findUnique({
       where: { id: visitId },
       select: {
-        imageKeys: true,
+        imageUrls: true,
+        beneficiaryId: true,
+        beneficiary: {
+          select: {
+            subscriberId: true,
+            userId: true,
+          },
+        },
         careCompanionId: true,
-        careCompanion: { select: { userId: true } },
-      } as any,
+        careCompanion: {
+          select: {
+            userId: true,
+          },
+        },
+      },
     });
 
     if (!visit) return null;
 
-    // Authorization: must be the assigned CC
-    const cc = (visit as any).careCompanion;
-    if (!cc || cc.userId !== userId) return null;
+    // Authorization: CC, Subscriber, Beneficiary, or Staff
+    const isCareCompanion = visit.careCompanion?.userId === userId;
+    const isSubscriber = visit.beneficiary?.subscriberId === userId;
+    const isBeneficiary = visit.beneficiary?.userId === userId || visit.beneficiaryId === userId;
 
-    const imageKeys: string[] = JSON.parse((visit as any).imageKeys || '[]');
-    const key = imageKeys[imageIndex];
-    return key ?? null;
+    if (!isCareCompanion && !isSubscriber && !isBeneficiary) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { role: true },
+      });
+      const staffRoles = ['admin', 'operations_manager', 'field_manager'];
+      if (!user || !staffRoles.includes(user.role)) {
+        return null;
+      }
+    }
+
+    let parsedList: string[] = [];
+    const raw = visit.imageUrls;
+    if (raw) {
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) parsedList = parsed;
+        } catch {
+          parsedList = raw.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      }
+    }
+
+    const targetItem = parsedList[imageIndex];
+    if (!targetItem) return null;
+
+    return extractStorageKey(targetItem);
   }
 }

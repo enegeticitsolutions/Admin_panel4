@@ -18,7 +18,7 @@
  * following the same pattern — this serves as the base contract.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -37,6 +37,7 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import { PresignedUrlService } from '@/utils/PresignedUrlService';
 
 // ─── Types (OOP config contract) ──────────────────────────────────────────────
 
@@ -96,6 +97,39 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [imageError, setImageError] = useState(false);
 
+  // Sync and resolve presigned URL when currentPhotoUrl or target changes
+  useEffect(() => {
+    let isMounted = true;
+    async function resolveCurrentUrl() {
+      if (!currentPhotoUrl) {
+        if (isMounted) setPhotoUrl(null);
+        return;
+      }
+      const isS3Path = !currentPhotoUrl.startsWith('http://') && !currentPhotoUrl.startsWith('https://');
+      const isRawS3Url = currentPhotoUrl.includes('s3.') && !currentPhotoUrl.includes('X-Amz-Signature');
+      if (isS3Path || isRawS3Url) {
+        try {
+          const resType = targetType === 'beneficiary' ? 'beneficiary_photo' : 'profile_photo';
+          const resId = targetType === 'beneficiary' && targetId ? targetId : 'me';
+          const presigned = await PresignedUrlService.get(resType, resId);
+          if (isMounted && presigned) {
+            setPhotoUrl(presigned);
+            setImageError(false);
+            return;
+          }
+        } catch {
+          // Keep currentPhotoUrl if lookup fails
+        }
+      }
+      if (isMounted) {
+        setPhotoUrl(currentPhotoUrl);
+        setImageError(false);
+      }
+    }
+    resolveCurrentUrl();
+    return () => { isMounted = false; };
+  }, [currentPhotoUrl, targetType, targetId]);
+
   const radius = size / 2;
   const badgeSize = Math.max(28, Math.round(size * 0.28));
   const badgeRadius = badgeSize / 2;
@@ -121,7 +155,7 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
     }
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
-      quality: 0.85,
+      quality: 0.5,
       allowsEditing: true,
       aspect: [1, 1],
     });
@@ -138,7 +172,7 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.85,
+      quality: 0.5,
       allowsEditing: true,
       aspect: [1, 1],
     });
@@ -223,6 +257,11 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
       }
 
       if (!data.success) throw new Error(data.message || 'Upload failed');
+
+      // Invalidate cached presigned URL
+      const resType = targetType === 'beneficiary' ? 'beneficiary_photo' : 'profile_photo';
+      const resId = targetType === 'beneficiary' && targetId ? targetId : 'me';
+      PresignedUrlService.invalidate(resType, resId);
 
       // Update local state immediately (optimistic UI)
       setPhotoUrl(data.url);

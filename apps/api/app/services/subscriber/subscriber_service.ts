@@ -2,6 +2,7 @@ import prisma from '../../core/database';
 import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { OtpFactory } from '../../core/otp/OtpFactory';
+import { resolveFileUrl } from '../storage/urlResolver';
 
 export const getSubscriberProfile = async (subscriberId: string, beneficiaryId?: string) => {
   const user = await prisma.user.findUnique({
@@ -23,10 +24,13 @@ export const getSubscriberProfile = async (subscriberId: string, beneficiaryId?:
 
   if (!user) throw new Error('User not found');
 
+  const resolvedProfilePhoto = user.profilePhoto ? await resolveFileUrl(user.profilePhoto) : null;
+
   // Inject fallback defaults for address fields not present on User model
   // to prevent mobile app from crashing.
   const userWithFallbackAddress = {
     ...user,
+    profilePhoto: resolvedProfilePhoto,
     flatPlot: '',
     streetArea: '',
     landmark: '',
@@ -133,7 +137,12 @@ export const getSubscriberProfile = async (subscriberId: string, beneficiaryId?:
     };
   }
 
-  // Beneficiaries list already loaded at the top
+  const resolvedBeneficiaries = await Promise.all(
+    beneficiaries.map(async (b) => ({
+      ...b,
+      photo: b.photo ? await resolveFileUrl(b.photo) : null,
+    }))
+  );
 
   return {
     user: userWithFallbackAddress,
@@ -143,7 +152,7 @@ export const getSubscriberProfile = async (subscriberId: string, beneficiaryId?:
       availableHours: Math.max(0, totalHours - usedHours)
     },
     currentPlan,
-    beneficiaries
+    beneficiaries: resolvedBeneficiaries
   };
 };
 

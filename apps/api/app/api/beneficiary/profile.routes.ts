@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../../core/database';
 import { authenticate, AuthRequest } from '../shared/deps';
 import { UserAccountService } from '../../services/shared/user_account.service';
+import { resolveFileUrl } from '../../services/storage/urlResolver';
 
 const router = Router();
 const userAccountService = UserAccountService.getInstance();
@@ -32,7 +33,21 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ success: false, message: 'Beneficiary profile not found' });
         }
 
-        res.json({ success: true, data: beneficiary });
+        const rawPhoto = beneficiary.photo || beneficiary.user?.profilePhoto;
+        const resolvedPhoto = rawPhoto ? await resolveFileUrl(rawPhoto) : null;
+
+        res.json({
+            success: true,
+            data: {
+                ...beneficiary,
+                photo: resolvedPhoto,
+                profilePhoto: resolvedPhoto,
+                user: beneficiary.user ? {
+                    ...beneficiary.user,
+                    profilePhoto: resolvedPhoto,
+                } : undefined,
+            }
+        });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }

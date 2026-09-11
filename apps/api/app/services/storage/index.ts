@@ -34,3 +34,6 @@ export function getStorageService(): StorageService {
 export function _resetStorageInstance(): void {
   instance = null;
 }
+
+export * from './StorageInterface';
+export * from './urlResolver';

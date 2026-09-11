@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../shared/deps';
 import prisma from '../../core/database';
+import { resolveFileUrl } from '../../services/storage/urlResolver';
 
 const router = Router();
 
@@ -38,12 +39,15 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
       where: { careCompanionId: cc.careCompanionProfile.id },
     });
 
+    const rawPhoto = cc.careCompanionProfile.photo || cc.profilePhoto;
+    const resolvedPhoto = rawPhoto ? await resolveFileUrl(rawPhoto) : null;
+
     res.json({
       success: true,
       data: {
         name: cc.name,
         initials: cc.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'CC',
-        photo: cc.careCompanionProfile.photo || null,
+        photo: resolvedPhoto,
         role: 'Care Companion',
         verified: cc.isVerified,
         email: cc.email || '',

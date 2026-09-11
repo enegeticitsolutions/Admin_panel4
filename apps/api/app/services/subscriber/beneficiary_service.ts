@@ -3,6 +3,7 @@ import { generateUUID, generateRandomPhone } from '../../utils/helpers';
 import { Prisma } from '@prisma/client';
 import { getBeneficiarySathiEligibility } from '../beneficiary/beneficiary_sathi_service';
 import { notificationProducer } from '@maihoonna/notifications';
+import { resolveFileUrl, resolveFileUrls } from '../storage';
 
 // Map free-text frequencies from the mobile UI to valid DB enum values
 const frequencyMap: Record<string, string> = {
@@ -605,213 +606,225 @@ export const getBeneficiaryProfile = async (beneficiaryId: string) => {
 
   const computedEmotionalScore = isDefaultData ? 100 : (beneficiary.emotionalScore === 8.0 ? 85 : beneficiary.emotionalScore);
 
+  const resolvedBeneficiaryPhoto = await resolveFileUrl(beneficiary.photo, 1800);
+
+  const resolvedNextVisit = nextVisit ? await (async () => {
+    const is3rdPartyNext = Boolean(nextVisit.is3rdParty || (!nextVisit.careCompanionId && !nextVisit.careCompanion));
+    const benefitName = nextVisit.benefit?.name || null;
+    const companionPhoto = is3rdPartyNext ? null : await resolveFileUrl(nextVisit.careCompanion?.photo, 1800);
+    return {
+      id: nextVisit.id,
+      is3rdParty: is3rdPartyNext,
+      benefitId: nextVisit.benefitId || null,
+      benefitName,
+      benefitCode: nextVisit.benefit?.code || null,
+      benefitCategory: nextVisit.benefit?.benefitType?.name || null,
+      thirdPartyNotes: nextVisit.thirdPartyNotes || null,
+      companionName: is3rdPartyNext ? (benefitName || 'Third-Party Partner Service') : (nextVisit.careCompanion?.name || 'Care Companion'),
+      companionPhoto,
+      companionPhone: is3rdPartyNext ? null : (nextVisit.careCompanion?.user?.phone || null),
+      dateStr: new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', month: 'short', day: 'numeric' }).format(nextVisit.scheduledTime),
+      timeStr: new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }).format(nextVisit.scheduledTime),
+      scheduledTime: nextVisit.scheduledTime.toISOString(),
+      durationMinutes: nextVisit.durationMinutes,
+    };
+  })() : null;
+
+  const resolvedTimeline = await Promise.all(pastVisits.map(async (v: any) => {
+    const istDateFormatter = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+    const istTimeFormatter = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const schedDate = new Date(v.scheduledTime);
+    const schedDateStr = istDateFormatter.format(schedDate);
+    const schedStartTime = istTimeFormatter.format(schedDate);
+    const schedEndTime = istTimeFormatter.format(new Date(schedDate.getTime() + (v.durationMinutes && v.durationMinutes >= 15 ? v.durationMinutes : 60) * 60000));
+
+    const checkInTime = v.checkInTime ? new Date(v.checkInTime) : null;
+    const checkOutTime = v.checkOutTime ? new Date(v.checkOutTime) : null;
+
+    const checkInTimeFormatted = checkInTime ? istTimeFormatter.format(checkInTime) : null;
+    const checkOutTimeFormatted = checkOutTime ? istTimeFormatter.format(checkOutTime) : null;
+
+    const defaultMins = (v.durationMinutes && v.durationMinutes >= 15) ? v.durationMinutes : 60;
+    let scheduledDurationText = '';
+    if (defaultMins < 60) {
+      scheduledDurationText = `${defaultMins} mins`;
+    } else {
+      const durationHours = parseFloat((defaultMins / 60).toFixed(1));
+      scheduledDurationText = `${durationHours} hour${durationHours !== 1 ? 's' : ''}`;
+    }
+
+    // Calculate actual duration strictly from check-in and check-out times
+    let durationText = '';
+    let actualDurationText: string | null = null;
+    let actualDurationMinutes: number | null = null;
+    
+    if (checkInTime && checkOutTime) {
+      const diffMs = checkOutTime.getTime() - checkInTime.getTime();
+      let diffMins = Math.round(diffMs / 60000);
+      if (diffMins <= 0 && diffMs > 0) diffMins = 1;
+      actualDurationMinutes = diffMins;
+      if (diffMins < 60) {
+        durationText = `${diffMins} min${diffMins !== 1 ? 's' : ''}`;
+      } else {
+        const durationHours = parseFloat((diffMins / 60).toFixed(1));
+        durationText = `${durationHours} hour${durationHours !== 1 ? 's' : ''}`;
+      }
+      actualDurationText = durationText;
+    } else {
+      durationText = scheduledDurationText;
+    }
+
+    // Extract vital readings
+    const vitalsList: any[] = [];
+    (v.vitalReadings || []).forEach((r: any) => {
+      const def = r.vitalDefinition;
+      if (!def) return;
+      let valStr = '';
+      if (def.dataType === 'dual_numeric') {
+        if (r.valueNumeric != null && r.valueNumeric2 != null) {
+          valStr = `${r.valueNumeric}/${r.valueNumeric2} ${def.unit || 'mmHg'}`.trim();
+        }
+      } else if (def.dataType === 'numeric') {
+        if (r.valueNumeric != null) {
+          valStr = `${r.valueNumeric} ${def.unit || ''}`.trim();
+        }
+      } else if (def.dataType === 'boolean') {
+        const isTrue = r.valueBoolean === true || String(r.valueText).toLowerCase() === 'yes';
+        valStr = isTrue ? (def.booleanTrueLabel || 'Yes') : (def.booleanFalseLabel || 'No');
+      } else if (def.dataType === 'text') {
+        if (r.valueText) valStr = r.valueText;
+      }
+
+      if (valStr) {
+        vitalsList.push({
+          id: def.id,
+          name: def.name,
+          code: def.code,
+          value: valStr,
+          unit: def.unit || ''
+        });
+      }
+    });
+
+    const bpReading = vitalsList.find(vl => vl.code === 'BP' || vl.name?.toLowerCase().includes('blood pressure'));
+    const hrReading = vitalsList.find(vl => vl.code === 'PULSE' || vl.code === 'HEART_RATE' || vl.name?.toLowerCase().includes('heart rate') || vl.name?.toLowerCase().includes('pulse'));
+    const bsReading = vitalsList.find(vl => vl.code === 'BLOOD_GLUCOSE' || vl.name?.toLowerCase().includes('sugar') || vl.name?.toLowerCase().includes('glucose'));
+
+    // Extract medication adherence records
+    const medicationsList = (v.medicationAdherenceRecords || []).map((mar: any) => ({
+      id: mar.medicationId,
+      name: mar.medication?.name || 'Medication',
+      dosage: mar.medication?.dosage || null,
+      instructions: mar.medication?.instructions || null,
+      taken: mar.taken === true
+    }));
+
+    let checkInType = 'Standard Check-in';
+    if (v.checkInTime) {
+      if (v.isGeoVerified) {
+        checkInType = `Auto Geofence (Verified${v.geoDistanceMeters != null ? ` • ${v.geoDistanceMeters}m` : ''})`;
+      } else if (v.manualCheckInReason) {
+        checkInType = 'Manual Check-in (Flagged)';
+      }
+    }
+
+    let checkOutType = 'Standard Check-out';
+    if (v.checkOutTime) {
+      if (v.manualCheckOutReason) {
+        checkOutType = 'Manual Check-out';
+      } else if (v.isGeoVerified) {
+        checkOutType = 'Auto Geofence (Verified)';
+      }
+    }
+
+    // Photos extraction
+    const rawPhotos = (() => {
+      const raw = (v as any).imageUrls;
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {
+          return raw.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+      }
+      return [];
+    })();
+
+    const [photos, companionPhoto] = await Promise.all([
+      resolveFileUrls(rawPhotos, 1800),
+      resolveFileUrl(v.careCompanion?.photo, 1800),
+    ]);
+
+    const is3rdParty = Boolean(v.is3rdParty || (!v.careCompanionId && !v.careCompanion));
+    const benefitName = v.benefit?.name || null;
+    const benefitCode = v.benefit?.code || null;
+    const benefitCategory = v.benefit?.benefitType?.name || null;
+
+    return {
+      id: v.id,
+      encounterId: v.encounterId || v.visitCode || `ENC-${v.id.slice(0, 8).toUpperCase()}`,
+      status: v.status,
+      is3rdParty,
+      benefitId: v.benefitId || null,
+      benefitName,
+      benefitCode,
+      benefitCategory,
+      thirdPartyNotes: v.thirdPartyNotes || null,
+      companionName: is3rdParty ? (benefitName || 'Third-Party Partner Service') : (v.careCompanion?.name || 'Care Companion'),
+      companionPhoto: is3rdParty ? null : companionPhoto,
+      companionPhone: is3rdParty ? null : (v.careCompanion?.user?.phone || null),
+      scheduledDate: schedDateStr,
+      scheduledTime: v.scheduledTime ? new Date(v.scheduledTime).toISOString() : null,
+      scheduledStartTime: schedStartTime,
+      scheduledEndTime: schedEndTime,
+      scheduledTimeRange: `${schedStartTime} – ${schedEndTime}`,
+      dateStr: `${schedDateStr} • ${schedStartTime} – ${schedEndTime}`,
+      duration: durationText,
+      scheduledDurationText,
+      actualDurationText,
+      actualDurationMinutes,
+      rated: v.subscriberRating !== null && v.subscriberRating !== undefined,
+      rating: v.subscriberRating ?? null,          // subscriber's rating of the CC
+      beneficiaryRating: v.beneficiaryRating ?? null, // beneficiary's rating of the CC
+      activities: v.activitiesDone || [],
+      bp: bpReading?.value || null,
+      heartRate: hrReading?.value || null,
+      bloodSugar: bsReading?.value || null,
+      notes: v.visitSummary || v.notes,
+      // Detailed fields for Subscriber encounter modal
+      checkInTime: checkInTimeFormatted,
+      checkInTimeIso: v.checkInTime ? new Date(v.checkInTime).toISOString() : null,
+      checkInType,
+      isGeoVerified: v.isGeoVerified === true,
+      geoDistanceMeters: v.geoDistanceMeters ?? null,
+      manualCheckInReason: v.manualCheckInReason || null,
+      checkOutTime: checkOutTimeFormatted,
+      checkOutTimeIso: v.checkOutTime ? new Date(v.checkOutTime).toISOString() : null,
+      checkOutType,
+      manualCheckOutReason: v.manualCheckOutReason || null,
+      mood: v.mood ? (v.mood.charAt(0).toUpperCase() + v.mood.slice(1).toLowerCase()) : 'Neutral',
+      medicationAdherence: v.medicationAdherence,
+      medications: medicationsList,
+      vitals: vitalsList,
+      photos
+    };
+  }));
+
   return {
     ...beneficiary,
+    photo: resolvedBeneficiaryPhoto,
     emotionalScore: computedEmotionalScore,
     lastHappinessScore,   // null if no mood ever recorded in any visit
     isDefaultData,
     hoursUsedPercent,
     vitalsData,
     vitalsTrends,
-    // vitalConfigs is already included via the ...beneficiary spread above (from Prisma include)
-    nextVisit: nextVisit ? (() => {
-      const is3rdPartyNext = Boolean(nextVisit.is3rdParty || (!nextVisit.careCompanionId && !nextVisit.careCompanion));
-      const benefitName = nextVisit.benefit?.name || null;
-      return {
-        id: nextVisit.id,
-        is3rdParty: is3rdPartyNext,
-        benefitId: nextVisit.benefitId || null,
-        benefitName,
-        benefitCode: nextVisit.benefit?.code || null,
-        benefitCategory: nextVisit.benefit?.benefitType?.name || null,
-        thirdPartyNotes: nextVisit.thirdPartyNotes || null,
-        companionName: is3rdPartyNext ? (benefitName || 'Third-Party Partner Service') : (nextVisit.careCompanion?.name || 'Care Companion'),
-        companionPhoto: is3rdPartyNext ? null : (nextVisit.careCompanion?.photo || null),
-        companionPhone: is3rdPartyNext ? null : (nextVisit.careCompanion?.user?.phone || null),
-        dateStr: new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', month: 'short', day: 'numeric' }).format(nextVisit.scheduledTime),
-        timeStr: new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true }).format(nextVisit.scheduledTime),
-        scheduledTime: nextVisit.scheduledTime.toISOString(),
-        durationMinutes: nextVisit.durationMinutes,
-      };
-    })() : null,
-    timeline: pastVisits.map((v: any) => {
-      const istDateFormatter = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
-      const istTimeFormatter = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true });
-
-      const schedDate = new Date(v.scheduledTime);
-      const schedDateStr = istDateFormatter.format(schedDate);
-      const schedStartTime = istTimeFormatter.format(schedDate);
-      const schedEndTime = istTimeFormatter.format(new Date(schedDate.getTime() + (v.durationMinutes && v.durationMinutes >= 15 ? v.durationMinutes : 60) * 60000));
-
-      const checkInTime = v.checkInTime ? new Date(v.checkInTime) : null;
-      const checkOutTime = v.checkOutTime ? new Date(v.checkOutTime) : null;
-
-      const checkInTimeFormatted = checkInTime ? istTimeFormatter.format(checkInTime) : null;
-      const checkOutTimeFormatted = checkOutTime ? istTimeFormatter.format(checkOutTime) : null;
-
-      const defaultMins = (v.durationMinutes && v.durationMinutes >= 15) ? v.durationMinutes : 60;
-      let scheduledDurationText = '';
-      if (defaultMins < 60) {
-        scheduledDurationText = `${defaultMins} mins`;
-      } else {
-        const durationHours = parseFloat((defaultMins / 60).toFixed(1));
-        scheduledDurationText = `${durationHours} hour${durationHours !== 1 ? 's' : ''}`;
-      }
-
-      // Calculate actual duration strictly from check-in and check-out times
-      let durationText = '';
-      let actualDurationText: string | null = null;
-      let actualDurationMinutes: number | null = null;
-      
-      if (checkInTime && checkOutTime) {
-        const diffMs = checkOutTime.getTime() - checkInTime.getTime();
-        let diffMins = Math.round(diffMs / 60000);
-        if (diffMins <= 0 && diffMs > 0) diffMins = 1;
-        actualDurationMinutes = diffMins;
-        if (diffMins < 60) {
-          durationText = `${diffMins} min${diffMins !== 1 ? 's' : ''}`;
-        } else {
-          const durationHours = parseFloat((diffMins / 60).toFixed(1));
-          durationText = `${durationHours} hour${durationHours !== 1 ? 's' : ''}`;
-        }
-        actualDurationText = durationText;
-      } else {
-        durationText = scheduledDurationText;
-      }
-
-      // Extract vital readings
-      const vitalsList: any[] = [];
-      (v.vitalReadings || []).forEach((r: any) => {
-        const def = r.vitalDefinition;
-        if (!def) return;
-        let valStr = '';
-        if (def.dataType === 'dual_numeric') {
-          if (r.valueNumeric != null && r.valueNumeric2 != null) {
-            valStr = `${r.valueNumeric}/${r.valueNumeric2} ${def.unit || 'mmHg'}`.trim();
-          }
-        } else if (def.dataType === 'numeric') {
-          if (r.valueNumeric != null) {
-            valStr = `${r.valueNumeric} ${def.unit || ''}`.trim();
-          }
-        } else if (def.dataType === 'boolean') {
-          const isTrue = r.valueBoolean === true || String(r.valueText).toLowerCase() === 'yes';
-          valStr = isTrue ? (def.booleanTrueLabel || 'Yes') : (def.booleanFalseLabel || 'No');
-        } else if (def.dataType === 'text') {
-          if (r.valueText) valStr = r.valueText;
-        }
-
-        if (valStr) {
-          vitalsList.push({
-            id: def.id,
-            name: def.name,
-            code: def.code,
-            value: valStr,
-            unit: def.unit || ''
-          });
-        }
-      });
-
-      const bpReading = vitalsList.find(vl => vl.code === 'BP' || vl.name?.toLowerCase().includes('blood pressure'));
-      const hrReading = vitalsList.find(vl => vl.code === 'PULSE' || vl.code === 'HEART_RATE' || vl.name?.toLowerCase().includes('heart rate') || vl.name?.toLowerCase().includes('pulse'));
-      const bsReading = vitalsList.find(vl => vl.code === 'BLOOD_GLUCOSE' || vl.name?.toLowerCase().includes('sugar') || vl.name?.toLowerCase().includes('glucose'));
-
-      // Extract medication adherence records
-      const medicationsList = (v.medicationAdherenceRecords || []).map((mar: any) => ({
-        id: mar.medicationId,
-        name: mar.medication?.name || 'Medication',
-        dosage: mar.medication?.dosage || null,
-        instructions: mar.medication?.instructions || null,
-        taken: mar.taken === true
-      }));
-
-      let checkInType = 'Standard Check-in';
-      if (v.checkInTime) {
-        if (v.isGeoVerified) {
-          checkInType = `Auto Geofence (Verified${v.geoDistanceMeters != null ? ` • ${v.geoDistanceMeters}m` : ''})`;
-        } else if (v.manualCheckInReason) {
-          checkInType = 'Manual Check-in (Flagged)';
-        }
-      }
-
-      let checkOutType = 'Standard Check-out';
-      if (v.checkOutTime) {
-        if (v.manualCheckOutReason) {
-          checkOutType = 'Manual Check-out';
-        } else if (v.isGeoVerified) {
-          checkOutType = 'Auto Geofence (Verified)';
-        }
-      }
-
-      // Photos extraction
-      const photos = (() => {
-        const raw = (v as any).imageUrls;
-        if (!raw) return [];
-        if (Array.isArray(raw)) return raw;
-        if (typeof raw === 'string') {
-          try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) return parsed;
-          } catch {
-            return raw.split(',').map((s: string) => s.trim()).filter(Boolean);
-          }
-        }
-        return [];
-      })();
-
-      const is3rdParty = Boolean(v.is3rdParty || (!v.careCompanionId && !v.careCompanion));
-      const benefitName = v.benefit?.name || null;
-      const benefitCode = v.benefit?.code || null;
-      const benefitCategory = v.benefit?.benefitType?.name || null;
-
-      return {
-        id: v.id,
-        encounterId: v.encounterId || v.visitCode || `ENC-${v.id.slice(0, 8).toUpperCase()}`,
-        status: v.status,
-        is3rdParty,
-        benefitId: v.benefitId || null,
-        benefitName,
-        benefitCode,
-        benefitCategory,
-        thirdPartyNotes: v.thirdPartyNotes || null,
-        companionName: is3rdParty ? (benefitName || 'Third-Party Partner Service') : (v.careCompanion?.name || 'Care Companion'),
-        companionPhoto: is3rdParty ? null : (v.careCompanion?.photo || null),
-        companionPhone: is3rdParty ? null : (v.careCompanion?.user?.phone || null),
-        scheduledDate: schedDateStr,
-        scheduledTime: v.scheduledTime ? new Date(v.scheduledTime).toISOString() : null,
-        scheduledStartTime: schedStartTime,
-        scheduledEndTime: schedEndTime,
-        scheduledTimeRange: `${schedStartTime} – ${schedEndTime}`,
-        dateStr: `${schedDateStr} • ${schedStartTime} – ${schedEndTime}`,
-        duration: durationText,
-        scheduledDurationText,
-        actualDurationText,
-        actualDurationMinutes,
-        rated: v.subscriberRating !== null && v.subscriberRating !== undefined,
-        rating: v.subscriberRating ?? null,          // subscriber's rating of the CC
-        beneficiaryRating: v.beneficiaryRating ?? null, // beneficiary's rating of the CC
-        activities: v.activitiesDone || [],
-        bp: bpReading?.value || null,
-        heartRate: hrReading?.value || null,
-        bloodSugar: bsReading?.value || null,
-        notes: v.visitSummary || v.notes,
-        // Detailed fields for Subscriber encounter modal
-        checkInTime: checkInTimeFormatted,
-        checkInTimeIso: v.checkInTime ? new Date(v.checkInTime).toISOString() : null,
-        checkInType,
-        isGeoVerified: v.isGeoVerified === true,
-        geoDistanceMeters: v.geoDistanceMeters ?? null,
-        manualCheckInReason: v.manualCheckInReason || null,
-        checkOutTime: checkOutTimeFormatted,
-        checkOutTimeIso: v.checkOutTime ? new Date(v.checkOutTime).toISOString() : null,
-        checkOutType,
-        manualCheckOutReason: v.manualCheckOutReason || null,
-        mood: v.mood ? (v.mood.charAt(0).toUpperCase() + v.mood.slice(1).toLowerCase()) : 'Neutral',
-        medicationAdherence: v.medicationAdherence,
-        medications: medicationsList,
-        vitals: vitalsList,
-        photos
-      };
-    })
+    nextVisit: resolvedNextVisit,
+    timeline: resolvedTimeline
   };
 };
 

@@ -3,14 +3,14 @@ import { authenticate, AuthRequest } from '../shared/deps';
 import prisma from '../../core/database';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
-import { getStorageService } from '../../services/storage';
+import { getStorageService, resolveFileUrl } from '../../services/storage';
 
 const router = Router();
 
 // ─── Multer (memory storage) ──────────────────────────────────────────────────
 const uploadMiddleware = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB — no size restriction as per user request
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB — no size restriction
   fileFilter: (_req, file, cb) => {
     const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
     if (allowed.includes(file.mimetype)) {
@@ -22,18 +22,17 @@ const uploadMiddleware = multer({
 });
 
 /**
- * Upload buffer via the active storage provider and return the public URL.
- * Internally uses Supabase locally (STORAGE_PROVIDER=supabase, default)
- * and AWS S3 in deployed environments (STORAGE_PROVIDER=s3).
+ * Upload buffer via the active storage provider and return both storage path and presigned URL.
  */
 async function uploadFile(
   buffer: Buffer,
   path: string,
   mimeType: string
-): Promise<string> {
+): Promise<{ storageKey: string; presignedUrl: string }> {
   const storage = getStorageService();
   const result = await storage.upload(buffer, path, mimeType);
-  return result.url;
+  const presignedUrl = await storage.getPresignedUrl(result.path, 1800);
+  return { storageKey: result.path, presignedUrl };
 }
 
 /**
@@ -84,7 +83,6 @@ router.post('/upload', authenticate, (req: any, res: any, next: any) => {
     return res.status(400).json({ success: false, message: 'No file uploaded' });
   }
 
-
   try {
     // Fetch the requesting user's role (could be User or Volunteer)
     const user = await prisma.user.findUnique({
@@ -108,7 +106,6 @@ router.post('/upload', authenticate, (req: any, res: any, next: any) => {
       isVolunteer = true;
     }
 
-    let photoUrl: string;
     let updatedEntity: any;
 
     if (targetType === 'self') {
@@ -116,36 +113,36 @@ router.post('/upload', authenticate, (req: any, res: any, next: any) => {
       const mimeType = file.mimetype === 'image/jpg' ? 'image/jpeg' : file.mimetype;
       const role = isVolunteer ? 'volunteer' : user!.role;
       const storagePath = generateProfilePath(role, userId, file.originalname);
-      photoUrl = await uploadFile(file.buffer, storagePath, mimeType);
+      const { storageKey, presignedUrl } = await uploadFile(file.buffer, storagePath, mimeType);
 
       if (isVolunteer) {
         updatedEntity = await prisma.volunteer.update({
           where: { id: userId },
-          data: { profilePhoto: photoUrl },
+          data: { profilePhoto: storageKey },
           select: { id: true, name: true, profilePhoto: true },
         });
       } else if (user!.role === 'care_companion' && user!.careCompanionProfile) {
         // CC: update CareCompanion.photo
         updatedEntity = await prisma.careCompanion.update({
           where: { id: user!.careCompanionProfile.id },
-          data: { photo: photoUrl },
+          data: { photo: storageKey },
           select: { id: true, name: true, photo: true },
         });
         // Also update User.profilePhoto for consistency
-        await prisma.user.update({ where: { id: userId }, data: { profilePhoto: photoUrl } });
+        await prisma.user.update({ where: { id: userId }, data: { profilePhoto: storageKey } });
       } else if (user!.role === 'beneficiary' && user!.beneficiaryProfile) {
         // Beneficiary: update Beneficiary.photo
         updatedEntity = await prisma.beneficiary.update({
           where: { id: user!.beneficiaryProfile.id },
-          data: { photo: photoUrl },
+          data: { photo: storageKey },
           select: { id: true, name: true, photo: true },
         });
-        await prisma.user.update({ where: { id: userId }, data: { profilePhoto: photoUrl } });
+        await prisma.user.update({ where: { id: userId }, data: { profilePhoto: storageKey } });
       } else {
         // Subscriber (and any other role): update User.profilePhoto
         updatedEntity = await prisma.user.update({
           where: { id: userId },
-          data: { profilePhoto: photoUrl },
+          data: { profilePhoto: storageKey },
           select: { id: true, name: true, profilePhoto: true },
         });
       }
@@ -153,7 +150,8 @@ router.post('/upload', authenticate, (req: any, res: any, next: any) => {
       return res.json({
         success: true,
         message: 'Profile photo updated successfully',
-        url: photoUrl,
+        url: presignedUrl,
+        key: storageKey,
         data: updatedEntity,
       });
     }
@@ -179,18 +177,19 @@ router.post('/upload', authenticate, (req: any, res: any, next: any) => {
 
       const mimeType = file.mimetype === 'image/jpg' ? 'image/jpeg' : file.mimetype;
       const storagePath = generateProfilePath('beneficiary', targetId, file.originalname);
-      photoUrl = await uploadFile(file.buffer, storagePath, mimeType);
+      const { storageKey, presignedUrl } = await uploadFile(file.buffer, storagePath, mimeType);
 
       updatedEntity = await prisma.beneficiary.update({
         where: { id: targetId },
-        data: { photo: photoUrl },
+        data: { photo: storageKey },
         select: { id: true, name: true, photo: true },
       });
 
       return res.json({
         success: true,
         message: `${beneficiary.name}'s photo updated successfully`,
-        url: photoUrl,
+        url: presignedUrl,
+        key: storageKey,
         data: updatedEntity,
       });
     }
@@ -208,12 +207,23 @@ router.post('/upload', authenticate, (req: any, res: any, next: any) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const user = await prisma.user.findUnique({
+    let user: any = await prisma.user.findUnique({
       where: { id: req.userId! },
       select: { id: true, profilePhoto: true, name: true, role: true },
     });
 
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!user) {
+      const volunteer = await prisma.volunteer.findUnique({
+        where: { id: req.userId! },
+        select: { id: true, profilePhoto: true, name: true },
+      });
+      if (!volunteer) return res.status(404).json({ success: false, message: 'User not found' });
+      user = { ...volunteer, role: 'volunteer' };
+    }
+
+    if (user.profilePhoto) {
+      user.profilePhoto = await resolveFileUrl(user.profilePhoto, 1800);
+    }
 
     res.json({ success: true, data: user });
   } catch (error: any) {

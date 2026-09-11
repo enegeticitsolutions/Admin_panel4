@@ -3,7 +3,7 @@ import { authenticate, AuthRequest } from '../shared/deps';
 import prisma from '../../core/database';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
-import { getStorageService } from '../../services/storage';
+import { getStorageService, resolveFileUrls, extractStorageKey } from '../../services/storage';
 
 const router = Router();
 
@@ -34,14 +34,16 @@ const uploadMiddleware = multer({
 
 // ─── Storage (provider-agnostic) ────────────────────────────────────────────
 
-/** Upload a buffer via the active storage provider and return the public URL.
- *  Uses Supabase locally (STORAGE_PROVIDER=supabase, default)
- *  and AWS S3 in deployed environments (STORAGE_PROVIDER=s3).
- */
-async function uploadFile(buffer: Buffer, path: string, mimeType: string): Promise<string> {
+/** Upload a buffer via the active storage provider and return storageKey and presigned URL. */
+async function uploadFile(
+  buffer: Buffer,
+  path: string,
+  mimeType: string
+): Promise<{ storageKey: string; presignedUrl: string }> {
   const storage = getStorageService();
   const result = await storage.upload(buffer, path, mimeType);
-  return result.url;
+  const presignedUrl = await storage.getPresignedUrl(result.path, 1800);
+  return { storageKey: result.path, presignedUrl };
 }
 
 /** Safely parse the imageUrls JSON string field → string array.
@@ -49,7 +51,7 @@ async function uploadFile(buffer: Buffer, path: string, mimeType: string): Promi
  */
 function parseImageUrls(raw: string | string[] | null | undefined): string[] {
   if (!raw) return [];
-  if (Array.isArray(raw)) return raw; // should not happen at runtime, defensive guard
+  if (Array.isArray(raw)) return raw;
   try { return JSON.parse(raw) as string[]; }
   catch { return []; }
 }
@@ -72,15 +74,16 @@ router.get('/config', authenticate, (_req: AuthRequest, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/care-companion/visit-images/:visitId
-// Returns the current array of image URLs for a visit.
+// Returns the current array of presigned image URLs for a visit.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:visitId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const visitId = req.params.visitId as string;
-    // Use findUnique with no select so we get the full model (avoids select type issues)
     const visit = await prisma.visit.findUnique({ where: { id: visitId } });
     if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
-    res.json({ success: true, data: { imageUrls: parseImageUrls((visit as any).imageUrls) } });
+    const keys = parseImageUrls((visit as any).imageUrls);
+    const presignedUrls = await resolveFileUrls(keys, 1800);
+    res.json({ success: true, data: { imageUrls: presignedUrls } });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -141,21 +144,22 @@ router.post('/:visitId', authenticate, (req: any, res: any, next: any) => {
     const storagePath = `visits/${visitId}/${Date.now()}_${uid}.${ext}`;
 
     const mimeType = file.mimetype === 'image/jpg' ? 'image/jpeg' : file.mimetype;
-    const publicUrl = await uploadFile(file.buffer, storagePath, mimeType);
+    const { storageKey, presignedUrl } = await uploadFile(file.buffer, storagePath, mimeType);
 
-    // Append the new URL and persist
-    const updated = [...existing, publicUrl];
+    // Append the storage key and persist
+    const updated = [...existing, storageKey];
     await prisma.visit.update({
       where: { id: visitId },
       data: { imageUrls: JSON.stringify(updated) },
     });
 
-    console.log(`   ✅ Uploaded → ${publicUrl} (${updated.length}/${VISIT_IMAGE_MAX_COUNT})`);
+    console.log(`   ✅ Uploaded → ${storageKey} (${updated.length}/${VISIT_IMAGE_MAX_COUNT})`);
 
     res.json({
       success: true,
       message: 'Image uploaded successfully.',
-      url: publicUrl,
+      url: presignedUrl,
+      key: storageKey,
       totalImages: updated.length,
       maxImages: VISIT_IMAGE_MAX_COUNT,
     });
@@ -168,8 +172,7 @@ router.post('/:visitId', authenticate, (req: any, res: any, next: any) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/care-companion/visit-images/:visitId
 // Remove one image URL from the visit's imageUrls array.
-// Body: { "url": "https://..." }
-// Does NOT delete from S3/Supabase storage (safety — admins may still need it).
+// Body: { "url": "https://..." or "visits/..." }
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete('/:visitId', authenticate, async (req: AuthRequest, res: Response) => {
   const visitId = req.params.visitId as string;
@@ -191,7 +194,8 @@ router.delete('/:visitId', authenticate, async (req: AuthRequest, res: Response)
     }
 
     const existing = parseImageUrls((visit as any).imageUrls);
-    const updated = existing.filter(u => u !== url);
+    const targetKey = extractStorageKey(url) || url;
+    const updated = existing.filter(u => u !== url && extractStorageKey(u) !== targetKey);
 
     if (updated.length === existing.length) {
       return res.status(404).json({ success: false, message: 'Image URL not found in this visit.' });

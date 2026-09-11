@@ -110,13 +110,13 @@ export function PhotoPickerInput({
         source === 'camera'
           ? await ImagePicker.launchCameraAsync({
             mediaTypes: ['images'],
-            quality: 0.85,
+            quality: 0.5,
             allowsEditing: true,
             aspect: [1, 1],
           })
           : await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
-            quality: 0.85,
+            quality: 0.5,
             allowsEditing: true,
             aspect: [1, 1],
           });
