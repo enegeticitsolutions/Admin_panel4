@@ -1,9 +1,21 @@
 import { config } from 'dotenv';
 import path from 'path';
 
-// Load environment variables
-config({ path: path.resolve(__dirname, '../../../../apps/api/.env') });
-config({ path: path.resolve(__dirname, '../../.env') });
+import fs from 'fs';
+
+// Load environment variables across possible monorepo locations
+const envPaths = [
+  path.resolve(__dirname, '../../.env'),
+  path.resolve(__dirname, '../../../apps/api/.env'),
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), 'apps/api/.env'),
+];
+
+for (const p of envPaths) {
+  if (fs.existsSync(p)) {
+    config({ path: p });
+  }
+}
 
 import { NotificationConsumer } from '../redis/notification.consumer';
 import { checkRedisHealth, closeRedisClient } from '../redis/redis.connection';

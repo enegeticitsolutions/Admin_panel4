@@ -97,42 +97,66 @@ export default function NotificationsScreen() {
     return `${Math.floor(diffInSeconds / 86400)}d ago`;
   };
 
-  const getIconForType = (type: string) => {
-    switch (type) {
-      case 'visit_reminder': return 'calendar-outline';
-      case 'appointment_confirmed': return 'checkmark-circle-outline';
-      case 'emergency_alert': return 'warning-outline';
-      default: return 'notifications-outline';
-    }
+  const getIconForType = (type: string, category?: string) => {
+    const key = (category || type || '').toLowerCase();
+    if (key.includes('emergency') || key.includes('alert') || key.includes('urgent')) return 'warning-outline';
+    if (key.includes('onboarding') || key.includes('profile')) return 'person-circle-outline';
+    if (key.includes('matching') || key.includes('match') || key.includes('beneficiary')) return 'people-outline';
+    if (key.includes('hour') || key.includes('visit') || key.includes('checkout') || key.includes('checkin')) return 'time-outline';
+    if (key.includes('credit') || key.includes('reward') || key.includes('badge')) return 'trophy-outline';
+    if (key.includes('support') || key.includes('guide') || key.includes('faq')) return 'help-circle-outline';
+    if (key.includes('coordinator') || key.includes('feedback')) return 'chatbubble-ellipses-outline';
+    return 'notifications-outline';
   };
 
-  const getIconColorForType = (type: string) => {
-    switch (type) {
-      case 'visit_reminder': return '#2563EB'; // Blue
-      case 'appointment_confirmed': return '#10B981'; // Green
-      case 'emergency_alert': return '#EF4444'; // Red
-      default: return '#6B7280'; // Gray
-    }
+  const getIconColorForType = (type: string, category?: string) => {
+    const key = (category || type || '').toLowerCase();
+    if (key.includes('emergency') || key.includes('alert') || key.includes('urgent')) return '#EF4444'; // Red
+    if (key.includes('matching') || key.includes('match')) return '#10B981'; // Green
+    if (key.includes('hour') || key.includes('visit')) return '#2563EB'; // Blue
+    if (key.includes('credit') || key.includes('reward')) return '#FE6700'; // Orange
+    if (key.includes('profile') || key.includes('onboarding')) return '#8B5CF6'; // Purple
+    if (key.includes('support') || key.includes('guide')) return '#06B6D4'; // Cyan
+    if (key.includes('coordinator') || key.includes('feedback')) return '#F59E0B'; // Amber
+    return '#6B7280'; // Gray
   };
 
-  const renderItem = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-      style={[styles.notificationCard, !item.isRead && styles.unreadCard]}
-      onPress={() => {
-        if (!item.isRead) markAsRead(item.id);
-      }}
-    >
-      <View style={[styles.iconContainer, { backgroundColor: getIconColorForType(item.type) + '15' }]}>
-        <Ionicons name={getIconForType(item.type) as any} size={24} color={getIconColorForType(item.type)} />
-      </View>
-      <View style={styles.contentContainer}>
-        <Text style={[styles.title, !item.isRead && styles.unreadTitle]}>{item.title}</Text>
-        <Text style={styles.body}>{item.body}</Text>
-        <Text style={styles.time}>{getTimeAgo(item.createdAt || item.sentAt)}</Text>
-      </View>
-      {!item.isRead && <View style={styles.unreadDot} />}
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item }: { item: any }) => {
+    const category = item.data?.category || item.category;
+    const targetScreen = item.data?.screen || item.data?.targetScreen;
+
+    return (
+      <TouchableOpacity 
+        style={[styles.notificationCard, !item.isRead && styles.unreadCard]}
+        activeOpacity={0.7}
+        onPress={() => {
+          if (!item.isRead) markAsRead(item.id);
+          if (targetScreen) {
+            try {
+              router.push(targetScreen as any);
+            } catch (e) {
+              console.log('Error navigating from notification:', e);
+            }
+          }
+        }}
+      >
+        <View style={[styles.iconContainer, { backgroundColor: getIconColorForType(item.type, category) + '15' }]}>
+          <Ionicons name={getIconForType(item.type, category) as any} size={24} color={getIconColorForType(item.type, category)} />
+        </View>
+        <View style={styles.contentContainer}>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, !item.isRead && styles.unreadTitle]}>{item.title}</Text>
+            {targetScreen && (
+              <Ionicons name="chevron-forward" size={16} color="#9CA3AF" style={styles.chevron} />
+            )}
+          </View>
+          <Text style={styles.body}>{item.body}</Text>
+          <Text style={styles.time}>{getTimeAgo(item.createdAt || item.sentAt)}</Text>
+        </View>
+        {!item.isRead && <View style={styles.unreadDot} />}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -237,11 +261,20 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  chevron: {
+    marginLeft: 4,
+  },
   title: {
     fontSize: 16,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 4,
+    flex: 1,
   },
   unreadTitle: {
     color: '#111827',

@@ -126,6 +126,11 @@ export const getBeneficiarySathiEligibility = async (beneficiaryId: string) => {
   return { eligible, remainingUnits, sathiBalanceId };
 };
 
+import {
+  dispatchSaathiVisitRequestReceived,
+  dispatchSaathiVisitConfirmedByBeneficiary
+} from '../sathi/sathi-notification.dispatcher';
+
 export const createSathiVisitRequest = async (beneficiaryId: string, dateTime: string, reason: string, targetVolunteerId?: string) => {
   const { eligible, remainingUnits } = await getBeneficiarySathiEligibility(beneficiaryId);
   if (!eligible) {
@@ -147,6 +152,27 @@ export const createSathiVisitRequest = async (beneficiaryId: string, dateTime: s
       beneficiary: true
     }
   });
+
+  // ST-012: Dispatch New Visit Request in-app & push notification to target volunteer
+  if (targetVolunteerId) {
+    dispatchSaathiVisitRequestReceived(targetVolunteerId, {
+      beneficiaryName: request.beneficiary?.name || 'Beneficiary',
+      requestId: request.id
+    }).catch(err => console.warn('[createSathiVisitRequest:Notification Error]:', err.message));
+  } else {
+    // Notify connected volunteers for this beneficiary
+    prisma.volunteerAssignment.findMany({
+      where: { beneficiaryId, isActive: true },
+      select: { volunteerId: true }
+    }).then(assignments => {
+      for (const a of assignments) {
+        dispatchSaathiVisitRequestReceived(a.volunteerId, {
+          beneficiaryName: request.beneficiary?.name || 'Beneficiary',
+          requestId: request.id
+        }).catch(err => console.warn('[createSathiVisitRequest:Notification Error]:', err.message));
+      }
+    }).catch(() => {});
+  }
 
   return request;
 };
@@ -446,6 +472,7 @@ export const completeSathiVisit = async (beneficiaryId: string, requestId: strin
   const config = await prisma.systemConfig.findUnique({ where: { key: 'SATHI_CREDIT_RATE' } });
   const creditRate = parseFloat(config ? config.value : '10');
   const pointsEarned = hoursEarned * creditRate;
+  const targetVolId = request.volunteerId || activeLog?.volunteerId;
 
   const updatedRequest = await prisma.$transaction(async (tx) => {
     // 1. Update SathiVisitRequest to COMPLETED
@@ -533,7 +560,6 @@ export const completeSathiVisit = async (beneficiaryId: string, requestId: strin
 
 
     // 3. Update volunteer points & credit transaction
-    const targetVolId = request.volunteerId || activeLog?.volunteerId;
     if (targetVolId) {
       const volunteer = await tx.volunteer.findUnique({
         where: { id: targetVolId }
@@ -607,6 +633,20 @@ export const completeSathiVisit = async (beneficiaryId: string, requestId: strin
 
     return completedReq;
   });
+
+  // ST-023: Beneficiary confirmed visit completion push & in-app notification
+  if (targetVolId) {
+    prisma.beneficiary.findUnique({
+      where: { id: beneficiaryId },
+      select: { name: true }
+    }).then(b => {
+      dispatchSaathiVisitConfirmedByBeneficiary(targetVolId, {
+        beneficiaryName: b?.name || 'Beneficiary',
+        points: pointsEarned.toFixed(0),
+        visitId: activeLog?.id || requestId,
+      }).catch(err => console.warn('[completeSathiVisit:ST-023 Error]:', err.message));
+    }).catch(() => {});
+  }
 
   return { request: updatedRequest, message: `Visit marked as completed successfully. Logged ${hoursEarned.toFixed(1)} hours.` };
 };

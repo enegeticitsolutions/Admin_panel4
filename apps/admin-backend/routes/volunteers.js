@@ -1,7 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { prisma } = require('../lib/prisma');
-const { dispatchSaathiProfileApproved } = require('../services/events/community-event.dispatcher');
+const {
+  dispatchSaathiProfileApproved,
+  dispatchSaathiBeneficiaryMatched,
+  dispatchSaathiBeneficiaryUnmatched,
+} = require('../services/events/sathi-event.dispatcher');
 
 // GET /api/volunteers — list volunteers with optional status filter
 router.get('/', async (req, res) => {
@@ -87,12 +90,12 @@ router.patch('/:id/verify', async (req, res) => {
       }
     });
 
-    // Zero latency impact: fire notification in background
+    // ST-003: Profile verified & activated push & in-app notification
     setImmediate(() => {
       dispatchSaathiProfileApproved({
+        volunteerId: volunteer.id,
         volunteerName: volunteer.name,
         volunteerPhone: volunteer.phone,
-        volunteerUserId: volunteer.userId,
       }).catch(err => console.error('[VolunteersRoute] Notification Error:', err.message));
     });
 
@@ -395,6 +398,24 @@ router.post('/:id/assignments', async (req, res) => {
       }
     });
 
+    // ST-010: New beneficiary match assigned push & in-app notification
+    setImmediate(() => {
+      prisma.volunteer.findUnique({
+        where: { id: volunteerId },
+        select: { name: true, phone: true }
+      }).then(vol => {
+        if (vol && assignment.beneficiary?.name) {
+          dispatchSaathiBeneficiaryMatched({
+            volunteerId,
+            volunteerName: vol.name,
+            volunteerPhone: vol.phone,
+            beneficiaryName: assignment.beneficiary.name,
+            distanceKm: '2.5'
+          }).catch(err => console.error('[VolunteersRoute:ST-010 Error]:', err.message));
+        }
+      }).catch(() => {});
+    });
+
     res.status(201).json({ success: true, data: assignment, message: 'Beneficiary assigned successfully' });
   } catch (err) {
     console.error('POST assignment error:', err);
@@ -415,6 +436,28 @@ router.delete('/:id/assignments/:beneficiaryId', async (req, res) => {
       data: {
         isActive: false
       }
+    });
+
+    // ST-011: Beneficiary unassigned / match removed push & in-app notification
+    setImmediate(() => {
+      prisma.volunteer.findUnique({
+        where: { id: volunteerId },
+        select: { name: true, phone: true }
+      }).then(vol => {
+        prisma.beneficiary.findUnique({
+          where: { id: beneficiaryId },
+          select: { name: true }
+        }).then(ben => {
+          if (vol && ben) {
+            dispatchSaathiBeneficiaryUnmatched({
+              volunteerId,
+              volunteerName: vol.name,
+              volunteerPhone: vol.phone,
+              beneficiaryName: ben.name,
+            }).catch(err => console.error('[VolunteersRoute:ST-011 Error]:', err.message));
+          }
+        }).catch(() => {});
+      }).catch(() => {});
     });
 
     res.json({ success: true, message: 'Assignment removed successfully' });

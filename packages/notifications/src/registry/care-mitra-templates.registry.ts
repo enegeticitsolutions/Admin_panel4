@@ -1,5 +1,5 @@
 export type NotificationChannelType = 'push' | 'whatsapp' | 'email' | 'sms' | 'in_app';
-export type NotificationPriority = 'high' | 'normal' | 'low';
+export type NotificationPriority = 'critical' | 'high' | 'normal' | 'low';
 export type WhatsAppCategory = 'Utility' | 'Marketing' | 'Authentication';
 
 export interface CareMitraTemplateDefinition {

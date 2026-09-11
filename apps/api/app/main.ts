@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { config } from './core/config';
 import { ApiError } from './utils/ApiError';
+import { checkRedisHealth } from '@maihoonna/notifications';
 
 // Auth Routes
 import authRouter from './api/auth/auth.routes';
@@ -146,6 +147,18 @@ fileResourceRegistry.register(new BeneficiaryPhotoResource());
 
 app.get(`${API}`, (_req, res) => {
   res.json({ message: 'MaiHoonNa Role-Based API', version: '2.0.0', status: 'active' });
+});
+
+app.get(`${API}/health/redis`, async (_req, res) => {
+  const isHealthy = await checkRedisHealth();
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'healthy' : 'degraded',
+    service: 'redis',
+    connected: isHealthy,
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: process.env.REDIS_PORT || 6379,
+    mode: isHealthy ? 'redis_streams' : 'in_process_fallback',
+  });
 });
 
 // Auth Route
