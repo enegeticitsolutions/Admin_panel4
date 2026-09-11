@@ -28,6 +28,7 @@ import { SathiBottomNav } from '@/components/shared/SathiBottomNav';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
+import { useAuth } from '@/contexts/AuthContext';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 
 
@@ -43,6 +44,7 @@ export default function SathiDashboard() {
   useAndroidBackHandler();
   const { width } = useWindowDimensions();
   const router = useRouter();
+  const { logout } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -221,17 +223,21 @@ export default function SathiDashboard() {
         },
       });
 
-      if (response.status === 401) {
-        handleLogout();
+      if (response.status === 401 || response.status === 403 || response.status === 404) {
+        console.warn(`[Dashboard] Auth/Profile error (HTTP ${response.status}). Redirecting to login.`);
+        await handleLogout();
         return;
       }
-      if (!response.ok) throw new Error('Dashboard data error');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || `Dashboard data error (${response.status})`);
+      }
       const data = await response.json();
       setDashboard(data.data || data);
       setError(null);
-    } catch (error) {
+    } catch (error: any) {
       console.log('Error fetching dashboard:', error);
-      setError('Unable to load dashboard. Please check your connection.');
+      setError(error?.message || 'Unable to load dashboard. Please check your connection.');
     } finally {
       setLoading(false);
     }
@@ -268,11 +274,13 @@ export default function SathiDashboard() {
 
   const handleLogout = async () => {
     try {
+      await logout();
+      replace('/(auth)');
+    } catch (error) {
+      console.error('Logout error:', error);
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('userData');
       replace('/(auth)');
-    } catch (error) {
-      console.error(error);
     }
   };
 
@@ -533,6 +541,12 @@ export default function SathiDashboard() {
           onPress={() => { setLoading(true); fetchDashboardData(); }}
         >
           <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: scale(16) }}>Retry</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={{ marginTop: scale(14), paddingHorizontal: scale(20), paddingVertical: scale(10) }}
+          onPress={handleLogout}
+        >
+          <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: scale(15) }}>Log Out / Switch Account</Text>
         </TouchableOpacity>
       </View>
     );

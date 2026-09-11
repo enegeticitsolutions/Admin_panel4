@@ -155,7 +155,7 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
     }
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
-      quality: 0.5,
+      quality: 0.3,
       allowsEditing: true,
       aspect: [1, 1],
     });
@@ -172,7 +172,7 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.5,
+      quality: 0.3,
       allowsEditing: true,
       aspect: [1, 1],
     });

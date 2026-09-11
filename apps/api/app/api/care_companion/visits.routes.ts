@@ -3,6 +3,7 @@ import { authenticate, validate } from '../shared/deps';
 import { createVisitSchema, checkInSchema, checkOutSchema, rateVisitSchema, saveDetailsSchema } from '../../schemas/visit';
 import * as visitService from '../../services/care_companion/visit_service';
 import prisma from '../../core/database';
+import { resolveFileUrl } from '../../services/storage/urlResolver';
 
 const router = Router();
 
@@ -423,7 +424,7 @@ router.get('/:visitId/details', authenticate, async (req: Request, res: Response
           streetArea: visit.beneficiary.streetArea,
           city: visit.beneficiary.city,
           pincode: visit.beneficiary.pincode,
-          photo: visit.beneficiary.photo || null,
+          photo: visit.beneficiary.photo ? await resolveFileUrl(visit.beneficiary.photo, 1800) : null,
           // GPS coordinates for client-side geo-fencing preview
           latitude: visit.beneficiary.latitude || null,
           longitude: visit.beneficiary.longitude || null,

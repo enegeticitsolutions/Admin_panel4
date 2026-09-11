@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../../core/database';
 import { authenticate, AuthRequest } from '../shared/deps';
 import { notificationProducer } from '@maihoonna/notifications';
+import { resolveFileUrl } from '../../services/storage';
 
 const router = Router();
 
@@ -132,7 +133,7 @@ async function handleBeneficiaryDashboard(req: AuthRequest, res: Response) {
                     name: beneficiary.primaryCC.name,
                     role: 'Primary Care Coordinator',
                     bio: beneficiary.primaryCC.bio || 'Experienced care companion.',
-                    photo: beneficiary.primaryCC.photo,
+                    photo: beneficiary.primaryCC.photo ? await resolveFileUrl(beneficiary.primaryCC.photo, 1800) : null,
                     phone: (beneficiary.primaryCC as any).user?.phone || null
                 } : null,
                 todaysMedications
@@ -178,7 +179,7 @@ router.get('/:userId/team', authenticate, async (req: AuthRequest, res: Response
                 name: beneficiary.primaryCC.name,
                 role: 'Primary Care Coordinator',
                 bio: beneficiary.primaryCC.bio || '',
-                photo: beneficiary.primaryCC.photo,
+                photo: beneficiary.primaryCC.photo ? await resolveFileUrl(beneficiary.primaryCC.photo, 1800) : null,
                 phone: (beneficiary.primaryCC as any).user?.phone || null
             });
         }
@@ -190,7 +191,7 @@ router.get('/:userId/team', authenticate, async (req: AuthRequest, res: Response
                 name: beneficiary.secondaryCC.name,
                 role: 'Secondary Care Coordinator',
                 bio: beneficiary.secondaryCC.bio || '',
-                photo: beneficiary.secondaryCC.photo,
+                photo: beneficiary.secondaryCC.photo ? await resolveFileUrl(beneficiary.secondaryCC.photo, 1800) : null,
                 phone: (beneficiary.secondaryCC as any).user?.phone || null
             });
         }
@@ -203,7 +204,7 @@ router.get('/:userId/team', authenticate, async (req: AuthRequest, res: Response
                 name: fmProfile.name || 'Field Manager',
                 role: 'Field Manager',
                 bio: fmProfile.bio || '',
-                photo: fmProfile.photo || null, 
+                photo: fmProfile.photo ? await resolveFileUrl(fmProfile.photo, 1800) : null, 
                 phone: fmProfile.phone || fmProfile.user?.phone || null
             });
         }

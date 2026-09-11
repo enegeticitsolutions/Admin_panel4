@@ -144,12 +144,12 @@ export function VisitImageGallery({ visitId, token, isCompleted = false }: Visit
     const result = source === 'camera'
       ? await ImagePicker.launchCameraAsync({
           mediaTypes: ['images'],
-          quality: 0.5,
+          quality: 0.3,
           allowsEditing: false,
         })
       : await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
-          quality: 0.5,
+          quality: 0.3,
           allowsEditing: false,
           allowsMultipleSelection: false,
         });

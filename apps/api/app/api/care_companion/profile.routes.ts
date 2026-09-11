@@ -197,7 +197,14 @@ router.get('/assigned-beneficiaries', authenticate, async (req: Request, res: Re
       }
     });
 
-    res.json({ success: true, data: beneficiaries });
+    const resolvedBeneficiaries = await Promise.all(
+      beneficiaries.map(async (b) => ({
+        ...b,
+        photo: b.photo ? await resolveFileUrl(b.photo, 1800) : null,
+      }))
+    );
+
+    res.json({ success: true, data: resolvedBeneficiaries });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

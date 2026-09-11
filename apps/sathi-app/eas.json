@@ -40,6 +40,8 @@
       "autoIncrement": true,
       "node": "22.14.0",
       "env": {
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_PRODUCTION_API_URL": "https://api.maihoonna.com/app-api",
         "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_live_TZ3KKOCt6TIiSt"
       }
     }

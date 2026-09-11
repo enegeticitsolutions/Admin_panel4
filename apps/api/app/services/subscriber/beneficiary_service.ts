@@ -173,11 +173,18 @@ export const createBeneficiary = async (data: {
 export const getBeneficiary = async (beneficiaryId: string) => {
   const b = await prisma.beneficiary.findUnique({ where: { id: beneficiaryId } });
   if (!b) throw new Error('Beneficiary not found');
-  return b;
+  const resolvedPhoto = b.photo ? await resolveFileUrl(b.photo, 1800) : null;
+  return { ...b, photo: resolvedPhoto };
 };
 
 export const getSubscriberBeneficiaries = async (subscriberId: string) => {
-  return prisma.beneficiary.findMany({ where: { subscriberId, status: { not: 'deleted' } } });
+  const beneficiaries = await prisma.beneficiary.findMany({ where: { subscriberId, status: { not: 'deleted' } } });
+  return Promise.all(
+    beneficiaries.map(async (b) => ({
+      ...b,
+      photo: b.photo ? await resolveFileUrl(b.photo, 1800) : null,
+    }))
+  );
 };
 
 export const getSathiEligibleBeneficiaries = async (subscriberId: string) => {

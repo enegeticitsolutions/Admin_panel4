@@ -107,7 +107,7 @@ export default function SathiProfile() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.5,
+      quality: 0.3,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -123,7 +123,7 @@ export default function SathiProfile() {
 
       const filename = uri.split('/').pop() || 'photo.jpg';
       const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image`;
+      const type = match ? `image/${match[1]}` : `image/jpeg`;
 
       const formData = new FormData();
       formData.append('file', { uri, name: filename, type } as any);
@@ -137,12 +137,30 @@ export default function SathiProfile() {
         body: formData,
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        if (response.status === 413) {
+          throw new Error('Photo file size is too large for upload. Please select a smaller photo.');
+        }
+        throw new Error(`Upload failed (Server HTTP ${response.status || 'unknown'}). Please try again.`);
+      }
+
       if (response.ok && data.success) {
         setProfile((prev: any) => ({ ...prev, profilePhoto: data.url }));
+        try {
+          const stored = await AsyncStorage.getItem('userData');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            parsed.profilePhoto = data.url;
+            await AsyncStorage.setItem('userData', JSON.stringify(parsed));
+          }
+        } catch (_) {}
         Alert.alert('Success', 'Profile photo updated!');
       } else {
-        throw new Error(data.message || 'Upload failed');
+        throw new Error(data?.message || 'Upload failed');
       }
     } catch (error: any) {
       console.error('Upload Error:', error);
@@ -233,7 +251,10 @@ export default function SathiProfile() {
         <View style={styles.profileHeaderCard}>
           <View style={styles.avatarContainer}>
             {profile?.profilePhoto ? (
-              <Image source={{ uri: sanitizeImageUri(profile.profilePhoto) }} style={styles.avatarImage} />
+              <Image 
+                source={{ uri: sanitizeImageUri(profile.profilePhoto, `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.name || 'Saathi')}&background=FE6700&color=FFFFFF&bold=true`) }} 
+                style={styles.avatarImage} 
+              />
             ) : (
               <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
                 <Ionicons name="person" size={50} color="#9CA3AF" />

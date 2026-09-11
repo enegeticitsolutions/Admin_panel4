@@ -381,7 +381,8 @@ export const updateVolunteerProfile = async (id: string, data: any) => {
     dispatchSaathiProfileUpdated(id, updated.name).catch(() => {});
   }
 
-  return updated;
+  const resolvedPhoto = updated.profilePhoto ? await resolveFileUrl(updated.profilePhoto, 1800) : updated.profilePhoto;
+  return { ...updated, profilePhoto: resolvedPhoto };
 };
 
 export const getVolunteerReviews = async (id: string) => {
@@ -501,6 +502,7 @@ export const getVolunteerDashboard = async (id: string) => {
           address: true,
           latitude: true,
           longitude: true,
+          hobbiesInterests: true,
           _count: {
             select: { volunteerVisitLogs: true }
           }
@@ -542,6 +544,58 @@ export const getVolunteerDashboard = async (id: string) => {
     }
   });
 
+  const resolvedVolunteerPhoto = volunteer.profilePhoto ? await resolveFileUrl(volunteer.profilePhoto, 1800) : null;
+
+  const assignedBeneficiaries = await Promise.all(volunteer.assignments.map(async a => ({
+    id: a.beneficiary.id,
+    name: a.beneficiary.name,
+    photo: a.beneficiary.photo ? await resolveFileUrl(a.beneficiary.photo, 1800) : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
+    age: a.beneficiary.age,
+    location: a.beneficiary.address,
+    distance: calculateDistance(volunteer.latitude, volunteer.longitude, a.beneficiary.latitude, a.beneficiary.longitude),
+    hobbies: a.beneficiary.hobbiesInterests || [],
+    assignedAt: a.createdAt.toISOString()
+  })));
+
+  const resolvedVisitRequests = await Promise.all(pendingRequests.map(async r => {
+    const lastVisitTime = r.beneficiary.volunteerVisitLogs?.[0]?.checkInTime;
+    const lastVisit = lastVisitTime ? new Date(lastVisitTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+    return {
+      id: r.id,
+      beneficiaryId: r.beneficiaryId,
+      name: r.beneficiary.name,
+      photo: r.beneficiary.photo ? await resolveFileUrl(r.beneficiary.photo, 1800) : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120',
+      age: r.beneficiary.age,
+      location: r.beneficiary.address,
+      distance: calculateDistance(volunteer.latitude, volunteer.longitude, r.beneficiary.latitude, r.beneficiary.longitude),
+      dateTime: r.dateTime.toISOString(),
+      reason: r.reason,
+      bio: '', // Beneficiary has no bio field in Prisma schema
+      hobbies: r.beneficiary.hobbiesInterests || [],
+      totalVisits: r.beneficiary._count?.volunteerVisitLogs || 0,
+      lastVisit: lastVisit
+    };
+  }));
+
+  const resolvedUpcomingVisits = await Promise.all(upcomingVisits.map(async v => {
+    const assignment = volunteer.assignments.find(a => a.beneficiaryId === v.beneficiaryId);
+    return {
+      id: v.id,
+      beneficiaryId: v.beneficiaryId,
+      assignmentId: assignment ? assignment.id : undefined,
+      name: v.beneficiary.name,
+      photo: v.beneficiary.photo ? await resolveFileUrl(v.beneficiary.photo, 1800) : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120',
+      age: v.beneficiary.age,
+      location: v.beneficiary.address,
+      distance: calculateDistance(volunteer.latitude, volunteer.longitude, v.beneficiary.latitude, v.beneficiary.longitude),
+      dateTime: v.dateTime.toISOString(),
+      reason: v.reason,
+      visitCount: v.beneficiary._count?.volunteerVisitLogs || 0,
+      hobbies: v.beneficiary.hobbiesInterests || [],
+      status: v.status
+    };
+  }));
+
   return {
     applicationStatus: volunteer.applicationStatus,
     rejectionReason: volunteer.rejectionReason,
@@ -551,7 +605,7 @@ export const getVolunteerDashboard = async (id: string) => {
     name: volunteer.name,
     city: volunteer.city,
     state: volunteer.state,
-    profilePhoto: volunteer.profilePhoto,
+    profilePhoto: resolvedVolunteerPhoto,
     totalCreditHours: volunteer.totalCreditHours,
     totalCreditPoints: volunteer.totalCreditPoints,
     monthlyGoalHours: volunteer.monthlyGoalHours,
@@ -560,52 +614,9 @@ export const getVolunteerDashboard = async (id: string) => {
     totalVisits,
     beneficiariesCount: volunteer.assignments.length,
     activeVisit: volunteer.visitLogs[0] || null,
-    assignedBeneficiaries: volunteer.assignments.map(a => ({
-      id: a.beneficiary.id,
-      name: a.beneficiary.name,
-      photo: a.beneficiary.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      age: a.beneficiary.age,
-      location: a.beneficiary.address,
-      distance: calculateDistance(volunteer.latitude, volunteer.longitude, a.beneficiary.latitude, a.beneficiary.longitude),
-      hobbies: a.beneficiary.hobbiesInterests || [],
-      assignedAt: a.createdAt.toISOString()
-    })),
-    visitRequests: pendingRequests.map(r => {
-      const lastVisitTime = r.beneficiary.volunteerVisitLogs?.[0]?.checkInTime;
-      const lastVisit = lastVisitTime ? new Date(lastVisitTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null;
-      return {
-        id: r.id,
-        beneficiaryId: r.beneficiaryId,
-        name: r.beneficiary.name,
-        photo: r.beneficiary.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120',
-        age: r.beneficiary.age,
-        location: r.beneficiary.address,
-        distance: calculateDistance(volunteer.latitude, volunteer.longitude, r.beneficiary.latitude, r.beneficiary.longitude),
-        dateTime: r.dateTime.toISOString(),
-        reason: r.reason,
-        bio: '', // Beneficiary has no bio field in Prisma schema
-        hobbies: r.beneficiary.hobbiesInterests || [],
-        totalVisits: r.beneficiary._count?.volunteerVisitLogs || 0,
-        lastVisit: lastVisit
-      };
-    }),
-    upcomingVisits: upcomingVisits.map(v => {
-      const assignment = volunteer.assignments.find(a => a.beneficiaryId === v.beneficiaryId);
-      return {
-        id: v.id,
-        beneficiaryId: v.beneficiaryId,
-        assignmentId: assignment ? assignment.id : undefined,
-        name: v.beneficiary.name,
-        photo: v.beneficiary.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120',
-        age: v.beneficiary.age,
-        location: v.beneficiary.address,
-        distance: calculateDistance(volunteer.latitude, volunteer.longitude, v.beneficiary.latitude, v.beneficiary.longitude),
-        dateTime: v.dateTime.toISOString(),
-        reason: v.reason,
-        visitCount: v.beneficiary._count?.volunteerVisitLogs || 0,
-        status: v.status
-      };
-    })
+    assignedBeneficiaries,
+    visitRequests: resolvedVisitRequests,
+    upcomingVisits: resolvedUpcomingVisits
   };
 };
 

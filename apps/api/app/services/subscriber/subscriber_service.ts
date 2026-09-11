@@ -192,8 +192,10 @@ export const updateProfile = async (subscriberId: string, data: {
   await logActivity(subscriberId, 'PROFILE', 'PROFILE_UPDATED', { fieldsChanged: Object.keys(data) });
 
   // Return updated user with address fallbacks to match expected schema
+  const resolvedProfilePhoto = updatedUser.profilePhoto ? await resolveFileUrl(updatedUser.profilePhoto) : null;
   return {
     ...updatedUser,
+    profilePhoto: resolvedProfilePhoto,
     flatPlot: data.flatPlot || '',
     streetArea: data.streetArea || '',
     landmark: data.landmark || '',
