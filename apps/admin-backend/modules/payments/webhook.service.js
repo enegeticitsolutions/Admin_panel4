@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const clean = (s) => (s || '').toString().replace(/^["']|["']$/g, '').trim();
 
 function getWebhookSecret() {
-  return clean(process.env.RAZORPAY_WEBHOOK_SECRET || 'maihoonna_webhook_secret_2026');
+  return clean(process.env.RAZORPAY_WEBHOOK_SECRET);
 }
 
 /**
@@ -10,10 +10,13 @@ function getWebhookSecret() {
  */
 function verifySignature(bodyBuffer, signature) {
   const secret = getWebhookSecret();
-  if (!secret || !signature) {
-    // If secret or signature is absent in local dev, allow processing with warning
-    console.warn('[Webhook Service] Signature verification skipped (secret or signature missing)');
-    return true;
+  if (!secret) {
+    console.error('[Webhook Service] CRITICAL: RAZORPAY_WEBHOOK_SECRET is not configured in environment.');
+    return false;
+  }
+  if (!signature || !bodyBuffer) {
+    console.warn('[Webhook Service] Webhook rejected: missing signature or empty payload body.');
+    return false;
   }
 
   try {
@@ -22,12 +25,14 @@ function verifySignature(bodyBuffer, signature) {
       .update(bodyBuffer)
       .digest('hex');
 
-    const isValid = crypto.timingSafeEqual(
-      Buffer.from(signature, 'utf-8'),
-      Buffer.from(expectedSignature, 'utf-8')
-    );
+    const sigBuffer = Buffer.from(signature, 'utf-8');
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf-8');
 
-    return isValid;
+    if (sigBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(sigBuffer, expectedBuffer);
   } catch (err) {
     console.error('[Webhook Signature Error]:', err.message);
     return false;

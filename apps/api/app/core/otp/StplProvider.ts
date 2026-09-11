@@ -1,36 +1,39 @@
 import prisma from '../database';
 import { OtpProvider, OtpResponse } from './OtpProvider';
+import { isBypassPhone, getBypassOtpCode } from './otp_bypass';
 
 /**
- * STPL OTP Provider — Dual-Channel Integration (STPL SMS Flow + WhatsApp Outbound)
+ * Enterprise MSG91 Flow & STPL OTP Provider
+ *
+ * Dispatches 6-digit OTPs via MSG91 Flow API (and optional parallel WhatsApp outbound).
+ * Fully environment-driven with zero hardcoded credentials or phone numbers.
  */
 export class StplProvider extends OtpProvider {
   async send(phone: string): Promise<OtpResponse> {
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
 
-    const BYPASS_PHONES = ['9305951785', '8585858585', '0000000000', '8814038004'];
-
-    // Reviewer & Test Bypass: always succeed instantly with static OTP 442233
-    if (BYPASS_PHONES.includes(cleanPhone)) {
+    // Dynamic OTP Bypass for testing team (configured strictly via .env)
+    if (isBypassPhone(cleanPhone)) {
+      const bypassCode = getBypassOtpCode();
       await prisma.otp.upsert({
         where: { phone: cleanPhone },
-        update: { code: '442233', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
-        create: { phone: cleanPhone, code: '442233', expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+        update: { code: bypassCode, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+        create: { phone: cleanPhone, code: bypassCode, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
       });
       return { success: true, message: 'OTP sent successfully' };
     }
 
-    const authKey = process.env.STPL_AUTH_KEY || process.env.MSG91_AUTH_KEY;
+    const authKey = process.env.MSG91_AUTH_KEY || process.env.STPL_AUTH_KEY;
     if (!authKey) {
-      throw new Error('STPL_AUTH_KEY (or MSG91_AUTH_KEY) environment variable is required');
+      throw new Error('MSG91_AUTH_KEY (or STPL_AUTH_KEY) environment variable is required');
     }
 
-    const templateId = process.env.STPL_TEMPLATE_ID || process.env.MSG91_FLOW_TEMPLATE_ID;
+    const templateId = process.env.MSG91_FLOW_TEMPLATE_ID || process.env.STPL_TEMPLATE_ID;
     if (!templateId) {
-      throw new Error('STPL_TEMPLATE_ID environment variable is required');
+      throw new Error('MSG91_FLOW_TEMPLATE_ID environment variable is required');
     }
 
-    // Generate 6-digit secure OTP
+    // Generate 6-digit secure random OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     // Upsert OTP record with 5-minute TTL
@@ -42,8 +45,8 @@ export class StplProvider extends OtpProvider {
 
     const recipient = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
 
-    // ── Channel 1: STPL SMS via Flow API ───────────────────────────────────────
-    const smsPayload = {
+    // ── Channel 1: MSG91 Flow API (SMS / Universal Flow) ───────────────────────
+    const flowPayload = {
       template_id: templateId,
       recipients: [
         {
@@ -53,25 +56,27 @@ export class StplProvider extends OtpProvider {
       ],
     };
 
-    const sendSmsPromise = fetch('https://control.msg91.com/api/v5/flow', {
+    const sendFlowPromise = fetch('https://control.msg91.com/api/v5/flow', {
       method: 'POST',
       headers: {
         accept: 'application/json',
         'content-type': 'application/json',
         authkey: authKey,
       },
-      body: JSON.stringify(smsPayload),
-    }).then(async (res) => {
-      const data: any = await res.json();
-      if (data.hasError || data.status === 'error' || data.type === 'error') {
-        console.warn('[STPL SMS Service] Flow API Warning/Error:', data);
-        return { success: false, error: data.message || JSON.stringify(data) };
-      }
-      return { success: true, data };
-    }).catch((err) => {
-      console.error('[STPL SMS Service] Network Error:', err);
-      return { success: false, error: err.message };
-    });
+      body: JSON.stringify(flowPayload),
+    })
+      .then(async (res) => {
+        const data: any = await res.json();
+        if (data.hasError || data.status === 'error' || data.type === 'error') {
+          console.warn('[MSG91 Flow OTP] Flow API Warning/Error:', data);
+          return { success: false, error: data.message || JSON.stringify(data) };
+        }
+        return { success: true, data };
+      })
+      .catch((err) => {
+        console.error('[MSG91 Flow OTP] Network Error:', err);
+        return { success: false, error: err.message };
+      });
 
     // ── Channel 2: WhatsApp Outbound Template (Optional Parallel Dispatch) ────
     const whatsappNumber = process.env.MSG91_WHATSAPP_NUMBER || '';
@@ -117,24 +122,25 @@ export class StplProvider extends OtpProvider {
           authkey: authKey,
         },
         body: JSON.stringify(whatsappPayload),
-      }).then(async (res) => {
-        const data: any = await res.json();
-        if (data.hasError || data.status === 'error') {
-          console.warn('[STPL WhatsApp Service] Warning/Error:', data);
-          return { success: false, error: data.message || JSON.stringify(data) };
-        }
-        return { success: true };
-      }).catch((err) => {
-        console.error('[STPL WhatsApp Service] Network Error:', err);
-        return { success: false, error: err.message };
-      });
+      })
+        .then(async (res) => {
+          const data: any = await res.json();
+          if (data.hasError || data.status === 'error') {
+            console.warn('[MSG91 WhatsApp OTP] Warning/Error:', data);
+            return { success: false, error: data.message || JSON.stringify(data) };
+          }
+          return { success: true };
+        })
+        .catch((err) => {
+          console.error('[MSG91 WhatsApp OTP] Network Error:', err);
+          return { success: false, error: err.message };
+        });
     }
 
-    // Await both channels concurrently
-    const [smsResult, whatsappResult] = await Promise.all([sendSmsPromise, sendWhatsappPromise]);
+    const [flowResult, whatsappResult] = await Promise.all([sendFlowPromise, sendWhatsappPromise]);
 
-    if (!smsResult.success && !whatsappResult.success) {
-      console.error('[STPL OTP Service] Both SMS and WhatsApp delivery failed');
+    if (!flowResult.success && !whatsappResult.success) {
+      console.error('[MSG91 OTP Service] Both Flow and WhatsApp delivery failed');
       throw new Error('OTP delivery failed');
     }
 
@@ -142,8 +148,16 @@ export class StplProvider extends OtpProvider {
   }
 
   async verify(phone: string, code: string): Promise<boolean> {
-    if (code === '223344' || code === '442233') return true;
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
 
+    // If phone is configured for bypass in .env, verify against the configured bypass code
+    if (isBypassPhone(cleanPhone)) {
+      if (code === getBypassOtpCode()) {
+        return true;
+      }
+    }
+
+    // Strict database lookup for verified OTP code
     const record = await prisma.otp.findUnique({ where: { phone } });
     if (!record || record.code !== code || record.expiresAt < new Date()) {
       return false;

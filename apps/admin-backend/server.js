@@ -77,7 +77,16 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pincode', require('./routes/pincode'));
 
 // Protected routes (Staff/Admin)
-const staffOnly = verifyToken;
+const STAFF_ROLES = [
+  'master_admin',
+  'admin',
+  'field_manager',
+  'operations_manager',
+  'customer_service',
+  'sales',
+  'care_coordinator'
+];
+const staffOnly = [verifyToken, authorizeRoles(...STAFF_ROLES)];
 const adminsOnly = [verifyToken, authorizeRoles('admin', 'master_admin')];
 const mastersOnly = [verifyToken, authorizeRoles('master_admin')];
 

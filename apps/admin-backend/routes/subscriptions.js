@@ -372,7 +372,6 @@ router.post('/admin-enroll', async (req, res) => {
     paymentMethod = 'Cash',
     paymentNote = '',
     csaMode = false,
-    subscriberPassword = '',
   } = req.body;
 
   if (!subscriberPhone || typeof subscriberPhone !== 'string' || !subscriberName || typeof subscriberName !== 'string' || !packageId) {
@@ -404,9 +403,8 @@ router.post('/admin-enroll', async (req, res) => {
     else if (duration === 'annual') end.setFullYear(end.getFullYear() + 1);
     else end.setMonth(end.getMonth() + 1);
 
-    // Use provided password for testing, otherwise OTP-only placeholder
-    const passwordToHash = subscriberPassword || ('otp-only-' + subscriberPhone);
-    const dummyHash = await bcrypt.hash(passwordToHash, 8);
+    // Pure OTP-only authentication: unguessable random password placeholder
+    const dummyHash = await bcrypt.hash(Math.random().toString(36) + Date.now().toString(), 10);
 
     const result = await prisma.$transaction(async (tx) => {
       // ──────────────────────────────────────────────────────────────────

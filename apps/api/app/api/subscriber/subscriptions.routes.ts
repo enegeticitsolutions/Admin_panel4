@@ -522,15 +522,20 @@ router.post('/purchase', paymentLimiter as unknown as RequestHandler, authentica
       }
     }
 
-    // Verify Payment Signature if payment details are provided
-    if (razorpay_payment_id && razorpay_order_id && razorpay_signature) {
-      if (razorpay_signature === 'DEV_MOCK_SIGNATURE' || config.nodeEnv === 'development') {
-        console.log("⚠️ DEV MODE: Bypassing Razorpay Signature Verification using mock signature.");
-      } else {
-        const isValid = verifyPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
-        if (!isValid) {
-          throw new Error("Invalid payment signature. Payment verification failed.");
-        }
+    // Verify Payment Signature
+    const isDevMockAllowed = config.nodeEnv === 'development' && process.env.ENABLE_MOCK_PAYMENTS === 'true';
+    if (razorpay_signature === 'DEV_MOCK_SIGNATURE') {
+      if (!isDevMockAllowed) {
+        return res.status(403).json({ success: false, message: 'Mock payment signatures are not permitted in this environment.' });
+      }
+      console.log("⚠️ DEV MODE: Bypassing Razorpay Signature Verification using mock signature.");
+    } else {
+      if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+        return res.status(400).json({ success: false, message: 'Payment verification details (payment_id, order_id, signature) are required.' });
+      }
+      const isValid = verifyPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
+      if (!isValid) {
+        throw new Error("Invalid payment signature. Payment verification failed.");
       }
     }
 
@@ -999,14 +1004,19 @@ router.post('/addon/purchase', paymentLimiter as unknown as RequestHandler, auth
     }
 
     // 1. Verify payment signature (same pattern as /purchase)
-    if (razorpay_payment_id && razorpay_order_id && razorpay_signature) {
-      if (razorpay_signature === 'DEV_MOCK_SIGNATURE' && config.nodeEnv === 'development') {
-        console.log('⚠️ DEV MODE: Bypassing Razorpay Signature Verification for addon purchase.');
-      } else {
-        const isValid = verifyPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
-        if (!isValid) {
-          return res.status(400).json({ success: false, message: 'Invalid payment signature. Payment verification failed.' });
-        }
+    const isDevMockAllowed = config.nodeEnv === 'development' && process.env.ENABLE_MOCK_PAYMENTS === 'true';
+    if (razorpay_signature === 'DEV_MOCK_SIGNATURE') {
+      if (!isDevMockAllowed) {
+        return res.status(403).json({ success: false, message: 'Mock payment signatures are not permitted in this environment.' });
+      }
+      console.log('⚠️ DEV MODE: Bypassing Razorpay Signature Verification for addon purchase.');
+    } else {
+      if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+        return res.status(400).json({ success: false, message: 'Payment verification details (payment_id, order_id, signature) are required.' });
+      }
+      const isValid = verifyPaymentSignature(razorpay_order_id, razorpay_payment_id, razorpay_signature);
+      if (!isValid) {
+        return res.status(400).json({ success: false, message: 'Invalid payment signature. Payment verification failed.' });
       }
     }
 

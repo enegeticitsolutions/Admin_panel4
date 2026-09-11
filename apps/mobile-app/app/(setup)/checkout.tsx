@@ -718,16 +718,6 @@ export default function CheckoutScreen() {
                     }
                 }
 
-                // ⚠️ DEV ONLY — auto-set beneficiary password if provided — remove when done testing
-                if (beneficiaryData?.devPassword && beneficiaryData?.phone) {
-                    fetch(`${API_URL}/dev/set-beneficiary-password`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ phone: beneficiaryData.phone, password: beneficiaryData.devPassword }),
-                    }).catch(() => { }); // fire-and-forget, non-blocking
-                }
-                // end DEV ONLY
-
                 // Invalidate dashboard queries so the new subscription appears immediately
                 await AsyncStorage.removeItem('beneficiaryDashboardCache');
                 queryClient.invalidateQueries({ queryKey: ['subscriberDashboard'] });

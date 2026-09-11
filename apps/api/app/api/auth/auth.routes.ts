@@ -7,9 +7,9 @@ import { sendEmailVerificationOtp, verifyEmailOtp } from '../../services/auth/em
 import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiResponse } from '../../utils/ApiResponse';
 
-const router = Router();
+import { isBypassPhone } from '../../core/otp/otp_bypass';
 
-const BYPASS_PHONES = ['9305951785', '8585858585', '0000000000', '8814038004'];
+const router = Router();
 
 // Rate Limiter for OTP Requests (max 10 requests per 15 mins per IP)
 const otpLimiter = rateLimit({
@@ -20,8 +20,7 @@ const otpLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     const raw = (req.body?.phone || '').toString();
-    const clean = raw.replace(/\D/g, '').slice(-10);
-    return BYPASS_PHONES.includes(clean);
+    return isBypassPhone(raw);
   },
 });
 
@@ -34,8 +33,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     const raw = (req.body?.phone || '').toString();
-    const clean = raw.replace(/\D/g, '').slice(-10);
-    return BYPASS_PHONES.includes(clean);
+    return isBypassPhone(raw);
   },
 });
 
