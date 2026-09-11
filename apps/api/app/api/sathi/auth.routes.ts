@@ -10,9 +10,9 @@ import {
 } from '../../schemas/sathi';
 import { sendOtpSchema, verifyOtpSchema } from '../../schemas/auth';
 
-const router = Router();
+import { isBypassPhone } from '../../core/otp/otp_bypass';
 
-const BYPASS_PHONES = ['9305951785', '8585858585', '0000000000', '8814038004'];
+const router = Router();
 
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -22,8 +22,7 @@ const otpLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     const raw = (req.body?.phone || '').toString();
-    const clean = raw.replace(/\D/g, '').slice(-10);
-    return BYPASS_PHONES.includes(clean);
+    return isBypassPhone(raw);
   },
 });
 
@@ -35,8 +34,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     const raw = (req.body?.phone || '').toString();
-    const clean = raw.replace(/\D/g, '').slice(-10);
-    return BYPASS_PHONES.includes(clean);
+    return isBypassPhone(raw);
   },
 });
 

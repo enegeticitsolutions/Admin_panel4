@@ -90,7 +90,6 @@ export default function EnrollmentWizardPage() {
   const [subscriberPincode, setSubscriberPincode] = useState('');
   const [subscriberCity, setSubscriberCity] = useState('');
   const [subscriberState, setSubscriberState] = useState('');
-  const [subscriberPassword, setSubscriberPassword] = useState('');
   const [phoneChecking, setPhoneChecking] = useState(false);
   const [phoneCheck, setPhoneCheck] = useState<{ exists: boolean; id?: string; name?: string; beneficiaries?: any[] } | null>(null);
   const phoneDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -293,7 +292,7 @@ export default function EnrollmentWizardPage() {
   useEffect(() => {
     if (step === 'confirm') return; // Don't save if already confirmed
     const data = {
-      step, subscriberPhone, subscriberName, subscriberEmail, subscriberAddress, subscriberPincode, subscriberCity, subscriberState, subscriberPassword,
+      step, subscriberPhone, subscriberName, subscriberEmail, subscriberAddress, subscriberPincode, subscriberCity, subscriberState,
       sameAsSubscriber, beneficiaryPhone, beneficiaryName, beneficiaryAge, beneficiaryDob, beneficiaryGender, maritalStatus, profilePhoto,
       beneficiaryAddress, beneficiaryPincode, beneficiaryCity, beneficiaryState, relationship, medicalConditions, medications, vitalsToTrack,
       primaryPhysicianName, primaryPhysicianPhone, hobbiesInterests, customHobby, emergencyContactName, emergencyContactPhone, emergencyContactRel,
@@ -302,7 +301,7 @@ export default function EnrollmentWizardPage() {
     };
     sessionStorage.setItem('enrollment_wizard_data', JSON.stringify(data));
   }, [
-    step, subscriberPhone, subscriberName, subscriberEmail, subscriberAddress, subscriberPincode, subscriberCity, subscriberState, subscriberPassword,
+    step, subscriberPhone, subscriberName, subscriberEmail, subscriberAddress, subscriberPincode, subscriberCity, subscriberState,
     sameAsSubscriber, beneficiaryPhone, beneficiaryName, beneficiaryAge, beneficiaryDob, beneficiaryGender, maritalStatus, profilePhoto,
     beneficiaryAddress, beneficiaryPincode, beneficiaryCity, beneficiaryState, relationship, medicalConditions, medications, vitalsToTrack,
     primaryPhysicianName, primaryPhysicianPhone, hobbiesInterests, customHobby, emergencyContactName, emergencyContactPhone, emergencyContactRel,
@@ -506,7 +505,6 @@ export default function EnrollmentWizardPage() {
         paymentMethod,
         paymentNote,
         csaMode: true, // Always CSA mode from admin — subscriber activates via app
-        subscriberPassword: subscriberPassword || undefined,
       });
       // Allocate any selected add-ons
       const subId = result?.subscription?.id || (result as any)?.id || (result as any)?.data?.subscription?.id;
@@ -879,24 +877,6 @@ export default function EnrollmentWizardPage() {
                       <div className="relative">
                         <MapPin className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
                         <Input id="sub-state" className="pl-9" value={subscriberState} onChange={e => setSubscriberState(e.target.value)} placeholder="State" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 col-span-2 border-t pt-4 mt-2">
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                        <Label className="text-amber-800 text-xs font-bold block mb-1">
-                          ⚠️ DEV ONLY — Subscriber Password
-                        </Label>
-                        <Input
-                          type="text"
-                          value={subscriberPassword}
-                          onChange={e => setSubscriberPassword(e.target.value)}
-                          placeholder="Set subscriber test password (for app login testing)"
-                          className="bg-white border-amber-300 focus-visible:ring-amber-500 text-sm"
-                        />
-                        <p className="text-[10px] text-amber-600 mt-1">
-                          If left blank, subscriber defaults to OTP-only login.
-                        </p>
                       </div>
                     </div>
                   </>

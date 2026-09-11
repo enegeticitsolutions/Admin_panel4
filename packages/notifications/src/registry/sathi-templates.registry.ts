@@ -30,7 +30,7 @@ export const SathiTemplates: Record<string, SathiTemplateDefinition> = {
     module: 'Onboarding & Account',
     triggerEvent: 'OTP for login / signup',
     audience: 'Saathi Volunteer',
-    channels: ['push', 'in_app', 'whatsapp', 'sms'],
+    channels: ['whatsapp', 'sms'],
     whatsappCategory: 'Authentication',
     priority: 'critical',
     subject: 'Saathi Login OTP',

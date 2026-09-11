@@ -13,6 +13,7 @@
     "userInterfaceStyle": "automatic",
     "primaryColor": "#ffffff",
     "ios": {
+      "icon": "./assets/images/icon.png",
       "supportsTablet": false,
       "buildNumber": "11",
       "config": {

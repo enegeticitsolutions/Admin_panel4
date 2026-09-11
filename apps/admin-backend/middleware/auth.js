@@ -33,23 +33,30 @@ const verifyToken = async (req, res, next) => {
   try {
     const dbUser = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: { id: true, name: true, phone: true, role: true }
+      select: { id: true, name: true, phone: true, role: true, isActive: true }
     });
 
-    if (dbUser) {
-      req.user = {
-        ...decoded,
-        role: dbUser.role || 'master_admin',
-        name: dbUser.name || decoded.name
-      };
-    } else {
-      req.user = { ...decoded, role: 'master_admin' };
+    if (!dbUser || dbUser.isActive === false) {
+      return res.status(401).json({
+        success: false,
+        message: 'Account not found or inactive. Access denied.'
+      });
     }
-  } catch (err) {
-    req.user = { ...decoded, role: 'master_admin' };
-  }
 
-  next();
+    req.user = {
+      ...decoded,
+      id: dbUser.id,
+      role: dbUser.role,
+      name: dbUser.name || decoded.name
+    };
+    next();
+  } catch (err) {
+    console.error('[Auth Middleware] Database lookup error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Authentication service temporarily unavailable.'
+    });
+  }
 };
 
 /**

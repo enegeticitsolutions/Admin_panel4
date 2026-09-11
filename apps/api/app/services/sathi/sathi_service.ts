@@ -347,6 +347,24 @@ export const getVolunteerProfile = async (id: string) => {
 };
 
 export const updateVolunteerProfile = async (id: string, data: any) => {
+  if (data.email !== undefined) {
+    const cleanEmail = typeof data.email === 'string' ? data.email.trim().toLowerCase() : null;
+    if (!cleanEmail) {
+      data.email = null;
+    } else {
+      data.email = cleanEmail;
+      const existing = await prisma.volunteer.findFirst({
+        where: {
+          email: cleanEmail,
+          id: { not: id }
+        }
+      });
+      if (existing) {
+        throw new ApiError(400, 'This email address is already registered with another Saathi account. Please enter a different email.');
+      }
+    }
+  }
+
   const updated = await prisma.volunteer.update({
     where: { id },
     data

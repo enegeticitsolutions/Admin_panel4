@@ -143,9 +143,10 @@ export async function dispatchSathiNotification<K extends keyof SathiNotificatio
       notifType = NotificationType.appointment_confirmed;
     }
 
-    // 2. Persist In-App Notification if User ID exists
+    // 2. Persist In-App Notification if User ID exists (Skip OTP as it is delivered via SMS/WhatsApp/Email)
     let notifRecord: any = null;
-    if (recipientUserId) {
+    const isOtp = eventKey === 'SAATHI_LOGIN_OTP';
+    if (recipientUserId && !isOtp) {
       notifRecord = await prisma.notification.create({
         data: {
           userId: recipientUserId,

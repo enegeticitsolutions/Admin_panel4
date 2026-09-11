@@ -71,9 +71,6 @@ import sathiRouter from './api/sathi/sathi.routes';
 // Website-specific Internal Routes
 import websiteRouter from './routes/website/websiteRoutes';
 
-// ⚠️ DEV-ONLY — Remove this import + route registration below when done testing
-import devRouter from './api/dev/dev.routes';
-
 const app = express();
 
 // Trust proxy is required if the API is behind a load balancer (Nginx, AWS, Cloudflare, etc.)
@@ -224,11 +221,6 @@ app.use(`${API}/sathi`, sathiRouter);
 
 // Website-specific Internal endpoints
 app.use(`${API}/website`, websiteRouter);
-
-// ⚠️ DEV-ONLY — Only enabled in development environment
-if (config.nodeEnv === 'development') {
-  app.use(`${API}/dev`, devRouter);
-}
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {

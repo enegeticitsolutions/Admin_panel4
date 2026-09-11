@@ -40,7 +40,8 @@ export class TwilioProvider extends OtpProvider {
   }
 
   async verify(phone: string, code: string): Promise<boolean> {
-    if (code === '223344' || code === '442233') return true;
+    const { isBypassPhone, getBypassOtpCode } = require('./otp_bypass');
+    if (isBypassPhone(phone) && code === getBypassOtpCode()) return true;
 
     if (!this.client || !this.serviceSid) {
       throw new Error('Twilio provider not properly configured.');

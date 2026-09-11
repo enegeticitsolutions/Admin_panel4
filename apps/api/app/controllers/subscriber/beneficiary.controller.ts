@@ -1,11 +1,30 @@
 import { Request, Response } from 'express';
 import * as beneficiaryService from '../../services/subscriber/beneficiary_service';
 import { getStorageService } from '../../services/storage';
+import prisma from '../../core/database';
 import { v4 as uuidv4 } from 'uuid';
+
+async function verifyBeneficiaryAccess(userId?: string, userRole?: string, beneficiaryId?: string): Promise<boolean> {
+  if (!userId || !beneficiaryId) return false;
+  if (['admin', 'master_admin', 'super_admin', 'field_manager', 'operations_manager', 'customer_service'].includes(userRole || '')) {
+    return true;
+  }
+  const ben = await prisma.beneficiary.findUnique({
+    where: { id: beneficiaryId },
+    select: { subscriberId: true, userId: true }
+  });
+  if (!ben) return false;
+  return ben.subscriberId === userId || ben.userId === userId;
+}
 
 export const getBeneficiaryProfile = async (req: Request, res: Response) => {
   try {
     const beneficiaryId = req.params.beneficiaryId as string;
+    const authReq = req as any;
+    const hasAccess = await verifyBeneficiaryAccess(authReq.userId, authReq.userRole, beneficiaryId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to view this beneficiary.' });
+    }
     const profile = await beneficiaryService.getBeneficiaryProfile(beneficiaryId);
     res.json({ success: true, data: profile });
   } catch (error: any) {
@@ -50,6 +69,11 @@ export const getSathiEligibleBeneficiaries = async (req: Request, res: Response)
 export const updateBeneficiary = async (req: Request, res: Response) => {
   try {
     const beneficiaryId = req.params.beneficiaryId as string;
+    const authReq = req as any;
+    const hasAccess = await verifyBeneficiaryAccess(authReq.userId, authReq.userRole, beneficiaryId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to modify this beneficiary.' });
+    }
     const data = await beneficiaryService.updateBeneficiary(beneficiaryId, req.body);
     res.json({ success: true, data });
   } catch (error: any) {
@@ -129,6 +153,11 @@ export const uploadMedicalRecord = async (req: Request, res: Response) => {
 export const getBeneficiaryPendingDetails = async (req: Request, res: Response) => {
   try {
     const beneficiaryId = req.params.beneficiaryId as string;
+    const authReq = req as any;
+    const hasAccess = await verifyBeneficiaryAccess(authReq.userId, authReq.userRole, beneficiaryId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to access this beneficiary details.' });
+    }
     const data = await beneficiaryService.getBeneficiaryPendingDetails(beneficiaryId);
     res.json({ success: true, data });
   } catch (error: any) {
@@ -139,6 +168,11 @@ export const getBeneficiaryPendingDetails = async (req: Request, res: Response) 
 export const addMedication = async (req: Request, res: Response) => {
   try {
     const beneficiaryId = req.params.beneficiaryId as string;
+    const authReq = req as any;
+    const hasAccess = await verifyBeneficiaryAccess(authReq.userId, authReq.userRole, beneficiaryId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to add medications for this beneficiary.' });
+    }
     const data = await beneficiaryService.addMedication(beneficiaryId, req.body);
     res.status(201).json({ success: true, data });
   } catch (error: any) {

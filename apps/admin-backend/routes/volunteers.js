@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const {
   dispatchSaathiProfileApproved,
-  dispatchSaathiBeneficiaryMatched,
   dispatchSaathiBeneficiaryUnmatched,
 } = require('../services/events/sathi-event.dispatcher');
 
@@ -398,24 +397,7 @@ router.post('/:id/assignments', async (req, res) => {
       }
     });
 
-    // ST-010: New beneficiary match assigned push & in-app notification
-    setImmediate(() => {
-      prisma.volunteer.findUnique({
-        where: { id: volunteerId },
-        select: { name: true, phone: true }
-      }).then(vol => {
-        if (vol && assignment.beneficiary?.name) {
-          dispatchSaathiBeneficiaryMatched({
-            volunteerId,
-            volunteerName: vol.name,
-            volunteerPhone: vol.phone,
-            beneficiaryName: assignment.beneficiary.name,
-            distanceKm: '2.5'
-          }).catch(err => console.error('[VolunteersRoute:ST-010 Error]:', err.message));
-        }
-      }).catch(() => {});
-    });
-
+    // Assignment created by admin (notification is triggered when beneficiary connects in the app)
     res.status(201).json({ success: true, data: assignment, message: 'Beneficiary assigned successfully' });
   } catch (err) {
     console.error('POST assignment error:', err);

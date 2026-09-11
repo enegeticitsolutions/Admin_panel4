@@ -119,5 +119,14 @@ export const verifyPaymentSignature = (
     .update(body.toString())
     .digest('hex');
 
-  return expectedSignature === razorpay_signature;
+  try {
+    const expectedBuf = Buffer.from(expectedSignature, 'utf-8');
+    const signatureBuf = Buffer.from(razorpay_signature, 'utf-8');
+    if (expectedBuf.length !== signatureBuf.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(expectedBuf, signatureBuf);
+  } catch {
+    return false;
+  }
 };
