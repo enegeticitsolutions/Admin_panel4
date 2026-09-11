@@ -16,14 +16,14 @@ export const SITE_LINKS = {
   appStore: {
     familyConnect: {
       googlePlay: "https://play.google.com/store/apps/details?id=com.maihoonna.app",
-      appleAppStore: "https://apps.apple.com/app/maihoonna/id1234567890",
+      appleAppStore: "https://apps.apple.com/app/id6801516827",
     },
     saathi: {
       googlePlay: "https://play.google.com/store/apps/details?id=com.maihoonna.sathiapp",
-      appleAppStore: "https://apps.apple.com/app/maihoonna-saathi/id1234567890",
+      appleAppStore: "https://apps.apple.com/app/id6802669670",
     },
     googlePlay: "https://play.google.com/store/apps/details?id=com.maihoonna.app",
-    appleAppStore: "https://apps.apple.com/app/maihoonna/id1234567890",
+    appleAppStore: "https://apps.apple.com/app/id6801516827",
   },
 
   // Contact Info

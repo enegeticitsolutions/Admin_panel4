@@ -1021,8 +1021,11 @@ const SaathiPage = () => {
             <span className="saathi-faq__eyebrow">FREQUENTLY ASKED QUESTIONS</span>
             <h2 className="saathi-faq__title">Questions about Saathi Network</h2>
             <p className="saathi-faq__desc">
-              Have questions about volunteering or senior visits? Reach out to us at{" "}
-              <a href="mailto:info@maihoonna.com">info@maihoonna.com</a>
+              Have questions about volunteering or senior visits? Reach out to us at:
+              <br />
+              <a href="mailto:info@maihoonna.com">info@maihoonna.com</a>,{" "}
+              <a href="mailto:aastha@maihoonna.com">aastha@maihoonna.com</a>,{" "}
+              <a href="mailto:nidhi.hora@maihoonna.com">nidhi.hora@maihoonna.com</a>
             </p>
           </div>
 

@@ -59,7 +59,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
               },
               {
                 title: "100% Background Verified Mitras",
-                desc: "Police + Aadhaar + reference verified",
+                desc: "Identity, Address, and Court check",
                 color: "#FE6700",
                 bg: "rgba(254, 103, 0, 0.133)",
                 icon: (
