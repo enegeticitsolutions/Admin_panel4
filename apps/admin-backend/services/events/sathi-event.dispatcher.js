@@ -84,7 +84,15 @@ async function dispatchSaathiProfileApproved({ volunteerId, volunteerName, volun
         event: 'SAATHI_PROFILE_APPROVED',
         to: validPhone,
         variables: { volunteerName: volunteerName || 'Volunteer' },
-      }).catch(() => {});
+      }).then(res => {
+        if (!res.success) {
+          console.error('[SathiAdminDispatcher] WhatsApp ST-003 delivery failed:', res.error);
+        } else {
+          console.log(`📱 [SathiAdminDispatcher] WhatsApp ST-003 (saathi_volunteer) delivered to ${validPhone}:`, res.messageId);
+        }
+      }).catch(err => {
+        console.error('[SathiAdminDispatcher] WhatsApp ST-003 Exception:', err.message);
+      });
     }
   } catch (err) {
     console.error('[SathiAdminDispatcher] dispatchSaathiProfileApproved Exception:', err.message);

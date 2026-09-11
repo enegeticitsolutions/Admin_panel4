@@ -85,6 +85,43 @@ router.delete('/push-token', authenticate, async (req, res, next) => {
   }
 });
 
+// Helper to resolve both User.id and Volunteer.id for the authenticated identity
+const resolveLinkedUserIds = async (userId: string): Promise<string[]> => {
+  const ids = [userId];
+  try {
+    const vol = await prisma.volunteer.findUnique({
+      where: { id: userId },
+      select: { phone: true },
+    });
+    if (vol?.phone) {
+      const u = await prisma.user.findUnique({
+        where: { phone: vol.phone },
+        select: { id: true },
+      });
+      if (u && !ids.includes(u.id)) {
+        ids.push(u.id);
+      }
+    } else {
+      const u = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { phone: true },
+      });
+      if (u?.phone) {
+        const v = await prisma.volunteer.findUnique({
+          where: { phone: u.phone },
+          select: { id: true },
+        });
+        if (v && !ids.includes(v.id)) {
+          ids.push(v.id);
+        }
+      }
+    }
+  } catch (err) {
+    // fallback to just userId
+  }
+  return ids;
+};
+
 // Helper handler for notification list
 const getNotificationsHandler = async (req: any, res: any, next: any) => {
   try {
@@ -94,11 +131,30 @@ const getNotificationsHandler = async (req: any, res: any, next: any) => {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const notifications = await prisma.notification.findMany({
-      where: { userId },
-      orderBy: { sentAt: 'desc' },
-      take: 50,
+    const isVolunteer = authReq.userRole === 'volunteer';
+    const userIds = await resolveLinkedUserIds(userId);
+
+    const rawNotifications = await prisma.notification.findMany({
+      where: { userId: { in: userIds } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     });
+
+    const notifications = rawNotifications.filter(n => {
+      const d = (n.data || {}) as any;
+      const isSaathi = Boolean(
+        d.templateId?.startsWith('ST-') ||
+        d.eventKey?.startsWith('SAATHI_') ||
+        d.screen?.startsWith('/(sathi)')
+      );
+      const isOtp = d.eventKey === 'SAATHI_LOGIN_OTP' || d.templateId === 'ST-001' || n.title?.toLowerCase().includes('otp');
+      
+      // OTP is for SMS/WhatsApp/Email, never for in-app list
+      if (isOtp) return false;
+
+      // Volunteers only receive Saathi notifications; non-volunteers only receive customer notifications
+      return isVolunteer ? isSaathi : !isSaathi;
+    }).slice(0, 50);
 
     res.json({ success: true, data: notifications });
   } catch (error) {
@@ -117,8 +173,10 @@ const markReadHandler = async (req: any, res: any, next: any) => {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
+    const userIds = await resolveLinkedUserIds(userId);
+
     const notification = await prisma.notification.findFirst({
-      where: { id, userId },
+      where: { id, userId: { in: userIds } },
     });
 
     if (!notification) {
@@ -145,10 +203,32 @@ const markAllReadHandler = async (req: any, res: any, next: any) => {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    await prisma.notification.updateMany({
-      where: { userId, isRead: false },
-      data: { isRead: true },
+    const isVolunteer = authReq.userRole === 'volunteer';
+    const userIds = await resolveLinkedUserIds(userId);
+
+    const unread = await prisma.notification.findMany({
+      where: { userId: { in: userIds }, isRead: false },
+      select: { id: true, data: true, title: true },
     });
+
+    const idsToMark = unread.filter(n => {
+      const d = (n.data || {}) as any;
+      const isSaathi = Boolean(
+        d.templateId?.startsWith('ST-') ||
+        d.eventKey?.startsWith('SAATHI_') ||
+        d.screen?.startsWith('/(sathi)')
+      );
+      const isOtp = d.eventKey === 'SAATHI_LOGIN_OTP' || d.templateId === 'ST-001' || n.title?.toLowerCase().includes('otp');
+      if (isOtp) return false;
+      return isVolunteer ? isSaathi : !isSaathi;
+    }).map(n => n.id);
+
+    if (idsToMark.length > 0) {
+      await prisma.notification.updateMany({
+        where: { id: { in: idsToMark } },
+        data: { isRead: true },
+      });
+    }
 
     res.json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {
@@ -165,9 +245,25 @@ const getUnreadCountHandler = async (req: any, res: any, next: any) => {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const count = await prisma.notification.count({
-      where: { userId, isRead: false },
+    const isVolunteer = authReq.userRole === 'volunteer';
+    const userIds = await resolveLinkedUserIds(userId);
+
+    const unread = await prisma.notification.findMany({
+      where: { userId: { in: userIds }, isRead: false },
+      select: { data: true, title: true },
     });
+
+    const count = unread.filter(n => {
+      const d = (n.data || {}) as any;
+      const isSaathi = Boolean(
+        d.templateId?.startsWith('ST-') ||
+        d.eventKey?.startsWith('SAATHI_') ||
+        d.screen?.startsWith('/(sathi)')
+      );
+      const isOtp = d.eventKey === 'SAATHI_LOGIN_OTP' || d.templateId === 'ST-001' || n.title?.toLowerCase().includes('otp');
+      if (isOtp) return false;
+      return isVolunteer ? isSaathi : !isSaathi;
+    }).length;
 
     res.json({ success: true, count });
   } catch (error) {

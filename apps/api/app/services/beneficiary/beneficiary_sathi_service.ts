@@ -128,7 +128,9 @@ export const getBeneficiarySathiEligibility = async (beneficiaryId: string) => {
 
 import {
   dispatchSaathiVisitRequestReceived,
-  dispatchSaathiVisitConfirmedByBeneficiary
+  dispatchSaathiVisitConfirmedByBeneficiary,
+  dispatchSaathiBeneficiaryMatched,
+  dispatchSaathiBeneficiaryUnmatched,
 } from '../sathi/sathi-notification.dispatcher';
 
 export const createSathiVisitRequest = async (beneficiaryId: string, dateTime: string, reason: string, targetVolunteerId?: string) => {
@@ -690,9 +692,25 @@ export const updateAssignmentStatus = async (beneficiaryId: string, volunteerId:
     where: {
       volunteerId_beneficiaryId: {
         volunteerId,
-        beneficiaryId
-      }
-    }
+        beneficiaryId,
+      },
+    },
+    include: {
+      beneficiary: {
+        select: {
+          id: true,
+          name: true,
+          latitude: true,
+          longitude: true,
+          user: {
+            select: { latitude: true, longitude: true },
+          },
+        },
+      },
+      volunteer: {
+        select: { id: true, name: true, latitude: true, longitude: true },
+      },
+    },
   });
 
   if (!assignment) {
@@ -701,8 +719,37 @@ export const updateAssignmentStatus = async (beneficiaryId: string, volunteerId:
 
   await prisma.volunteerAssignment.update({
     where: { id: assignment.id },
-    data: { status }
+    data: { status },
   });
+
+  const b = assignment.beneficiary;
+  const v = assignment.volunteer;
+
+  // ST-010: Trigger notification ONLY when beneficiary connects with volunteer
+  if (status === 'CONNECTED') {
+    const bLat = b?.latitude ?? b?.user?.latitude;
+    const bLon = b?.longitude ?? b?.user?.longitude;
+    const vLat = v?.latitude;
+    const vLon = v?.longitude;
+
+    let distanceStr = '1.0';
+    if (bLat && bLon && vLat && vLon) {
+      const dist = calculateDistance(Number(bLat), Number(bLon), Number(vLat), Number(vLon));
+      distanceStr = dist < 0.1 ? '0.1' : dist.toFixed(1);
+    }
+
+    dispatchSaathiBeneficiaryMatched(volunteerId, {
+      volunteerName: v?.name || 'Volunteer',
+      beneficiaryName: b?.name || 'Beneficiary',
+      distanceKm: distanceStr,
+    }).catch(err => console.warn('[updateAssignmentStatus:ST-010 Error]:', err.message));
+  } else if (status === 'REJECTED') {
+    // ST-011: Trigger notification if beneficiary rejects / removes match
+    dispatchSaathiBeneficiaryUnmatched(volunteerId, {
+      volunteerName: v?.name || 'Volunteer',
+      beneficiaryName: b?.name || 'Beneficiary',
+    }).catch(err => console.warn('[updateAssignmentStatus:ST-011 Error]:', err.message));
+  }
 
   return { success: true };
 };
