@@ -965,10 +965,50 @@ export const subscriptionApi = {
       body: JSON.stringify(data),
     });
   },
-  /** Get rich utilization data for a beneficiary's active subscription */
-  async getBeneficiaryUtilization(beneficiaryId: string): Promise<{
-    subscription: any | null;
-    benefits: Array<{
+  /** Get rich utilization data for a beneficiary's active or past subscription */
+  async getBeneficiaryUtilization(beneficiaryId: string, subscriptionId?: string): Promise<{
+    subscription: {
+      id: string;
+      packageId?: string;
+      packageName: string;
+      packageType: string;
+      packageVersion?: string | number | null;
+      basePrice?: number | null;
+      duration?: string;
+      startDate: string;
+      endDate: string;
+      isActive: boolean;
+      status: 'active' | 'expired' | 'cancelled';
+      isExpired: boolean;
+      durationDays: number;
+      daysRemaining: number;
+      expiredDaysAgo: number;
+      cancelledAt?: string | null;
+      cancellationNote?: string | null;
+      hoursTotal: number;
+      hoursUsed: number;
+      hoursRemaining: number;
+      visitsTotal: number;
+      visitsCompleted: number;
+      latestPayment?: any | null;
+    } | null;
+    allSubscriptions?: Array<{
+      id: string;
+      packageName: string;
+      packageType: string;
+      duration?: string;
+      startDate: string;
+      endDate: string;
+      isActive: boolean;
+      status: 'active' | 'expired' | 'cancelled';
+      isExpired: boolean;
+      hoursTotal: number;
+      hoursUsed: number;
+      visitsTotal: number;
+      visitsCompleted: number;
+      createdAt: string;
+    }>;
+    mostUsedBenefit?: {
       benefitId: string;
       benefitName: string;
       unitLabel: string;
@@ -979,10 +1019,33 @@ export const subscriptionApi = {
       usagePercent: number;
       isLowBalance: boolean;
       isExhausted: boolean;
+    } | null;
+    overallStats?: {
+      totalAllocatedUnits: number;
+      totalUsedUnits: number;
+      totalRemainingUnits: number;
+      overallUsagePercent: number;
+      totalBenefitsCount: number;
+      exhaustedCount: number;
+      lowBalanceCount: number;
+    } | null;
+    benefits: Array<{
+      benefitId: string;
+      benefitName: string;
+      unitLabel: string;
+      benefitTypeName: string | null;
+      description: string | null;
+      totalUnits: number;
+      usedUnits: number;
+      remainingUnits: number;
+      usagePercent: number;
+      isLowBalance: boolean;
+      isExhausted: boolean;
     }>;
     recentLogs: any[];
   }> {
-    return apiJson(`/subscriptions/beneficiary/${beneficiaryId}/utilization`);
+    const query = subscriptionId ? `?subscriptionId=${encodeURIComponent(subscriptionId)}` : '';
+    return apiJson(`/subscriptions/beneficiary/${beneficiaryId}/utilization${query}`);
   },
   /** Initialize/backfill missing benefit balances for a subscription */
   async initializeBalances(subscriptionId: string): Promise<{ created: number; message: string; benefits: any[] }> {

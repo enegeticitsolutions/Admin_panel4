@@ -1168,55 +1168,149 @@ router.post('/:id/addons/allocate', async (req, res) => {
 router.get('/beneficiary/:id/utilization', async (req, res) => {
   try {
     const { id: beneficiaryId } = req.params;
+    const { subscriptionId } = req.query;
 
-    // Get active subscription with package + benefit balances
-    const subscription = await prisma.subscription.findFirst({
-      where: { beneficiaryId, isActive: true },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        package: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            basePrice: true,
-          },
+    const subInclude = {
+      package: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          basePrice: true,
+          description: true,
         },
-        packageVersion: {
-          select: {
-            id: true,
-            name: true,
-            basePrice: true,
-          }
+      },
+      packageVersion: {
+        select: {
+          id: true,
+          name: true,
+          basePrice: true,
+          version: true,
         },
-        benefitBalances: {
-          include: {
-            benefit: {
-              select: {
-                id: true,
-                name: true,
-                unitLabel: true,
-                description: true,
-                benefitType: { select: { name: true } },
-              },
+      },
+      benefitBalances: {
+        include: {
+          benefit: {
+            select: {
+              id: true,
+              name: true,
+              unitLabel: true,
+              description: true,
+              benefitType: { select: { name: true } },
             },
           },
         },
       },
+      payments: {
+        select: {
+          id: true,
+          invoiceNumber: true,
+          amountPaid: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          paidAt: true,
+          transactionId: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    };
+
+    let subscription = null;
+    if (subscriptionId) {
+      subscription = await prisma.subscription.findFirst({
+        where: { id: subscriptionId, beneficiaryId },
+        include: subInclude,
+      });
+    }
+
+    // Try active subscription if not explicitly requested
+    if (!subscription) {
+      subscription = await prisma.subscription.findFirst({
+        where: { beneficiaryId, isActive: true },
+        orderBy: { createdAt: 'desc' },
+        include: subInclude,
+      });
+    }
+
+    // If no active subscription, fall back to the most recent subscription (expired or inactive)
+    if (!subscription) {
+      subscription = await prisma.subscription.findFirst({
+        where: { beneficiaryId },
+        orderBy: { createdAt: 'desc' },
+        include: subInclude,
+      });
+    }
+
+    // Fetch all subscriptions for this beneficiary to provide complete history
+    const allSubsRaw = await prisma.subscription.findMany({
+      where: { beneficiaryId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        packageType: true,
+        duration: true,
+        startDate: true,
+        endDate: true,
+        isActive: true,
+        cancelledAt: true,
+        cancellationNote: true,
+        hoursTotal: true,
+        hoursUsed: true,
+        visitsTotal: true,
+        visitsCompleted: true,
+        createdAt: true,
+        package: {
+          select: { id: true, name: true, type: true, basePrice: true },
+        },
+        packageVersion: {
+          select: { id: true, name: true, basePrice: true, version: true },
+        },
+      },
+    });
+
+    const now = new Date();
+    const allSubscriptions = allSubsRaw.map((s) => {
+      const sEnd = new Date(s.endDate);
+      const isExpired = sEnd < now;
+      const status = s.cancelledAt ? 'cancelled' : (!s.isActive || isExpired) ? 'expired' : 'active';
+      return {
+        id: s.id,
+        packageName: s.packageVersion?.name || s.package?.name || s.packageType,
+        packageType: s.packageType,
+        duration: s.duration,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        isActive: s.isActive,
+        status,
+        isExpired,
+        hoursTotal: s.hoursTotal,
+        hoursUsed: s.hoursUsed,
+        visitsTotal: s.visitsTotal,
+        visitsCompleted: s.visitsCompleted,
+        createdAt: s.createdAt,
+      };
     });
 
     if (!subscription) {
       return res.json({
         success: true,
-        data: { subscription: null, benefits: [], recentLogs: [] },
+        data: {
+          subscription: null,
+          allSubscriptions: [],
+          benefits: [],
+          recentLogs: [],
+          mostUsedBenefit: null,
+          overallStats: null,
+        },
       });
     }
 
-    // Get recent package hours logs (last 30 entries)
+    // Get recent package hours logs (last 50 entries)
     const recentLogs = await prisma.packageHoursLog.findMany({
       where: { subscriptionId: subscription.id },
       orderBy: { loggedAt: 'desc' },
-      take: 30,
+      take: 50,
       include: {
         visit: {
           select: {
@@ -1232,11 +1326,17 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
       },
     });
 
+    let totalAllocatedUnits = 0;
+    let totalUsedUnits = 0;
+
     const benefits = subscription.benefitBalances.map((b) => {
       const remainingUnits = Math.max(0, b.totalUnits - b.usedUnits);
       const usagePercent = b.totalUnits > 0 ? Math.round((b.usedUnits / b.totalUnits) * 100) : 0;
       const isLowBalance = b.totalUnits > 0 && remainingUnits / b.totalUnits < 0.2;
       const isExhausted = b.totalUnits > 0 && remainingUnits === 0;
+
+      totalAllocatedUnits += (b.totalUnits || 0);
+      totalUsedUnits += (b.usedUnits || 0);
 
       return {
         benefitId: b.benefitId,
@@ -1252,6 +1352,20 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
         isExhausted,
       };
     });
+
+    // Find the benefit used the most
+    const sortedByUsage = [...benefits].sort((a, b) => (b.usedUnits - a.usedUnits) || (b.usagePercent - a.usagePercent));
+    const mostUsedBenefit = sortedByUsage.find((b) => b.usedUnits > 0) || (benefits.length > 0 ? benefits[0] : null);
+
+    const overallUsagePercent = totalAllocatedUnits > 0 ? Math.round((totalUsedUnits / totalAllocatedUnits) * 100) : 0;
+
+    const subStart = new Date(subscription.startDate);
+    const subEnd = new Date(subscription.endDate);
+    const isExpired = subEnd < now;
+    const status = subscription.cancelledAt ? 'cancelled' : (!subscription.isActive || isExpired) ? 'expired' : 'active';
+    const durationDays = Math.max(1, Math.round((subEnd.getTime() - subStart.getTime()) / (1000 * 60 * 60 * 24)));
+    const daysRemaining = !isExpired ? Math.max(0, Math.ceil((subEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+    const expiredDaysAgo = isExpired ? Math.floor((now.getTime() - subEnd.getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
     const logs = recentLogs.map((l) => ({
       id: l.id,
@@ -1275,16 +1389,38 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
         subscription: {
           id: subscription.id,
           packageId: subscription.package?.id,
-          packageName: subscription.packageVersion?.name || subscription.package?.name,
+          packageName: subscription.packageVersion?.name || subscription.package?.name || subscription.packageType,
           packageType: subscription.packageType,
+          packageVersion: subscription.packageVersion?.version || null,
+          basePrice: subscription.packageVersion?.basePrice ?? subscription.package?.basePrice ?? null,
+          duration: subscription.duration,
           startDate: subscription.startDate,
           endDate: subscription.endDate,
           isActive: subscription.isActive,
+          status,
+          isExpired,
+          durationDays,
+          daysRemaining,
+          expiredDaysAgo,
+          cancelledAt: subscription.cancelledAt,
+          cancellationNote: subscription.cancellationNote,
           hoursTotal: subscription.hoursTotal,
           hoursUsed: subscription.hoursUsed,
           hoursRemaining: Math.max(0, subscription.hoursTotal - subscription.hoursUsed),
           visitsTotal: subscription.visitsTotal,
           visitsCompleted: subscription.visitsCompleted,
+          latestPayment: subscription.payments?.[0] || null,
+        },
+        allSubscriptions,
+        mostUsedBenefit,
+        overallStats: {
+          totalAllocatedUnits,
+          totalUsedUnits,
+          totalRemainingUnits: Math.max(0, totalAllocatedUnits - totalUsedUnits),
+          overallUsagePercent,
+          totalBenefitsCount: benefits.length,
+          exhaustedCount: benefits.filter((b) => b.isExhausted).length,
+          lowBalanceCount: benefits.filter((b) => b.isLowBalance).length,
         },
         benefits,
         recentLogs: logs,

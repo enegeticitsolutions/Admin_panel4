@@ -1,5 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, TrendingUp, AlertTriangle, CheckCircle2, Loader2, RefreshCw, PackageCheck, Calendar, CheckCheck, Sparkles, Plus } from 'lucide-react';
+import {
+  Clock,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  RefreshCw,
+  PackageCheck,
+  Calendar,
+  CheckCheck,
+  Sparkles,
+  Plus,
+  Award,
+  History,
+  Activity,
+  UserCheck,
+  Layers,
+  ChevronDown
+} from 'lucide-react';
 import { subscriptionApi } from '../../services/api';
 import { toast } from 'sonner';
 import { AddonBenefitModal } from './addons/AddonBenefitModal';
@@ -33,19 +51,61 @@ interface LogEntry {
   actualMinutes: number | null;
 }
 
+interface SubscriptionSummary {
+  id: string;
+  packageId?: string;
+  packageName: string;
+  packageType: string;
+  packageVersion?: string | number | null;
+  basePrice?: number | null;
+  duration?: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+  status: 'active' | 'expired' | 'cancelled';
+  isExpired: boolean;
+  durationDays: number;
+  daysRemaining: number;
+  expiredDaysAgo: number;
+  cancelledAt?: string | null;
+  cancellationNote?: string | null;
+  hoursTotal: number;
+  hoursUsed: number;
+  hoursRemaining: number;
+  visitsTotal: number;
+  visitsCompleted: number;
+  latestPayment?: any | null;
+}
+
+interface SubscriptionHistoryItem {
+  id: string;
+  packageName: string;
+  packageType: string;
+  duration?: string;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+  status: 'active' | 'expired' | 'cancelled';
+  isExpired: boolean;
+  hoursTotal: number;
+  hoursUsed: number;
+  visitsTotal: number;
+  visitsCompleted: number;
+  createdAt: string;
+}
+
 interface UtilizationData {
-  subscription: {
-    id: string;
-    packageName: string;
-    packageType: string;
-    startDate: string;
-    endDate: string;
-    isActive: boolean;
-    hoursTotal: number;
-    hoursUsed: number;
-    hoursRemaining: number;
-    visitsTotal: number;
-    visitsCompleted: number;
+  subscription: SubscriptionSummary | null;
+  allSubscriptions?: SubscriptionHistoryItem[];
+  mostUsedBenefit?: BenefitBalance | null;
+  overallStats?: {
+    totalAllocatedUnits: number;
+    totalUsedUnits: number;
+    totalRemainingUnits: number;
+    overallUsagePercent: number;
+    totalBenefitsCount: number;
+    exhaustedCount: number;
+    lowBalanceCount: number;
   } | null;
   benefits: BenefitBalance[];
   recentLogs: LogEntry[];
@@ -126,7 +186,9 @@ function CircleRing({
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F3F4F6" strokeWidth={strokeWidth} />
           {/* Progress */}
           <circle
-            cx={cx} cy={cy} r={r}
+            cx={cx}
+            cy={cy}
+            r={r}
             fill="none"
             stroke={ringColor}
             strokeWidth={strokeWidth}
@@ -149,7 +211,9 @@ function CircleRing({
         </div>
       </div>
       <div className="text-center">
-        <p className="text-[10px] font-black text-gray-600 uppercase tracking-wider leading-tight max-w-[80px] text-center">{label}</p>
+        <p className="text-[10px] font-black text-gray-600 uppercase tracking-wider leading-tight max-w-[85px] text-center truncate" title={label}>
+          {label}
+        </p>
         {isSelected && (
           <span className="text-[8px] font-black text-[#FF7A00] uppercase tracking-widest">Selected</span>
         )}
@@ -159,27 +223,44 @@ function CircleRing({
         {!isSelected && !isExhausted && isLow && (
           <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Low</span>
         )}
+        {!isSelected && !isExhausted && !isLow && (
+          <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wider">{percent}%</span>
+        )}
       </div>
     </div>
   );
 }
 
-const COLORS = ['#FF7A00', '#7C3AED', '#059669', '#2563EB', '#DB2777', '#D97706'];
+const COLORS = ['#FF7A00', '#7C3AED', '#059669', '#2563EB', '#DB2777', '#D97706', '#0284C7', '#10B981'];
 
-export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscriberId, subscriberName, subscriberPhone, subscriberEmail, defaultPincode, onBenefitSelect, selectedBenefitId }: Props) {
+export function PackageUtilizationPanel({
+  beneficiaryId,
+  beneficiaryName,
+  subscriberId,
+  subscriberName,
+  subscriberPhone,
+  subscriberEmail,
+  defaultPincode,
+  onBenefitSelect,
+  selectedBenefitId,
+}: Props) {
   const [data, setData] = useState<UtilizationData | null>(null);
+  const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAllLogs, setShowAllLogs] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
 
-  const load = async () => {
+  const load = async (subId?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await subscriptionApi.getBeneficiaryUtilization(beneficiaryId);
+      const result = await subscriptionApi.getBeneficiaryUtilization(beneficiaryId, subId || selectedSubId || undefined);
       setData(result as unknown as UtilizationData);
+      if (result?.subscription?.id && !selectedSubId) {
+        setSelectedSubId(result.subscription.id);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load utilization data');
     } finally {
@@ -191,21 +272,29 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
     if (beneficiaryId) load();
   }, [beneficiaryId]);
 
-  if (loading) {
+  const handleSelectSubscription = (subId: string) => {
+    setSelectedSubId(subId);
+    load(subId);
+  };
+
+  if (loading && !data) {
     return (
       <div className="bg-white rounded-[32px] p-12 border border-[#E7DED6] flex items-center justify-center gap-4">
         <Loader2 className="animate-spin text-[#FF7A00]" size={24} />
-        <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">Loading utilization data...</span>
+        <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">Loading package & utilization data...</span>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="bg-white rounded-[32px] p-10 border border-[#E7DED6] text-center">
         <AlertTriangle className="text-amber-400 mx-auto mb-3" size={32} />
         <p className="text-sm font-bold text-gray-600">{error}</p>
-        <button onClick={load} className="mt-4 text-[#FF7A00] font-black text-[10px] uppercase tracking-widest flex items-center gap-2 mx-auto">
+        <button
+          onClick={() => load()}
+          className="mt-4 text-[#FF7A00] font-black text-[10px] uppercase tracking-widest flex items-center gap-2 mx-auto cursor-pointer"
+        >
           <RefreshCw size={12} /> Retry
         </button>
       </div>
@@ -215,38 +304,144 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
   if (!data || !data.subscription) {
     return (
       <div className="bg-white rounded-[32px] p-12 border border-dashed border-[#E7DED6] flex flex-col items-center justify-center gap-4 text-center">
-        <PackageCheck size={36} className="text-gray-200" />
+        <PackageCheck size={40} className="text-gray-300" />
         <div>
-          <h3 className="font-black text-gray-600 text-sm uppercase tracking-widest">No Active Subscription</h3>
-          <p className="text-xs text-gray-400 mt-1">Enroll this beneficiary in a package to track utilization.</p>
+          <h3 className="font-black text-gray-700 text-sm uppercase tracking-widest">No Subscription On Record</h3>
+          <p className="text-xs text-gray-400 mt-1">
+            This beneficiary has not yet been enrolled in any care package.
+          </p>
         </div>
       </div>
     );
   }
 
-  const { subscription, benefits, recentLogs } = data;
+  const { subscription, allSubscriptions = [], mostUsedBenefit, overallStats, benefits, recentLogs } = data;
   const visibleLogs = showAllLogs ? recentLogs : recentLogs.slice(0, 8);
-  const hasWarnings = benefits.some(b => b.isLowBalance || b.isExhausted);
+  const hasWarnings = benefits.some((b) => b.isLowBalance || b.isExhausted);
   const isSelectable = !!onBenefitSelect;
+
+  const isExpired = subscription.status === 'expired' || subscription.isExpired;
+  const isCancelled = subscription.status === 'cancelled';
+  const isActive = subscription.status === 'active' && !isExpired && !isCancelled;
 
   return (
     <div className="space-y-6">
-      {/* Package Header */}
-      <div className="bg-white rounded-[28px] p-6 border border-[#E7DED6] shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <PackageCheck size={18} className="text-[#FF7A00]" />
-              <h3 className="text-lg font-black text-gray-900">{subscription.packageName}</h3>
-              <span className="bg-green-100 text-green-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Active</span>
+      {/* ── Package History Switcher (if multiple subscriptions exist) ── */}
+      {allSubscriptions.length > 1 && (
+        <div className="bg-white rounded-[24px] p-4 border border-[#E7DED6] shadow-sm">
+          <div className="flex items-center justify-between gap-3 mb-2.5">
+            <div className="flex items-center gap-2">
+              <History size={15} className="text-[#FF7A00]" />
+              <span className="text-[11px] font-black text-gray-800 uppercase tracking-widest">
+                Package History ({allSubscriptions.length} Subscriptions)
+              </span>
             </div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1">
-              <Calendar size={10} />
-              {new Date(subscription.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-              &nbsp;→&nbsp;
-              {new Date(subscription.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-            </p>
+            <span className="text-[10px] font-bold text-gray-400">Click to view utilization for any package</span>
           </div>
+
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-thin">
+            {allSubscriptions.map((sub, idx) => {
+              const isCurrent = sub.id === subscription.id;
+              const subIsExpired = sub.status === 'expired' || sub.isExpired;
+              return (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => handleSelectSubscription(sub.id)}
+                  className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all flex items-center gap-2 shrink-0 border cursor-pointer ${
+                    isCurrent
+                      ? 'bg-orange-50 border-[#FF7A00] text-gray-900 shadow-sm'
+                      : 'bg-white border-gray-100 hover:border-gray-300 text-gray-600'
+                  }`}
+                >
+                  <span className={isCurrent ? 'text-[#FF7A00]' : 'text-gray-400'}>
+                    #{allSubscriptions.length - idx}
+                  </span>
+                  <span>{sub.packageName}</span>
+                  <span
+                    className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${
+                      sub.status === 'active' && !subIsExpired
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : sub.status === 'cancelled'
+                        ? 'bg-rose-100 text-rose-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {sub.status === 'active' && !subIsExpired ? 'Active' : sub.status === 'cancelled' ? 'Cancelled' : 'Expired'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Package Header Card ── */}
+      {/* ── 1. Package Header Card ── */}
+      <div className="bg-white rounded-[28px] p-6 border border-[#E7DED6] shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+              <PackageCheck size={22} className="text-[#FF7A00]" />
+              <h3 className="text-xl font-black text-gray-900">{subscription.packageName}</h3>
+
+              {/* Status Badge */}
+              {isActive && (
+                <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5">
+                  <CheckCircle2 size={12} className="text-emerald-600" /> Active Subscription
+                </span>
+              )}
+              {isExpired && (
+                <span className="bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5">
+                  <Clock size={12} className="text-amber-700" /> Expired Package
+                </span>
+              )}
+              {isCancelled && (
+                <span className="bg-rose-100 text-rose-800 border border-rose-200 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5">
+                  <AlertTriangle size={12} className="text-rose-600" /> Cancelled
+                </span>
+              )}
+            </div>
+
+            {/* Active Date Range & Validity */}
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-600 flex-wrap">
+              <span className="flex items-center gap-1 text-gray-400">
+                <Calendar size={13} />
+                Active from:
+              </span>
+              <span className="font-black text-gray-800">
+                {new Date(subscription.startDate).toLocaleDateString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </span>
+              <span className="text-gray-400">→</span>
+              <span className="font-black text-gray-800">
+                {new Date(subscription.endDate).toLocaleDateString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </span>
+              <span className="text-gray-300">·</span>
+              <span className="bg-gray-100 text-gray-700 text-[11px] font-bold px-2.5 py-0.5 rounded-lg">
+                {subscription.durationDays} Days Duration
+              </span>
+
+              {isExpired && subscription.expiredDaysAgo > 0 && (
+                <span className="text-amber-700 text-[11px] font-bold">
+                  (Expired {subscription.expiredDaysAgo} days ago)
+                </span>
+              )}
+              {isActive && subscription.daysRemaining > 0 && (
+                <span className="text-emerald-700 text-[11px] font-bold">
+                  ({subscription.daysRemaining} days remaining)
+                </span>
+              )}
+            </div>
+          </div>
+
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -256,14 +451,167 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
               <Plus size={14} className="stroke-[3]" /> Add Add-on Benefit
             </button>
             <button
-              onClick={load}
-              className="p-2 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-400 hover:text-[#FF7A00] transition-colors border border-gray-100 cursor-pointer"
+              onClick={() => load(subscription.id)}
+              className="p-2.5 rounded-2xl bg-gray-50 hover:bg-orange-50 text-gray-400 hover:text-[#FF7A00] transition-colors border border-gray-100 cursor-pointer"
               title="Refresh utilization"
             >
               <RefreshCw size={14} />
             </button>
           </div>
         </div>
+
+        {/* Expired info banner */}
+        {isExpired && (
+          <div className="flex items-center gap-3 p-3.5 bg-amber-50/90 border border-amber-200 rounded-2xl mt-5 text-xs text-amber-900">
+            <Clock size={16} className="text-amber-600 shrink-0" />
+            <div>
+              <span className="font-black">Historical Package Record: </span>
+              This subscription was active from{' '}
+              <span className="font-bold">
+                {new Date(subscription.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </span>{' '}
+              to{' '}
+              <span className="font-bold">
+                {new Date(subscription.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </span>
+              . All historical benefit utilization, clinical actions, and encounter logs are preserved below.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── 2. Key Metrics Row (4 Standalone Cards in 2x2 Grid) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4">
+        {/* Card 1: Top Used Benefit */}
+        <div className="bg-white rounded-[24px] p-5 border border-[#E7DED6] shadow-sm flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-[#FF7A00] shrink-0">
+                <Award size={16} />
+              </div>
+              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider truncate">
+                Top Used Benefit
+              </span>
+            </div>
+            {mostUsedBenefit && mostUsedBenefit.usedUnits > 0 && (
+              <span className="text-[10px] font-black text-[#FF7A00] bg-orange-50 border border-orange-200 px-2.5 py-0.5 rounded-full shrink-0">
+                {mostUsedBenefit.usagePercent}% Used
+              </span>
+            )}
+          </div>
+
+          <div>
+            <p className="text-base font-black text-gray-900 truncate" title={mostUsedBenefit?.benefitName || 'N/A'}>
+              {mostUsedBenefit?.benefitName || 'None'}
+            </p>
+            {mostUsedBenefit && mostUsedBenefit.usedUnits > 0 ? (
+              <p className="text-xs font-bold text-gray-500 mt-1">
+                <strong className="text-sm font-black text-[#FF7A00]">{mostUsedBenefit.usedUnits}</strong> of {mostUsedBenefit.totalUnits} {mostUsedBenefit.unitLabel} consumed
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">No benefits consumed yet</p>
+            )}
+          </div>
+        </div>
+
+        {/* Card 2: Quota Utilization */}
+        <div className="bg-white rounded-[24px] p-5 border border-[#E7DED6] shadow-sm flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                <Activity size={16} />
+              </div>
+              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider truncate">
+                Quota Utilization
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-gray-600 bg-gray-100 px-2.5 py-0.5 rounded-full shrink-0">
+              {benefits.length} Benefits
+            </span>
+          </div>
+
+          <div>
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-2xl font-black text-gray-900">{overallStats?.overallUsagePercent ?? 0}%</span>
+              <span className="text-xs font-bold text-gray-500">
+                {overallStats?.totalUsedUnits ?? 0} / {overallStats?.totalAllocatedUnits ?? 0} Units
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-blue-500 to-[#FF7A00] h-2 rounded-full transition-all"
+                style={{ width: `${Math.min(overallStats?.overallUsagePercent ?? 0, 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Care Companion Hours */}
+        <div className="bg-white rounded-[24px] p-5 border border-[#E7DED6] shadow-sm flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shrink-0">
+                <Clock size={16} />
+              </div>
+              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider truncate">
+                Companion Hours
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-0.5 rounded-full shrink-0">
+              {subscription.hoursRemaining}h left
+            </span>
+          </div>
+
+          <div>
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-2xl font-black text-gray-900">
+                {subscription.hoursUsed} <span className="text-xs font-bold text-gray-400">/ {subscription.hoursTotal} hrs</span>
+              </span>
+              <span className="text-xs font-bold text-purple-700">
+                {subscription.hoursTotal > 0 ? Math.round((subscription.hoursUsed / subscription.hoursTotal) * 100) : 0}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-purple-600 h-2 rounded-full transition-all"
+                style={{
+                  width: `${Math.min(subscription.hoursTotal > 0 ? (subscription.hoursUsed / subscription.hoursTotal) * 100 : 0, 100)}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Delivered Visits */}
+        <div className="bg-white rounded-[24px] p-5 border border-[#E7DED6] shadow-sm flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                <UserCheck size={16} />
+              </div>
+              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider truncate">
+                Delivered Visits
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full shrink-0">
+              Verified
+            </span>
+          </div>
+
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-gray-900">{subscription.visitsCompleted}</span>
+              <span className="text-xs font-bold text-gray-500">
+                {subscription.visitsTotal > 0 ? `/ ${subscription.visitsTotal} Visits Total` : 'Visits Completed'}
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-1">Care encounters logged & synced</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 3. Benefit Balances & Quota Overview Card ── */}
+      <div className="bg-white rounded-[28px] p-6 border border-[#E7DED6] shadow-sm">
 
         {/* Selectable hint banner */}
         {isSelectable && benefits.length > 0 && (
@@ -280,29 +628,29 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
         )}
 
         {/* Warning Banner */}
-        {hasWarnings && (
+        {hasWarnings && !isExpired && (
           <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-100 rounded-2xl mb-4">
             <AlertTriangle size={16} className="text-amber-500 flex-shrink-0" />
             <p className="text-xs font-bold text-amber-700">
-              {benefits.filter(b => b.isExhausted).length > 0
-                ? `${benefits.filter(b => b.isExhausted).length} benefit(s) exhausted — renewal or top-up needed`
-                : `${benefits.filter(b => b.isLowBalance).length} benefit(s) running low (< 20% remaining)`}
+              {benefits.filter((b) => b.isExhausted).length > 0
+                ? `${benefits.filter((b) => b.isExhausted).length} benefit(s) exhausted — renewal or top-up needed`
+                : `${benefits.filter((b) => b.isLowBalance).length} benefit(s) running low (< 20% remaining)`}
             </p>
           </div>
         )}
 
-        {/* Benefit Rings */}
+        {/* ── Benefit Rings (Visual Overview) ── */}
         {benefits.length > 0 ? (
-          <div className="flex flex-wrap justify-center gap-8 py-6">
+          <div className="flex flex-wrap justify-center gap-8 py-5 border-y border-gray-100 my-4">
             {benefits.map((b, i) => (
               <CircleRing
                 key={b.benefitId}
                 percent={b.usagePercent}
-                size={90}
-                strokeWidth={8}
+                size={86}
+                strokeWidth={7}
                 color={COLORS[i % COLORS.length]}
                 label={b.benefitName || 'Benefit'}
-                value={`${b.remainingUnits}`}
+                value={`${b.usedUnits}`}
                 unit={`/ ${b.totalUnits} ${b.unitLabel}`}
                 isExhausted={b.isExhausted}
                 isLow={b.isLowBalance}
@@ -317,13 +665,13 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
             <p className="text-sm text-gray-400 text-center italic">No benefit balances configured for this subscription.</p>
             <button
               onClick={async () => {
-                if (!data.subscription?.id) return;
+                if (!subscription?.id) return;
                 setInitializing(true);
                 try {
-                  const result = await subscriptionApi.initializeBalances(data.subscription.id);
+                  const result = await subscriptionApi.initializeBalances(subscription.id);
                   if (result.created > 0) {
                     toast.success(`✅ Initialized ${result.created} benefit balance(s)!`);
-                    load(); // Refresh data
+                    load(subscription.id);
                   } else {
                     toast.info(result.message || 'No new balances to create.');
                   }
@@ -334,116 +682,138 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
                 }
               }}
               disabled={initializing}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#FF7A00] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#e06d00] transition-colors disabled:opacity-60"
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#FF7A00] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#e06d00] transition-colors disabled:opacity-60 cursor-pointer"
             >
               {initializing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
               {initializing ? 'Initializing...' : 'Initialize Benefit Balances'}
             </button>
-            <p className="text-[10px] text-gray-400 max-w-xs text-center">
-              This will set up benefit tracking based on the package's defined benefits.
-            </p>
           </div>
         )}
 
-        {/* Benefit Detail Cards — clickable when onBenefitSelect is provided */}
+        {/* ── Detailed Benefit Cards Grid ── */}
         {benefits.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-            {benefits.map((b, i) => {
-              const accent = COLORS[i % COLORS.length];
-              const isSelected = selectedBenefitId === b.benefitId;
-              const isHourBased = b.unitLabel?.toLowerCase().includes('hour');
-              const canSelect = isSelectable && !b.isExhausted;
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-[11px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                <Layers size={13} className="text-[#FF7A00]" />
+                Benefit Quota & Usage Breakdown ({benefits.length} Benefits)
+              </h4>
+              <span className="text-[10px] font-bold text-gray-400">
+                {benefits.filter((b) => b.usedUnits > 0).length} of {benefits.length} benefits utilized
+              </span>
+            </div>
 
-              return (
-                <div
-                  key={b.benefitId}
-                  onClick={canSelect ? () => onBenefitSelect?.(b.benefitId, b.benefitName, b.unitLabel) : undefined}
-                  className={`p-4 rounded-2xl border-2 transition-all ${
-                    canSelect ? 'cursor-pointer' : ''
-                  } ${
-                    isSelected
-                      ? 'bg-[#FFF5EE] border-[#FF7A00] shadow-lg shadow-orange-100'
-                      : b.isExhausted
-                        ? 'bg-red-50 border-red-100 opacity-60'
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {benefits.map((b, i) => {
+                const accent = COLORS[i % COLORS.length];
+                const isSelected = selectedBenefitId === b.benefitId;
+                const isHourBased = b.unitLabel?.toLowerCase().includes('hour');
+                const canSelect = isSelectable && !b.isExhausted;
+                const isTopUsed = mostUsedBenefit && mostUsedBenefit.benefitId === b.benefitId && b.usedUnits > 0;
+
+                return (
+                  <div
+                    key={b.benefitId}
+                    onClick={canSelect ? () => onBenefitSelect?.(b.benefitId, b.benefitName, b.unitLabel) : undefined}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      canSelect ? 'cursor-pointer' : ''
+                    } ${
+                      isSelected
+                        ? 'bg-[#FFF5EE] border-[#FF7A00] shadow-md shadow-orange-100'
+                        : b.isExhausted
+                        ? 'bg-red-50/50 border-red-100'
                         : b.isLowBalance
-                          ? 'bg-amber-50 border-amber-100 hover:border-amber-300'
-                          : canSelect
-                            ? 'bg-[#FDFBF9] border-gray-100 hover:border-[#FF7A00] hover:bg-[#FFF9F5] hover:shadow-md'
-                            : 'bg-[#FDFBF9] border-gray-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {isSelected && (
-                        <div className="w-5 h-5 rounded-full bg-[#FF7A00] flex items-center justify-center flex-shrink-0">
-                          <CheckCheck size={10} className="text-white" />
+                        ? 'bg-amber-50/50 border-amber-200 hover:border-amber-300'
+                        : isTopUsed
+                        ? 'bg-orange-50/30 border-orange-200'
+                        : canSelect
+                        ? 'bg-[#FDFBF9] border-gray-100 hover:border-[#FF7A00] hover:bg-[#FFF9F5]'
+                        : 'bg-[#FDFBF9] border-gray-100'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          {isTopUsed && (
+                            <span title="Most used benefit in this package">
+                              <Award size={13} className="text-[#FF7A00] shrink-0" />
+                            </span>
+                          )}
+                          <p className={`text-xs font-black truncate max-w-[160px] ${isSelected ? 'text-[#FF7A00]' : 'text-gray-800'}`}>
+                            {b.benefitName}
+                          </p>
                         </div>
-                      )}
-                      <p className={`text-xs font-black ${isSelected ? 'text-[#FF7A00]' : 'text-gray-700'}`}>
-                        {b.benefitName}
-                      </p>
+                        {b.benefitTypeName && (
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mt-0.5">
+                            {b.benefitTypeName}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {b.isExhausted ? (
+                          <span className="flex items-center gap-1 text-[9px] font-black text-red-600 uppercase bg-red-100/80 px-1.5 py-0.5 rounded">
+                            <AlertTriangle size={10} /> Exhausted
+                          </span>
+                        ) : b.isLowBalance ? (
+                          <span className="flex items-center gap-1 text-[9px] font-black text-amber-700 uppercase bg-amber-100/80 px-1.5 py-0.5 rounded">
+                            <AlertTriangle size={10} /> Low
+                          </span>
+                        ) : b.usedUnits > 0 ? (
+                          <span className="text-[9px] font-black text-emerald-700 uppercase bg-emerald-100/80 px-1.5 py-0.5 rounded">
+                            {b.usagePercent}% Used
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-gray-400 uppercase bg-gray-100 px-1.5 py-0.5 rounded">
+                            Unused
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      {isHourBased && isSelectable && (
-                        <span className="text-[8px] font-black text-purple-500 uppercase tracking-widest bg-purple-50 px-1.5 py-0.5 rounded">
-                          ⏱ At checkout
-                        </span>
-                      )}
-                      {b.isExhausted ? (
-                        <span className="flex items-center gap-1 text-[9px] font-black text-red-600 uppercase">
-                          <AlertTriangle size={10} /> Exhausted
-                        </span>
-                      ) : b.isLowBalance ? (
-                        <span className="flex items-center gap-1 text-[9px] font-black text-amber-600 uppercase">
-                          <AlertTriangle size={10} /> Low
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-[9px] font-black text-green-600 uppercase">
-                          <CheckCircle2 size={10} /> OK
-                        </span>
-                      )}
+
+                    {/* Progress bar */}
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${Math.min(b.usagePercent, 100)}%`,
+                          backgroundColor: isSelected ? '#FF7A00' : b.isExhausted ? '#EF4444' : b.isLowBalance ? '#F59E0B' : accent,
+                        }}
+                      />
                     </div>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{
-                        width: `${b.usagePercent}%`,
-                        backgroundColor: isSelected ? '#FF7A00' : b.isExhausted ? '#EF4444' : b.isLowBalance ? '#F59E0B' : accent,
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-gray-500">
-                      {b.usedUnits} used · {b.remainingUnits} left
-                    </span>
-                    <span className={`text-[10px] font-black uppercase ${isSelected ? 'text-[#FF7A00]' : 'text-gray-400'}`}>
-                      {b.unitLabel}
-                    </span>
-                  </div>
-                  {/* Selected indicator line at bottom */}
-                  {isSelected && (
-                    <div className="mt-2 pt-2 border-t border-[#FFE4D3]">
-                      <p className="text-[9px] font-black text-[#FF7A00] uppercase tracking-widest text-center">
-                        ✓ Selected for this visit
-                      </p>
+
+                    <div className="flex justify-between items-center text-[10px]">
+                      <span className="font-black text-gray-700">
+                        <strong className="text-gray-900">{b.usedUnits}</strong> of {b.totalUnits} {b.unitLabel} used
+                      </span>
+                      <span className="font-bold text-gray-400">
+                        {b.remainingUnits} left
+                      </span>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+
+                    {/* Selected indicator line at bottom */}
+                    {isSelected && (
+                      <div className="mt-2 pt-2 border-t border-[#FFE4D3]">
+                        <p className="text-[9px] font-black text-[#FF7A00] uppercase tracking-widest text-center">
+                          ✓ Selected for this visit
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Recent Activity Log */}
+      {/* ── Recent Activity Log ── */}
       {recentLogs.length > 0 && (
         <div className="bg-white rounded-[28px] p-6 border border-[#E7DED6] shadow-sm">
           <div className="flex items-center justify-between mb-5">
             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
               <TrendingUp size={14} className="text-[#FF7A00]" />
-              Recent Activity Log
+              Package Consumption & Visit Logs
             </h4>
             <span className="text-[10px] font-bold text-gray-400">{recentLogs.length} entries</span>
           </div>
@@ -462,7 +832,7 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-gray-800 truncate">
-                        {log.description || log.encounterId || 'Manual deduction'}
+                        {log.description || log.encounterId || 'Benefit deduction'}
                       </p>
                       <p className="text-[10px] font-bold text-gray-400 uppercase">
                         {log.careCompanionName}
@@ -472,10 +842,10 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-xs font-black text-gray-800">
-                      {isHours ? `${billMinutes}m billed` : `−1 visit`}
+                      {isHours ? `${billMinutes || (log.hoursConsumed * 60)}m billed` : `−1 unit`}
                     </p>
                     <p className="text-[10px] font-bold text-gray-400">
-                      {new Date(log.loggedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                      {new Date(log.loggedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </p>
                   </div>
                 </div>
@@ -484,8 +854,8 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
           </div>
           {recentLogs.length > 8 && (
             <button
-              onClick={() => setShowAllLogs(v => !v)}
-              className="w-full mt-4 py-3 rounded-2xl bg-[#F4EAE3] text-gray-600 font-black text-[10px] uppercase tracking-widest hover:bg-[#E7DED6] transition-colors"
+              onClick={() => setShowAllLogs((v) => !v)}
+              className="w-full mt-4 py-3 rounded-2xl bg-[#F4EAE3] text-gray-600 font-black text-[10px] uppercase tracking-widest hover:bg-[#E7DED6] transition-colors cursor-pointer"
             >
               {showAllLogs ? 'Show Less' : `View All ${recentLogs.length} Entries`}
             </button>
@@ -497,7 +867,7 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
         <div className="bg-white rounded-[28px] p-8 border border-dashed border-[#E7DED6] text-center">
           <TrendingUp size={28} className="text-gray-200 mx-auto mb-3" />
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">No consumption logged yet</p>
-          <p className="text-xs text-gray-400 mt-1">Activity will appear here once visits are scheduled and completed.</p>
+          <p className="text-xs text-gray-400 mt-1">Activity will appear here once visits or consultations are completed.</p>
         </div>
       )}
 
@@ -513,7 +883,7 @@ export function PackageUtilizationPanel({ beneficiaryId, beneficiaryName, subscr
         subscriberPhone={subscriberPhone}
         subscriberEmail={subscriberEmail}
         defaultPincode={defaultPincode}
-        onSuccess={() => load()}
+        onSuccess={() => load(subscription.id)}
       />
     </div>
   );
