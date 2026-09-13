@@ -502,7 +502,7 @@ export const purchaseSubscription = async (
     }
     const versionObj = pVersion!;
 
-    // 2b. Compute subscription activation dates (chain from existing unexpired subscription if renewing early)
+    // 2b. Compute subscription activation dates & queue status
     const now = new Date();
     let existingActiveSub: any = null;
     if (beneficiary?.id) {
@@ -516,11 +516,14 @@ export const purchaseSubscription = async (
       });
     }
 
-    const startDate = existingActiveSub ? new Date(existingActiveSub.endDate) : now;
+    // If beneficiary already has an active, unexpired plan, place newly purchased plan in QUEUE
+    const isQueued = !!existingActiveSub;
+    const isActive = !isQueued;
+    const startDate = isQueued ? new Date(existingActiveSub.endDate) : now;
     const endDate = new Date(startDate);
     endDate.setMonth(endDate.getMonth() + months);
 
-    // Create active Subscription record (beneficiaryId is optional now)
+    // Create Subscription record
     const subscription = await tx.subscription.create({
       data: {
         id: generateUUID(),
@@ -532,6 +535,9 @@ export const purchaseSubscription = async (
         endDate: endDate,
         visitsTotal: subPackage.visitsPerWeek * 4 * months,
         hoursTotal: (subPackage.hoursPerMonth || 0) * months,
+        isActive: isActive,
+        isQueued: isQueued,
+        cancellationNote: isQueued ? 'QUEUED' : null,
       },
       include: {
         package: true,
@@ -545,6 +551,7 @@ export const purchaseSubscription = async (
     });
 
     // 2c. Initialize snapshot benefit balances with frequency & tenure awareness
+    // For monthly benefits in multi-month packages, allocate Period 1 base units (not months*units upfront)
     if (versionObj.versionBenefits && versionObj.versionBenefits.length > 0) {
       await tx.subscriptionBenefitBalance.createMany({
         data: versionObj.versionBenefits.map((vb: any) => {
@@ -562,8 +569,8 @@ export const purchaseSubscription = async (
           } else if (vb.unitsPeriod === 'one_time') {
             unitsToGrant = vb.unitsIncluded;
           } else {
-            // Default monthly benefit: scales by months purchased
-            unitsToGrant = vb.unitsIncluded * months;
+            // Default monthly benefit: base units for Period 1
+            unitsToGrant = vb.unitsIncluded;
           }
 
           return {
@@ -1046,6 +1053,7 @@ export const linkBeneficiaryToSubscription = async (
     }
 
     // 5b. Link subscription and payments to the new beneficiary
+    let isQueued = false;
     if (subIdToLink) {
       const existingSub = await tx.subscription.findUnique({
         where: { id: subIdToLink },
@@ -1059,8 +1067,7 @@ export const linkBeneficiaryToSubscription = async (
         }
       });
 
-      const newStart = new Date();
-      const newEnd = new Date(newStart);
+      const now = new Date();
       let months = 1;
       if (existingSub?.startDate && existingSub?.endDate) {
         const diffDays = Math.round((new Date(existingSub.endDate).getTime() - new Date(existingSub.startDate).getTime()) / (1000 * 60 * 60 * 24));
@@ -1075,15 +1082,33 @@ export const linkBeneficiaryToSubscription = async (
       } else if (existingSub?.packageVersion?.durationMonths || existingSub?.package?.durationMonths) {
         months = existingSub?.packageVersion?.durationMonths || existingSub?.package?.durationMonths || 1;
       }
-      newEnd.setMonth(newEnd.getMonth() + months);
+
+      // Check if beneficiary already has an active unexpired plan
+      const currentActiveSub = await tx.subscription.findFirst({
+        where: {
+          beneficiaryId: beneficiary.id,
+          isActive: true,
+          endDate: { gte: now },
+          id: { not: subIdToLink }
+        },
+        orderBy: { endDate: 'desc' }
+      });
+
+      isQueued = !!currentActiveSub;
+      const isActive = !isQueued;
+      const startDate = isQueued && currentActiveSub ? new Date(currentActiveSub.endDate) : now;
+      const endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + months);
 
       await tx.subscription.update({
         where: { id: subIdToLink },
         data: { 
           beneficiaryId: beneficiary.id,
-          startDate: newStart,
-          endDate: newEnd,
-          isActive: true,
+          startDate: startDate,
+          endDate: endDate,
+          isActive: isActive,
+          isQueued: isQueued,
+          cancellationNote: isQueued ? 'QUEUED' : null,
         }
       });
 
@@ -1091,8 +1116,8 @@ export const linkBeneficiaryToSubscription = async (
         where: { subscriptionId: subIdToLink },
         data: { 
           beneficiaryId: beneficiary.id,
-          planStartDate: newStart,
-          planEndDate: newEnd
+          planStartDate: startDate,
+          planEndDate: endDate
         }
       });
 
@@ -1104,12 +1129,10 @@ export const linkBeneficiaryToSubscription = async (
           monthlyUnits: vb.unitsIncluded || 1,
           allowRollover: vb.allowRollover ?? false,
           maxRolloverUnits: vb.maxRolloverUnits ?? null,
-        }));
-
-        await benefitPeriodManager.generatePeriodsForSubscription(
+        }));        await benefitPeriodManager.generatePeriodsForSubscription(
           subIdToLink,
           months,
-          newStart,
+          startDate,
           periodBenefits,
           tx
         );
@@ -1135,7 +1158,7 @@ export const linkBeneficiaryToSubscription = async (
         await tx.beneficiaryVitalConfig.upsert({
           where: { beneficiaryId_vitalDefinitionId: { beneficiaryId: beneficiary.id, vitalDefinitionId: def.id } },
           update: { 
-            isActive: true,
+            isActive: true, 
             selectedBySubscriberId: userId,
           },
           create: { 
@@ -1182,15 +1205,22 @@ export const linkBeneficiaryToSubscription = async (
       });
     }
 
-    return { beneficiaryId: beneficiary.id, beneficiaryName: beneficiary.name };
+    return { 
+      beneficiaryId: beneficiary.id, 
+      beneficiaryName: beneficiary.name,
+      isQueued
+    };
   });
 
   return {
     success: true,
-    message: 'Beneficiary enrolled and linked to subscription successfully!',
+    message: result.isQueued 
+      ? 'Beneficiary linked successfully! This plan is in Queue behind their active plan.'
+      : 'Beneficiary enrolled and linked to subscription successfully!',
     beneficiaryId: result.beneficiaryId,
     beneficiaryName: result.beneficiaryName,
-    subscriptionId: subIdToLink
+    subscriptionId: subIdToLink,
+    isQueued: result.isQueued
   };
 };
 

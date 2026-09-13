@@ -10,6 +10,7 @@ import { sendAddonPurchaseNotifications } from '../../services/notification_serv
 import { generateUUID } from '../../utils/helpers';
 import { generateInvoiceNumber, calculateItemizedInvoice, BenefitTaxItem } from '../../utils/invoice_utils';
 import { notificationProducer } from '@maihoonna/notifications';
+import { benefitPeriodManager } from '../../services/benefit/BenefitPeriodManager';
 
 const router = Router();
 
@@ -432,10 +433,10 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
 
-    // 3. Link them in a transaction (Update Subscription and reset dates from activation moment)
+    // 3. Link them in a transaction
+    let isQueued = false;
     await prisma.$transaction(async (tx) => {
-      const newStart = new Date();
-      const newEnd = new Date(newStart);
+      const now = new Date();
       let months = 1;
       if (subscription.startDate && subscription.endDate) {
         const diffDays = Math.round((new Date(subscription.endDate).getTime() - new Date(subscription.startDate).getTime()) / (1000 * 60 * 60 * 24));
@@ -448,6 +449,22 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
       } else if (subscription.duration === 'six_months') {
         months = 6;
       }
+
+      // Check if beneficiary already has an active unexpired plan
+      const currentActiveSub = await tx.subscription.findFirst({
+        where: {
+          beneficiaryId: beneficiaryId,
+          isActive: true,
+          endDate: { gte: now },
+          id: { not: subscriptionId }
+        },
+        orderBy: { endDate: 'desc' }
+      });
+
+      isQueued = !!currentActiveSub;
+      const isActive = !isQueued;
+      const newStart = (isQueued && currentActiveSub) ? new Date(currentActiveSub.endDate) : now;
+      const newEnd = new Date(newStart);
       newEnd.setMonth(newEnd.getMonth() + months);
 
       await tx.subscription.update({
@@ -456,7 +473,9 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
           beneficiaryId: beneficiaryId,
           startDate: newStart,
           endDate: newEnd,
-          isActive: true,
+          isActive: isActive,
+          isQueued: isQueued,
+          cancellationNote: isQueued ? 'QUEUED' : null,
         }
       });
 
@@ -466,18 +485,182 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
           beneficiaryId: beneficiaryId,
           planStartDate: newStart,
           planEndDate: newEnd,
+          isSubscriptionActive: isActive,
         }
       });
     });
 
     res.json({
       success: true,
-      message: 'Successfully linked beneficiary to care plan',
+      isQueued,
+      message: isQueued
+        ? 'Beneficiary linked successfully! This care plan has been placed in Queue behind their active plan.'
+        : 'Successfully linked beneficiary to care plan',
     });
 
   } catch (error: any) {
     console.error('[Link Beneficiary Error]:', error);
     res.status(500).json({ success: false, message: error.message || 'Failed to link beneficiary' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /subscriber/subscriptions/:subscriptionId/activate-plan
+// Subscriber intentionally activates a queued care plan.
+// Sets startDate = today, endDate = today + durationMonths.
+// Extends older active package's benefit accessibility to match the new endDate.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/:subscriptionId/activate-plan', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const { subscriptionId } = req.params;
+
+    const subscription = await prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: {
+        package: true,
+        packageVersion: {
+          include: { versionBenefits: true }
+        }
+      }
+    });
+
+    if (!subscription) {
+      return res.status(404).json({ success: false, message: 'Subscription not found' });
+    }
+    if (subscription.subscriberId !== userId) {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+    if (!subscription.beneficiaryId) {
+      return res.status(400).json({ success: false, message: 'Subscription must be linked to a beneficiary before activating' });
+    }
+    if (subscription.isActive && !subscription.isQueued && subscription.cancellationNote !== 'QUEUED') {
+      return res.status(400).json({ success: false, message: 'Subscription is already active' });
+    }
+
+    const beneficiaryId = subscription.beneficiaryId;
+    const now = new Date();
+
+    // Calculate duration
+    let months = 1;
+    if (subscription.startDate && subscription.endDate) {
+      const diffDays = Math.round((new Date(subscription.endDate).getTime() - new Date(subscription.startDate).getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 300) months = 12;
+      else if (diffDays >= 150) months = 6;
+      else if (diffDays >= 70) months = 3;
+      else months = 1;
+    } else if (subscription.duration === 'annual') {
+      months = 12;
+    } else if (subscription.duration === 'six_months') {
+      months = 6;
+    } else if (subscription.packageVersion?.durationMonths) {
+      months = subscription.packageVersion.durationMonths;
+    }
+
+    const newStart = new Date();
+    const newEnd = new Date(newStart);
+    newEnd.setMonth(newEnd.getMonth() + months);
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Activate this subscription
+      await tx.subscription.update({
+        where: { id: subscriptionId },
+        data: {
+          startDate: newStart,
+          endDate: newEnd,
+          isActive: true,
+          isQueued: false,
+          cancellationNote: null,
+        }
+      });
+
+      // 2. Extend older active subscriptions for this beneficiary so remaining benefits stay accessible
+      const olderActiveSubs = await tx.subscription.findMany({
+        where: {
+          beneficiaryId: beneficiaryId,
+          isActive: true,
+          id: { not: subscriptionId },
+          endDate: { lt: newEnd },
+        }
+      });
+
+      for (const oldSub of olderActiveSubs) {
+        await tx.subscription.update({
+          where: { id: oldSub.id },
+          data: { endDate: newEnd }
+        });
+
+        // Also extend active BenefitPeriod endDate for older sub
+        await tx.benefitPeriod.updateMany({
+          where: {
+            subscriptionId: oldSub.id,
+            status: 'ACTIVE',
+            endDate: { lt: newEnd }
+          },
+          data: { endDate: newEnd }
+        });
+      }
+
+      // 3. Update payment dates for this subscription
+      await tx.payment.updateMany({
+        where: { subscriptionId: subscriptionId },
+        data: {
+          planStartDate: newStart,
+          planEndDate: newEnd,
+          isSubscriptionActive: true,
+        }
+      });
+
+      // 4. Generate/activate BenefitPeriods for this new subscription
+      if (subscription.packageVersion?.versionBenefits && subscription.packageVersion.versionBenefits.length > 0) {
+        const periodBenefits = subscription.packageVersion.versionBenefits.map((vb: any) => ({
+          benefitId: vb.benefitId,
+          name: vb.snapshotName || 'Benefit',
+          unitLabel: vb.snapshotUnitLabel || null,
+          monthlyUnits: vb.unitsIncluded || 1,
+          allowRollover: vb.allowRollover ?? false,
+          maxRolloverUnits: vb.maxRolloverUnits ?? null,
+        }));
+
+        await benefitPeriodManager.generatePeriodsForSubscription(
+          subscriptionId,
+          months,
+          newStart,
+          periodBenefits,
+          tx
+        );
+      }
+    });
+
+    // Send WhatsApp notification
+    try {
+      const subscriberUser = await prisma.user.findUnique({ where: { id: userId } });
+      const beneficiaryUser = await prisma.beneficiary.findUnique({ where: { id: beneficiaryId } });
+      if (subscriberUser?.phone) {
+        await notificationProducer.publish({
+          idempotencyKey: `sub-${subscriptionId}-activated-manual`,
+          channel: 'whatsapp',
+          event: 'SUBSCRIPTION_ACTIVATED',
+          recipient: { phone: subscriberUser.phone },
+          variables: {
+            subscriberName: subscriberUser.name || 'Subscriber',
+            packageName: subscription.package?.name || subscription.packageType,
+            beneficiaryName: beneficiaryUser?.name || 'Beneficiary',
+            startDate: newStart.toLocaleDateString('en-IN'),
+          },
+        });
+      }
+    } catch (notifErr: any) {
+      console.error('[Activate Plan Notification Error]:', notifErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Plan ${subscription.package?.name || subscription.packageType} activated successfully! Benefits from both plans are now active.`,
+    });
+  } catch (error: any) {
+    console.error('[Activate Plan Error]:', error);
+    res.status(500).json({ success: false, message: error.message || 'Failed to activate plan' });
   }
 });
 

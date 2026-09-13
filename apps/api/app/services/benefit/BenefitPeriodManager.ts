@@ -124,6 +124,24 @@ export class BenefitPeriodManager {
         }
       }
 
+      // Synchronize master SubscriptionBenefitBalance for Period 1 so initial ledger matches monthly base
+      for (const b of benefits) {
+        const base = Math.max(0, b.monthlyUnits || 0);
+        const subBal = await client.subscriptionBenefitBalance.findFirst({
+          where: { subscriptionId, benefitId: b.benefitId }
+        });
+        if (subBal) {
+          await client.subscriptionBenefitBalance.update({
+            where: { id: subBal.id },
+            data: {
+              totalUnits: base,
+              availableUnits: base,
+              usedUnits: 0,
+            }
+          });
+        }
+      }
+
       currentPeriodStart = new Date(periodEnd);
     }
   }
@@ -154,7 +172,11 @@ export class BenefitPeriodManager {
 
   /**
    * Transitions a subscription from its current active period to the next upcoming period.
-   * Computes non-compounding rollover: min(unusedRemaining, rolloverCap).
+   * Computes strict single-month non-compounding rollover:
+   * 1. Consumes previous rollover units first (FIFO).
+   * 2. Unused rollover units from past periods expire at month end.
+   * 3. Only unused units from the immediate base allocation roll over (capped at 1 month base quota).
+   * 4. Synchronizes master SubscriptionBenefitBalance to match active period total & remaining units.
    */
   public async transitionToNextPeriod(
     subscriptionId: string,
@@ -198,14 +220,20 @@ export class BenefitPeriodManager {
 
     const rolloverMultiplier = await this.getSystemRolloverMultiplier(client);
 
-    // 3. Roll over unused balances into next period
+    // 3. Roll over unused balances into next period (Strict Non-Compounding FIFO)
     for (const prevBal of currentPeriod.balances) {
-      const unused = Math.max(0, prevBal.remainingQuantity);
+      const isRolloverAllowed = (prevBal.rolloverCap !== null && prevBal.rolloverCap > 0);
+
+      // FIFO calculation: Rollover units are consumed first.
+      // Base units consumed = max(0, usedQuantity - rolloverAllocation)
+      const baseConsumed = Math.max(0, prevBal.usedQuantity - prevBal.rolloverAllocation);
+      const unusedBaseUnits = Math.max(0, prevBal.baseAllocation - baseConsumed);
+
       const cap = prevBal.rolloverCap !== null && prevBal.rolloverCap !== undefined
         ? prevBal.rolloverCap
         : Math.round(prevBal.baseAllocation * rolloverMultiplier);
 
-      const rolloverUnits = cap > 0 ? Math.min(unused, cap) : 0;
+      const rolloverUnits = isRolloverAllowed && cap > 0 ? Math.min(unusedBaseUnits, cap) : 0;
       const base = prevBal.baseAllocation;
       const total = base + rolloverUnits;
 
@@ -225,6 +253,21 @@ export class BenefitPeriodManager {
           rolloverCap: cap,
         }
       });
+
+      // Synchronize master SubscriptionBenefitBalance with newly activated period
+      const targetSubBal = await client.subscriptionBenefitBalance.findFirst({
+        where: { subscriptionId, benefitId: prevBal.benefitId },
+      });
+      if (targetSubBal) {
+        await client.subscriptionBenefitBalance.update({
+          where: { id: targetSubBal.id },
+          data: {
+            totalUnits: total,
+            availableUnits: total,
+            usedUnits: 0,
+          },
+        });
+      }
     }
 
     return await client.benefitPeriod.findUnique({
@@ -270,8 +313,10 @@ export class BenefitPeriodManager {
       const cap = prevBal.rolloverCap ?? 0;
       if (cap <= 0) continue; // Rollover not permitted for this benefit
 
-      const unused = Math.max(0, prevBal.remainingQuantity);
-      const unitsToRoll = Math.min(unused, cap);
+      // FIFO check for cross-subscription renewal
+      const baseConsumed = Math.max(0, prevBal.usedQuantity - prevBal.rolloverAllocation);
+      const unusedBaseUnits = Math.max(0, prevBal.baseAllocation - baseConsumed);
+      const unitsToRoll = Math.min(unusedBaseUnits, cap);
       if (unitsToRoll <= 0) continue;
 
       const targetBal = newFirstPeriod.balances.find((b) => b.benefitId === prevBal.benefitId);

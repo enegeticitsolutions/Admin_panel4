@@ -537,6 +537,68 @@ export default function PackageUtilizationScreen() {
     }
   };
 
+  const handleActivatePlan = (queuedPlanId: string, packageName: string) => {
+    const benName = detailData?.beneficiaryName || 'beneficiary';
+    const confirmMessage = `Activate ${packageName} for ${benName} now?\n\n• Both current and new packages will run simultaneously.\n• Remaining benefits from your current package remain accessible till the extended end date.\n• New package cycle starts today.`;
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Activate Care Plan\n\n${confirmMessage}`)) {
+        executePlanActivation(queuedPlanId);
+      }
+    } else {
+      Alert.alert(
+        'Activate Care Plan',
+        confirmMessage,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Confirm & Activate', 
+            style: 'default',
+            onPress: () => executePlanActivation(queuedPlanId) 
+          }
+        ]
+      );
+    }
+  };
+
+  const executePlanActivation = async (queuedPlanId: string) => {
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      const res = await fetch(`${API_URL}/subscriber/subscriptions/${queuedPlanId}/activate-plan`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (Platform.OS === 'web') {
+          window.alert(data.message || 'Plan activated successfully!');
+        } else {
+          Alert.alert('Plan Activated', data.message || 'Plan activated successfully! Benefits from both plans are now active.');
+        }
+        await fetchUtilization();
+      } else {
+        if (Platform.OS === 'web') {
+          window.alert(data.message || 'Failed to activate plan');
+        } else {
+          Alert.alert('Activation Failed', data.message || 'Failed to activate plan');
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (Platform.OS === 'web') {
+        window.alert('An error occurred while activating plan');
+      } else {
+        Alert.alert('Error', 'An error occurred while activating plan');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
@@ -691,6 +753,7 @@ export default function PackageUtilizationScreen() {
               data={detailData} 
               selectedBenefitId={selectedBenefit?.benefitId}
               onSelectBenefit={handleSelectBenefit}
+              onActivatePlan={userRole === 'subscriber' ? handleActivatePlan : undefined}
             />
           )}
 

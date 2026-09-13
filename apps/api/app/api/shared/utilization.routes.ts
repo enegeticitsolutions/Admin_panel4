@@ -564,6 +564,17 @@ export async function buildDetailedUtilization(beneficiary: any) {
     ).slice(0, 30);
   }
 
+  const queuedSub = await prisma.subscription.findFirst({
+    where: {
+      beneficiaryId: beneficiary.id,
+      OR: [
+        { isQueued: true },
+        { cancellationNote: 'QUEUED' }
+      ]
+    },
+    include: { package: true }
+  });
+
   return {
     type: 'detail',
     beneficiaryId: beneficiary.id,
@@ -575,6 +586,13 @@ export async function buildDetailedUtilization(beneficiary: any) {
       startDate: activeSub.startDate,
       endDate: activeSub.endDate,
       isActive: activeSub.isActive,
+    } : null,
+    hasQueuedPlan: !!queuedSub,
+    queuedPlan: queuedSub ? {
+      id: queuedSub.id,
+      packageName: queuedSub.package?.name || queuedSub.packageType,
+      startDate: queuedSub.startDate,
+      endDate: queuedSub.endDate,
     } : null,
     benefits: formattedBenefits,
     recentLogs

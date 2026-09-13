@@ -56,15 +56,25 @@ export interface DetailedUtilization {
   } | null;
   benefits: BenefitBalance[];
   recentLogs: LogEntry[];
+  hasQueuedPlan?: boolean;
+  queuedPlan?: {
+    id: string;
+    package?: {
+      name: string;
+    };
+    packageType: string;
+    durationMonths: number;
+  } | null;
 }
 
 interface Props {
   data: DetailedUtilization | null;
   selectedBenefitId?: string | null;
   onSelectBenefit?: (benefit: BenefitBalance) => void;
+  onActivatePlan?: (queuedPlanId: string, packageName: string) => void;
 }
 
-export default function PackageUtilizationPanel({ data, selectedBenefitId, onSelectBenefit }: Props) {
+export default function PackageUtilizationPanel({ data, selectedBenefitId, onSelectBenefit, onActivatePlan }: Props) {
   if (!data || !data.subscription) {
     return (
       <View style={styles.emptyContainer}>
@@ -82,6 +92,41 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
 
   return (
     <View style={styles.container}>
+      {/* Queued Care Plan Banner (Jio-like Plan Queue) */}
+      {data.hasQueuedPlan && data.queuedPlan && (
+        <View style={styles.queuedPlanCard}>
+          <View style={styles.queuedPlanHeader}>
+            <View style={styles.queuedBadge}>
+              <Ionicons name="time-outline" size={13} color="#D97706" style={{ marginRight: 4 }} />
+              <Text style={styles.queuedBadgeText}>NEXT PLAN IN QUEUE</Text>
+            </View>
+            <Text style={styles.queuedPlanDuration}>
+              {data.queuedPlan.durationMonths} {data.queuedPlan.durationMonths === 1 ? 'Month' : 'Months'} Plan
+            </Text>
+          </View>
+
+          <View style={styles.queuedPlanBody}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.queuedPlanTitle}>
+                {data.queuedPlan.package?.name || data.queuedPlan.packageType}
+              </Text>
+              <Text style={styles.queuedPlanSubtitle}>
+                Queued behind active plan. Activates automatically on expiry, or activate now to use both plans together.
+              </Text>
+            </View>
+            {onActivatePlan && (
+              <TouchableOpacity
+                style={styles.activatePlanBtn}
+                onPress={() => onActivatePlan(data.queuedPlan!.id, data.queuedPlan!.package?.name || data.queuedPlan!.packageType)}
+              >
+                <Ionicons name="flash" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.activatePlanBtnText}>Activate</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
       {/* Monthly Cycle Progress Card */}
       {periodInfo && (
         <View style={styles.periodBanner}>
@@ -544,4 +589,77 @@ const styles = StyleSheet.create({
   logRight: { alignItems: 'flex-end' },
   logValue: { fontSize: 14, fontWeight: '800', color: '#374151' },
   logDate: { fontSize: 11, color: '#9CA3AF', fontWeight: '600', marginTop: 2 },
+  
+  // ── Queued Care Plan Styles ──
+  queuedPlanCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    ...Platform.select({
+      ios: { shadowColor: '#D97706', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 5 },
+      android: { elevation: 2 },
+    }),
+  },
+  queuedPlanHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  queuedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  queuedBadgeText: {
+    color: '#B45309',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  queuedPlanDuration: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  queuedPlanBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  queuedPlanTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 3,
+  },
+  queuedPlanSubtitle: {
+    fontSize: 11.5,
+    color: '#6B7280',
+    lineHeight: 16,
+  },
+  activatePlanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF5B0A',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    ...Platform.select({
+      ios: { shadowColor: '#FF5B0A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
+      android: { elevation: 3 },
+    }),
+  },
+  activatePlanBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });

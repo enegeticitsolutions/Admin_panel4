@@ -788,6 +788,7 @@ model Subscription {
   hoursUsed        Float                        @default(0.0)
   hoursTotal       Float
   isActive         Boolean                      @default(true)
+  isQueued         Boolean                      @default(false)
   cancelledAt      DateTime?
   cancellationNote String?
   createdAt        DateTime                     @default(now())
@@ -804,6 +805,7 @@ model Subscription {
 
   @@index([subscriberId])
   @@index([beneficiaryId])
+  @@index([beneficiaryId, isQueued])
   @@index([isActive])
   @@map("subscriptions")
 }

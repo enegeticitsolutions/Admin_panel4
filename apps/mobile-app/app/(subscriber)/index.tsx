@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,6 +27,7 @@ const CARD_GAP = scale(12);
 export default function SubscriberDashboardScreen() {
     useExitOnBack();
     const router = useRouter();
+    const queryClient = useQueryClient();
     const { availableRoles, switchRole, isSwitchingRole } = useAuth();
 
     const [userData, setUserData] = useState<any>(null);
@@ -38,6 +39,9 @@ export default function SubscriberDashboardScreen() {
     const [linkModalVisible, setLinkModalVisible] = useState(false);
     const [selectedUnlinkedSubId, setSelectedUnlinkedSubId] = useState<string | null>(null);
     const [isLinking, setIsLinking] = useState(false);
+    const [activateModalVisible, setActivateModalVisible] = useState(false);
+    const [selectedQueuedSub, setSelectedQueuedSub] = useState<any | null>(null);
+    const [isActivating, setIsActivating] = useState(false);
     const pullAnim = useRef(new Animated.Value(0)).current;
 
     const handleSwitchToBeneficiary = async () => {
@@ -212,6 +216,7 @@ export default function SubscriberDashboardScreen() {
     const beneficiaries = dashboard?.beneficiaries || [];
     const recentUpdates = dashboard?.recentUpdates || [];
     const unlinkedSubs = (dashboard?.activeSubscriptions || []).filter((sub: any) => !sub.beneficiaryId);
+    const queuedSubs = dashboard?.queuedSubscriptions || [];
 
     const hasSelfBeneficiary = (beneficiaries || userData?.subscriberBeneficiaries || []).some(
         (b: any) => (b.relationship || '').toLowerCase() === 'self' || b.isSelf || (userData?.id && b.userId === userData.id)
@@ -464,6 +469,42 @@ export default function SubscriberDashboardScreen() {
                     </View>
                 ))}
 
+                {/* Queued Care Plans (Like Jio Plan Queue) */}
+                {queuedSubs.map((qSub: any) => {
+                    const targetBen = beneficiaries.find((b: any) => b.id === qSub.beneficiaryId);
+                    const benName = targetBen?.name || 'Beneficiary';
+                    return (
+                        <View key={qSub.id} style={styles.queuedSubCard}>
+                            <View style={styles.queuedHeaderRow}>
+                                <View style={styles.queuedBadge}>
+                                    <Ionicons name="time-outline" size={scale(13)} color="#D97706" style={{ marginRight: scale(4) }} />
+                                    <Text style={styles.queuedBadgeText}>IN QUEUE</Text>
+                                </View>
+                                <Text style={styles.queuedForText}>For {benName}</Text>
+                            </View>
+
+                            <View style={styles.queuedBodyRow}>
+                                <View style={{ flex: 1, marginRight: scale(10) }}>
+                                    <Text style={styles.queuedTitle}>{qSub.package?.name || qSub.packageType}</Text>
+                                    <Text style={styles.queuedSubtitle}>
+                                        Queued behind active plan. Activates automatically on expiry, or activate now to use both plans together.
+                                    </Text>
+                                </View>
+                                <TouchableOpacity 
+                                    style={styles.activatePlanBtn}
+                                    onPress={() => {
+                                        setSelectedQueuedSub({ ...qSub, beneficiaryName: benName });
+                                        setActivateModalVisible(true);
+                                    }}
+                                >
+                                    <Ionicons name="flash" size={scale(14)} color="#FFFFFF" style={{ marginRight: scale(4) }} />
+                                    <Text style={styles.activatePlanBtnText}>Activate</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    );
+                })}
+
                 {beneficiaries.length === 0 ? (
                     dashboard?.activeSubscriptions && dashboard.activeSubscriptions.length > 0 ? (
                         <View style={styles.emptyBenCard}>
@@ -709,6 +750,87 @@ export default function SubscriberDashboardScreen() {
                         >
                             <Feather name="user-plus" size={18} color="#FE6700" style={{ marginRight: 8 }} />
                             <Text style={styles.modalAddNewText}>Add New Beneficiary</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── Modal for Activating Queued Plan ── */}
+            <Modal visible={activateModalVisible} transparent animationType="slide" onRequestClose={() => !isActivating && setActivateModalVisible(false)}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <View style={styles.activateIconWrap}>
+                                    <Ionicons name="flash" size={scale(18)} color="#FE6700" />
+                                </View>
+                                <Text style={styles.modalTitle}>Activate Care Plan</Text>
+                            </View>
+                            <TouchableOpacity disabled={isActivating} onPress={() => setActivateModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#111827" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.modalSubtitle}>
+                            Activate <Text style={{ fontWeight: '700', color: '#111827' }}>{selectedQueuedSub?.package?.name || selectedQueuedSub?.packageType}</Text> for <Text style={{ fontWeight: '700', color: '#111827' }}>{selectedQueuedSub?.beneficiaryName}</Text> now?
+                        </Text>
+
+                        <View style={styles.activationInfoBox}>
+                            <View style={styles.activationInfoRow}>
+                                <Ionicons name="checkmark-circle" size={scale(16)} color="#10B981" style={{ marginRight: scale(8) }} />
+                                <Text style={styles.activationInfoText}>Both current and new packages will run simultaneously.</Text>
+                            </View>
+                            <View style={styles.activationInfoRow}>
+                                <Ionicons name="checkmark-circle" size={scale(16)} color="#10B981" style={{ marginRight: scale(8) }} />
+                                <Text style={styles.activationInfoText}>Remaining benefits from current package remain accessible till the extended end date.</Text>
+                            </View>
+                            <View style={styles.activationInfoRow}>
+                                <Ionicons name="checkmark-circle" size={scale(16)} color="#10B981" style={{ marginRight: scale(8) }} />
+                                <Text style={styles.activationInfoText}>New package cycle starts today.</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity 
+                            style={[styles.confirmActivateBtn, isActivating && { opacity: 0.7 }]}
+                            disabled={isActivating}
+                            onPress={async () => {
+                                if (!selectedQueuedSub) return;
+                                setIsActivating(true);
+                                try {
+                                    const storedToken = await AsyncStorage.getItem('userToken');
+                                    const res = await fetch(`${API_URL}/subscriber/subscriptions/${selectedQueuedSub.id}/activate-plan`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${storedToken}`,
+                                            'Content-Type': 'application/json'
+                                        }
+                                    });
+                                    const data = await res.json();
+                                    if (data.success) {
+                                        setActivateModalVisible(false);
+                                        setSelectedQueuedSub(null);
+                                        queryClient.invalidateQueries({ queryKey: ['subscriberDashboard'] });
+                                        refetch();
+                                        Alert.alert('Plan Activated', data.message || 'Plan activated successfully! Benefits from both plans are now active.');
+                                    } else {
+                                        Alert.alert('Activation Failed', data.message || 'Failed to activate plan');
+                                    }
+                                } catch (err) {
+                                    console.error(err);
+                                    Alert.alert('Error', 'An error occurred while activating plan');
+                                } finally {
+                                    setIsActivating(false);
+                                }
+                            }}
+                        >
+                            {isActivating ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    <Ionicons name="flash" size={scale(16)} color="#FFFFFF" style={{ marginRight: scale(6) }} />
+                                    <Text style={styles.confirmActivateBtnText}>Confirm & Activate Now</Text>
+                                </>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -1117,5 +1239,124 @@ const styles = StyleSheet.create({
         color: '#991B1B',
         fontSize: scale(11),
         fontWeight: '600',
+    },
+
+    // ── Queued Care Plan Styles (Jio-like Plan Queue) ──
+    queuedSubCard: {
+        backgroundColor: '#FFFBEB',
+        borderColor: '#FDE68A',
+        borderWidth: 1.5,
+        borderRadius: scale(16),
+        padding: scale(14),
+        marginHorizontal: HORIZONTAL_PADDING,
+        marginBottom: scale(14),
+        ...Platform.select({
+            ios: { shadowColor: '#D97706', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 },
+            android: { elevation: 2 },
+        }),
+    },
+    queuedHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: scale(8),
+    },
+    queuedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: scale(8),
+        paddingVertical: scale(3),
+        borderRadius: scale(6),
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+    },
+    queuedBadgeText: {
+        color: '#B45309',
+        fontSize: scale(11),
+        fontWeight: '700',
+    },
+    queuedForText: {
+        fontSize: scale(12),
+        fontWeight: '600',
+        color: '#92400E',
+    },
+    queuedBodyRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    queuedTitle: {
+        fontSize: scale(15),
+        fontWeight: '700',
+        color: '#111827',
+        marginBottom: scale(3),
+    },
+    queuedSubtitle: {
+        fontSize: scale(11.5),
+        color: '#6B7280',
+        lineHeight: scale(16),
+    },
+    activatePlanBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FE6700',
+        paddingHorizontal: scale(14),
+        paddingVertical: scale(8),
+        borderRadius: scale(10),
+        ...Platform.select({
+            ios: { shadowColor: '#FE6700', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
+            android: { elevation: 3 },
+        }),
+    },
+    activatePlanBtnText: {
+        color: '#FFFFFF',
+        fontSize: scale(13),
+        fontWeight: '700',
+    },
+    activateIconWrap: {
+        width: scale(32),
+        height: scale(32),
+        borderRadius: scale(16),
+        backgroundColor: '#FFF7ED',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: scale(10),
+    },
+    activationInfoBox: {
+        backgroundColor: '#F0FDF4',
+        borderRadius: scale(12),
+        padding: scale(14),
+        borderWidth: 1,
+        borderColor: '#DCFCE7',
+        marginBottom: scale(20),
+        gap: scale(10),
+    },
+    activationInfoRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    activationInfoText: {
+        flex: 1,
+        fontSize: scale(12.5),
+        color: '#166534',
+        lineHeight: scale(18),
+    },
+    confirmActivateBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FE6700',
+        paddingVertical: scale(14),
+        borderRadius: scale(12),
+        ...Platform.select({
+            ios: { shadowColor: '#FE6700', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6 },
+            android: { elevation: 4 },
+        }),
+    },
+    confirmActivateBtnText: {
+        color: '#FFFFFF',
+        fontSize: scale(15),
+        fontWeight: '700',
     },
 });

@@ -117,9 +117,14 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
       }
     }).catch((e: any) => console.warn('[Dashboard] Auto-deactivate sub error:', e.message));
 
-    // Core data
+    // Core data (exclude queued plans from active subscriptions)
     const allActiveSubscriptions = await prisma.subscription.findMany({
-      where: { subscriberId: userId, isActive: true },
+      where: { 
+        subscriberId: userId, 
+        isActive: true,
+        isQueued: false,
+        cancellationNote: { not: 'QUEUED' }
+      },
       include: {
         package: true,
         benefitBalances: {
@@ -130,12 +135,16 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
       }
     });
 
-    // All subscriptions (including expired) to calculate beneficiary package health status
+    // All subscriptions (including expired & queued) to calculate beneficiary package health status
     const allUserSubscriptions = await prisma.subscription.findMany({
       where: { subscriberId: userId },
       orderBy: { createdAt: 'desc' },
       include: { package: true }
     });
+
+    const queuedSubscriptions = allUserSubscriptions.filter((s: any) =>
+      (s.isQueued === true || s.cancellationNote === 'QUEUED') && s.beneficiaryId
+    );
 
     const beneficiaries = await prisma.beneficiary.findMany({
       where: { subscriberId: userId, status: { not: 'deleted' } }
@@ -179,11 +188,14 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
       });
     }
 
-    // Map beneficiaries with dynamic subscription health & expiration status
+    // Map beneficiaries with dynamic subscription health, expiration status, and queued plans
     const mappedBeneficiaries = beneficiaries.map((b: any) => {
       const benSubs = allUserSubscriptions.filter((s: any) => s.beneficiaryId === b.id);
-      const activeSub = benSubs.find((s: any) => s.isActive && new Date(s.endDate) > now);
-      const expiredSub = benSubs.find((s: any) => new Date(s.endDate) <= now || !s.isActive);
+      const activeSubs = benSubs.filter((s: any) => s.isActive && new Date(s.endDate) > now && !s.isQueued && s.cancellationNote !== 'QUEUED');
+      const activeSub = activeSubs[0] || null;
+      const queuedSubs = benSubs.filter((s: any) => (s.isQueued === true || s.cancellationNote === 'QUEUED'));
+      const queuedSub = queuedSubs[0] || null;
+      const expiredSub = benSubs.find((s: any) => (new Date(s.endDate) <= now || !s.isActive) && !s.isQueued && s.cancellationNote !== 'QUEUED');
 
       let packageStatus: 'active' | 'expired' | 'pending' | 'none' = 'none';
       if (b.verificationStatus === 'pending') {
@@ -199,6 +211,14 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
         packageStatus,
         isExpired: packageStatus === 'expired',
         subscriptionEndDate: activeSub?.endDate || expiredSub?.endDate || null,
+        hasQueuedPlan: !!queuedSub,
+        queuedPlan: queuedSub ? {
+          id: queuedSub.id,
+          packageName: queuedSub.package?.name || queuedSub.packageType,
+          startDate: queuedSub.startDate,
+          endDate: queuedSub.endDate,
+        } : null,
+        activeSubscriptionsCount: activeSubs.length,
         // Only map default Prisma seed score (8.0) → null; real scores pass through as-is
         emotionalScore: b.emotionalScore === 8.0 ? null : (b.emotionalScore ?? null)
       };
@@ -263,6 +283,7 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
     res.json({
       success: true,
       activeSubscriptions: allActiveSubscriptions,
+      queuedSubscriptions,
       beneficiaries: mappedBeneficiaries,
       topStats: {
         happinessScore: avgHappiness,
