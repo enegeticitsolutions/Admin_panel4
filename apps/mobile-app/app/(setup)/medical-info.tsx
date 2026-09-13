@@ -134,16 +134,25 @@ export default function MedicalInfoScreen() {
                 if (data.success && data.data) {
                     setVitalsConfig(data.data);
                     const initial: Record<string, boolean> = {};
-                    data.data.forEach((v: any) => initial[v.code] = false);
+                    
+                    // By default, system vitals are pre-checked
+                    data.data.forEach((v: any) => {
+                        initial[v.code] = !!v.isSystemVital;
+                    });
 
-                    // Pre-fill active vitals in verification flow
+                    // Pre-fill active vitals in verification flow if saved configs exist
                     if (isVerificationFlow && pendingDetailsRaw) {
                         try {
                             const b = JSON.parse(pendingDetailsRaw);
-                            if (b.vitalConfigs && Array.isArray(b.vitalConfigs)) {
+                            if (b.vitalConfigs && Array.isArray(b.vitalConfigs) && b.vitalConfigs.length > 0) {
+                                // Reset to false first so we accurately reflect the saved configuration
+                                data.data.forEach((v: any) => {
+                                    initial[v.code] = false;
+                                });
                                 b.vitalConfigs.forEach((vc: any) => {
-                                    if (vc.vitalDefinition?.code) {
-                                        initial[vc.vitalDefinition.code] = true;
+                                    const code = vc.vitalDefinition?.code || vc.code;
+                                    if (code) {
+                                        initial[code] = vc.isActive !== false;
                                     }
                                 });
                             }
@@ -481,7 +490,7 @@ export default function MedicalInfoScreen() {
                         ) : vitalsConfig.map((v) => (
                             <Checkbox 
                                 key={v.id} 
-                                label={v.name} 
+                                label={v.name + (v.unit ? ` (${v.unit})` : '')} 
                                 checked={!!vitals[v.code]} 
                                 onPress={() => setVitals({ ...vitals, [v.code]: !vitals[v.code] })} 
                             />

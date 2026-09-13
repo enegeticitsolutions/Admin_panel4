@@ -472,13 +472,17 @@ export const purchaseSubscription = async (
                 vitalDefinitionId: def.id,
               }
             },
-            update: { isActive: true },
+            update: { 
+              isActive: true,
+              selectedBySubscriberId: userId,
+            },
             create: {
               id: generateUUID(),
               beneficiaryId: beneficiary.id,
               vitalDefinitionId: def.id,
               isActive: true,
               frequency: 'every_visit',
+              selectedBySubscriberId: userId,
             }
           });
         }
@@ -1130,8 +1134,18 @@ export const linkBeneficiaryToSubscription = async (
       for (const def of vitalDefs) {
         await tx.beneficiaryVitalConfig.upsert({
           where: { beneficiaryId_vitalDefinitionId: { beneficiaryId: beneficiary.id, vitalDefinitionId: def.id } },
-          update: { isActive: true },
-          create: { id: generateUUID(), beneficiaryId: beneficiary.id, vitalDefinitionId: def.id, isActive: true, frequency: 'every_visit' }
+          update: { 
+            isActive: true,
+            selectedBySubscriberId: userId,
+          },
+          create: { 
+            id: generateUUID(), 
+            beneficiaryId: beneficiary.id, 
+            vitalDefinitionId: def.id, 
+            isActive: true, 
+            frequency: 'every_visit',
+            selectedBySubscriberId: userId,
+          }
         });
       }
     }
@@ -1463,13 +1477,17 @@ export const activateSubscription = async (
               vitalDefinitionId: def.id,
             }
           },
-          update: { isActive: true },
+          update: { 
+            isActive: true,
+            selectedBySubscriberId: userId,
+          },
           create: {
             id: generateUUID(),
             beneficiaryId,
             vitalDefinitionId: def.id,
             isActive: true,
             frequency: 'every_visit',
+            selectedBySubscriberId: userId,
           }
         });
       }

@@ -3,9 +3,10 @@ import { useParams, useNavigate, useLocation } from 'react-router';
 import { 
   User, Phone, Mail, MapPin, Calendar, Loader2, Heart, Activity, 
   Thermometer, Droplet, Scale, RefreshCw, UserCheck, ArrowLeft, Edit2, Trash2,
-  CalendarClock, Eye, Pencil, CheckCircle2, XCircle, Receipt, ExternalLink, FileText
+  CalendarClock, Eye, Pencil, CheckCircle2, XCircle, Receipt, ExternalLink, FileText,
+  Search, Check, Sparkles
 } from 'lucide-react';
-import { beneficiaryApi, visitApi, fileAccessApi, invoicesApi } from '../../services/api';
+import { beneficiaryApi, visitApi, fileAccessApi, invoicesApi, vitalsApi, BeneficiaryVitalConfigItem } from '../../services/api';
 import { StatusChip } from '../components/common/StatusChip';
 import { ProfilePhotoUploader } from '../components/common/ProfilePhotoUploader';
 import { RefreshButton } from '../components/common/RefreshButton';
@@ -20,6 +21,7 @@ import { AddMedicineDialog } from '../components/forms/AddMedicineDialog';
 import { AddConditionDialog } from '../components/forms/AddConditionDialog';
 import { PackageUtilizationPanel } from '../components/PackageUtilizationPanel';
 import VisitDetailsModal from '../components/field-management/VisitDetailsModal';
+import { VitalsTrendsCard } from '../components/beneficiary/VitalsTrendsCard';
 import { format } from 'date-fns';
 
 interface StaffPool {
@@ -55,6 +57,12 @@ export default function BeneficiaryProfilePage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [openingInvoiceId, setOpeningInvoiceId] = useState<string | null>(null);
+
+  // Dynamic Vital Configurations
+  const [dynamicVitalConfigs, setDynamicVitalConfigs] = useState<BeneficiaryVitalConfigItem[]>([]);
+  const [vitalsSearchQuery, setVitalsSearchQuery] = useState('');
+  const [loadingVitalConfigs, setLoadingVitalConfigs] = useState(false);
+  const [updatingVitalId, setUpdatingVitalId] = useState<string | null>(null);
 
   const handleViewInvoice = async (invoiceId: string) => {
     setOpeningInvoiceId(invoiceId);
@@ -144,6 +152,7 @@ export default function BeneficiaryProfilePage() {
 
   useEffect(() => {
     fetchDetails();
+    fetchVitalConfigs();
   }, [id]);
 
   const fetchVisits = async () => {
@@ -162,6 +171,7 @@ export default function BeneficiaryProfilePage() {
   useEffect(() => {
     if (activeTab === 'visits') fetchVisits();
     if (activeTab === 'billing') fetchInvoices();
+    if (activeTab === 'clinical') fetchVitalConfigs();
   }, [activeTab, id]);
 
   const fetchInvoices = async () => {
@@ -196,16 +206,77 @@ export default function BeneficiaryProfilePage() {
     }
   };
 
-  const handleVitalToggle = async (vitalKey: string, enabled: boolean) => {
-    if (!details) return;
+  const getVitalIcon = (code: string, category?: string) => {
+    const c = (code || '').toUpperCase();
+    if (c.includes('BP') || c === 'BLOOD_PRESSURE' || c === 'TBP') return Heart;
+    if (c.includes('PULSE') || c.includes('HEART') || c.includes('HR')) return Heart;
+    if (c.includes('TEMP')) return Thermometer;
+    if (c.includes('SUGAR') || c.includes('GLUCOSE') || c.includes('GLU')) return Droplet;
+    if (c.includes('WEIGHT') || c.includes('BMI')) return Scale;
+    if (c.includes('SPO2') || c.includes('O2') || c.includes('OXYGEN')) return Activity;
+    return Activity;
+  };
+
+  const fetchVitalConfigs = async () => {
+    if (!id) return;
+    setLoadingVitalConfigs(true);
     try {
-      await beneficiaryApi.updateClinicalConfig(details.id, {
-        [vitalKey]: { ...details.clinicalConfiguration?.[vitalKey], enabled },
+      const data = await vitalsApi.getBeneficiaryConfigs(id);
+      setDynamicVitalConfigs(data);
+    } catch (err) {
+      console.error('Failed to load vital configs', err);
+    } finally {
+      setLoadingVitalConfigs(false);
+    }
+  };
+
+  const handleVitalToggle = async (vitalDefinitionId: string, enabled: boolean, vitalName: string) => {
+    if (!id) return;
+    setUpdatingVitalId(vitalDefinitionId);
+    
+    // Optimistic UI update
+    setDynamicVitalConfigs(prev => 
+      prev.map(v => v.vitalDefinitionId === vitalDefinitionId ? { ...v, isEnabled: enabled } : v)
+    );
+
+    try {
+      await vitalsApi.updateBeneficiaryConfig(id, {
+        vitalDefinitionId,
+        isEnabled: enabled,
       });
-      await fetchDetails();
-      toast.success(`${vitalKey} monitoring ${enabled ? 'enabled' : 'disabled'}`);
-    } catch (error) {
-      toast.error('Failed to update configuration');
+      toast.success(`${vitalName} monitoring ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (error: any) {
+      // Revert optimistic update on failure
+      setDynamicVitalConfigs(prev => 
+        prev.map(v => v.vitalDefinitionId === vitalDefinitionId ? { ...v, isEnabled: !enabled } : v)
+      );
+      toast.error(error?.message || 'Failed to update vital configuration');
+    } finally {
+      setUpdatingVitalId(null);
+    }
+  };
+
+  const handleFrequencyChange = async (vitalDefinitionId: string, frequency: string, vitalName: string) => {
+    if (!id) return;
+    setUpdatingVitalId(vitalDefinitionId);
+
+    setDynamicVitalConfigs(prev => 
+      prev.map(v => v.vitalDefinitionId === vitalDefinitionId ? { ...v, frequency } : v)
+    );
+
+    try {
+      const vital = dynamicVitalConfigs.find(v => v.vitalDefinitionId === vitalDefinitionId);
+      await vitalsApi.updateBeneficiaryConfig(id, {
+        vitalDefinitionId,
+        isEnabled: vital?.isEnabled ?? true,
+        frequency,
+      });
+      toast.success(`${vitalName} tracking frequency set to ${frequency.replace('_', ' ')}`);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update frequency');
+      fetchVitalConfigs();
+    } finally {
+      setUpdatingVitalId(null);
     }
   };
 
@@ -265,6 +336,128 @@ export default function BeneficiaryProfilePage() {
     : null;
   const isFallback = primaryContact?.name?.toLowerCase() === 'subscriber';
   const hasRealContact = primaryContact && !isFallback;
+
+  const renderHistoricalClinicalRecords = () => (
+    <div id="historical-records-section" className="bg-white rounded-[32px] p-8 shadow-sm border border-[#E7DED6]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h3 className="text-lg font-black text-gray-800 mb-1">Historical Clinical Records</h3>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Select a past visit to view recorded vitals and remarks</p>
+        </div>
+        <button onClick={fetchVisits} className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-gray-800 transition-colors self-start sm:self-center">
+          <RefreshCw size={14} className={visitsLoading ? 'animate-spin' : ''} /> Refresh Visits
+        </button>
+      </div>
+      
+      {(!details.visits || details.visits.length === 0) ? (
+        <div className="py-12 text-center bg-gray-50 rounded-3xl border border-dashed border-gray-200">
+           <p className="text-sm font-bold text-gray-400 uppercase">No past visits found</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <select 
+            className="w-full h-14 rounded-2xl border-gray-200 bg-gray-50/50 px-4 text-sm font-bold text-gray-800 focus:border-[#FF7A00] focus:ring-[#FF7A00] transition-all"
+            value={selectedVisitId}
+            onChange={(e) => setSelectedVisitId(e.target.value)}
+          >
+            <option value="" disabled>Select a visit to view records...</option>
+            {details.visits.map((v: any) => (
+              <option key={v.id} value={v.id}>
+                {new Date(v.scheduledTime).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} - {v.status.toUpperCase()}
+              </option>
+            ))}
+          </select>
+
+          {selectedVisitId && details.visits.find((v: any) => v.id === selectedVisitId) && (() => {
+            const v = details.visits.find((v: any) => v.id === selectedVisitId);
+            
+            // 1. Map new dynamic readings
+            const dynamicVitals = (v.readings || []).map((r: any) => {
+               let valStr = r.valueText || '';
+               if (r.valueNumeric !== null && r.valueNumeric2 !== null) {
+                 valStr = `${r.valueNumeric}/${r.valueNumeric2}`;
+               } else if (r.valueNumeric !== null) {
+                 valStr = `${r.valueNumeric}`;
+               }
+               if (r.vitalDefinition?.unit && r.valueText === null) {
+                 valStr += ` ${r.vitalDefinition.unit}`;
+               }
+               
+               let Icon = Activity;
+               const code = r.vitalDefinition?.code || '';
+               if (code.includes('BP') || code === 'PULSE') Icon = Heart;
+               if (code === 'TEMP') Icon = Thermometer;
+               if (code === 'WEIGHT') Icon = Scale;
+               if (code.includes('GLUCOSE') || code.includes('BLOOD')) Icon = Droplet;
+
+               return {
+                 label: r.vitalDefinition?.name || 'Unknown',
+                 value: valStr,
+                 icon: Icon
+               };
+            });
+
+            // 2. Map legacy vitals if dynamic readings are missing
+            const legacyVitals: any[] = [];
+            const config = details.clinicalConfiguration || {};
+            
+            if (dynamicVitals.length === 0) {
+              if (config['bloodPressure']?.enabled && v.bpSystolic && v.bpDiastolic) legacyVitals.push({ label: 'Blood Pressure', value: `${v.bpSystolic}/${v.bpDiastolic} mmHg`, icon: Activity });
+              if (config['heartRate']?.enabled && v.heartRate) legacyVitals.push({ label: 'Heart Rate', value: `${v.heartRate} bpm`, icon: Heart });
+              if (config['spO2']?.enabled && v.oxygenLevel) legacyVitals.push({ label: 'SpO2', value: `${v.oxygenLevel}%`, icon: Activity });
+              if (config['temperature']?.enabled && v.temperature) legacyVitals.push({ label: 'Temperature', value: `${v.temperature}°F`, icon: Thermometer });
+              if (config['bloodSugar']?.enabled && v.bloodSugarFasting) legacyVitals.push({ label: 'Blood Sugar (Fasting)', value: `${v.bloodSugarFasting} mg/dL`, icon: Droplet });
+              if (config['bloodSugar']?.enabled && v.bloodSugarPostMeal) legacyVitals.push({ label: 'Blood Sugar (Post-meal)', value: `${v.bloodSugarPostMeal} mg/dL`, icon: Droplet });
+              if (config['weight']?.enabled && v.weight) legacyVitals.push({ label: 'Weight', value: `${v.weight} kg`, icon: Scale });
+              if (config['respiratoryRate']?.enabled && v.respiratoryRate) legacyVitals.push({ label: 'Resp. Rate', value: `${v.respiratoryRate} bpm`, icon: Activity });
+            }
+
+            const vitalsToShow = [...dynamicVitals, ...legacyVitals];
+
+            return (
+              <div className="mt-6 space-y-6">
+                 {/* Remarks / Status */}
+                 <div className="p-5 rounded-2xl bg-orange-50 border border-orange-100">
+                    <div className="flex items-center gap-3 mb-2">
+                       <StatusChip status={v.status} />
+                    </div>
+                    <p className="text-sm text-gray-700 font-medium">
+                      <span className="font-bold">Remarks: </span> 
+                      {v.visitSummary || v.notes || v.manualCheckInReason || 'No remarks recorded.'}
+                    </p>
+                 </div>
+
+                 {/* Vitals Grid */}
+                 {vitalsToShow.length > 0 ? (
+                   <div>
+                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Recorded Vitals</h4>
+                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                       {vitalsToShow.map((vital, idx) => {
+                         const Icon = vital.icon;
+                         return (
+                           <div key={idx} className="bg-[#FDFBF9] p-4 rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center">
+                             <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF7A00] flex items-center justify-center mb-2">
+                                <Icon size={14} />
+                             </div>
+                             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{vital.label}</p>
+                             <p className="text-sm font-black text-gray-800 mt-1">{vital.value}</p>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </div>
+                 ) : (
+                   <div className="py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                      <p className="text-sm font-bold text-gray-400 uppercase">No active vitals recorded for this visit</p>
+                   </div>
+                 )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="p-8 bg-[#F4EAE3] min-h-screen">
@@ -421,6 +614,7 @@ export default function BeneficiaryProfilePage() {
                 <TabsTrigger value="usage" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-[#FF7A00] data-[state=active]:shadow-md transition-all">Membership & Package Usage</TabsTrigger>
                 <TabsTrigger value="assign" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-[#FF7A00] data-[state=active]:shadow-md transition-all">Staff Assignment</TabsTrigger>
                 <TabsTrigger value="clinical" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-[#FF7A00] data-[state=active]:shadow-md transition-all">Clinical Config</TabsTrigger>
+                <TabsTrigger value="records" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-[#FF7A00] data-[state=active]:shadow-md transition-all flex items-center justify-center gap-1.5"><FileText size={12} />Clinical Records</TabsTrigger>
                 <TabsTrigger value="visits" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-[#1D4ED8] data-[state=active]:shadow-md transition-all flex items-center gap-1.5"><CalendarClock size={12} />Visits</TabsTrigger>
                 <TabsTrigger value="billing" className="flex-1 py-4 font-black uppercase text-[10px] tracking-widest rounded-2xl data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-md transition-all flex items-center gap-1.5"><Receipt size={12} />Billing</TabsTrigger>
               </TabsList>
@@ -487,19 +681,90 @@ export default function BeneficiaryProfilePage() {
                      </div>
                    </div>
                    <div className="mt-12 pt-8 border-t border-gray-50">
-                      <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Care Scores</h4>
-                      <div className="grid grid-cols-3 gap-4">
-                         <div className="bg-gray-50/50 p-6 rounded-3xl border border-gray-100 text-center">
+                      <div className="flex items-center justify-between mb-6">
+                        <div>
+                          <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Care Scores</h4>
+                          <p className="text-xs text-gray-500 font-medium mt-0.5">Live clinical & wellness metrics</p>
+                        </div>
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200">
+                          Live Assessment
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                         <div className="bg-gray-50/70 p-6 rounded-3xl border border-gray-100 text-center">
                             <p className="text-xs font-bold text-gray-400 uppercase mb-2">Emotional</p>
-                            <p className="text-3xl font-black text-blue-600">{details.emotionalScore || '8.0'}</p>
+                            <p className="text-3xl font-black text-blue-600">
+                              {(() => {
+                                if (details.emotionalScore == null) return '—';
+                                const num = Number(details.emotionalScore);
+                                if (isNaN(num)) return '—';
+                                return num > 10 ? `${Math.round(num)}%` : `${num.toFixed(1)}/10`;
+                              })()}
+                            </p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">
+                              {(() => {
+                                if (details.emotionalScore == null) return 'No visits yet';
+                                const num = Number(details.emotionalScore);
+                                return num >= 80 || (num <= 10 && num >= 8) ? 'Positive & Stable' : 'Monitored';
+                              })()}
+                            </p>
                          </div>
-                         <div className="bg-gray-50/50 p-6 rounded-3xl border border-gray-100 text-center">
+                         <div className="bg-gray-50/70 p-6 rounded-3xl border border-gray-100 text-center">
                             <p className="text-xs font-bold text-gray-400 uppercase mb-2">Health</p>
-                            <p className="text-3xl font-black text-green-600">{details.healthScore || '7.5'}</p>
+                            <p className="text-3xl font-black text-green-600">
+                              {(() => {
+                                const readings = details.vitalReadings || [];
+                                const conditions = (details.conditions || []).filter((c: any) => c.isActive !== false);
+                                if (readings.length > 0) {
+                                  const normal = readings.filter((r: any) => !r.isAbnormal).length;
+                                  const ratio = normal / readings.length;
+                                  const penalty = Math.min(2, conditions.length * 0.4);
+                                  return `${Math.max(5.0, Math.min(10.0, (ratio * 10) - penalty)).toFixed(1)}/10`;
+                                }
+                                if (details.healthScore != null) {
+                                  const num = Number(details.healthScore);
+                                  return !isNaN(num) ? `${num.toFixed(1)}/10` : '8.0/10';
+                                }
+                                return '8.0/10';
+                              })()}
+                            </p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">
+                              {(() => {
+                                const readings = details.vitalReadings || [];
+                                if (readings.length > 0) {
+                                  const normal = readings.filter((r: any) => !r.isAbnormal).length;
+                                  return `${normal}/${readings.length} Vitals Normal`;
+                                }
+                                const conditions = (details.conditions || []).filter((c: any) => c.isActive !== false);
+                                if (conditions.length > 0) {
+                                  return `${conditions.length} Condition${conditions.length > 1 ? 's' : ''}`;
+                                }
+                                return 'General Wellness';
+                              })()}
+                            </p>
                          </div>
-                         <div className="bg-gray-50/50 p-6 rounded-3xl border border-gray-100 text-center">
+                         <div className="bg-gray-50/70 p-6 rounded-3xl border border-gray-100 text-center">
                             <p className="text-xs font-bold text-gray-400 uppercase mb-2">Medication</p>
-                            <p className="text-3xl font-black text-orange-600">{details.medicationScore || '100'}%</p>
+                            <p className="text-3xl font-black text-orange-600">
+                              {(() => {
+                                const meds = details.medications || details.medicationList || [];
+                                if (meds.length === 0) return 'N/A';
+                                const completedVisits = (details.visits || []).filter((v: any) => v.status === 'completed');
+                                if (completedVisits.length > 0) {
+                                  const compliant = completedVisits.filter((v: any) => v.medicationsTaken !== false && !v.notes?.toLowerCase().includes('missed medication'));
+                                  return `${Math.round((compliant.length / completedVisits.length) * 100)}%`;
+                                }
+                                return '100%';
+                              })()}
+                            </p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">
+                              {(() => {
+                                const meds = details.medications || details.medicationList || [];
+                                if (meds.length === 0) return 'No medications';
+                                return `${meds.length} Active Prescription${meds.length > 1 ? 's' : ''}`;
+                              })()}
+                            </p>
                          </div>
                       </div>
                    </div>
@@ -679,144 +944,164 @@ export default function BeneficiaryProfilePage() {
               </TabsContent>
 
               <TabsContent value="clinical" className="space-y-6 mt-0 outline-none">
-                 <div className="bg-white rounded-[32px] p-8 shadow-sm border border-[#E7DED6]">
-                    <h3 className="text-lg font-black text-gray-800 mb-2">Vitals Monitoring</h3>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-8">Configure live tracking parameters</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       {Object.entries(details.clinicalConfiguration || {}).map(([key, config]: [string, any]) => {
-                          const Icon = vitalIcons[key] || Activity;
-                          const vitalLabel = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                          return (
-                             <div key={key} className={`flex items-center justify-between p-6 rounded-[24px] border transition-all ${config.enabled ? 'bg-white border-orange-100 shadow-sm' : 'bg-gray-50/50 border-gray-100 opacity-60'}`}>
-                                <div className="flex items-center gap-4">
-                                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${config.enabled ? 'bg-orange-50 text-[#FF7A00]' : 'bg-gray-200 text-gray-400'}`}>
-                                      <Icon size={24} />
-                                   </div>
-                                   <div>
-                                      <p className="font-bold text-gray-800 text-sm">{vitalLabel}</p>
-                                      <p className="text-[10px] font-black text-gray-400 uppercase mt-1">Freq: {config.frequency}</p>
-                                   </div>
-                                </div>
-                                <Switch checked={config.enabled} onCheckedChange={(checked) => handleVitalToggle(key, checked)} className="data-[state=checked]:bg-[#FF7A00]" />
-                             </div>
-                          );
-                       })}
-                    </div>
-                 </div>
+                 {/* Vitals Trends Chart Component */}
+                 <VitalsTrendsCard beneficiaryId={details.id} />
 
-                 {/* Historical Vitals Records */}
                  <div className="bg-white rounded-[32px] p-8 shadow-sm border border-[#E7DED6]">
-                    <h3 className="text-lg font-black text-gray-800 mb-2">Historical Clinical Records</h3>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">Select a past visit to view recorded vitals and remarks</p>
-                    
-                    {(!details.visits || details.visits.length === 0) ? (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                      <div>
+                        <div className="flex items-center gap-3">
+                          <h3 className="text-lg font-black text-gray-800">Vitals Monitoring</h3>
+                          <span className="px-3 py-1 text-xs font-black uppercase rounded-full bg-orange-100 text-[#FF7A00]">
+                            {dynamicVitalConfigs.filter(v => v.isEnabled).length} of {dynamicVitalConfigs.length} Active
+                          </span>
+                        </div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
+                          Configure live tracking parameters defined in database & selected during onboarding
+                        </p>
+                      </div>
+
+                      {/* Search, Action & Refresh Controls */}
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActiveTab('records')}
+                          className="h-10 rounded-xl border-orange-200 text-[#FF7A00] bg-orange-50/70 hover:bg-orange-100 font-bold text-xs flex items-center gap-1.5 shadow-sm"
+                          title="Open Historical Clinical Records tab directly"
+                        >
+                          <FileText className="w-3.5 h-3.5" /> Historical Records →
+                        </Button>
+
+                        <div className="relative">
+                          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="text"
+                            placeholder="Search vitals..."
+                            value={vitalsSearchQuery}
+                            onChange={(e) => setVitalsSearchQuery(e.target.value)}
+                            className="h-10 pl-9 pr-3 rounded-xl border border-gray-200 text-xs font-semibold focus:outline-none focus:border-[#FF7A00] w-36 sm:w-48"
+                          />
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={fetchVitalConfigs}
+                          disabled={loadingVitalConfigs}
+                          className="h-10 rounded-xl border-gray-200 hover:border-[#FF7A00] text-gray-600 px-3"
+                          title="Refresh vitals configuration"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${loadingVitalConfigs ? 'animate-spin text-[#FF7A00]' : ''}`} />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {loadingVitalConfigs && dynamicVitalConfigs.length === 0 ? (
+                      <div className="py-12 text-center flex flex-col items-center gap-3">
+                        <Loader2 className="w-8 h-8 animate-spin text-[#FF7A00]" />
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading vitals definitions...</p>
+                      </div>
+                    ) : dynamicVitalConfigs.length === 0 ? (
                       <div className="py-12 text-center bg-gray-50 rounded-3xl border border-dashed border-gray-200">
-                         <p className="text-sm font-bold text-gray-400 uppercase">No past visits found</p>
+                        <p className="text-sm font-bold text-gray-400">No active vital definitions found in database.</p>
                       </div>
                     ) : (
-                      <div className="space-y-6">
-                        <select 
-                          className="w-full h-14 rounded-2xl border-gray-200 bg-gray-50/50 px-4 text-sm font-bold text-gray-800 focus:border-[#FF7A00] focus:ring-[#FF7A00] transition-all"
-                          value={selectedVisitId}
-                          onChange={(e) => setSelectedVisitId(e.target.value)}
-                        >
-                          <option value="" disabled>Select a visit to view records...</option>
-                          {details.visits.map((v: any) => (
-                            <option key={v.id} value={v.id}>
-                              {new Date(v.scheduledTime).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} - {v.status.toUpperCase()}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[520px] overflow-y-auto pr-1">
+                        {dynamicVitalConfigs
+                          .filter((v) => {
+                            if (!vitalsSearchQuery) return true;
+                            const q = vitalsSearchQuery.toLowerCase();
+                            return (
+                              v.name.toLowerCase().includes(q) ||
+                              v.code.toLowerCase().includes(q) ||
+                              (v.category && v.category.toLowerCase().includes(q))
+                            );
+                          })
+                          .map((v) => {
+                            const Icon = getVitalIcon(v.code, v.category);
+                            const isUpdating = updatingVitalId === v.vitalDefinitionId;
 
-                        {selectedVisitId && details.visits.find((v: any) => v.id === selectedVisitId) && (() => {
-                          const v = details.visits.find((v: any) => v.id === selectedVisitId);
-                          
-                          // 1. Map new dynamic readings
-                          const dynamicVitals = (v.readings || []).map((r: any) => {
-                             let valStr = r.valueText || '';
-                             if (r.valueNumeric !== null && r.valueNumeric2 !== null) {
-                               valStr = `${r.valueNumeric}/${r.valueNumeric2}`;
-                             } else if (r.valueNumeric !== null) {
-                               valStr = `${r.valueNumeric}`;
-                             }
-                             if (r.vitalDefinition?.unit && r.valueText === null) {
-                               valStr += ` ${r.vitalDefinition.unit}`;
-                             }
-                             
-                             let Icon = Activity;
-                             const code = r.vitalDefinition?.code || '';
-                             if (code.includes('BP') || code === 'PULSE') Icon = Heart;
-                             if (code === 'TEMP') Icon = Thermometer;
-                             if (code === 'WEIGHT') Icon = Scale;
-                             if (code.includes('GLUCOSE') || code.includes('BLOOD')) Icon = Droplet;
-
-                             return {
-                               label: r.vitalDefinition?.name || 'Unknown',
-                               value: valStr,
-                               icon: Icon
-                             };
-                          });
-
-                          // 2. Map legacy vitals if dynamic readings are missing
-                          const legacyVitals: any[] = [];
-                          const config = details.clinicalConfiguration || {};
-                          
-                          if (dynamicVitals.length === 0) {
-                            if (config['bloodPressure']?.enabled && v.bpSystolic && v.bpDiastolic) legacyVitals.push({ label: 'Blood Pressure', value: `${v.bpSystolic}/${v.bpDiastolic} mmHg`, icon: Activity });
-                            if (config['heartRate']?.enabled && v.heartRate) legacyVitals.push({ label: 'Heart Rate', value: `${v.heartRate} bpm`, icon: Heart });
-                            if (config['spO2']?.enabled && v.oxygenLevel) legacyVitals.push({ label: 'SpO2', value: `${v.oxygenLevel}%`, icon: Activity });
-                            if (config['temperature']?.enabled && v.temperature) legacyVitals.push({ label: 'Temperature', value: `${v.temperature}°F`, icon: Thermometer });
-                            if (config['bloodSugar']?.enabled && v.bloodSugarFasting) legacyVitals.push({ label: 'Blood Sugar (Fasting)', value: `${v.bloodSugarFasting} mg/dL`, icon: Droplet });
-                            if (config['bloodSugar']?.enabled && v.bloodSugarPostMeal) legacyVitals.push({ label: 'Blood Sugar (Post-meal)', value: `${v.bloodSugarPostMeal} mg/dL`, icon: Droplet });
-                            if (config['weight']?.enabled && v.weight) legacyVitals.push({ label: 'Weight', value: `${v.weight} kg`, icon: Scale });
-                            if (config['respiratoryRate']?.enabled && v.respiratoryRate) legacyVitals.push({ label: 'Resp. Rate', value: `${v.respiratoryRate} bpm`, icon: Activity });
-                          }
-
-                          const vitalsToShow = [...dynamicVitals, ...legacyVitals];
-
-                          return (
-                            <div className="mt-6 space-y-6">
-                               {/* Remarks / Status */}
-                               <div className="p-5 rounded-2xl bg-orange-50 border border-orange-100">
-                                  <div className="flex items-center gap-3 mb-2">
-                                     <StatusChip status={v.status} />
+                            return (
+                              <div
+                                key={v.vitalDefinitionId}
+                                className={`flex items-center justify-between p-5 rounded-[24px] border transition-all ${
+                                  v.isEnabled
+                                    ? 'bg-white border-orange-200 shadow-sm ring-1 ring-orange-100'
+                                    : 'bg-gray-50/60 border-gray-100 opacity-60 hover:opacity-100'
+                                }`}
+                              >
+                                <div className="flex items-center gap-4 flex-1 min-w-0 mr-3">
+                                  <div
+                                    className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                                      v.isEnabled ? 'bg-orange-50 text-[#FF7A00]' : 'bg-gray-200 text-gray-400'
+                                    }`}
+                                  >
+                                    {isUpdating ? <Loader2 size={22} className="animate-spin text-[#FF7A00]" /> : <Icon size={22} />}
                                   </div>
-                                  <p className="text-sm text-gray-700 font-medium">
-                                    <span className="font-bold">Remarks: </span> 
-                                    {v.visitSummary || v.notes || v.manualCheckInReason || 'No remarks recorded.'}
-                                  </p>
-                               </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <p className="font-bold text-gray-800 text-sm truncate">{v.name}</p>
+                                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 uppercase">
+                                        {v.code}
+                                      </span>
+                                      {v.selectedBySubscriber && (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center gap-0.5">
+                                          <Check className="w-2.5 h-2.5" /> Selected by Subscriber
+                                        </span>
+                                      )}
+                                      {v.isSystemVital ? (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                                          System
+                                        </span>
+                                      ) : (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">
+                                          Custom
+                                        </span>
+                                      )}
+                                    </div>
 
-                               {/* Vitals Grid */}
-                               {vitalsToShow.length > 0 ? (
-                                 <div>
-                                   <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Recorded Vitals</h4>
-                                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                     {vitalsToShow.map((vital, idx) => {
-                                       const Icon = vital.icon;
-                                       return (
-                                         <div key={idx} className="bg-[#FDFBF9] p-4 rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center">
-                                           <div className="w-8 h-8 rounded-full bg-orange-100 text-[#FF7A00] flex items-center justify-center mb-2">
-                                              <Icon size={14} />
-                                           </div>
-                                           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{vital.label}</p>
-                                           <p className="text-sm font-black text-gray-800 mt-1">{vital.value}</p>
-                                         </div>
-                                       );
-                                     })}
-                                   </div>
-                                 </div>
-                               ) : (
-                                 <div className="py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                                    <p className="text-sm font-bold text-gray-400 uppercase">No active vitals recorded for this visit</p>
-                                 </div>
-                               )}
-                            </div>
-                          );
-                        })()}
+                                    <div className="flex items-center gap-2 mt-2">
+                                      <span className="text-[10px] font-black text-gray-400 uppercase">FREQ:</span>
+                                      <select
+                                        value={v.frequency || 'every_visit'}
+                                        disabled={!v.isEnabled || isUpdating}
+                                        onChange={(e) => handleFrequencyChange(v.vitalDefinitionId, e.target.value, v.name)}
+                                        className="text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200/80 border-0 rounded-lg px-2 py-1 outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        <option value="every_visit">Every Visit</option>
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                        <option value="biweekly">Bi-weekly</option>
+                                        <option value="monthly">Monthly</option>
+                                        <option value="as_needed">As Needed</option>
+                                      </select>
+                                      {v.unit && (
+                                        <span className="text-[11px] font-semibold text-gray-400">({v.unit})</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <Switch
+                                  checked={v.isEnabled}
+                                  disabled={isUpdating}
+                                  onCheckedChange={(checked) => handleVitalToggle(v.vitalDefinitionId, checked, v.name)}
+                                  className="data-[state=checked]:bg-[#FF7A00]"
+                                />
+                              </div>
+                            );
+                          })}
                       </div>
                     )}
-                 </div>
+                  </div>
+
+                 {/* Historical Vitals Records */}
+                 {renderHistoricalClinicalRecords()}
+              </TabsContent>
+
+              {/* ──────────────── CLINICAL RECORDS TAB ──────────────── */}
+              <TabsContent value="records" className="space-y-6 mt-0 outline-none">
+                {renderHistoricalClinicalRecords()}
               </TabsContent>
 
               {/* ──────────────── VISITS TAB ──────────────── */}

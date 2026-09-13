@@ -685,6 +685,7 @@ router.get('/:id', async (req, res) => {
         medicationList: { where: { isActive: true } },
         conditions: { include: { condition: true }, where: { isActive: true } },
         vitalReadings: { include: { vitalDefinition: true } },
+        vitalConfigs: { include: { vitalDefinition: true } },
         medicalRecords: { orderBy: { createdAt: 'desc' } },
       },
     });
@@ -705,10 +706,10 @@ router.get('/:id', async (req, res) => {
     // Map medicationList to medications for frontend compatibility
     b.medications = b.medicationList;
 
-    // Attach dynamic vital readings to visits
+    // Attach dynamic vital readings to visits (match by visitId or encounterId)
     b.visits = b.visits.map(v => ({
       ...v,
-      readings: b.vitalReadings.filter(r => r.encounterId === v.encounterId)
+      readings: b.vitalReadings.filter(r => (r.visitId && r.visitId === v.id) || (r.encounterId && v.encounterId && r.encounterId === v.encounterId))
     }));
 
     const sub = await prisma.subscription.findFirst({
@@ -716,10 +717,36 @@ router.get('/:id', async (req, res) => {
       include: { package: true },
     });
 
+    // Compute sanitized live care scores
+    let emotionalScore = b.emotionalScore != null ? Number(b.emotionalScore) : null;
+    if (emotionalScore !== null && emotionalScore > 10) {
+      emotionalScore = Math.round(emotionalScore);
+    } else if (emotionalScore !== null) {
+      emotionalScore = parseFloat(emotionalScore.toFixed(1));
+    }
+
+    let healthScore = b.healthScore != null ? parseFloat(Number(b.healthScore).toFixed(1)) : 8.0;
+    if (b.vitalReadings && b.vitalReadings.length > 0) {
+      const normalCount = b.vitalReadings.filter(r => !r.isAbnormal).length;
+      const ratio = normalCount / b.vitalReadings.length;
+      const condPenalty = Math.min(2.0, (b.conditions?.length || 0) * 0.4);
+      healthScore = parseFloat(Math.max(5.0, Math.min(10.0, (ratio * 10) - condPenalty)).toFixed(1));
+    } else if (b.conditions && b.conditions.length > 0) {
+      healthScore = parseFloat(Math.max(6.0, 10 - (b.conditions.length * 0.5)).toFixed(1));
+    }
+
+    let medicationScore = 100;
+    if (!b.medications || b.medications.length === 0) {
+      medicationScore = null;
+    }
+
     res.json({
       success: true,
       data: { 
         ...b, 
+        emotionalScore,
+        healthScore,
+        medicationScore,
         phone: b.user?.phone || null,
         dateOfBirth: b.dateOfBirth || null,
         age: b.dateOfBirth ? (calculateAge(b.dateOfBirth) ?? b.age) : b.age,

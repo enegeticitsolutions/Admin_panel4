@@ -250,6 +250,297 @@ router.get('/readings', async (req, res) => {
   }
 });
 
+// ─── GET /api/vitals/trends/:beneficiaryId ─────────────────────────────────
+router.get('/trends/:beneficiaryId', async (req, res) => {
+  try {
+    const { beneficiaryId } = req.params;
+    let days = parseInt(req.query.days) || 30;
+    if (days <= 0 || days > 365) days = 30;
+
+    const limitPoints = req.query.limit ? parseInt(req.query.limit) : null;
+
+    let fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - days);
+
+    // Fetch vital readings for this beneficiary
+    let readings = await prisma.vitalReading.findMany({
+      where: {
+        beneficiaryId,
+        capturedAt: { gte: fromDate },
+      },
+      include: {
+        vitalDefinition: {
+          select: {
+            code: true,
+            name: true,
+            unit: true,
+            dataType: true,
+            normalMax: true,
+            normalMin: true,
+            normalMax2: true,
+            normalMin2: true,
+            displayOrder: true,
+          },
+        },
+        capturedBy: { select: { name: true, role: true } },
+      },
+      orderBy: { capturedAt: 'asc' },
+    });
+
+    // Fallback: If no readings in the last N days, fetch the most recent 50 readings overall
+    if (readings.length === 0) {
+      readings = await prisma.vitalReading.findMany({
+        where: { beneficiaryId },
+        include: {
+          vitalDefinition: {
+            select: {
+              code: true,
+              name: true,
+              unit: true,
+              dataType: true,
+              normalMax: true,
+              normalMin: true,
+              normalMax2: true,
+              normalMin2: true,
+              displayOrder: true,
+            },
+          },
+          capturedBy: { select: { name: true, role: true } },
+        },
+        orderBy: { capturedAt: 'desc' },
+        take: 50,
+      });
+      readings.reverse(); // chronological
+    }
+
+    const grouped = new Map();
+
+    for (const r of readings) {
+      const def = r.vitalDefinition;
+      if (!def) continue;
+      const code = def.code.toUpperCase();
+
+      if (!grouped.has(code)) {
+        grouped.set(code, {
+          name: def.name,
+          code: code,
+          unit: r.unit || def.unit || '',
+          dataType: def.dataType,
+          normalMin: def.normalMin,
+          normalMax: def.normalMax,
+          normalMin2: def.normalMin2,
+          normalMax2: def.normalMax2,
+          displayOrder: def.displayOrder || 0,
+          v1: [],
+          v2: [],
+        });
+      }
+
+      const group = grouped.get(code);
+      const dateStr = r.capturedAt.toISOString().split('T')[0];
+      const shortDate = r.capturedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const timeStr = r.capturedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+      const src = r.source || 'care_companion';
+      const recName = src === 'beneficiary'
+        ? 'Self'
+        : (r.capturedBy ? r.capturedBy.name || 'Care Companion' : 'Care Companion');
+
+      if (def.dataType === 'numeric' || def.dataType === 'dual_numeric') {
+        if (r.valueNumeric !== null && r.valueNumeric !== undefined) {
+          group.v1.push({
+            date: shortDate,
+            time: timeStr,
+            fullDate: dateStr,
+            timestamp: r.capturedAt,
+            value: r.valueNumeric,
+            source: src,
+            recorder: recName,
+          });
+        }
+        if (def.dataType === 'dual_numeric' && r.valueNumeric2 !== null && r.valueNumeric2 !== undefined) {
+          group.v2.push({
+            date: shortDate,
+            time: timeStr,
+            fullDate: dateStr,
+            timestamp: r.capturedAt,
+            value: r.valueNumeric2,
+            source: src,
+            recorder: recName,
+          });
+        }
+      }
+    }
+
+    const trends = Array.from(grouped.values()).map(g => {
+      // Apply point limit if specified (default 7 for trend card matching mobile)
+      const maxPts = limitPoints || 7;
+      if (maxPts > 0) {
+        g.v1 = g.v1.slice(-maxPts);
+        if (g.v2) g.v2 = g.v2.slice(-maxPts);
+      }
+
+      let maxVal = 0;
+      g.v1.forEach(pt => { if (pt.value > maxVal) maxVal = pt.value; });
+      if (g.v2) g.v2.forEach(pt => { if (pt.value > maxVal) maxVal = pt.value; });
+
+      if (maxVal > 0) {
+        g.gridMax = Math.ceil(maxVal * 1.2);
+      } else {
+        g.gridMax = g.normalMax ? Math.ceil(g.normalMax * 1.2) : 200;
+      }
+
+      g.gridValues = [];
+      const step = Math.max(1, Math.ceil(g.gridMax / 4));
+      for (let i = 0; i <= 4; i++) {
+        g.gridValues.push(i * step);
+      }
+      g.gridMax = g.gridValues[4];
+
+      // Curated distinct colors
+      const code = g.code;
+      if (code === 'BP' || code === 'BLOOD_PRESSURE') {
+        g.color = '#EF4444'; // Red (Systolic)
+        g.color2 = '#4B5563'; // Slate / Gray (Diastolic)
+      } else if (code === 'PULSE' || code === 'HEART_RATE') {
+        g.color = '#F43F5E'; // Rose
+      } else if (code === 'SPO2' || code === 'OXYGEN_LEVEL') {
+        g.color = '#3B82F6'; // Blue
+      } else if (code === 'TEMP' || code === 'TEMPERATURE') {
+        g.color = '#F59E0B'; // Amber
+      } else if (code === 'WEIGHT') {
+        g.color = '#10B981'; // Emerald
+      } else if (code.includes('GLUCOSE') || code.includes('SUGAR')) {
+        g.color = '#8B5CF6'; // Violet
+      } else {
+        g.color = '#6366F1'; // Indigo
+      }
+
+      return g;
+    });
+
+    // Sort by vital definition display order
+    trends.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+    res.json({ success: true, data: trends });
+  } catch (error) {
+    console.error('GET /vitals/trends error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ─── GET /api/vitals/beneficiary/:beneficiaryId/config ─────────────────────
+router.get('/beneficiary/:beneficiaryId/config', async (req, res) => {
+  try {
+    const { beneficiaryId } = req.params;
+
+    // 1. Fetch all latest active vital definitions
+    const allDefinitions = await prisma.vitalDefinition.findMany({
+      where: { isLatestVersion: true, isActive: true },
+      orderBy: { displayOrder: 'asc' },
+    });
+
+    // 2. Fetch beneficiary's existing vital configurations
+    const userConfigs = await prisma.beneficiaryVitalConfig.findMany({
+      where: { beneficiaryId },
+      include: { vitalDefinition: true },
+    });
+
+    const configMap = new Map();
+    userConfigs.forEach(c => {
+      configMap.set(c.vitalDefinitionId, c);
+      if (c.vitalDefinition?.code) {
+        configMap.set(c.vitalDefinition.code.toUpperCase(), c);
+      }
+    });
+
+    // 3. Merge: each vital definition with its enabled status
+    const merged = allDefinitions.map(def => {
+      const config = configMap.get(def.id) || configMap.get(def.code.toUpperCase());
+      const isEnabled = config ? Boolean(config.isActive) : false;
+      const frequency = config?.frequency || (def.isSystemVital ? 'daily' : 'every_visit');
+
+      return {
+        vitalDefinitionId: def.id,
+        code: def.code,
+        name: def.name,
+        category: def.category || 'General',
+        dataType: def.dataType,
+        unit: def.unit || null,
+        isSystemVital: def.isSystemVital,
+        displayOrder: def.displayOrder || 0,
+        isEnabled,
+        frequency,
+        configId: config?.id || null,
+        selectedBySubscriber: config ? Boolean(config.selectedBySubscriberId) : false,
+      };
+    });
+
+    res.json({ success: true, data: merged });
+  } catch (err) {
+    console.error('GET /vitals/beneficiary/:beneficiaryId/config error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── PUT /api/vitals/beneficiary/:beneficiaryId/config ─────────────────────
+router.put('/beneficiary/:beneficiaryId/config', async (req, res) => {
+  try {
+    const { beneficiaryId } = req.params;
+    const { vitalDefinitionId, isEnabled, frequency } = req.body;
+
+    if (!vitalDefinitionId) {
+      return res.status(400).json({ success: false, message: 'vitalDefinitionId is required' });
+    }
+
+    // Upsert config in database
+    const config = await prisma.beneficiaryVitalConfig.upsert({
+      where: {
+        beneficiaryId_vitalDefinitionId: {
+          beneficiaryId,
+          vitalDefinitionId,
+        }
+      },
+      update: {
+        isActive: Boolean(isEnabled),
+        ...(frequency ? { frequency } : {}),
+        updatedAt: new Date(),
+      },
+      create: {
+        beneficiaryId,
+        vitalDefinitionId,
+        isActive: Boolean(isEnabled),
+        frequency: frequency || 'every_visit',
+      },
+      include: { vitalDefinition: true }
+    });
+
+    // Create activity log
+    try {
+      await prisma.activityLog.create({
+        data: {
+          userId: req.user?.id || null,
+          type: 'CLINICAL',
+          action: 'VITAL_CONFIG_UPDATED',
+          details: {
+            beneficiaryId,
+            vitalCode: config.vitalDefinition?.code,
+            vitalName: config.vitalDefinition?.name,
+            isEnabled: Boolean(isEnabled),
+            frequency: config.frequency,
+            updatedByName: req.user?.name || 'Administrator',
+          }
+        }
+      });
+    } catch (e) {}
+
+    res.json({ success: true, data: config });
+  } catch (err) {
+    console.error('PUT /vitals/beneficiary/:beneficiaryId/config error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ─── GET /api/vitals/:id ─────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {

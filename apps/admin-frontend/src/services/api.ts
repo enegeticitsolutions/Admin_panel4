@@ -1794,5 +1794,95 @@ export const invoicesApi = {
   },
 };
 
+// ============================================================================
+// VITALS API
+// ============================================================================
+
+export interface VitalDataPoint {
+  date: string;
+  time?: string;
+  fullDate: string;
+  timestamp: string;
+  value: number;
+  source?: 'care_companion' | 'beneficiary';
+  recorder?: string;
+}
+
+export interface VitalTrend {
+  name: string;
+  code: string;
+  unit: string;
+  dataType: string;
+  normalMin?: number | null;
+  normalMax?: number | null;
+  normalMin2?: number | null;
+  normalMax2?: number | null;
+  gridMax: number;
+  gridValues: number[];
+  color: string;
+  color2?: string;
+  v1: VitalDataPoint[];
+  v2?: VitalDataPoint[];
+}
+
+export const vitalsApi = {
+  getTrends: async (beneficiaryId: string, options?: { days?: number; limit?: number }): Promise<VitalTrend[]> => {
+    try {
+      const params = new URLSearchParams();
+      if (options?.days) params.append('days', String(options.days));
+      if (options?.limit) params.append('limit', String(options.limit));
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const res = await apiJson<any>(`/vitals/trends/${beneficiaryId}${query}`);
+      return Array.isArray(res) ? res : (res?.data || []);
+    } catch (err) {
+      console.error('vitalsApi.getTrends error:', err);
+      return [];
+    }
+  },
+  getReadings: async (beneficiaryId: string): Promise<any[]> => {
+    try {
+      const res = await apiJson<any>(`/vitals/readings?beneficiaryId=${beneficiaryId}`);
+      return Array.isArray(res) ? res : (res?.data || []);
+    } catch (err) {
+      console.error('vitalsApi.getReadings error:', err);
+      return [];
+    }
+  },
+  getBeneficiaryConfigs: async (beneficiaryId: string): Promise<BeneficiaryVitalConfigItem[]> => {
+    try {
+      const res = await apiJson<any>(`/vitals/beneficiary/${beneficiaryId}/config`);
+      return Array.isArray(res) ? res : (res?.data || []);
+    } catch (err) {
+      console.error('vitalsApi.getBeneficiaryConfigs error:', err);
+      return [];
+    }
+  },
+  updateBeneficiaryConfig: async (
+    beneficiaryId: string, 
+    payload: { vitalDefinitionId: string; isEnabled: boolean; frequency?: string }
+  ): Promise<any> => {
+    return apiJson<any>(`/vitals/beneficiary/${beneficiaryId}/config`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+export interface BeneficiaryVitalConfigItem {
+  vitalDefinitionId: string;
+  code: string;
+  name: string;
+  category: string;
+  dataType: string;
+  unit: string | null;
+  isSystemVital: boolean;
+  displayOrder: number;
+  isEnabled: boolean;
+  frequency: string;
+  configId: string | null;
+  selectedBySubscriber: boolean;
+}
+
+
 
 
