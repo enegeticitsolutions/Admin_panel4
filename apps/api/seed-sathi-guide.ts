@@ -56,7 +56,7 @@ async function main() {
           'Never share personal financial information',
           'Don\'t accept or give expensive gifts',
           'Respect their privacy and confidentiality',
-          'Report any concerns to the program coordinator',
+          'Report any concerns to the saathi coordinator',
           'Don\'t provide medical advice or assistance',
         ],
         sortOrder: 4,
@@ -127,12 +127,12 @@ async function main() {
     data: [
       {
         question: 'What if the beneficiary seems unwell during my visit?',
-        answer: 'If it is an emergency, contact Emergency Services immediately. Otherwise, inform the program coordinator through the emergency support channel.',
+        answer: 'If it is an emergency, contact Emergency Services immediately. Otherwise, inform the saathi coordinator through the emergency support channel.',
         sortOrder: 1,
       },
       {
         question: 'How do I handle difficult conversations or emotions?',
-        answer: 'Listen empathetically without judgment. Do not try to "fix" their feelings. If you feel overwhelmed, contact your program coordinator for guidance.',
+        answer: 'Listen empathetically without judgment. Do not try to "fix" their feelings. If you feel overwhelmed, contact your saathi coordinator for guidance.',
         sortOrder: 2,
       },
       {

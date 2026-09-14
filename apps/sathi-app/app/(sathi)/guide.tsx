@@ -29,7 +29,7 @@ const FALLBACK_ACTIVITIES = [
 const FALLBACK_FAQS = [
   {
     question: 'What if the beneficiary seems unwell during my visit?',
-    answer: 'Call Emergency Services (112) first, then contact the Program Coordinator.',
+    answer: 'Call Emergency Services (112) first, then contact the Saathi Coordinator.',
   },
 ];
 
@@ -219,7 +219,7 @@ export default function SathiGuide() {
               </View>
 
               <Text style={styles.emergencyDesc}>
-                Contact the program coordinator if you have questions, concerns, or need support with any
+                Contact the saathi coordinator if you have questions, concerns, or need support with any
                 aspect of your role as a Saathi.
               </Text>
             </View>
