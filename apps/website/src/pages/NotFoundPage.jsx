@@ -64,21 +64,6 @@ const NotFoundPage = ({ setActivePage }) => {
           >
             Explore Services
           </button>
-          <button
-            onClick={() => setActivePage("plans")}
-            style={{
-              padding: "12px 24px",
-              borderRadius: "50px",
-              background: "#FFFFFF",
-              color: "#333333",
-              fontWeight: "600",
-              fontSize: "14px",
-              border: "1.5px solid #E5E5E5",
-              cursor: "pointer"
-            }}
-          >
-            View Plans
-          </button>
         </div>
       </div>
     </main>

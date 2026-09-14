@@ -27,7 +27,7 @@ const App = () => {
     const validPages = [
       "home", "services", "saathi", /* "plans", "auth", */
       "account", "checkout", "story", "about", "terms",
-      "privacy", "refund-policy", "cookie-policy", "child-safety", "child-safety-policy"
+      "privacy", "refund-policy", "cookie-policy", "child-safety", "child-safety-policy", "child-policy"
     ];
 
     // 1. Inspect direct pathname first (e.g., /services, /plans, /saathi, /about)
@@ -186,7 +186,7 @@ const App = () => {
           token={token}
           user={user}
           onSuccess={() => setActivePage("account")}
-          onGoBack={() => setActivePage("plans")}
+          onGoBack={() => setActivePage("services")}
         />
       );
     }
@@ -215,7 +215,7 @@ const App = () => {
             user={user}
             token={token}
             onLogout={handleLogout}
-            onNavigateToPlans={() => setActivePage("plans")}
+            onNavigateToPlans={() => setActivePage("services")}
             onGoHome={() => setActivePage("home")}
           />
         ) : activePage === "services" ? (
@@ -230,7 +230,7 @@ const App = () => {
             onSelectPackage={handleSelectPackageForBuy}
             openForm={openForm}
           /> */
-        ) : ["terms", "privacy", "refund-policy", "cookie-policy", "child-safety", "child-safety-policy"].includes(activePage) ? (
+        ) : ["terms", "privacy", "refund-policy", "cookie-policy", "child-safety", "child-safety-policy", "child-policy"].includes(activePage) ? (
           <LegalPage initialTab={activePage} setActivePage={setActivePage} />
         ) : (
           <NotFoundPage setActivePage={setActivePage} />

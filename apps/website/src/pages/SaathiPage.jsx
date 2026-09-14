@@ -850,6 +850,17 @@ const SaathiPage = () => {
                 </div>
               </div>
 
+              {/* Notice for NCR enrollment */}
+              <p style={{
+                fontSize: '13px',
+                color: '#FE6700',
+                margin: '-4px 0 16px 0',
+                lineHeight: '1.45',
+                fontWeight: '500'
+              }}>
+                Now enrolling in NCR - more cities coming soon. Sign up anyway to be notified when we launch near you.
+              </p>
+
               {/* Row 6: Interests */}
               <div className="saathi-form-group" style={{ marginBottom: '16px' }}>
                 <label className="saathi-form-label">Areas of Interest</label>

@@ -8,7 +8,6 @@ export const SITE_LINKS = {
     instagram: "https://www.instagram.com/maihoonna_eldercare/",
     twitter: "https://x.com/MaihoonnaElderC",
     facebook: "https://www.facebook.com/maihoonnaeldercare",
-    youtube: "https://youtube.com/@maihoonna",
     linkedin: "https://www.linkedin.com/company/maihoonna-eldercare-private-limited/?viewAsMember=true",
   },
 
@@ -16,14 +15,14 @@ export const SITE_LINKS = {
   appStore: {
     familyConnect: {
       googlePlay: "https://play.google.com/store/apps/details?id=com.maihoonna.app",
-      appleAppStore: "https://apps.apple.com/app/id6801516827",
+      appleAppStore: "https://apps.apple.com/in/app/maihoonna/id6801516827",
     },
     saathi: {
       googlePlay: "https://play.google.com/store/apps/details?id=com.maihoonna.sathiapp",
-      appleAppStore: "https://apps.apple.com/app/id6802669670",
+      appleAppStore: "https://apps.apple.com/in/app/maihoonna-saathi-app/id6802669670",
     },
     googlePlay: "https://play.google.com/store/apps/details?id=com.maihoonna.app",
-    appleAppStore: "https://apps.apple.com/app/id6801516827",
+    appleAppStore: "https://apps.apple.com/in/app/maihoonna/id6801516827",
   },
 
   // Contact Info
