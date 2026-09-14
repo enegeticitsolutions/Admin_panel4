@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../core/database';
+import { resolveFileUrl } from '../../services/storage/urlResolver';
 
 const router = Router();
 
@@ -44,15 +45,15 @@ router.get('/content/sathi', async (_req: Request, res: Response) => {
       },
     });
 
-    const saathis = saathisRaw.map((s: any) => ({
+    const saathis = await Promise.all(saathisRaw.map(async (s: any) => ({
       id: s.id,
       name: s.name,
       city: s.city,
       state: s.state,
       area: s.streetArea || null,
       totalCreditHours: s.totalCreditHours || 0,
-      profilePhoto: s.profilePhoto || null,
-    }));
+      profilePhoto: s.profilePhoto ? await resolveFileUrl(s.profilePhoto) : null,
+    })));
 
     // Aggregate live stats for the hero section
     const volunteerStats = await (prisma as any).volunteer.aggregate({

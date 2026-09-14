@@ -10,6 +10,7 @@ const storage = require('../services/storage');
 const { dispatchVisitScheduled } = require('../services/notification.dispatcher');
 const visitEventDispatcher = require('../services/events/visit-event.dispatcher');
 const { rosterEvents } = require('../services/events');
+const { resolveFileUrl } = require('../services/storage/urlResolver');
 
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
@@ -561,9 +562,23 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Visit not found' });
     }
 
+    let resolvedImageUrls = visit.imageUrls;
+    if (visit.imageUrls) {
+      try {
+        const rawUrls = JSON.parse(visit.imageUrls);
+        if (Array.isArray(rawUrls)) {
+          const urls = await Promise.all(rawUrls.map(resolveFileUrl));
+          resolvedImageUrls = JSON.stringify(urls);
+        }
+      } catch (e) {
+        console.error('Failed to parse imageUrls for visit', visit.id, e);
+      }
+    }
+
     // Flatten the phone number to make it easier for the frontend
     const formattedVisit = {
       ...visit,
+      imageUrls: resolvedImageUrls,
       beneficiary: visit.beneficiary ? {
         ...visit.beneficiary,
         phone: visit.beneficiary.user?.phone
@@ -869,14 +884,30 @@ router.get('/', async (req, res) => {
     });
 
     // Attach geo-fencing fields + visitCode to each visit for the admin UI
-    const visitsWithGeo = visits.map((v) => ({
-      ...v,
-      visitCode: v.visitCode,
-      isGeoVerified: v.isGeoVerified,
-      geoDistanceMeters: v.geoDistanceMeters,
-      manualCheckInReason: v.manualCheckInReason,
-      checkInLat: v.checkInLat,
-      checkInLng: v.checkInLng,
+    const visitsWithGeo = await Promise.all(visits.map(async (v) => {
+      let resolvedImageUrls = v.imageUrls;
+      if (v.imageUrls) {
+        try {
+          const rawUrls = JSON.parse(v.imageUrls);
+          if (Array.isArray(rawUrls)) {
+            const urls = await Promise.all(rawUrls.map(resolveFileUrl));
+            resolvedImageUrls = JSON.stringify(urls);
+          }
+        } catch (e) {
+          console.error('Failed to parse imageUrls for visit', v.id, e);
+        }
+      }
+
+      return {
+        ...v,
+        imageUrls: resolvedImageUrls,
+        visitCode: v.visitCode,
+        isGeoVerified: v.isGeoVerified,
+        geoDistanceMeters: v.geoDistanceMeters,
+        manualCheckInReason: v.manualCheckInReason,
+        checkInLat: v.checkInLat,
+        checkInLng: v.checkInLng,
+      };
     }));
 
     res.json({ success: true, data: visitsWithGeo });

@@ -10,6 +10,7 @@ const { calculateAge } = require('../utils/age');
 const { dispatchCareCompanionAssigned } = require('../services/notification.dispatcher');
 const { rosterEvents } = require('../services/events');
 const { isSathiBenefit } = require('../utils/systemBenefits');
+const { resolveFileUrl } = require('../services/storage/urlResolver');
 
 // ── GET /api/beneficiaries ───────────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -162,7 +163,7 @@ router.get('/', async (req, res) => {
       subMap[s.beneficiaryId].push(s);
     });
 
-    let mapped = allBeneficiaries.map((b) => {
+    let mapped = await Promise.all(allBeneficiaries.map(async (b) => {
       const benSubs = subMap[b.id] || [];
       const activeSubs = benSubs.filter((s) => s.isActive && new Date(s.endDate) > now);
       const activeSub = activeSubs[0] || null;
@@ -219,7 +220,7 @@ router.get('/', async (req, res) => {
         userId: b.userId,
         name: b.name,
         phone: b.user?.phone || null,
-        photo: b.photo,
+        photo: b.photo ? await resolveFileUrl(b.photo) : null,
         dateOfBirth: b.dateOfBirth || null,
         age: b.dateOfBirth ? (calculateAge(b.dateOfBirth) ?? b.age) : b.age,
         gender: b.gender,
@@ -253,7 +254,7 @@ router.get('/', async (req, res) => {
         nearestZone: nearestZoneName,
         hasSathiBenefit
       };
-    });
+    }));
 
     // ── Apply Status Filter ('active' package | 'expired' package | 'all') ─────────
     if (statusFilter === 'active') {
@@ -738,6 +739,10 @@ router.get('/:id', async (req, res) => {
     let medicationScore = 100;
     if (!b.medications || b.medications.length === 0) {
       medicationScore = null;
+    }
+
+    if (b.photo) {
+      b.photo = await resolveFileUrl(b.photo);
     }
 
     res.json({

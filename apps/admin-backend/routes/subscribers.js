@@ -4,6 +4,7 @@ const path = require('path');
 
 const { prisma } = require('../lib/prisma');
 const { calculateAge } = require('../utils/age');
+const { resolveFileUrl } = require('../services/storage/urlResolver');
 
 // ── GET /api/subscribers ─────────────────────────────────────────────────────
 // Fetches all users with role = 'subscriber' and their linked beneficiaries
@@ -59,12 +60,12 @@ router.get('/', async (req, res) => {
       if (!subMap[s.subscriberId]) subMap[s.subscriberId] = s;
     });
 
-    const mapped = subscribers.map((s) => {
+    const mapped = await Promise.all(subscribers.map(async (s) => {
       const activeSub = subMap[s.id];
       return {
         id: s.id,
         name: s.name,
-        profilePhoto: s.profilePhoto || null,
+        profilePhoto: s.profilePhoto ? await resolveFileUrl(s.profilePhoto) : null,
         phone: s.phone,
         email: s.email || null,
         address: s.address || null,
@@ -77,7 +78,7 @@ router.get('/', async (req, res) => {
         activePackage: activeSub?.package?.name || null,
         subscriptionType: activeSub?.package?.type || null,
       };
-    });
+    }));
 
     if (page && limit) {
       res.json({
@@ -131,6 +132,10 @@ router.get('/:id', async (req, res) => {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    if (s.profilePhoto) {
+      s.profilePhoto = await resolveFileUrl(s.profilePhoto);
+    }
 
     res.json({
       success: true,

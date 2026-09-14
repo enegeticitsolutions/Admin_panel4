@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 
 const { prisma } = require('../lib/prisma');
+const { resolveFileUrl } = require('../services/storage/urlResolver');
 const { dispatchCMOnboardingCleared } = require('../services/events/account-event.dispatcher');
 
 const SUPPORTED_ONBOARDING_ROLES = new Set([
@@ -259,7 +260,7 @@ function buildTrainingRows(role, staffProfileId) {
   }));
 }
 
-function mapCareCompanion(companion) {
+async function mapCareCompanion(companion) {
   const staffProfile = companion.user?.staffProfile || null;
   const latestBackgroundCheck = staffProfile?.backgroundChecks?.[0] || null;
 
@@ -269,7 +270,7 @@ function mapCareCompanion(companion) {
     name: companion.user?.name || companion.name,
     phone: companion.user?.phone || '',
     email: companion.user?.email || null,
-    photo: companion.user?.profilePhoto || companion.photo || null,
+    photo: (companion.user?.profilePhoto || companion.photo) ? await resolveFileUrl(companion.user?.profilePhoto || companion.photo) : null,
     bio: companion.bio || '',
     zone: companion.zone,
     zoneId: staffProfile?.zoneId || null,
@@ -301,14 +302,14 @@ function mapCareCompanion(companion) {
   };
 }
 
-function mapFieldManager(manager) {
+async function mapFieldManager(manager) {
   const staffProfile = manager.user?.staffProfile || null;
 
   return {
     id: manager.id,
     userId: manager.userId,
     name: manager.user?.name || manager.name,
-    photo: manager.user?.profilePhoto || manager.photo || null,
+    photo: (manager.user?.profilePhoto || manager.photo) ? await resolveFileUrl(manager.user?.profilePhoto || manager.photo) : null,
     phone: manager.user?.phone || manager.phone || '',
     email: manager.user?.email || null,
     zone: manager.zone,
@@ -337,13 +338,13 @@ function mapFieldManager(manager) {
   };
 }
 
-function mapOperationsManager(manager) {
+async function mapOperationsManager(manager) {
   const staffProfile = manager.user?.staffProfile || null;
   return {
     id: manager.id,
     userId: manager.userId,
     name: manager.user?.name || manager.name,
-    photo: manager.user?.profilePhoto || manager.photo || null,
+    photo: (manager.user?.profilePhoto || manager.photo) ? await resolveFileUrl(manager.user?.profilePhoto || manager.photo) : null,
     phone: manager.user?.phone || manager.phone || '',
     email: manager.user?.email || null,
     qualification: manager.qualification,
@@ -440,7 +441,7 @@ async function buildOnboardingMetadata() {
         team.fieldManager?.name ||
         'Unassigned',
     })),
-    operationsManagers: operationsManagers.map(mapOperationsManager),
+    operationsManagers: await Promise.all(operationsManagers.map(mapOperationsManager)),
     specializations: [
       'Elderly Care',
       'Post-Operative Recovery',
@@ -521,7 +522,7 @@ router.get('/field-managers', async (req, res) => {
       prisma.fieldManager.count({ where: filterParams }),
     ]);
 
-    const mapped = managers.map(mapFieldManager);
+    const mapped = await Promise.all(managers.map(mapFieldManager));
     if (page && limit) {
       res.json({
         success: true,
@@ -600,7 +601,7 @@ router.get('/operations-managers', async (req, res) => {
       prisma.operationsManager.count({ where: filterParams }),
     ]);
 
-    const mapped = managers.map(mapOperationsManager);
+    const mapped = await Promise.all(managers.map(mapOperationsManager));
     if (page && limit) {
       res.json({
         success: true,
@@ -1230,7 +1231,7 @@ router.get('/care-companions', async (req, res) => {
       prisma.careCompanion.count({ where: filterParams }),
     ]);
 
-    const mapped = companions.map(mapCareCompanion);
+    const mapped = await Promise.all(companions.map(mapCareCompanion));
     if (page && limit) {
       res.json({
         success: true,
@@ -1356,7 +1357,7 @@ router.get('/staff/:userId', async (req, res) => {
       role: user.role,
       personal: {
         fullName: user.name || '',
-        photoUrl: user.profilePhoto || null,
+        photoUrl: user.profilePhoto ? await resolveFileUrl(user.profilePhoto) : null,
         preferredName: user.staffProfile?.preferredName || '',
         dateOfBirth: user.staffProfile?.dateOfBirth
           ? user.staffProfile.dateOfBirth.toISOString().split('T')[0]

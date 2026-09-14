@@ -4,6 +4,7 @@ const {
   dispatchSaathiProfileApproved,
   dispatchSaathiBeneficiaryUnmatched,
 } = require('../services/events/sathi-event.dispatcher');
+const { resolveFileUrl } = require('../services/storage/urlResolver');
 
 // GET /api/volunteers — list volunteers with optional status filter
 router.get('/', async (req, res) => {
@@ -38,7 +39,14 @@ router.get('/', async (req, res) => {
       }
     });
 
-    res.json({ success: true, data: volunteers });
+    const resolvedVolunteers = await Promise.all(volunteers.map(async (v) => {
+      if (v.profilePhoto) {
+        v.profilePhoto = await resolveFileUrl(v.profilePhoto);
+      }
+      return v;
+    }));
+
+    res.json({ success: true, data: resolvedVolunteers });
   } catch (err) {
     console.error('GET /api/volunteers error:', err);
     res.status(500).json({ success: false, message: err.message });
@@ -69,6 +77,10 @@ router.get('/:id', async (req, res) => {
 
     if (!volunteer) {
       return res.status(404).json({ success: false, message: 'Volunteer not found' });
+    }
+
+    if (volunteer.profilePhoto) {
+      volunteer.profilePhoto = await resolveFileUrl(volunteer.profilePhoto);
     }
 
     res.json({ success: true, data: volunteer });
