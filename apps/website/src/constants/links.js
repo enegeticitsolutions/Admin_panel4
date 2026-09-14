@@ -53,6 +53,7 @@ export const SITE_LINKS = {
     { label: "Terms of Service", page: "terms", href: "/terms" },
     { label: "Refund Policy", page: "refund-policy", href: "/refund-policy" },
     { label: "Cookie Policy", page: "cookie-policy", href: "/cookie-policy" },
+    { label: "Child Safety Policy", page: "child-safety", href: "/child-safety" },
   ],
 
   // Footer Bottom Legal Links
@@ -60,6 +61,7 @@ export const SITE_LINKS = {
     { label: "Privacy", page: "privacy", href: "/privacy" },
     { label: "Terms", page: "terms", href: "/terms" },
     { label: "Cookies", page: "cookie-policy", href: "/cookie-policy" },
+    { label: "Child Safety", page: "child-safety", href: "/child-safety" },
     { label: "Sitemap", href: "/sitemap.xml" },
   ],
 };

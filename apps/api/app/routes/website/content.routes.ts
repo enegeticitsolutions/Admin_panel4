@@ -81,4 +81,64 @@ router.get('/content/sathi', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/website/content/legal
+ * Returns all active legal policies ordered by sortOrder
+ */
+router.get('/content/legal', async (_req: Request, res: Response) => {
+  try {
+    const policies = await (prisma as any).legalPolicy.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: policies.length,
+      data: policies,
+    });
+  } catch (error: any) {
+    console.error('❌ [Website Legal Policies Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching legal policies.',
+    });
+  }
+});
+
+/**
+ * GET /api/website/content/legal/:slug
+ * Returns a single legal policy by its slug (e.g., terms, privacy, refund, cookie, child-safety)
+ */
+router.get('/content/legal/:slug', async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const policy = await (prisma as any).legalPolicy.findFirst({
+      where: {
+        slug: slug.toLowerCase(),
+        isActive: true,
+      },
+    });
+
+    if (!policy) {
+      return res.status(404).json({
+        success: false,
+        message: `Legal policy with slug '${slug}' not found.`,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: policy,
+    });
+  } catch (error: any) {
+    console.error('❌ [Website Legal Policy By Slug Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching legal policy.',
+    });
+  }
+});
+
 export default router;
+

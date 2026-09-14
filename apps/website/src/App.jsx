@@ -27,7 +27,7 @@ const App = () => {
     const validPages = [
       "home", "services", "saathi", /* "plans", "auth", */
       "account", "checkout", "story", "about", "terms",
-      "privacy", "refund-policy", "cookie-policy"
+      "privacy", "refund-policy", "cookie-policy", "child-safety", "child-safety-policy"
     ];
 
     // 1. Inspect direct pathname first (e.g., /services, /plans, /saathi, /about)
@@ -230,7 +230,7 @@ const App = () => {
             onSelectPackage={handleSelectPackageForBuy}
             openForm={openForm}
           /> */
-        ) : ["terms", "privacy", "refund-policy", "cookie-policy"].includes(activePage) ? (
+        ) : ["terms", "privacy", "refund-policy", "cookie-policy", "child-safety", "child-safety-policy"].includes(activePage) ? (
           <LegalPage initialTab={activePage} setActivePage={setActivePage} />
         ) : (
           <NotFoundPage setActivePage={setActivePage} />

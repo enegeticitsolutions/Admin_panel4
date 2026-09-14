@@ -2183,6 +2183,26 @@ model WebsiteContent {
   @@map("website_content")
 }
 
+model LegalPolicy {
+  id            String   @id @default(uuid())
+  slug          String   @unique
+  title         String
+  tabLabel      String
+  effectiveDate String?
+  lastUpdated   String?
+  appliesTo     String?
+  operatedBy    String?
+  summary       String?
+  sections      Json
+  footerNote    String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("legal_policies")
+}
+
 model VolunteerReview {
   id            String   @id @default(uuid())
   volunteerId   String

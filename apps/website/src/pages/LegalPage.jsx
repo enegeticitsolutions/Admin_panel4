@@ -1,32 +1,75 @@
 import React, { useState, useEffect } from "react";
+import { fetchLegalPolicies } from "../services/api";
+
+const HASH_MAP = {
+  terms: "terms",
+  privacy: "privacy",
+  refund: "refund-policy",
+  cookie: "cookie-policy",
+  "child-safety": "child-safety",
+  "saathi-tc": "saathi-tc",
+};
 
 export default function LegalPage({ initialTab = "terms", setActivePage }) {
-  const getTabFromHash = () => {
-    const rawHash = (window.location.hash || "").replace("#", "").toLowerCase();
-    if (rawHash === "privacy") return "privacy";
-    if (rawHash === "refund-policy" || rawHash === "refund") return "refund";
-    if (rawHash === "cookie-policy" || rawHash === "cookie") return "cookie";
+  const normalizeTab = (raw) => {
+    const clean = (raw || "").toLowerCase().replace(/^[#/]+|[#/]+$/g, "");
+    if (clean === "privacy") return "privacy";
+    if (clean === "refund" || clean === "refund-policy") return "refund";
+    if (clean === "cookie" || clean === "cookie-policy") return "cookie";
+    if (clean === "child-safety" || clean === "child-safety-policy" || clean === "child") return "child-safety";
+    if (clean === "saathi-tc" || clean === "saathi") return "saathi-tc";
     return "terms";
   };
 
+  const getTabFromHash = () => {
+    const rawHash = (window.location.hash || "").replace("#", "");
+    return normalizeTab(rawHash || initialTab);
+  };
+
   const [activeTab, setActiveTab] = useState(getTabFromHash);
+  const [policies, setPolicies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const loadPolicies = () => {
+    setLoading(true);
+    setError(null);
+    fetchLegalPolicies()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setPolicies(data);
+        } else {
+          setError("No legal policies found in the database.");
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading policies from database:", err);
+        setError("Failed to load legal policies. Please check backend connection.");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    loadPolicies();
+  }, []);
 
   useEffect(() => {
     setActiveTab(getTabFromHash());
   }, [initialTab]);
 
-  const handleTabClick = (tabId) => {
-    setActiveTab(tabId);
-    const hashMap = {
-      terms: "terms",
-      privacy: "privacy",
-      refund: "refund-policy",
-      cookie: "cookie-policy",
-    };
-    if (hashMap[tabId]) {
-      window.location.hash = `#${hashMap[tabId]}`;
-    }
+  const handleTabClick = (tabSlug) => {
+    setActiveTab(tabSlug);
+    const targetHash = HASH_MAP[tabSlug] || tabSlug;
+    window.location.hash = `#${targetHash}`;
   };
+
+  // Find currently active policy object from database rows
+  const currentPolicy =
+    policies.find((p) => p.slug === activeTab) ||
+    policies[0] ||
+    null;
 
   return (
     <div
@@ -39,11 +82,11 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
         fontFamily: "'Poppins', sans-serif",
       }}
     >
-      <div style={{ maxWidth: "860px", margin: "0 auto", padding: "0 24px" }}>
+      <div style={{ maxWidth: "880px", margin: "0 auto", padding: "0 24px" }}>
         {/* Breadcrumb & Navigation */}
-        <div style={{ marginBottom: "20px" }}>
+        <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <button
-            onClick={() => setActivePage ? setActivePage("home") : (window.location.hash = "#home")}
+            onClick={() => (setActivePage ? setActivePage("home") : (window.location.hash = "#home"))}
             style={{
               background: "none",
               border: "none",
@@ -59,237 +102,319 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
           >
             ← Back to Home
           </button>
+
+          {!loading && !error && (
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: "#16a34a",
+                background: "#f0fdf4",
+                padding: "4px 10px",
+                borderRadius: "20px",
+                fontWeight: "600",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                border: "1px solid #bbf7d0",
+              }}
+            >
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#16a34a" }}></span>
+              Live from Database
+            </span>
+          )}
         </div>
 
-        {/* Header Title Card */}
-        <div
-          style={{
-            background: "#ffffff",
-            borderRadius: "20px",
-            padding: "32px",
-            border: "1px solid #e2e8f0",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
-            marginBottom: "24px",
-          }}
-        >
-          <span
-            style={{
-              fontSize: "0.8rem",
-              fontWeight: "700",
-              color: "var(--orange, #fe6700)",
-              textTransform: "uppercase",
-              letterSpacing: "0.8px",
-            }}
-          >
-            MaiHoonNa Eldercare Legal Center
-          </span>
-          <h1 style={{ fontSize: "2rem", fontWeight: "800", color: "#0f172a", margin: "6px 0 12px" }}>
-            {activeTab === "terms" && "Terms of Service"}
-            {activeTab === "privacy" && "Privacy Policy"}
-            {activeTab === "refund" && "Refund & Cancellation Policy"}
-            {activeTab === "cookie" && "Cookie Policy"}
-          </h1>
-          <p style={{ fontSize: "0.95rem", color: "#64748b", margin: 0, lineHeight: "1.6" }}>
-            Last revised: January 2026. Please read these terms carefully before using MaiHoonNa's senior care services, mobile apps, or digital platforms.
-          </p>
-
-          {/* Tab Switcher Pills */}
+        {/* Loading State */}
+        {loading ? (
           <div
             style={{
-              display: "flex",
-              gap: "10px",
-              marginTop: "24px",
-              flexWrap: "wrap",
-              borderTop: "1px solid #f1f5f9",
-              paddingTop: "20px",
+              background: "#ffffff",
+              borderRadius: "20px",
+              padding: "48px 32px",
+              textAlign: "center",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
             }}
           >
-            {[
-              { id: "terms", label: "Terms of Service" },
-              { id: "privacy", label: "Privacy Policy" },
-              { id: "refund", label: "Refund Policy" },
-              { id: "cookie", label: "Cookie Policy" },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => handleTabClick(tab.id)}
+            <div
+              style={{
+                width: "40px",
+                height: "40px",
+                border: "3px solid #f1f5f9",
+                borderTop: "3px solid #fe6700",
+                borderRadius: "50%",
+                animation: "spin 0.8s linear infinite",
+                margin: "0 auto 16px",
+              }}
+            />
+            <p style={{ color: "#64748b", margin: 0, fontWeight: "500" }}>Loading legal policies from database...</p>
+            <style>
+              {`
+                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                .legal-html-content h1, .legal-html-content h2 { font-size: 1.22rem; font-weight: 800; color: #0f172a; margin-top: 24px; margin-bottom: 10px; }
+                .legal-html-content h1:first-child { margin-top: 0; }
+                .legal-html-content p { margin-bottom: 14px; }
+                .legal-html-content ul { padding-left: 24px; margin: 12px 0; }
+                .legal-html-content li { margin-bottom: 6px; }
+                .legal-html-content table { width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #e2e8f0; }
+                .legal-html-content td, .legal-html-content th { border: 1px solid #e2e8f0; padding: 12px 16px; vertical-align: top; }
+                .legal-html-content th { background: #f8fafc; font-weight: 700; color: #0f172a; text-align: left; }
+                .legal-html-content td strong, .legal-html-content th strong { font-weight: 700; }
+              `}
+            </style>
+          </div>
+        ) : error ? (
+          /* Error State */
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "20px",
+              padding: "40px 32px",
+              textAlign: "center",
+              border: "1px solid #fee2e2",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+            }}
+          >
+            <p style={{ color: "#ef4444", fontWeight: "600", marginBottom: "16px" }}>{error}</p>
+            <button
+              onClick={loadPolicies}
+              style={{
+                padding: "10px 20px",
+                borderRadius: "10px",
+                border: "none",
+                background: "#fe6700",
+                color: "#ffffff",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : currentPolicy ? (
+          /* Main Content Rendered Directly From Database */
+          <>
+            {/* Header Title Card */}
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "20px",
+                padding: "32px",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+                marginBottom: "24px",
+              }}
+            >
+              <span
                 style={{
-                  padding: "10px 20px",
-                  borderRadius: "12px",
-                  border: activeTab === tab.id ? "1.5px solid #fe6700" : "1px solid #e2e8f0",
-                  fontSize: "0.9rem",
+                  fontSize: "0.8rem",
                   fontWeight: "700",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                  background: activeTab === tab.id ? "#fe6700" : "#ffffff",
-                  color: activeTab === tab.id ? "#ffffff" : "#475569",
-                  boxShadow: activeTab === tab.id ? "0 4px 12px rgba(254, 103, 0, 0.25)" : "none",
+                  color: "var(--orange, #fe6700)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.8px",
                 }}
               >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
+                MaiHoonNa Eldercare Legal Center
+              </span>
 
-        {/* Content Card */}
-        <div
-          style={{
-            background: "#ffffff",
-            borderRadius: "20px",
-            padding: "36px 32px",
-            border: "1px solid #e2e8f0",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
-            color: "#334155",
-            fontSize: "0.95rem",
-            lineHeight: "1.75",
-          }}
-        >
-          {activeTab === "terms" && (
-            <div>
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: 0, marginBottom: "10px" }}>
-                1. Acceptance of Terms & Services
-              </h2>
-              <p>
-                By registering on or using the MaiHoonNa mobile application or website, you agree to comply with and be bound by these Terms of Service. These terms apply to all subscribers, senior beneficiaries, family members, and visitors.
+              <h1 style={{ fontSize: "2rem", fontWeight: "800", color: "#0f172a", margin: "6px 0 10px" }}>
+                {currentPolicy.title}
+              </h1>
+
+              <p style={{ fontSize: "0.95rem", color: "#64748b", margin: 0, lineHeight: "1.6" }}>
+                {currentPolicy.summary ||
+                  `Last revised: ${currentPolicy.lastUpdated || "January 2026"}. Please read these terms carefully before using MaiHoonNa's senior care services, mobile apps, or digital platforms.`}
               </p>
 
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                2. Nature of Elder Care & Companion Services
-              </h2>
-              <p>
-                MaiHoonNa provides non-medical senior companionship, recurring home visits through verified Care Mitras, vitals logging, social interaction circles (Saathi Network), and family visibility tracking.
-              </p>
-              <p>
-                <strong>Important Notice:</strong> MaiHoonNa is not an emergency hospital or emergency medical room. Our Care Mitras provide non-medical companionship and assistance. In case of acute medical emergencies, our platform helps trigger designated family contacts and public emergency emergency lines.
-              </p>
+              {/* Meta Details Pills (Effective Date, Applies to, Operated by) */}
+              {(currentPolicy.effectiveDate || currentPolicy.appliesTo) && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "12px",
+                    marginTop: "16px",
+                    fontSize: "0.82rem",
+                    color: "#475569",
+                  }}
+                >
+                  {currentPolicy.effectiveDate && (
+                    <div style={{ background: "#f1f5f9", padding: "4px 12px", borderRadius: "8px" }}>
+                      <strong>Effective:</strong> {currentPolicy.effectiveDate}
+                      {currentPolicy.lastUpdated && currentPolicy.lastUpdated !== currentPolicy.effectiveDate && (
+                        <span> • <strong>Updated:</strong> {currentPolicy.lastUpdated}</span>
+                      )}
+                    </div>
+                  )}
+                  {currentPolicy.operatedBy && (
+                    <div style={{ background: "#f1f5f9", padding: "4px 12px", borderRadius: "8px" }}>
+                      <strong>Operated by:</strong> {currentPolicy.operatedBy}
+                    </div>
+                  )}
+                  {currentPolicy.appliesTo && (
+                    <div
+                      style={{
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        padding: "4px 12px",
+                        borderRadius: "8px",
+                        width: "100%",
+                      }}
+                    >
+                      <strong>Applies to:</strong> {currentPolicy.appliesTo}
+                    </div>
+                  )}
+                </div>
+              )}
 
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                3. User Account Security & Authentication
-              </h2>
-              <p>
-                You must be at least 18 years of age to register as a subscriber. You are responsible for ensuring that all beneficiary information, contact phone numbers, and address details submitted under your profile are accurate and up to date.
-              </p>
-
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                4. Code of Conduct & Safety
-              </h2>
-              <p>
-                All Care Mitras are background-verified and trained. We maintain a zero-tolerance policy against any form of harassment, discrimination, or unsafe working conditions during companion visits.
-              </p>
-
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                5. Subscriptions, Payments & Billing
-              </h2>
-              <p>
-                Subscriptions are billed according to the chosen package duration (monthly, quarterly, or annually). All online payments are encrypted and processed through certified RBI-compliant payment gateways.
-              </p>
-
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                6. Contact & Grievance Officer
-              </h2>
-              <p>
-                For questions, clarifications, or grievances regarding these terms, please contact our support team at{" "}
-                <a href="mailto:info@maihoonna.com" style={{ color: "#fe6700", fontWeight: "700" }}>
-                  info@maihoonna.com
-                </a>
-                .
-              </p>
+              {/* Dynamic Database Tabs */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  marginTop: "24px",
+                  flexWrap: "wrap",
+                  borderTop: "1px solid #f1f5f9",
+                  paddingTop: "20px",
+                }}
+              >
+                {policies.map((tab) => {
+                  const isSelected = activeTab === tab.slug;
+                  return (
+                    <button
+                      key={tab.slug}
+                      type="button"
+                      onClick={() => handleTabClick(tab.slug)}
+                      style={{
+                        padding: "10px 18px",
+                        borderRadius: "12px",
+                        border: isSelected ? "1.5px solid #fe6700" : "1px solid #e2e8f0",
+                        fontSize: "0.88rem",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        background: isSelected ? "#fe6700" : "#ffffff",
+                        color: isSelected ? "#ffffff" : "#475569",
+                        boxShadow: isSelected ? "0 4px 12px rgba(254, 103, 0, 0.25)" : "none",
+                      }}
+                    >
+                      {tab.tabLabel || tab.title}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          )}
 
-          {activeTab === "privacy" && (
-            <div>
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: 0, marginBottom: "10px" }}>
-                1. Information We Collect
-              </h2>
-              <p>
-                To provide safe and personalized elder care services, MaiHoonNa collects information including:
-              </p>
-              <ul style={{ paddingLeft: "24px", margin: "12px 0" }}>
-                <li><strong>Account Information:</strong> Full name, phone number, email address, and age of subscribers and beneficiaries.</li>
-                <li><strong>Service Addresses:</strong> House/flat number, landmark, area, city, and pincode for accurate companion dispatch.</li>
-                <li><strong>Emergency Contacts:</strong> Names, relationships, and emergency phone numbers designated by family members.</li>
-                <li><strong>Health & Activity Notes:</strong> Daily wellness check-in summaries, visit feedback, and activity logs.</li>
-              </ul>
+            {/* Dynamic Policy Content Card */}
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "20px",
+                padding: "36px 32px",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+                color: "#334155",
+                fontSize: "0.95rem",
+                lineHeight: "1.75",
+              }}
+            >
+              {Array.isArray(currentPolicy.sections) && currentPolicy.sections.length > 0 ? (
+                currentPolicy.sections.map((section, idx) => (
+                  <div key={section.id || idx} style={{ marginBottom: idx < currentPolicy.sections.length - 1 ? "28px" : "0" }}>
+                    {section.title && (
+                      <h2
+                        style={{
+                          fontSize: "1.22rem",
+                          fontWeight: "800",
+                          color: "#0f172a",
+                          marginTop: idx === 0 ? 0 : "24px",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        {section.title}
+                      </h2>
+                    )}
 
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                2. How We Use Your Data
-              </h2>
-              <p>
-                We use your data solely to:
-              </p>
-              <ul style={{ paddingLeft: "24px", margin: "12px 0" }}>
-                <li>Authenticate your login and verify mobile OTPs securely without requiring passwords.</li>
-                <li>Coordinate, dispatch, and track Care Mitra senior visits.</li>
-                <li>Deliver real-time visit reports and emergency SOS notifications to family members.</li>
-                <li>Maintain safety and service compliance across all visits.</li>
-              </ul>
+                    {section.content && section.isHtml ? (
+                      <div 
+                        className="legal-html-content"
+                        style={{ color: "#334155" }}
+                        dangerouslySetInnerHTML={{ __html: section.content }} 
+                      />
+                    ) : section.content && (
+                      <div style={{ whiteSpace: "pre-line", color: "#334155" }}>
+                        {section.content}
+                      </div>
+                    )}
 
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                3. Privacy Protection & Non-Disclosure
-              </h2>
-              <p>
-                MaiHoonNa <strong>does not sell, rent, or trade</strong> your personal or health data to third-party marketing companies or advertisers. Data is stored on secure cloud servers with end-to-end encryption in transit (TLS 1.3) and at rest.
-              </p>
+                    {/* Bullet list items if provided in DB */}
+                    {Array.isArray(section.listItems) && section.listItems.length > 0 && (
+                      <ul style={{ paddingLeft: "24px", margin: "12px 0" }}>
+                        {section.listItems.map((item, itemIdx) => (
+                          <li key={itemIdx} style={{ marginBottom: "6px" }}>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
 
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                4. Account & Data Deletion Rights
-              </h2>
-              <p>
-                You retain complete ownership of your data. You may request profile updates or permanent account deletion at any time directly through the mobile app settings or by writing to{" "}
-                <a href="mailto:support@maihoonna.in" style={{ color: "#fe6700", fontWeight: "700" }}>
-                  support@maihoonna.in
-                </a>
-                .
-              </p>
+                    {/* Callout / Warning box from DB */}
+                    {section.callout && (
+                      <div
+                        style={{
+                          marginTop: "14px",
+                          padding: "14px 18px",
+                          borderRadius: "12px",
+                          background: section.callout.includes("⚠️") || section.callout.includes("violate") ? "#fffbeb" : "#fff7ed",
+                          borderLeft: section.callout.includes("⚠️") || section.callout.includes("violate") ? "4px solid #f59e0b" : "4px solid #fe6700",
+                          color: "#1e293b",
+                          fontSize: "0.92rem",
+                          fontWeight: "500",
+                          lineHeight: "1.6",
+                        }}
+                      >
+                        {section.callout}
+                      </div>
+                    )}
+
+                    {/* Direct contact link if specified */}
+                    {section.contactEmail && (
+                      <div style={{ marginTop: "8px" }}>
+                        <a
+                          href={`mailto:${section.contactEmail}`}
+                          style={{ color: "var(--orange, #fe6700)", fontWeight: "700", textDecoration: "underline" }}
+                        >
+                          {section.contactEmail}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p style={{ color: "#64748b" }}>Policy details are currently being updated.</p>
+              )}
+
+              {/* Footer Note from DB */}
+              {currentPolicy.footerNote && (
+                <div
+                  style={{
+                    marginTop: "36px",
+                    paddingTop: "24px",
+                    borderTop: "1px solid #f1f5f9",
+                    fontSize: "0.85rem",
+                    color: "#64748b",
+                    whiteSpace: "pre-line",
+                    lineHeight: "1.6",
+                  }}
+                >
+                  {currentPolicy.footerNote}
+                </div>
+              )}
             </div>
-          )}
-
-          {activeTab === "refund" && (
-            <div>
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: 0, marginBottom: "10px" }}>
-                1. 7-Day Satisfaction Guarantee
-              </h2>
-              <p>
-                We stand behind our senior care companions. If you are not satisfied after your senior's first Care Mitra visit, you may request a 100% refund within 7 days of package activation.
-              </p>
-
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                2. Unused Visit Rollovers
-              </h2>
-              <p>
-                Unused visits from active subscriptions automatically roll over up to 60 days so your family never loses paid care time.
-              </p>
-
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                3. Refund Processing
-              </h2>
-              <p>
-                Refunds are credited back to the original payment source (UPI, Card, or Net Banking) within 5-7 business days.
-              </p>
-            </div>
-          )}
-
-          {activeTab === "cookie" && (
-            <div>
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: 0, marginBottom: "10px" }}>
-                1. Essential Session Cookies
-              </h2>
-              <p>
-                We use secure, first-party authentication tokens and essential cookies to maintain your login session and language preferences.
-              </p>
-
-              <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginTop: "24px", marginBottom: "10px" }}>
-                2. No Invasive Tracking
-              </h2>
-              <p>
-                MaiHoonNa does not employ intrusive cross-website behavioral advertising cookies.
-              </p>
-            </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <p style={{ color: "#64748b", textAlign: "center" }}>No policy selected.</p>
+        )}
       </div>
     </div>
   );

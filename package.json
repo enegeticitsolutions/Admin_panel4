@@ -24,6 +24,7 @@
     "build:packages": "npm run build --workspaces --if-present"
   },
   "dependencies": {
+    "cheerio": "^1.2.0",
     "razorpay": "^2.9.8",
     "react": "19.1.0",
     "react-dom": "19.1.0"

@@ -346,4 +346,32 @@ export const fetchSubscriberInvoices = async (token) => {
   return data.data || [];
 };
 
+/**
+ * 10. Fetch Legal Policies from Database (Terms, Privacy, Refund, Cookie, Child Safety)
+ * Endpoint: GET /api/website/content/legal
+ */
+export const fetchLegalPolicies = async () => {
+  try {
+    const response = await fetch(`${API_BASE}/website/content/legal`);
+    if (!response.ok) return null;
+    const json = await response.json();
+    return json.success ? json.data : null;
+  } catch (err) {
+    console.warn('Unable to reach legal policies endpoint, using fallback:', err);
+    return null;
+  }
+};
+
+export const fetchLegalPolicyBySlug = async (slug) => {
+  try {
+    const response = await fetch(`${API_BASE}/website/content/legal/${encodeURIComponent(slug)}`);
+    if (!response.ok) return null;
+    const json = await response.json();
+    return json.success ? json.data : null;
+  } catch (err) {
+    console.warn(`Unable to fetch legal policy for ${slug}:`, err);
+    return null;
+  }
+};
+
 

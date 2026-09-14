@@ -417,6 +417,15 @@ const SEO_CONFIG = {
     ogImage: "https://maihoonna.in/og-image.jpg"
   },
 
+  "child-safety": {
+    title: "Child Safety Policy | MaiHoonNa Eldercare",
+    description:
+      "MaiHoonNa's zero-tolerance child safety standards, prohibited conduct, reporting channels, and platform compliance guidelines.",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.in/og-image.jpg"
+  },
+
   auth: {
     title: "Sign Up & Login | MaiHoonNa Senior Care",
     description:

@@ -75,6 +75,7 @@ export default function LegalModal({ isOpen, onClose, initialTab = "terms", onAc
               {activeTab === "privacy" && "Privacy Policy"}
               {activeTab === "refund" && "Refund & Cancellation Policy"}
               {activeTab === "cookie" && "Cookie Policy"}
+              {activeTab === "child-safety" && "Child Safety Policy"}
             </h3>
           </div>
 
@@ -117,6 +118,7 @@ export default function LegalModal({ isOpen, onClose, initialTab = "terms", onAc
             { id: "privacy", label: "Privacy Policy" },
             { id: "refund", label: "Refund Policy" },
             { id: "cookie", label: "Cookie Policy" },
+            { id: "child-safety", label: "Child Safety Policy" },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -274,6 +276,32 @@ export default function LegalModal({ isOpen, onClose, initialTab = "terms", onAc
               <h4 style={{ color: "#0f172a", margin: "16px 0 6px" }}>2. Managing Preferences</h4>
               <p>
                 You can configure your browser to block or alert you about cookies, though some parts of the portal may not function properly without essential session cookies.
+              </p>
+            </div>
+          )}
+
+          {activeTab === "child-safety" && (
+            <div>
+              <p style={{ marginTop: 0, color: "#64748b", fontSize: "0.8rem" }}>
+                Effective Date: 25 Aug 2026 • MaiHoonNa Eldercare Private Limited
+              </p>
+
+              <h4 style={{ color: "#0f172a", margin: "16px 0 6px" }}>1. Zero Tolerance for Child Exploitation</h4>
+              <p>
+                MaiHoonNa has zero tolerance for child sexual abuse, child sexual exploitation, child sexual abuse material (CSAM), grooming, trafficking, or any conduct that endangers a child. For this policy, a child means any person under 18 years of age.
+              </p>
+
+              <h4 style={{ color: "#0f172a", margin: "16px 0 6px" }}>2. Prohibited Conduct</h4>
+              <p>
+                Users must not create, upload, share, request, store, or distribute CSAM, exploit, groom, sexualize, or harass children. Any user who violates these standards faces immediate content removal, account termination, and referral to law enforcement.
+              </p>
+
+              <h4 style={{ color: "#0f172a", margin: "16px 0 6px" }}>3. Reporting & Child Safety Contact</h4>
+              <p>
+                Report concerns immediately via the in-app support options or directly to our designated Trust & Safety Team at:{" "}
+                <a href="mailto:childsafety@maihoonna.com" style={{ color: "#fe6700", fontWeight: "600" }}>
+                  childsafety@maihoonna.com
+                </a>
               </p>
             </div>
           )}
