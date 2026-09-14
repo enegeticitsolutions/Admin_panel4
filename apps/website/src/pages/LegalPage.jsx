@@ -103,25 +103,7 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
             ← Back to Home
           </button>
 
-          {!loading && !error && (
-            <span
-              style={{
-                fontSize: "0.75rem",
-                color: "#16a34a",
-                background: "#f0fdf4",
-                padding: "4px 10px",
-                borderRadius: "20px",
-                fontWeight: "600",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                border: "1px solid #bbf7d0",
-              }}
-            >
-              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#16a34a" }}></span>
-              Live from Database
-            </span>
-          )}
+
         </div>
 
         {/* Loading State */}
