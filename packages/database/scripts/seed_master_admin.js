@@ -54,7 +54,12 @@ if (!process.env.DATABASE_URL) {
 }
 
 // Master Admin Details
-const PHONE = '9305951785';
+const PHONES = [
+  '9305951785',
+  '8826280049',
+  '8081152565',
+  '9971661223'
+];
 const PASSWORD_PLAIN = '901221';
 const ROLE = 'master_admin';
 
@@ -76,7 +81,7 @@ async function seed() {
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
-  console.log('\n--- 1. Seeding Master Admin Profile ---');
+  console.log('\n--- 1. Seeding Master Admin Profiles ---');
 
   let bcrypt;
   try {
@@ -95,27 +100,27 @@ async function seed() {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(PASSWORD_PLAIN, salt);
 
-  const adminData = {
-    phone: PHONE,
-    password: hashedPassword,
-    role: ROLE,
-    name: 'Master Admin',
-    isActive: true,
-    isVerified: true,
-    status: 'active'
-  };
+  for (const phone of PHONES) {
+    const adminData = {
+      phone: phone,
+      password: hashedPassword,
+      role: ROLE,
+      name: 'Master Admin',
+      isActive: true,
+      isVerified: true,
+      status: 'active'
+    };
 
-  const user = await prisma.user.upsert({
-    where: { phone: PHONE },
-    update: adminData,
-    create: adminData,
-  });
+    const user = await prisma.user.upsert({
+      where: { phone: phone },
+      update: adminData,
+      create: adminData,
+    });
+    
+    console.log(`  - Upserted Master Admin: ${user.phone} (ID: ${user.id})`);
+  }
 
-  console.log(`\n[Master Admin Seed] Completed successfully!`);
-  console.log(`  - Upserted Master Admin (Role: ${user.role})`);
-  console.log(`  - Phone: ${user.phone}`);
-  console.log(`  - Name: ${user.name}`);
-  console.log(`  - ID: ${user.id}`);
+  console.log(`\n[Master Admin Seed] Completed successfully! seeded ${PHONES.length} profiles.`);
 
   await prisma.$disconnect();
   await pool.end();
