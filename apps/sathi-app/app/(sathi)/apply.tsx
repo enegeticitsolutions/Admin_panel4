@@ -610,6 +610,7 @@ export default function ApplyVolunteerScreen() {
                   <View style={styles.iosPickerModalContainer}>
                     <View style={styles.iosPickerContainer}>
                       <View style={styles.iosPickerHeader}>
+                        <Text style={styles.iosPickerTitle}>Date of Birth</Text>
                         <TouchableOpacity onPress={() => setShowDatePicker(false)}>
                           <Text style={styles.iosPickerDoneText}>Done</Text>
                         </TouchableOpacity>
@@ -617,11 +618,14 @@ export default function ApplyVolunteerScreen() {
                       <DateTimePicker
                         value={dateOfBirth || new Date(new Date().setFullYear(new Date().getFullYear() - 18))}
                         mode="date"
-                        display="spinner"
+                        display="inline"
                         maximumDate={new Date(new Date().setFullYear(new Date().getFullYear() - 18))}
+                        accentColor="#FE6700"
+                        themeVariant="light"
                         onChange={(event: any, selectedDate?: Date) => {
                           if (selectedDate) setDateOfBirth(selectedDate);
                         }}
+                        style={{ backgroundColor: '#FFFFFF' }}
                       />
                     </View>
                   </View>
@@ -838,7 +842,13 @@ export default function ApplyVolunteerScreen() {
                 I have read and agree to the{' '}
                 <Text
                   style={styles.orangeTextBold}
-                  onPress={(e) => { e.stopPropagation?.(); setShowLegalModal(true); }}
+                  onPress={(e) => { e.stopPropagation?.(); Linking.openURL('https://maihoonna.com/saathi-tc'); }}
+                >
+                  Terms of Service
+                </Text>{' '}and{' '}
+                <Text
+                  style={styles.orangeTextBold}
+                  onPress={(e) => { e.stopPropagation?.(); Linking.openURL('https://maihoonna.com/privacy'); }}
                 >
                   Privacy Policy
                 </Text>{' '}
@@ -1033,18 +1043,29 @@ const styles = StyleSheet.create({
   },
   iosPickerContainer: {
     backgroundColor: '#FFFFFF',
-    paddingBottom: scale(20),
+    paddingBottom: scale(30),
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
   iosPickerHeader: {
-    padding: scale(16),
-    alignItems: 'flex-end',
+    paddingHorizontal: scale(20),
+    paddingVertical: scale(14),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     backgroundColor: '#F9FAFB',
   },
-  iosPickerDoneText: {
-    color: '#007AFF',
+  iosPickerTitle: {
+    fontSize: scale(16),
     fontWeight: '600',
+    color: '#111827',
+  },
+  iosPickerDoneText: {
+    color: '#FE6700',
+    fontWeight: '700',
     fontSize: scale(16),
   },
   disabledInput: { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },

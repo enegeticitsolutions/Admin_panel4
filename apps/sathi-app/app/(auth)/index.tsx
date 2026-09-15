@@ -23,7 +23,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { IS_PASSWORD_LOGIN_ENABLED } from '@/constants/authMode';
-import { LegalConsentModal } from '@/components/shared/LegalConsentModal';
 
 const { width, height } = Dimensions.get('window');
 const scale = (size: number) => Math.round((width / 390) * size);
@@ -39,7 +38,6 @@ export default function AuthScreen() {
   const [otpCode, setOtpCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [showLegal, setShowLegal] = useState(false);
   const { push, replace } = useNavigationStack();
   useAndroidBackHandler();
   const { login } = useAuth();
@@ -350,15 +348,10 @@ export default function AuthScreen() {
 
             <Text style={styles.terms}>
               By continuing, you agree to our{' '}
-              <Text style={styles.orangeTextTerms} onPress={() => setShowLegal(true)}>Terms of Service and Privacy Policy</Text>
+              <Text style={styles.orangeTextTerms} onPress={() => Linking.openURL('https://maihoonna.com/saathi-tc')}>Terms of Service</Text>
+              {' '}and{' '}
+              <Text style={styles.orangeTextTerms} onPress={() => Linking.openURL('https://maihoonna.com/privacy')}>Privacy Policy</Text>
             </Text>
-
-            <LegalConsentModal
-              visible={showLegal}
-              onClose={() => setShowLegal(false)}
-              onAccept={() => setShowLegal(false)}
-              requireConsent={false}
-            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

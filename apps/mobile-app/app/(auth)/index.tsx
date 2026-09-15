@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Dimensions, Image, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Dimensions, Image, TouchableWithoutFeedback, Keyboard, Linking } from 'react-native';
 import { useState, useEffect } from "react";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -11,7 +11,6 @@ import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useAuth } from '@/contexts/AuthContext';
 import { IS_PASSWORD_LOGIN_ENABLED } from '@/constants/authMode';
-import { LegalConsentModal } from '@/components/shared/LegalConsentModal';
 
 const { width, height } = Dimensions.get('window');
 const BASE_WIDTH = 390;
@@ -26,6 +25,7 @@ export default function AuthScreen() {
   const [biometricType, setBiometricType] = useState<BiometricKind>('biometric');
   const [hasBiometricsSetup, setHasBiometricsSetup] = useState(false);
   const [showLegalModal, setShowLegalModal] = useState(false);
+
 
   const { push } = useNavigationStack();
   useAndroidBackHandler();
@@ -315,8 +315,12 @@ export default function AuthScreen() {
 
               <Text style={styles.terms}>
                 By continuing, you agree to our{"\n"}
-                <Text style={styles.orangeTextTerms} onPress={() => setShowLegalModal(true)}>
-                  Terms of Service & Privacy Policy
+                <Text style={styles.orangeTextTerms} onPress={() => Linking.openURL('https://maihoonna.com/terms')}>
+                  Terms of Service
+                </Text>
+                {' & '}
+                <Text style={styles.orangeTextTerms} onPress={() => Linking.openURL('https://maihoonna.com/privacy')}>
+                  Privacy Policy
                 </Text>
               </Text>
             </View>
@@ -324,12 +328,6 @@ export default function AuthScreen() {
         </KeyboardAvoidingView>
       </TouchableWithoutFeedback>
 
-      <LegalConsentModal
-        visible={showLegalModal}
-        onClose={() => setShowLegalModal(false)}
-        onAccept={() => setShowLegalModal(false)}
-        requireConsent={false}
-      />
     </SafeAreaView>
   );
 }
