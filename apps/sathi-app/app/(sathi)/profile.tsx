@@ -7,12 +7,12 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
-  Image,
   Alert,
   Dimensions,
   Modal,
   Linking,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -44,8 +44,21 @@ export default function SathiProfile() {
   const [fetchingReviews, setFetchingReviews] = useState(false);
 
   useEffect(() => {
+    loadCachedProfile();
     fetchProfile();
   }, []);
+
+  const loadCachedProfile = async () => {
+    try {
+      const stored = await AsyncStorage.getItem('userData');
+      if (stored) {
+        setProfile(JSON.parse(stored));
+        setLoading(false); // Instantly stop loading if we have cached data
+      }
+    } catch (e) {
+      console.log('Error loading cached profile', e);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -257,6 +270,9 @@ export default function SathiProfile() {
               <Image 
                 source={{ uri: sanitizeImageUri(profile.profilePhoto, `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.name || 'Saathi')}&background=FE6700&color=FFFFFF&bold=true`) }} 
                 style={styles.avatarImage} 
+                cachePolicy="disk"
+                contentFit="cover"
+                transition={200}
               />
             ) : (
               <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
