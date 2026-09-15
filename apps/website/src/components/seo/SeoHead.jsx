@@ -426,6 +426,15 @@ const SEO_CONFIG = {
     ogImage: "https://maihoonna.in/og-image.jpg"
   },
 
+  "saathi-tc": {
+    title: "Saathi Terms & Conditions | MaiHoonNa Volunteer Network",
+    description:
+      "Volunteer terms and conditions, Saathi credits programme guidelines, and community code of conduct.",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.in/og-image.jpg"
+  },
+
   auth: {
     title: "Sign Up & Login | MaiHoonNa Senior Care",
     description:

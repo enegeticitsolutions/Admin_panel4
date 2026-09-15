@@ -17,6 +17,38 @@ import SeoHead from "./components/seo/SeoHead";
 import NotFoundPage from "./pages/NotFoundPage";
 import LegalPage from "./pages/LegalPage";
 
+const ROUTE_ALIASES = {
+  about: "story",
+  "terms-of-service": "terms",
+  "privacy-policy": "privacy",
+  refund: "refund-policy",
+  cookie: "cookie-policy",
+  cookies: "cookie-policy",
+  "child-safety-policy": "child-safety",
+  "child-policy": "child-safety",
+  "saathi-terms": "saathi-tc",
+  "saathi-tc": "saathi-tc",
+};
+
+const LEGAL_PAGES = [
+  "terms",
+  "privacy",
+  "refund-policy",
+  "cookie-policy",
+  "child-safety",
+  "saathi-tc",
+];
+
+const VALID_PAGES = [
+  "home",
+  "services",
+  "saathi",
+  "account",
+  "checkout",
+  "story",
+  ...LEGAL_PAGES,
+];
+
 /**
  * App Component - Root Application Shell & Router
  */
@@ -24,35 +56,47 @@ const App = () => {
   const getInitialPage = () => {
     if (typeof window === "undefined") return "home";
 
-    const validPages = [
-      "home", "services", "saathi", /* "plans", "auth", */
-      "account", "checkout", "story", "about", "terms",
-      "privacy", "refund-policy", "cookie-policy", "child-safety", "child-safety-policy", "child-policy"
-    ];
+    const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
+    const rawHash = (window.location.hash || "").replace(/^#+/, "").toLowerCase();
 
-    // 1. Inspect direct pathname first (e.g., /services, /plans, /saathi, /about)
-    const pathname = window.location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
-    if (pathname && validPages.includes(pathname)) {
-      return pathname === "about" ? "story" : pathname;
+    // If an old hash exists matching a legal tab (e.g. /terms#privacy or #child-safety),
+    // normalize and clean up URL to clean path without hash
+    if (rawHash && (LEGAL_PAGES.includes(rawHash) || ROUTE_ALIASES[rawHash])) {
+      const targetLegal = ROUTE_ALIASES[rawHash] || rawHash;
+      try {
+        window.history.replaceState(null, "", `/${targetLegal}`);
+      } catch (e) {}
+      return targetLegal;
+    }
+
+    // 1. Inspect direct pathname first (e.g., /terms, /privacy, /refund-policy, /services)
+    if (cleanPath) {
+      const normalized = ROUTE_ALIASES[cleanPath] || cleanPath;
+      if (VALID_PAGES.includes(normalized)) {
+        return normalized;
+      }
     }
 
     // 2. Fallback to hash route (e.g., #services)
-    const rawHash = (window.location.hash || "").replace(/^#/, "").toLowerCase();
-    if (rawHash && validPages.includes(rawHash)) {
-      return rawHash === "about" ? "story" : rawHash;
+    if (rawHash) {
+      const normalized = ROUTE_ALIASES[rawHash] || rawHash;
+      if (VALID_PAGES.includes(normalized)) {
+        return normalized;
+      }
     }
 
-    if (!pathname && !rawHash) return "home";
+    if (!cleanPath && !rawHash) return "home";
     return "not-found";
   };
 
   const [activePage, setActiveStatePage] = useState(getInitialPage);
 
   const setActivePage = (page) => {
-    setActiveStatePage(page);
+    const normalized = ROUTE_ALIASES[page] || page;
+    setActiveStatePage(normalized);
     try {
-      const targetUrl = page === "home" ? "/" : `/${page}`;
-      if (window.location.pathname !== targetUrl) {
+      const targetUrl = normalized === "home" ? "/" : `/${normalized}`;
+      if (window.location.pathname !== targetUrl || window.location.hash) {
         window.history.pushState(null, "", targetUrl);
       }
     } catch (e) { }
@@ -230,7 +274,7 @@ const App = () => {
             onSelectPackage={handleSelectPackageForBuy}
             openForm={openForm}
           /> */
-        ) : ["terms", "privacy", "refund-policy", "cookie-policy", "child-safety", "child-safety-policy", "child-policy"].includes(activePage) ? (
+        ) : LEGAL_PAGES.includes(activePage) ? (
           <LegalPage initialTab={activePage} setActivePage={setActivePage} />
         ) : (
           <NotFoundPage setActivePage={setActivePage} />

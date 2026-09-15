@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { fetchLegalPolicies } from "../services/api";
 
-const HASH_MAP = {
+// Maps database policy slugs to clean public routes
+const TAB_TO_ROUTE_MAP = {
   terms: "terms",
   privacy: "privacy",
   refund: "refund-policy",
@@ -10,23 +11,32 @@ const HASH_MAP = {
   "saathi-tc": "saathi-tc",
 };
 
+// Maps incoming routes/aliases to database policy slugs
+const ROUTE_TO_TAB_MAP = {
+  terms: "terms",
+  "terms-of-service": "terms",
+  privacy: "privacy",
+  "privacy-policy": "privacy",
+  refund: "refund",
+  "refund-policy": "refund",
+  cookie: "cookie",
+  "cookie-policy": "cookie",
+  cookies: "cookie",
+  "child-safety": "child-safety",
+  "child-safety-policy": "child-safety",
+  "child-policy": "child-safety",
+  "saathi-tc": "saathi-tc",
+  "saathi-terms": "saathi-tc",
+  saathi: "saathi-tc",
+};
+
 export default function LegalPage({ initialTab = "terms", setActivePage }) {
   const normalizeTab = (raw) => {
     const clean = (raw || "").toLowerCase().replace(/^[#/]+|[#/]+$/g, "");
-    if (clean === "privacy") return "privacy";
-    if (clean === "refund" || clean === "refund-policy") return "refund";
-    if (clean === "cookie" || clean === "cookie-policy") return "cookie";
-    if (clean === "child-safety" || clean === "child-safety-policy" || clean === "child") return "child-safety";
-    if (clean === "saathi-tc" || clean === "saathi") return "saathi-tc";
-    return "terms";
+    return ROUTE_TO_TAB_MAP[clean] || "terms";
   };
 
-  const getTabFromHash = () => {
-    const rawHash = (window.location.hash || "").replace("#", "");
-    return normalizeTab(rawHash || initialTab);
-  };
-
-  const [activeTab, setActiveTab] = useState(getTabFromHash);
+  const [activeTab, setActiveTab] = useState(() => normalizeTab(initialTab));
   const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -55,14 +65,23 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
     loadPolicies();
   }, []);
 
+  // Synchronize active tab whenever initialTab prop changes (e.g., direct navigation, footer link, browser back/forward)
   useEffect(() => {
-    setActiveTab(getTabFromHash());
+    setActiveTab(normalizeTab(initialTab));
   }, [initialTab]);
 
   const handleTabClick = (tabSlug) => {
     setActiveTab(tabSlug);
-    const targetHash = HASH_MAP[tabSlug] || tabSlug;
-    window.location.hash = `#${targetHash}`;
+    const targetRoute = TAB_TO_ROUTE_MAP[tabSlug] || tabSlug;
+    if (setActivePage) {
+      setActivePage(targetRoute);
+    } else {
+      try {
+        window.history.pushState(null, "", `/${targetRoute}`);
+      } catch (e) {
+        window.location.pathname = `/${targetRoute}`;
+      }
+    }
   };
 
   // Find currently active policy object from database rows
@@ -86,7 +105,7 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
         {/* Breadcrumb & Navigation */}
         <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <button
-            onClick={() => (setActivePage ? setActivePage("home") : (window.location.hash = "#home"))}
+            onClick={() => (setActivePage ? setActivePage("home") : (window.location.pathname = "/"))}
             style={{
               background: "none",
               border: "none",
