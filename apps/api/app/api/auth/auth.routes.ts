@@ -1,5 +1,5 @@
 import { Router, Request, Response, RequestHandler } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { validate, authenticate } from '../shared/deps';
 import { sendOtpSchema, verifyOtpSchema, checkLocationSchema, registerPasswordSchema, loginPasswordSchema } from '../../schemas/auth';
 import * as authService from '../../services/auth/auth_service';
@@ -20,7 +20,7 @@ const otpLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: any) => {
     const rawPhone = (req.body?.phone || '').toString().replace(/\D/g, '').slice(-10);
-    return `${req.ip}_${rawPhone}`;
+    return `${ipKeyGenerator(req.ip)}_${rawPhone}`;
   },
   skip: (req) => {
     const raw = (req.body?.phone || '').toString();
@@ -37,7 +37,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: any) => {
     const rawPhone = (req.body?.phone || '').toString().replace(/\D/g, '').slice(-10);
-    return `${req.ip}_${rawPhone}`;
+    return `${ipKeyGenerator(req.ip)}_${rawPhone}`;
   },
   skip: (req) => {
     const raw = (req.body?.phone || '').toString();
