@@ -11,6 +11,9 @@
  */
 
 export function isOtpBypassEnabled(): boolean {
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
   return process.env.ENABLE_OTP_BYPASS === 'true';
 }
 

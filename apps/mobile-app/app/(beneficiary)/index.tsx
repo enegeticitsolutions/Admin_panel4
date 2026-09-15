@@ -22,9 +22,9 @@ import { API_URL } from '@/constants/api';
 import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
 import NotificationBell from '@/components/shared/NotificationBell';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
-import { triggerEmergencyAlert } from '@/services/emergencyTrigger';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { useAuth } from '@/contexts/AuthContext';
+import { triggerEmergencyAlert, dialEmergencyHelpline, EMERGENCY_HELPLINE_NUMBER } from '@/services/emergencyTrigger';
 
 const MOCK_BENEFICIARY_ID = '8340d860-2641-479c-b26a-8b9a71bcec29';
 
@@ -186,33 +186,38 @@ export default function BeneficiaryDashboard() {
     const handleEmergencyPress = async () => {
         if (triggeringEmergency) return;
 
-        // Optimistic confirmation dialog first — then locate
+        // Optimistic confirmation dialog first — then locate & dial 01142258823
         const executeEmergency = async () => {
             setTriggeringEmergency(true);
             setLocationStatus('locating');
+
+            // Trigger immediate phone call to Emergency Helpline: 01142258823
+            dialEmergencyHelpline().catch(() => {});
+
             try {
                 const result = await triggerEmergencyAlert(
-                    'SOS Emergency Support triggered from MaiHoonNa Mobile App'
+                    'SOS Emergency Support triggered from MaiHoonNa Mobile App',
+                    { autoDial: false } // already dialed above
                 );
                 setLocationStatus('done');
 
                 if (result.success) {
                     setEmergencySuccessModal({
                         ticketNumber: result.ticketNumber || 'EMG-ALERT',
-                        message: 'Your Subscriber, Care Companions, and Admin Emergency Center have been notified.',
+                        message: 'Helpline 011-42258823 dialed. Your Subscriber, Care Companions, and Admin Emergency Center have been alerted with your location.',
                         locationAddress: result.locationAddress,
                         lat: result.lat,
                         lng: result.lng,
                     });
                 } else {
-                    const errMsg = result.error || 'Failed to trigger emergency alert.';
-                    if (Platform.OS === 'web') window.alert(`Error: ${errMsg}`);
-                    else Alert.alert('Error', errMsg);
+                    const errMsg = result.error || 'Failed to dispatch emergency alert.';
+                    if (Platform.OS === 'web') window.alert(`Alert: ${errMsg}`);
+                    else Alert.alert('Emergency Alert', errMsg);
                 }
             } catch (err: any) {
                 const errMsg = err.message || 'Network error while triggering emergency alert.';
-                if (Platform.OS === 'web') window.alert(`Error: ${errMsg}`);
-                else Alert.alert('Error', errMsg);
+                if (Platform.OS === 'web') window.alert(`Notice: ${errMsg}`);
+                else Alert.alert('Notice', errMsg);
             } finally {
                 setTriggeringEmergency(false);
                 setLocationStatus('idle');
@@ -220,16 +225,16 @@ export default function BeneficiaryDashboard() {
         };
 
         if (Platform.OS === 'web') {
-            if (window.confirm('🚨 TRIGGER EMERGENCY SOS ALERT?\n\nThis will immediately locate you and alert your Subscriber, Care Companions, and Emergency Center.')) {
+            if (window.confirm(`🚨 TRIGGER EMERGENCY SOS ALERT?\n\nThis will immediately call Emergency Helpline (${EMERGENCY_HELPLINE_NUMBER}) and alert your Subscriber, Care Companions, and Emergency Center.`)) {
                 executeEmergency();
             }
         } else {
             Alert.alert(
                 '🚨 Trigger Emergency Alert?',
-                'This will get your live GPS location and immediately alert your Subscriber, Care Companions, and Emergency Response Center.',
+                `This will immediately call our 24/7 Emergency Helpline (${EMERGENCY_HELPLINE_NUMBER}) and broadcast your live GPS location to your care team & emergency response center.`,
                 [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'SEND SOS NOW', style: 'destructive', onPress: executeEmergency },
+                    { text: 'CALL & SEND SOS NOW', style: 'destructive', onPress: executeEmergency },
                 ]
             );
         }
@@ -350,14 +355,17 @@ export default function BeneficiaryDashboard() {
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                             <ActivityIndicator color="#FFFFFF" size="small" />
                                             <Text style={styles.emergencyText}>
-                                                {locationStatus === 'locating' ? 'Locating you...' : 'Sending SOS...'}
+                                                {locationStatus === 'locating' ? 'Locating & Calling...' : 'Dialing Helpline...'}
                                             </Text>
                                         </View>
                                     ) : (
-                                        <>
-                                            <Feather name="alert-circle" size={28} color="#FFFFFF" />
-                                            <Text style={styles.emergencyText}>Emergency Support</Text>
-                                        </>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Feather name="phone-call" size={24} color="#FFFFFF" />
+                                            <View style={{ marginLeft: 10 }}>
+                                                <Text style={styles.emergencyText}>Emergency Support</Text>
+                                                <Text style={styles.emergencySubtext}>24/7 Helpline: 011-42258823</Text>
+                                            </View>
+                                        </View>
                                     )}
                                 </TouchableOpacity>
                             </Animated.View>
@@ -566,6 +574,16 @@ export default function BeneficiaryDashboard() {
                             </View>
                         )}
 
+                        {/* Direct Helpline Call Button */}
+                        <TouchableOpacity
+                            style={styles.callHelplineBtn}
+                            onPress={() => dialEmergencyHelpline()}
+                            activeOpacity={0.85}
+                        >
+                            <Feather name="phone-call" size={18} color="#FFFFFF" />
+                            <Text style={styles.callHelplineBtnText}>Call Helpline: 011-42258823</Text>
+                        </TouchableOpacity>
+
                         <TouchableOpacity
                             style={styles.modalDoneBtn}
                             onPress={() => setEmergencySuccessModal(null)}
@@ -640,7 +658,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: '#E7000B',
         borderRadius: 16,
-        height: 56,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        minHeight: 58,
         marginHorizontal: 16,
         marginTop: 8,
         shadowColor: '#E7000B',
@@ -650,11 +670,16 @@ const styles = StyleSheet.create({
         elevation: 4,
     },
     emergencyText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 18,
-        lineHeight: 24,
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 16,
+        lineHeight: 22,
         color: '#FFFFFF',
-        marginLeft: 10,
+    },
+    emergencySubtext: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 12,
+        lineHeight: 16,
+        color: 'rgba(255, 255, 255, 0.92)',
     },
     mainContent: {
         paddingHorizontal: 16,
@@ -940,8 +965,25 @@ const styles = StyleSheet.create({
         lineHeight: 18,
         marginBottom: 20,
     },
-    modalDoneBtn: {
+    callHelplineBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
         backgroundColor: '#DC2626',
+        borderRadius: 12,
+        paddingVertical: 13,
+        paddingHorizontal: 16,
+        width: '100%',
+        marginBottom: 10,
+    },
+    callHelplineBtnText: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 15,
+        color: '#FFFFFF',
+    },
+    modalDoneBtn: {
+        backgroundColor: '#F3F4F6',
         paddingVertical: 12,
         paddingHorizontal: 32,
         borderRadius: 12,
@@ -950,8 +992,8 @@ const styles = StyleSheet.create({
     },
     modalDoneBtnText: {
         fontFamily: 'Poppins-SemiBold',
-        fontSize: 15,
-        color: '#FFFFFF',
+        fontSize: 14,
+        color: '#4B5563',
     },
     locationBadge: {
         flexDirection: 'row',

@@ -17,10 +17,20 @@ export class StplProvider extends OtpProvider {
       const bypassCode = getBypassOtpCode();
       await prisma.otp.upsert({
         where: { phone: cleanPhone },
-        update: { code: bypassCode, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
-        create: { phone: cleanPhone, code: bypassCode, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+        update: { code: bypassCode, attempts: 0, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
+        create: { phone: cleanPhone, code: bypassCode, attempts: 0, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
       });
       return { success: true, message: 'OTP sent successfully' };
+    }
+
+    // 60-second cooldown check to prevent SMS bombing / financial exhaustion
+    const existingOtp = await prisma.otp.findUnique({ where: { phone: cleanPhone } });
+    if (existingOtp) {
+      const elapsedMs = Date.now() - new Date(existingOtp.createdAt).getTime();
+      if (elapsedMs < 60 * 1000) {
+        const waitSeconds = Math.ceil((60 * 1000 - elapsedMs) / 1000);
+        throw new Error(`Please wait ${waitSeconds}s before requesting another OTP.`);
+      }
     }
 
     const authKey = process.env.MSG91_AUTH_KEY || process.env.STPL_AUTH_KEY;
@@ -36,11 +46,11 @@ export class StplProvider extends OtpProvider {
     // Generate 6-digit secure random OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Upsert OTP record with 5-minute TTL
+    // Upsert OTP record with 5-minute TTL, reset attempts to 0 and record createdAt
     await prisma.otp.upsert({
-      where: { phone },
-      update: { code: otpCode, expiresAt: new Date(Date.now() + 5 * 60 * 1000) },
-      create: { phone, code: otpCode, expiresAt: new Date(Date.now() + 5 * 60 * 1000) },
+      where: { phone: cleanPhone },
+      update: { code: otpCode, attempts: 0, createdAt: new Date(), expiresAt: new Date(Date.now() + 5 * 60 * 1000) },
+      create: { phone: cleanPhone, code: otpCode, attempts: 0, createdAt: new Date(), expiresAt: new Date(Date.now() + 5 * 60 * 1000) },
     });
 
     const recipient = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
@@ -157,13 +167,38 @@ export class StplProvider extends OtpProvider {
       }
     }
 
-    // Strict database lookup for verified OTP code
-    const record = await prisma.otp.findUnique({ where: { phone } });
-    if (!record || record.code !== code || record.expiresAt < new Date()) {
+    // Strict database lookup for verified OTP code using normalized phone
+    const record = await prisma.otp.findUnique({ where: { phone: cleanPhone } });
+    if (!record) {
       return false;
     }
 
-    await prisma.otp.delete({ where: { phone } });
+    if (record.expiresAt < new Date()) {
+      await prisma.otp.delete({ where: { phone: cleanPhone } }).catch(() => {});
+      return false;
+    }
+
+    // Check if max attempts (5) already reached
+    if (record.attempts >= 5) {
+      await prisma.otp.delete({ where: { phone: cleanPhone } }).catch(() => {});
+      throw new Error('Too many failed OTP attempts. This OTP has been invalidated for security. Please request a new OTP.');
+    }
+
+    // Check code match
+    if (record.code !== code) {
+      const newAttempts = record.attempts + 1;
+      if (newAttempts >= 5) {
+        await prisma.otp.delete({ where: { phone: cleanPhone } }).catch(() => {});
+        throw new Error('Too many failed OTP attempts. This OTP has been invalidated for security. Please request a new OTP.');
+      }
+      await prisma.otp.update({
+        where: { phone: cleanPhone },
+        data: { attempts: newAttempts },
+      });
+      return false;
+    }
+
+    await prisma.otp.delete({ where: { phone: cleanPhone } });
     return true;
   }
 }

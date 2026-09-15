@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { sendOtp, verifyOtp, registerUser, loginWithPassword } from "../../services/api";
 
 export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "", initialView = "PHONE" }) {
@@ -11,13 +11,25 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [infoMessage, setInfoMessage] = useState("");
+  const [resendTimer, setResendTimer] = useState(60);
 
   const otpRefs = useRef([]);
+
+  useEffect(() => {
+    let interval;
+    if (view === "OTP" && resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [view, resendTimer]);
 
   if (!isOpen) return null;
 
   const handlePhoneSubmit = async (e) => {
-    e.preventDefault();
+    if (e?.preventDefault) e.preventDefault();
+    if (loading || (view === "OTP" && resendTimer > 0)) return;
     setError("");
     setInfoMessage("");
 
@@ -31,6 +43,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
     try {
       const res = await sendOtp(cleanPhone);
       setInfoMessage(`6-digit OTP sent to +91 ${cleanPhone}`);
+      setResendTimer(60);
       setView("OTP");
     } catch (err) {
       setError(err.message || "Failed to send OTP. Please try again.");
@@ -353,9 +366,16 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
               <button
                 type="button"
                 onClick={handlePhoneSubmit}
-                style={{ background: "none", border: "none", color: "var(--orange, #fe6700)", fontWeight: "600", cursor: "pointer" }}
+                disabled={resendTimer > 0 || loading}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: resendTimer > 0 ? "#9ca3af" : "var(--orange, #fe6700)",
+                  fontWeight: "600",
+                  cursor: resendTimer > 0 ? "not-allowed" : "pointer",
+                }}
               >
-                Resend OTP
+                {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Resend OTP"}
               </button>
             </div>
           </form>

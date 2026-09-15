@@ -83,7 +83,7 @@ const CareSupportModal: React.FC<CareSupportModalProps> = ({
     };
 
     const handleCall = () => {
-        Linking.openURL('tel:+919999999999').catch(() => {});
+        Linking.openURL('tel:01142258823').catch(() => {});
     };
 
     const INFO_ROWS: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; color: string }[] = [

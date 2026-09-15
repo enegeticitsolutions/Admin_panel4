@@ -14,7 +14,36 @@
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
+
+/**
+ * 24/7 Emergency Helpline Number
+ * Automatically triggered when beneficiary presses the emergency button
+ */
+export const EMERGENCY_HELPLINE_NUMBER = '01142258823';
+
+/**
+ * Initiates an immediate phone call to the Emergency Helpline (01142258823)
+ */
+export async function dialEmergencyHelpline(): Promise<void> {
+  const telUrl = `tel:${EMERGENCY_HELPLINE_NUMBER}`;
+  try {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        window.location.href = telUrl;
+      }
+    } else {
+      const canOpen = await Linking.canOpenURL(telUrl);
+      if (canOpen) {
+        await Linking.openURL(telUrl);
+      } else {
+        await Linking.openURL(telUrl);
+      }
+    }
+  } catch (err) {
+    console.warn('[EmergencyTrigger] Failed to dial emergency helpline:', err);
+  }
+}
 
 export interface EmergencyTriggerResult {
   success: boolean;
@@ -23,6 +52,7 @@ export interface EmergencyTriggerResult {
   locationAddress?: string;
   lat?: number;
   lng?: number;
+  helplineNumber?: string;
   error?: string;
 }
 
@@ -126,15 +156,28 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
+export interface EmergencyTriggerOptions {
+  autoDial?: boolean;
+}
+
 /**
- * Core function to POST an emergency alert to the backend.
+ * Core function to POST an emergency alert to the backend and dial helpline.
  * Can be called from the button handler OR the background notification handler.
  *
  * @param description  Optional custom description to include in the alert.
+ * @param options      Optional config (e.g. autoDial: true to call 01142258823)
  */
 export async function triggerEmergencyAlert(
-  description = 'SOS Emergency Support triggered from Mobile App'
+  description = 'SOS Emergency Support triggered from Mobile App',
+  options: EmergencyTriggerOptions = { autoDial: true }
 ): Promise<EmergencyTriggerResult> {
+  // Automatically dial the emergency helpline number (01142258823)
+  if (options.autoDial) {
+    dialEmergencyHelpline().catch(err => {
+      console.warn('[EmergencyTrigger] Auto-dial error:', err);
+    });
+  }
+
   try {
     const [storedUser, storedToken] = await Promise.all([
       AsyncStorage.getItem('userData'),
@@ -142,7 +185,7 @@ export async function triggerEmergencyAlert(
     ]);
 
     if (!storedUser || !storedToken) {
-      return { success: false, error: 'Not authenticated' };
+      return { success: false, error: 'Not authenticated', helplineNumber: EMERGENCY_HELPLINE_NUMBER };
     }
 
     const parsedUser = JSON.parse(storedUser);
@@ -177,6 +220,7 @@ export async function triggerEmergencyAlert(
         locationAddress: location?.address || postData.data?.locationAddress,
         lat: location?.lat,
         lng: location?.lng,
+        helplineNumber: EMERGENCY_HELPLINE_NUMBER,
       };
     }
 
