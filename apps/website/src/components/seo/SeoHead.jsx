@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 
-const BASE_URL = "https://maihoonna.in";
+const BASE_URL = "https://maihoonna.com";
 
 /**
- * Resolves the full absolute canonical URL strictly pointing to https://maihoonna.in
+ * Resolves the full absolute canonical URL strictly pointing to https://maihoonna.com
  * Eliminates URL hash fragments so search engines receive clean indexing targets.
  */
 const resolveCanonicalUrl = (activePage) => {
@@ -26,21 +26,21 @@ const SEO_CONFIG = {
       "senior care Gurugram, care for elderly parents Gurgaon, elder care for NRI families, Saathi volunteer senior care, elderly companionship India, senior health monitoring Gurugram",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg",
+    ogImage: "https://maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
         "@type": "LocalBusiness",
-        "@id": "https://maihoonna.in/#localbusiness",
+        "@id": "https://maihoonna.com/#localbusiness",
         "name": "MaiHoonNa Eldercare",
         "alternateName": "MaiHoonNa Senior Care",
-        "url": "https://maihoonna.in",
-        "logo": "https://maihoonna.in/logo.svg",
-        "image": "https://maihoonna.in/og-image.jpg",
+        "url": "https://maihoonna.com",
+        "logo": "https://maihoonna.com/logo.svg",
+        "image": "https://maihoonna.com/og-image.jpg",
         "description":
           "Trusted senior care companions and elder health monitoring in Gurugram & Delhi NCR. Care Mitra visits, Saathi companionship, and family updates.",
         "priceRange": "₹₹",
-        "telephone": "+91-98765-43210",
+        "telephone": "+91-85270-70049",
         "email": "info@maihoonna.com",
         "address": {
           "@type": "PostalAddress",
@@ -75,10 +75,10 @@ const SEO_CONFIG = {
       {
         "@context": "https://schema.org",
         "@type": "Organization",
-        "@id": "https://maihoonna.in/#organization",
+        "@id": "https://maihoonna.com/#organization",
         "name": "MaiHoonNa Eldercare Private Limited",
-        "url": "https://maihoonna.in",
-        "logo": "https://maihoonna.in/logo.svg",
+        "url": "https://maihoonna.com",
+        "logo": "https://maihoonna.com/logo.svg",
         "description":
           "India's connected senior care ecosystem — blending human companionship with smart healthcare technology.",
         "address": {
@@ -98,9 +98,9 @@ const SEO_CONFIG = {
       {
         "@context": "https://schema.org",
         "@type": "WebSite",
-        "@id": "https://maihoonna.in/#website",
+        "@id": "https://maihoonna.com/#website",
         "name": "MaiHoonNa",
-        "url": "https://maihoonna.in",
+        "url": "https://maihoonna.com",
         "description":
           "MaiHoonNa is India's first connected senior care ecosystem. We keep your parents safe, healthy, and emotionally fulfilled."
       },
@@ -166,7 +166,7 @@ const SEO_CONFIG = {
       "senior care services Gurugram, elderly vitals monitoring Gurgaon, medication adherence seniors, Care Mitra visits Delhi NCR",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg",
+    ogImage: "https://maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -175,7 +175,7 @@ const SEO_CONFIG = {
         "provider": {
           "@type": "LocalBusiness",
           "name": "MaiHoonNa Eldercare",
-          "url": "https://maihoonna.in"
+          "url": "https://maihoonna.com"
         },
         "areaServed": [
           {
@@ -199,7 +199,7 @@ const SEO_CONFIG = {
       "Connect your elderly parents with verified Saathi community companions for meaningful conversations, walks, hobbies, and loneliness support across India.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg",
+    ogImage: "https://maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -208,7 +208,7 @@ const SEO_CONFIG = {
         "provider": {
           "@type": "Organization",
           "name": "MaiHoonNa",
-          "url": "https://maihoonna.in"
+          "url": "https://maihoonna.com"
         },
         "description":
           "Community companionship program connecting verified volunteers with senior citizens for social interactions, walks, hobby sharing, and loneliness relief."
@@ -264,13 +264,13 @@ const SEO_CONFIG = {
       "Transparent senior care subscription plans built around prepaid hours with 30-day rollover, no hidden fees, and full family connect app access for NRI families.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg",
+    ogImage: "https://maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
         "@type": "OfferCatalog",
         "name": "MaiHoonNa Senior Care Plans",
-        "url": "https://maihoonna.in/",
+        "url": "https://maihoonna.com/",
         "numberOfItems": 3,
         "itemListElement": [
           {
@@ -341,7 +341,7 @@ const SEO_CONFIG = {
       "Learn about MaiHoonNa's founding story by Sumit Kejriwal. Dedicated to caring for aging parents in India with trustworthy companionship, medical tracking, and NRI peace of mind.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg",
+    ogImage: "https://maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -352,7 +352,7 @@ const SEO_CONFIG = {
         "publisher": {
           "@type": "Organization",
           "name": "MaiHoonNa Eldercare Private Limited",
-          "url": "https://maihoonna.in"
+          "url": "https://maihoonna.com"
         }
       }
     ]
@@ -364,7 +364,7 @@ const SEO_CONFIG = {
       "Learn about MaiHoonNa's founding story by Sumit Kejriwal. Dedicated to caring for aging parents in India with trustworthy companionship, medical tracking, and NRI peace of mind.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg",
+    ogImage: "https://maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -375,7 +375,7 @@ const SEO_CONFIG = {
         "publisher": {
           "@type": "Organization",
           "name": "MaiHoonNa Eldercare Private Limited",
-          "url": "https://maihoonna.in"
+          "url": "https://maihoonna.com"
         }
       }
     ]
@@ -387,7 +387,7 @@ const SEO_CONFIG = {
       "Read the terms and conditions governing the use of MaiHoonNa senior care and companionship services, subscription hours, and Care Mitra visits.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   },
 
   privacy: {
@@ -396,7 +396,7 @@ const SEO_CONFIG = {
       "Learn how MaiHoonNa protects and respects your personal, health, and family data across our senior care mobile apps and web platform.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   },
 
   "refund-policy": {
@@ -405,7 +405,7 @@ const SEO_CONFIG = {
       "Understand MaiHoonNa's subscription cancellation rules, refund criteria, and 30-day unused care hour rollover terms.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   },
 
   "cookie-policy": {
@@ -414,7 +414,7 @@ const SEO_CONFIG = {
       "Information on how MaiHoonNa utilizes cookies and analytics to enhance user experience across our senior care website.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   },
 
   "child-safety": {
@@ -423,7 +423,7 @@ const SEO_CONFIG = {
       "MaiHoonNa's zero-tolerance child safety standards, prohibited conduct, reporting channels, and platform compliance guidelines.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   },
 
   "saathi-tc": {
@@ -432,7 +432,7 @@ const SEO_CONFIG = {
       "Volunteer terms and conditions, Saathi credits programme guidelines, and community code of conduct.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   },
 
   auth: {
@@ -441,7 +441,7 @@ const SEO_CONFIG = {
       "Sign up or log in to MaiHoonNa to access family connect dashboard, manage parent care, and track companion visits.",
     robots: "noindex, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   },
 
   account: {
@@ -450,7 +450,7 @@ const SEO_CONFIG = {
       "Manage active senior care subscriptions, view visit logs, and update parent care details.",
     robots: "noindex, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   },
 
   checkout: {
@@ -459,7 +459,7 @@ const SEO_CONFIG = {
       "Securely finalize senior care plan subscription for your parents.",
     robots: "noindex, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   },
 
   "not-found": {
@@ -468,7 +468,7 @@ const SEO_CONFIG = {
       "The requested page does not exist on MaiHoonNa. Explore our senior care services, Saathi network, and subscription plans.",
     robots: "noindex, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.in/og-image.jpg"
+    ogImage: "https://maihoonna.com/og-image.jpg"
   }
 };
 
