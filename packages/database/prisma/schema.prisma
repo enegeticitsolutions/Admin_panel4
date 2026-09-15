@@ -1902,6 +1902,7 @@ model Volunteer {
   refreshToken       String?
   applicationStatus  VolunteerStatus              @default(SUBMITTED)
   isActive           Boolean                      @default(true)
+  showOnWebsite      Boolean                      @default(false)
   previousExperience String?
   whyJoin            String?
   address            String?

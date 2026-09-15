@@ -804,6 +804,13 @@ export const volunteerApi = {
     });
   },
 
+  async toggleWebsiteVisibility(id: string, showOnWebsite: boolean): Promise<Volunteer> {
+    return apiJson<Volunteer>(`/volunteers/${id}/toggle-website-visibility`, {
+      method: 'PATCH',
+      body: JSON.stringify({ showOnWebsite }),
+    });
+  },
+
   async assignBeneficiary(volunteerId: string, beneficiaryId: string): Promise<any> {
     return apiJson(`/volunteers/${volunteerId}/assignments`, {
       method: 'POST',

@@ -446,41 +446,9 @@ const SaathiPage = () => {
           </p>
 
           <div className="saathi-community__grid">
-            {(saathis && saathis.length > 0 ? saathis : [
-              {
-                name: "Priya Sharma",
-                city: "Gurugram",
-                state: "Haryana",
-                area: "Sector 55",
-                totalCreditHours: 128,
-                profilePhoto: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500&auto=format&fit=crop&q=80"
-              },
-              {
-                name: "Raj Patel",
-                city: "Gurugram",
-                state: "Haryana",
-                area: "Sector 56",
-                totalCreditHours: 96,
-                profilePhoto: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80"
-              },
-              {
-                name: "Anita Devi",
-                city: "Gurugram",
-                state: "Haryana",
-                area: "Sector 54",
-                totalCreditHours: 214,
-                profilePhoto: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=500&auto=format&fit=crop&q=80"
-              },
-              {
-                name: "Deepak Kumar",
-                city: "Gurugram",
-                state: "Haryana",
-                area: "Sector 57",
-                totalCreditHours: 72,
-                profilePhoto: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500&auto=format&fit=crop&q=80"
-              }
-            ]).map((saathi, idx) => {
-              const tierPresets = [
+            {saathis && saathis.length > 0 ? (
+              saathis.map((saathi, idx) => {
+                const tierPresets = [
                 { tier: "Top Saathi", tierBg: "#FE6700", color: "#FE6700" },
                 { tier: "Senior Saathi", tierBg: "#7C3AED", color: "#7C3AED" },
                 { tier: "Legend Saathi", tierBg: "#059669", color: "#059669" },
@@ -567,7 +535,16 @@ const SaathiPage = () => {
                   </div>
                 </div>
               );
-            })}
+            })
+            ) : (
+              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "60px 20px", background: "#f9fafb", borderRadius: "16px", color: "#6b7280" }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 16px auto" }}>
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#111827", marginBottom: "8px" }}>More Saathis Joining Soon</h3>
+                <p>We are verifying our next batch of volunteers for this region.</p>
+              </div>
+            )}
           </div>
 
           <div className="saathi-community__banner">

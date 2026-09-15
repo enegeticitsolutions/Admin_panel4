@@ -89,6 +89,28 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/volunteers/:id/toggle-website-visibility — toggle showOnWebsite
+router.patch('/:id/toggle-website-visibility', async (req, res) => {
+  const { showOnWebsite } = req.body;
+  if (typeof showOnWebsite !== 'boolean') {
+    return res.status(400).json({ success: false, message: 'showOnWebsite boolean is required' });
+  }
+
+  try {
+    const volunteer = await prisma.volunteer.update({
+      where: { id: req.params.id },
+      data: { showOnWebsite },
+    });
+
+    res.json({ success: true, data: volunteer, message: 'Website visibility updated successfully' });
+  } catch (err) {
+    if (err.code === 'P2025') {
+      return res.status(404).json({ success: false, message: 'Volunteer not found' });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // PATCH /api/volunteers/:id/verify — approve application
 router.patch('/:id/verify', async (req, res) => {
   try {

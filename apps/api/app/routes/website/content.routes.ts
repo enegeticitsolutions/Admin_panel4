@@ -32,7 +32,7 @@ router.get('/content/sathi', async (_req: Request, res: Response) => {
 
     // Fetch up to 4 approved volunteers for the "Meet our Saathis" section
     const saathisRaw = await (prisma as any).volunteer.findMany({
-      where: { applicationStatus: 'APPROVED' },
+      where: { applicationStatus: 'APPROVED', showOnWebsite: true },
       take: 4,
       select: {
         id: true,

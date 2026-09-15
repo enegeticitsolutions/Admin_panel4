@@ -148,6 +148,7 @@ export default function VolunteersPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [detailedVolunteer, setDetailedVolunteer] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [mainSearchTerm, setMainSearchTerm] = useState('');
 
   useEffect(() => {
     loadData();
@@ -413,6 +414,13 @@ export default function VolunteersPage() {
 
   // Multi-select location reactive filtering (with spatial GPS & city fallback)
   const filteredVolunteers = volunteers.filter((v) => {
+    if (mainSearchTerm) {
+      const lowerSearch = mainSearchTerm.toLowerCase();
+      const nameMatch = v.name.toLowerCase().includes(lowerSearch);
+      const phoneMatch = v.phone.includes(lowerSearch);
+      if (!nameMatch && !phoneMatch) return false;
+    }
+
     const volCountry = v.country || 'India';
     const volState = (v.state || '').toLowerCase();
     const volCity = (v.city || '').toLowerCase();
@@ -584,6 +592,17 @@ export default function VolunteersPage() {
         )}
       </div>
 
+      <div className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-2">
+        <Search className="w-5 h-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search volunteers by name or phone..."
+          value={mainSearchTerm}
+          onChange={(e) => setMainSearchTerm(e.target.value)}
+          className="w-full bg-transparent border-none outline-none focus:ring-0 text-sm text-gray-800"
+        />
+      </div>
+
       {error && (
         <div className="p-4 bg-destructive/10 text-destructive rounded-xl text-sm font-medium">
           {error}
@@ -620,6 +639,28 @@ export default function VolunteersPage() {
                       )}
                       <StatusChip status="Verified" />
                     </div>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-gray-50 p-2 rounded-lg border border-gray-200">
+                    <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                      <Globe className="w-3.5 h-3.5 text-blue-600" /> Show on Website
+                    </span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={v.showOnWebsite || false} 
+                        onChange={async (e) => {
+                          try {
+                            const updated = await volunteerApi.toggleWebsiteVisibility(v.id, e.target.checked);
+                            setVolunteers(prev => prev.map(vol => vol.id === v.id ? { ...vol, showOnWebsite: updated.showOnWebsite } : vol));
+                          } catch (err: any) {
+                            alert(err.message || 'Failed to update website visibility.');
+                          }
+                        }}
+                      />
+                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
