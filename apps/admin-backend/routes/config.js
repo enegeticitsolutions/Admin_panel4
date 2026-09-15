@@ -18,6 +18,24 @@ router.get('/', async (req, res) => {
         value: 'true',
         description: 'Enable automatic monthly period refresh and 1-month rollover for multi-month care plans',
         group: 'BENEFITS'
+      },
+      {
+        key: 'EMERGENCY_HELPLINE_NUMBER',
+        value: '01142258823',
+        description: '24/7 Emergency Helpline dialed by Beneficiary SOS and emergency support modals',
+        group: 'EMERGENCY'
+      },
+      {
+        key: 'SATHI_COORDINATOR_NUMBER',
+        value: '+91 1244495435',
+        description: 'Saathi Coordinator phone number shown in Saathi App Guide and Support',
+        group: 'SUPPORT'
+      },
+      {
+        key: 'EMERGENCY_SERVICES_NUMBER',
+        value: '112',
+        description: 'National Emergency Services helpline (112)',
+        group: 'EMERGENCY'
       }
     ];
 

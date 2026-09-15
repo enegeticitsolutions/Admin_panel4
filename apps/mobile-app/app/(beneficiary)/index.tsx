@@ -204,7 +204,7 @@ export default function BeneficiaryDashboard() {
                 if (result.success) {
                     setEmergencySuccessModal({
                         ticketNumber: result.ticketNumber || 'EMG-ALERT',
-                        message: 'Helpline 011-42258823 dialed. Your Subscriber, Care Companions, and Admin Emergency Center have been alerted with your location.',
+                        message: `Helpline ${result.helplineNumber || '011-42258823'} dialed. Your Subscriber, Care Companions, and Admin Emergency Center have been alerted with your location.`,
                         locationAddress: result.locationAddress,
                         lat: result.lat,
                         lng: result.lng,

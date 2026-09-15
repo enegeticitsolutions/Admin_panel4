@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -12,9 +12,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Dimensions } from 'react-native';
+import { API_URL } from '@/constants/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const scale = (size: number) => Math.round((SCREEN_WIDTH / 390) * size);
+
+const DEFAULT_HELPLINE_NUMBER = '01142258823';
 
 interface CareSupportModalProps {
     visible: boolean;
@@ -31,6 +34,18 @@ const CareSupportModal: React.FC<CareSupportModalProps> = ({
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(40)).current;
     const scaleAnim = useRef(new Animated.Value(0.92)).current;
+    const [helplineNumber, setHelplineNumber] = useState<string>(DEFAULT_HELPLINE_NUMBER);
+
+    useEffect(() => {
+        fetch(`${API_URL}/public/company/config`)
+            .then((res) => res.json())
+            .then((json) => {
+                if (json?.data?.EMERGENCY_HELPLINE_NUMBER) {
+                    setHelplineNumber(json.data.EMERGENCY_HELPLINE_NUMBER);
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     useEffect(() => {
         if (visible) {
@@ -83,7 +98,7 @@ const CareSupportModal: React.FC<CareSupportModalProps> = ({
     };
 
     const handleCall = () => {
-        Linking.openURL('tel:01142258823').catch(() => {});
+        Linking.openURL(`tel:${helplineNumber.replace(/[^\d+]/g, '')}`).catch(() => {});
     };
 
     const INFO_ROWS: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; color: string }[] = [

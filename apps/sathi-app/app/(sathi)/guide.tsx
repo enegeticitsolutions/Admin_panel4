@@ -10,6 +10,7 @@ import {
   Platform,
   UIManager,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +22,9 @@ import { API_URL } from '@/constants/api';
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+const DEFAULT_COORDINATOR_NUMBER = '+91 1244495435';
+const DEFAULT_EMERGENCY_SERVICES_NUMBER = '112';
 
 // Fallbacks if API fails
 const FALLBACK_ACTIVITIES = [
@@ -43,6 +47,8 @@ export default function SathiGuide() {
   const [bestPractices, setBestPractices] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
   const [faqs, setFaqs] = useState<any[]>([]);
+  const [coordinatorNumber, setCoordinatorNumber] = useState<string>(DEFAULT_COORDINATOR_NUMBER);
+  const [emergencyServicesNumber, setEmergencyServicesNumber] = useState<string>(DEFAULT_EMERGENCY_SERVICES_NUMBER);
 
   useEffect(() => {
     fetchGuideData();
@@ -57,6 +63,12 @@ export default function SathiGuide() {
         setBestPractices(json.data.bestPractices || []);
         setActivities(json.data.suggestedActivities || []);
         setFaqs(json.data.faqs || []);
+        if (json.data.emergencySupport?.coordinatorNumber) {
+          setCoordinatorNumber(json.data.emergencySupport.coordinatorNumber);
+        }
+        if (json.data.emergencySupport?.emergencyServicesNumber) {
+          setEmergencyServicesNumber(json.data.emergencySupport.emergencyServicesNumber);
+        }
       } else {
         throw new Error('Failed to fetch guide data');
       }
@@ -208,15 +220,23 @@ export default function SathiGuide() {
                 <Text style={styles.emergencyTitle}>Emergency Support</Text>
               </View>
 
-              <View style={styles.supportContact}>
+              <TouchableOpacity
+                style={styles.supportContact}
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL(`tel:${coordinatorNumber.replace(/[^\d+]/g, '')}`).catch(() => {})}
+              >
                 <Text style={styles.contactLabel}>Saathi Coordinator:</Text>
-                <Text style={styles.contactValue}>+91 1244495435</Text>
-              </View>
+                <Text style={[styles.contactValue, styles.contactValueLink]}>{coordinatorNumber}</Text>
+              </TouchableOpacity>
 
-              <View style={styles.supportContact}>
+              <TouchableOpacity
+                style={styles.supportContact}
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL(`tel:${emergencyServicesNumber.replace(/[^\d+]/g, '')}`).catch(() => {})}
+              >
                 <Text style={styles.contactLabel}>Emergency Services:</Text>
-                <Text style={styles.contactValue}>112</Text>
-              </View>
+                <Text style={[styles.contactValue, styles.contactValueLink]}>{emergencyServicesNumber}</Text>
+              </TouchableOpacity>
 
               <Text style={styles.emergencyDesc}>
                 Contact the saathi coordinator if you have questions, concerns, or need support with any
@@ -443,6 +463,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#111827',
+  },
+  contactValueLink: {
+    color: '#EF4444',
+    textDecorationLine: 'underline',
   },
   emergencyDesc: {
     fontSize: 13,

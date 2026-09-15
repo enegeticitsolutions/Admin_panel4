@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LEGAL_CONFIG } from '@/constants/legal';
 import { scale } from '@/utils/responsive';
+import { dialEmergencyHelpline, getEmergencyHelplineNumber } from '@/services/emergencyTrigger';
 
 interface CareSupportModalProps {
     visible: boolean;
@@ -29,6 +30,11 @@ const CareSupportModal: React.FC<CareSupportModalProps> = ({
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(40)).current;
     const scaleAnim = useRef(new Animated.Value(0.92)).current;
+    const [helplineNumber, setHelplineNumber] = useState<string>('01142258823');
+
+    useEffect(() => {
+        getEmergencyHelplineNumber().then(setHelplineNumber).catch(() => {});
+    }, []);
 
     useEffect(() => {
         if (visible) {
@@ -81,11 +87,11 @@ const CareSupportModal: React.FC<CareSupportModalProps> = ({
     };
 
     const handleCall = () => {
-        Linking.openURL('tel:01142258823').catch(() => {});
+        dialEmergencyHelpline(helplineNumber).catch(() => {});
     };
 
     const INFO_ROWS: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; color: string }[] = [
-        { icon: 'call-outline', label: 'Helpline', value: '011-42258823', color: '#10B981' },
+        { icon: 'call-outline', label: 'Helpline', value: helplineNumber, color: '#10B981' },
         { icon: 'mail-outline', label: 'Email', value: LEGAL_CONFIG.SUPPORT_EMAIL || 'info@maihoonna.com', color: '#F97316' },
         { icon: 'time-outline', label: 'Hours', value: 'Mon–Sat, 9 AM – 7 PM IST', color: '#3B82F6' },
         { icon: 'location-outline', label: 'Hub', value: 'Gurugram, Haryana, India', color: '#6366F1' },

@@ -17,16 +17,68 @@ import { API_URL } from '@/constants/api';
 import { Platform, Linking } from 'react-native';
 
 /**
- * 24/7 Emergency Helpline Number
- * Automatically triggered when beneficiary presses the emergency button
+ * 24/7 Emergency Helpline Number (Default Fallback)
  */
-export const EMERGENCY_HELPLINE_NUMBER = '01142258823';
+export const DEFAULT_EMERGENCY_HELPLINE_NUMBER = '01142258823';
+export const EMERGENCY_HELPLINE_NUMBER = DEFAULT_EMERGENCY_HELPLINE_NUMBER;
+
+// In-memory cache with AsyncStorage fallback for offline / instant access
+let cachedHelplineNumber: string | null = null;
+const STORAGE_KEY_HELPLINE = '@mhn_emergency_helpline';
 
 /**
- * Initiates an immediate phone call to the Emergency Helpline (01142258823)
+ * Returns the current emergency helpline number.
+ * Reads in-memory cache -> AsyncStorage -> default fallback ('01142258823')
  */
-export async function dialEmergencyHelpline(): Promise<void> {
-  const telUrl = `tel:${EMERGENCY_HELPLINE_NUMBER}`;
+export async function getEmergencyHelplineNumber(): Promise<string> {
+  if (cachedHelplineNumber) {
+    return cachedHelplineNumber;
+  }
+  try {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY_HELPLINE);
+    if (stored) {
+      cachedHelplineNumber = stored;
+      return stored;
+    }
+  } catch {}
+  return DEFAULT_EMERGENCY_HELPLINE_NUMBER;
+}
+
+/**
+ * Synchronous getter for cases where async is not possible, returning cached or default.
+ */
+export function getCachedEmergencyHelplineNumber(): string {
+  return cachedHelplineNumber || DEFAULT_EMERGENCY_HELPLINE_NUMBER;
+}
+
+/**
+ * Fetches the latest system config from backend and updates local cache.
+ */
+export async function refreshEmergencyHelplineNumber(): Promise<string> {
+  try {
+    const res = await fetch(`${API_URL}/public/company/config`);
+    const json = await res.json();
+    const dynamicNumber = json?.data?.EMERGENCY_HELPLINE_NUMBER;
+    if (dynamicNumber && typeof dynamicNumber === 'string') {
+      cachedHelplineNumber = dynamicNumber.trim();
+      await AsyncStorage.setItem(STORAGE_KEY_HELPLINE, cachedHelplineNumber);
+      return cachedHelplineNumber;
+    }
+  } catch (err) {
+    console.warn('[EmergencyTrigger] Failed to refresh helpline number from API:', err);
+  }
+  return getEmergencyHelplineNumber();
+}
+
+// Background initial refresh
+refreshEmergencyHelplineNumber().catch(() => {});
+
+/**
+ * Initiates an immediate phone call to the Emergency Helpline
+ */
+export async function dialEmergencyHelpline(targetNumber?: string): Promise<void> {
+  const numberToDial = targetNumber || (await getEmergencyHelplineNumber());
+  const telUrl = `tel:${numberToDial.replace(/[^\d+]/g, '')}`;
   try {
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined') {
@@ -184,8 +236,10 @@ export async function triggerEmergencyAlert(
       AsyncStorage.getItem('userToken'),
     ]);
 
+    const dynamicHelpline = await getEmergencyHelplineNumber();
+
     if (!storedUser || !storedToken) {
-      return { success: false, error: 'Not authenticated', helplineNumber: EMERGENCY_HELPLINE_NUMBER };
+      return { success: false, error: 'Not authenticated', helplineNumber: dynamicHelpline };
     }
 
     const parsedUser = JSON.parse(storedUser);
@@ -220,7 +274,7 @@ export async function triggerEmergencyAlert(
         locationAddress: location?.address || postData.data?.locationAddress,
         lat: location?.lat,
         lng: location?.lng,
-        helplineNumber: EMERGENCY_HELPLINE_NUMBER,
+        helplineNumber: dynamicHelpline,
       };
     }
 

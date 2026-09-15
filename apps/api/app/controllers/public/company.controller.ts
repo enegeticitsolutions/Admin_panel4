@@ -17,7 +17,10 @@ export const getCompanyConfig = async (req: Request, res: Response) => {
           'COMPANY_BANK_NAME',
           'COMPANY_BANK_ACCOUNT',
           'COMPANY_BANK_IFSC',
-          'COMPANY_UPI_ID'
+          'COMPANY_UPI_ID',
+          'EMERGENCY_HELPLINE_NUMBER',
+          'SATHI_COORDINATOR_NUMBER',
+          'EMERGENCY_SERVICES_NUMBER'
         ]
       }
     }
@@ -35,7 +38,10 @@ export const getCompanyConfig = async (req: Request, res: Response) => {
     COMPANY_BANK_NAME: 'HDFC Bank',
     COMPANY_BANK_ACCOUNT: '000000000000',
     COMPANY_BANK_IFSC: 'HDFC0000000',
-    COMPANY_UPI_ID: 'maihoonna@upi'
+    COMPANY_UPI_ID: 'maihoonna@upi',
+    EMERGENCY_HELPLINE_NUMBER: '01142258823',
+    SATHI_COORDINATOR_NUMBER: '+91 1244495435',
+    EMERGENCY_SERVICES_NUMBER: '112'
   };
 
   const configMap = { ...defaultConfigs };
