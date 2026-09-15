@@ -24,7 +24,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
 
   // 6-digit OTP state
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [resendTimer, setResendTimer] = useState(30);
+  const [resendTimer, setResendTimer] = useState(60);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -109,7 +109,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
       await sendOtp(cleanPhone);
       setInfoMessage(`We've sent a 6-digit verification code to +91 ${cleanPhone}`);
       setLoginStep("OTP");
-      setResendTimer(30);
+      setResendTimer(60);
       setOtp(["", "", "", "", "", ""]);
     } catch (err) {
       setError(err.message || "Failed to send OTP. Please try again.");
@@ -183,7 +183,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
       await sendOtp(cleanPhone);
       setInfoMessage(`We've sent a 6-digit verification code to +91 ${cleanPhone}`);
       setRegisterStep("OTP");
-      setResendTimer(30);
+      setResendTimer(60);
       setOtp(["", "", "", "", "", ""]);
     } catch (err) {
       setError(err.message || "Failed to send verification code. Please check your connection.");
@@ -241,7 +241,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
     setLoading(true);
     try {
       await sendOtp(cleanPhone);
-      setResendTimer(30);
+      setResendTimer(60);
       setInfoMessage(`A fresh 6-digit verification code has been sent to +91 ${cleanPhone}`);
     } catch (err) {
       setError(err.message || "Failed to resend code.");

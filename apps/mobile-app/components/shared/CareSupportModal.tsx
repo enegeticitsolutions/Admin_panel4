@@ -81,13 +81,14 @@ const CareSupportModal: React.FC<CareSupportModalProps> = ({
     };
 
     const handleCall = () => {
-        Linking.openURL('tel:+919999999999').catch(() => {});
+        Linking.openURL('tel:01142258823').catch(() => {});
     };
 
     const INFO_ROWS: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; color: string }[] = [
-        { icon: 'mail-outline', label: 'Email', value: 'info@maihoonna.com', color: '#F97316' },
+        { icon: 'call-outline', label: 'Helpline', value: '011-42258823', color: '#10B981' },
+        { icon: 'mail-outline', label: 'Email', value: LEGAL_CONFIG.SUPPORT_EMAIL || 'info@maihoonna.com', color: '#F97316' },
         { icon: 'time-outline', label: 'Hours', value: 'Mon–Sat, 9 AM – 7 PM IST', color: '#3B82F6' },
-        { icon: 'location-outline', label: 'Hub', value: 'Gurugram, Haryana, India', color: '#10B981' },
+        { icon: 'location-outline', label: 'Hub', value: 'Gurugram, Haryana, India', color: '#6366F1' },
     ];
 
     return (

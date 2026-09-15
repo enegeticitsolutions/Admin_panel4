@@ -25,7 +25,7 @@ export default function RegisterScreen() {
     const [otp, setOtp] = useState(["", "", "", "", "", ""]);
     const [consentGiven, setConsentGiven] = useState(false);
     const [showLegalModal, setShowLegalModal] = useState(false);
-    const [resendTimer, setResendTimer] = useState(30);
+    const [resendTimer, setResendTimer] = useState(60);
     const inputRefs = useRef<Array<TextInput | null>>([]);
 
     const [form, setForm] = useState({
@@ -149,7 +149,7 @@ export default function RegisterScreen() {
             });
             const data = await response.json();
             if (data.success) {
-                setResendTimer(30);
+                setResendTimer(60);
                 Alert.alert("Code Sent", "A new verification code has been sent to your phone number.");
             } else {
                 Alert.alert("Error", data.message || "Failed to resend verification code.");
@@ -256,7 +256,7 @@ export default function RegisterScreen() {
 
                 if (data.success) {
                     setStep('otp');
-                    setResendTimer(30);
+                    setResendTimer(60);
                     setOtp(["", "", "", "", "", ""]);
                 } else {
                     Alert.alert("Verification Error", data.message || "Failed to send verification code.");

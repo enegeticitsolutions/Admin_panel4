@@ -11,26 +11,34 @@ import { isBypassPhone } from '../../core/otp/otp_bypass';
 
 const router = Router();
 
-// Rate Limiter for OTP Requests (max 10 requests per 15 mins per IP)
+// Rate Limiter for OTP Requests (max 10 requests per 15 mins per IP + Phone)
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 OTP requests per window
-  message: { success: false, message: 'Too many OTP requests from this IP. Please try again after 15 minutes.' },
+  max: 10, // Limit each IP + Phone combo to 10 OTP requests per window
+  message: { success: false, message: 'Too many OTP requests. Please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req: any) => {
+    const rawPhone = (req.body?.phone || '').toString().replace(/\D/g, '').slice(-10);
+    return `${req.ip}_${rawPhone}`;
+  },
   skip: (req) => {
     const raw = (req.body?.phone || '').toString();
     return isBypassPhone(raw);
   },
 });
 
-// Rate Limiter for Password Logins (e.g., max 10 requests per 15 mins per IP)
+// Rate Limiter for Password Logins (max 10 requests per 15 mins per IP + Phone)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 password login attempts per window
+  max: 10, // Limit each IP + Phone combo to 10 password login attempts per window
   message: { success: false, message: 'Too many login attempts. Please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req: any) => {
+    const rawPhone = (req.body?.phone || '').toString().replace(/\D/g, '').slice(-10);
+    return `${req.ip}_${rawPhone}`;
+  },
   skip: (req) => {
     const raw = (req.body?.phone || '').toString();
     return isBypassPhone(raw);

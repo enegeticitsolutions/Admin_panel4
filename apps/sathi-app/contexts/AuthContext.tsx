@@ -58,10 +58,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loadSession = async () => {
       try {
-        const [storedToken, storedUser] = await Promise.all([
-          AsyncStorage.getItem('userToken'),
-          AsyncStorage.getItem('userData'),
-        ]);
+        let storedToken: string | null = null;
+        if (Platform.OS !== 'web') {
+          try {
+            storedToken = await require('expo-secure-store').getItemAsync('secureUserToken');
+          } catch (_) {}
+        }
+        if (!storedToken) {
+          storedToken = await AsyncStorage.getItem('userToken');
+          if (storedToken && Platform.OS !== 'web') {
+            try {
+              await require('expo-secure-store').setItemAsync('secureUserToken', storedToken);
+            } catch (_) {}
+          }
+        }
+        const storedUser = await AsyncStorage.getItem('userData');
 
         if (storedToken && storedUser) {
           const parsedUser = JSON.parse(storedUser) as UserData;

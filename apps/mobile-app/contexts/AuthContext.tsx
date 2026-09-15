@@ -90,8 +90,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loadSession = async () => {
       try {
-        const [storedToken, storedUser, storedAvailableRoles, storedSelfBenId] = await Promise.all([
-          AsyncStorage.getItem('userToken'),
+        let storedToken: string | null = null;
+        if (Platform.OS !== 'web') {
+          storedToken = await SecureStore.getItemAsync('secureUserToken');
+        }
+        if (!storedToken) {
+          storedToken = await AsyncStorage.getItem('userToken');
+          // Migrate legacy token to SecureStore if present
+          if (storedToken && Platform.OS !== 'web') {
+            await SecureStore.setItemAsync('secureUserToken', storedToken).catch(() => {});
+          }
+        }
+
+        const [storedUser, storedAvailableRoles, storedSelfBenId] = await Promise.all([
           AsyncStorage.getItem('userData'),
           AsyncStorage.getItem('availableRoles'),
           AsyncStorage.getItem('selfBeneficiaryId'),

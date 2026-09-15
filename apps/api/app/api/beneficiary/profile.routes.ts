@@ -72,12 +72,11 @@ router.post('/me', authenticate, async (req: AuthRequest, res: Response) => {
             return res.status(404).json({ success: false, message: 'Beneficiary profile not found' });
         }
 
-        // Update User account if details provided
-        if (phone || email || name) {
+        // Update User account if details provided (Phone cannot be updated without OTP verification)
+        if (email || name) {
             await prisma.user.update({
                 where: { id: beneficiary.userId },
                 data: {
-                    ...(phone && { phone }),
                     ...(email && { email }),
                     ...(name && { name })
                 }
