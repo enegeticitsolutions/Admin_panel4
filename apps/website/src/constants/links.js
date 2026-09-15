@@ -53,6 +53,7 @@ export const SITE_LINKS = {
     { label: "Refund Policy", page: "refund-policy", href: "/refund-policy" },
     { label: "Cookie Policy", page: "cookie-policy", href: "/cookie-policy" },
     { label: "Child Safety Policy", page: "child-safety", href: "/child-safety" },
+    { label: "Saathi T&C", page: "saathi-tc", href: "/saathi-tc" },
   ],
 
   // Footer Bottom Legal Links

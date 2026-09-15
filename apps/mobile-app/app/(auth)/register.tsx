@@ -576,9 +576,16 @@ export default function RegisterScreen() {
                                         I agree that MaiHoonNa may collect and use my personal information (name, phone, age, and location) to provide elder care coordination services. I have read and accept the{" "}
                                         <Text
                                             style={styles.consentLink}
-                                            onPress={(e) => { e.stopPropagation?.(); setShowLegalModal(true); }}
+                                            onPress={(e) => { e.stopPropagation?.(); Linking.openURL('https://maihoonna.com/terms'); }}
                                         >
-                                            Terms of Service & Privacy Policy
+                                            Terms of Service
+                                        </Text>
+                                        {" & "}
+                                        <Text
+                                            style={styles.consentLink}
+                                            onPress={(e) => { e.stopPropagation?.(); Linking.openURL('https://maihoonna.com/privacy'); }}
+                                        >
+                                            Privacy Policy
                                         </Text>
                                         .
                                     </Text>
