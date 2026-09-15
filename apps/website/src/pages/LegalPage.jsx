@@ -208,8 +208,8 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
                   `Last revised: ${currentPolicy.lastUpdated || "January 2026"}. Please read these terms carefully before using MaiHoonNa's senior care services, mobile apps, or digital platforms.`}
               </p>
 
-              {/* Meta Details Pills (Effective Date, Applies to, Operated by) */}
-              {(currentPolicy.effectiveDate || currentPolicy.appliesTo) && (
+              {/* Meta Details Pills (Effective Date, Operated by) */}
+              {(currentPolicy.effectiveDate || currentPolicy.operatedBy) && (
                 <div
                   style={{
                     display: "flex",
@@ -231,19 +231,6 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
                   {currentPolicy.operatedBy && (
                     <div style={{ background: "#f1f5f9", padding: "4px 12px", borderRadius: "8px" }}>
                       <strong>Operated by:</strong> {currentPolicy.operatedBy}
-                    </div>
-                  )}
-                  {currentPolicy.appliesTo && (
-                    <div
-                      style={{
-                        background: "#f8fafc",
-                        border: "1px solid #e2e8f0",
-                        padding: "4px 12px",
-                        borderRadius: "8px",
-                        width: "100%",
-                      }}
-                    >
-                      <strong>Applies to:</strong> {currentPolicy.appliesTo}
                     </div>
                   )}
                 </div>
