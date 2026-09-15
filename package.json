@@ -21,7 +21,10 @@
     "redis:down": "docker compose down",
     "redis:logs": "docker logs -f maihoonna-redis",
     "redis:check": "npx ts-node packages/notifications/check-redis.ts",
-    "build:packages": "npm run build --workspaces --if-present"
+    "build:packages": "npm run build --workspaces --if-present",
+    "seed:config": "npm run seed:config --workspace=@maihoonna/database",
+    "seed:sathi-guide": "npm run seed:sathi-guide --workspace=@maihoonna/database",
+    "seed:all": "npm run seed:config && npm run seed:sathi-guide"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

@@ -3,7 +3,7 @@
 MOBILE_TESTING_SETUP.md
 DEVOPS_DATABASE_CONNECTION_GUIDE.md
 sync-app.ps1
-scripts/
+/scripts/
 .claude
 scratch/
 

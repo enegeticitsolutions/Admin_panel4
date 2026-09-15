@@ -7,7 +7,10 @@
   "scripts": {
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev"
+    "db:migrate": "prisma migrate dev",
+    "seed:config": "node scripts/seed_system_configs.js",
+    "seed:sathi-guide": "node scripts/seed_sathi_guide.js",
+    "seed:all": "node scripts/seed_system_configs.js && node scripts/seed_sathi_guide.js"
   },
   "dependencies": {
     "@prisma/client": "^7.8.0"
