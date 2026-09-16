@@ -135,7 +135,7 @@ export const getInvoiceHtml = async (req: AuthRequest, res: Response) => {
     res.send(html);
   } catch (err: any) {
     console.error('[InvoicesController.getInvoiceHtml]', err.message);
-    res.status(500).send(`<h3>Error generating invoice: ${err.message}</h3>`);
+    res.status(500).send(`<h3>Error generating invoice</h3>`);
   }
 };
 

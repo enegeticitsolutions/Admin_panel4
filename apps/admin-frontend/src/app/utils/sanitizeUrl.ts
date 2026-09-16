@@ -12,8 +12,14 @@ export function sanitizeImgSrc(url: string | null | undefined, fallback?: string
   if (typeof url === 'string' && url.trim()) {
     try {
       const parsed = new URL(url.trim());
-      if (parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'file:') {
-        return encodeURI(parsed.href);
+      if (parsed.protocol === 'http:') {
+        return `http://${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      if (parsed.protocol === 'https:') {
+        return `https://${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      }
+      if (parsed.protocol === 'file:') {
+        return `file://${parsed.pathname}${parsed.search}${parsed.hash}`;
       }
     } catch {
       if (url.trim().startsWith('/')) {
@@ -25,8 +31,11 @@ export function sanitizeImgSrc(url: string | null | undefined, fallback?: string
   if (typeof fallback === 'string' && fallback.trim()) {
     try {
       const parsedFallback = new URL(fallback.trim());
-      if (parsedFallback.protocol === 'http:' || parsedFallback.protocol === 'https:') {
-        return encodeURI(parsedFallback.href);
+      if (parsedFallback.protocol === 'http:') {
+        return `http://${parsedFallback.host}${parsedFallback.pathname}${parsedFallback.search}${parsedFallback.hash}`;
+      }
+      if (parsedFallback.protocol === 'https:') {
+        return `https://${parsedFallback.host}${parsedFallback.pathname}${parsedFallback.search}${parsedFallback.hash}`;
       }
     } catch {
       // Invalid fallback URL

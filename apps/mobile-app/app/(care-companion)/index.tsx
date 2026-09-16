@@ -243,7 +243,16 @@ export default function DashboardScreen() {
                     {currentVisit ? (
                         <View
                             style={styles.card}
-                            {...(upcomingList.length > 1 ? panResponder.panHandlers : {})}
+                            onStartShouldSetResponder={upcomingList.length > 1 ? panResponder.panHandlers.onStartShouldSetResponder : undefined}
+                            onMoveShouldSetResponder={upcomingList.length > 1 ? panResponder.panHandlers.onMoveShouldSetResponder : undefined}
+                            onResponderEnd={upcomingList.length > 1 ? panResponder.panHandlers.onResponderEnd : undefined}
+                            onResponderGrant={upcomingList.length > 1 ? panResponder.panHandlers.onResponderGrant : undefined}
+                            onResponderMove={upcomingList.length > 1 ? panResponder.panHandlers.onResponderMove : undefined}
+                            onResponderReject={upcomingList.length > 1 ? panResponder.panHandlers.onResponderReject : undefined}
+                            onResponderRelease={upcomingList.length > 1 ? panResponder.panHandlers.onResponderRelease : undefined}
+                            onResponderStart={upcomingList.length > 1 ? panResponder.panHandlers.onResponderStart : undefined}
+                            onResponderTerminate={upcomingList.length > 1 ? panResponder.panHandlers.onResponderTerminate : undefined}
+                            onResponderTerminationRequest={upcomingList.length > 1 ? panResponder.panHandlers.onResponderTerminationRequest : undefined}
                         >
                             {/* Header Row: Title + Left/Right Switcher + Type Badge */}
                             <View style={styles.nextVisitHeader}>

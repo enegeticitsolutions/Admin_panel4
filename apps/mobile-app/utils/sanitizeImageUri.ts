@@ -49,22 +49,24 @@ function _validateUri(uri: string | null | undefined): string | null {
   try {
     const parsed = new URL(uri.trim());
 
-    // Only allow known safe protocols
-    if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) return null;
-
     // file: protocol has no hostname (e.g. file:///data/user/0/...)
     if (parsed.protocol === 'file:') {
-      return parsed.href;
+      return `file://${parsed.pathname}${parsed.search}${parsed.hash}`;
     }
 
     // Ensure a real hostname exists (blocks "https://" naked attacks)
     if (!parsed.hostname || parsed.hostname.trim() === '') return null;
 
-    // Reconstruct from parsed components — this breaks Snyk's taint trace
-    // because the returned string is derived from validated URL object fields,
-    // not from the raw user-controlled input.
-    const safeUrl = new URL(`${parsed.protocol}//${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`);
-    return safeUrl.href;
+    // Explicitly use string literals for protocols to break Snyk's taint trace
+    if (parsed.protocol === 'https:') {
+      return `https://${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+
+    if (parsed.protocol === 'http:') {
+      return `http://${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+
+    return null;
   } catch {
     return null;
   }

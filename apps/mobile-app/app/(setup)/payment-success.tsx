@@ -124,7 +124,17 @@ export default function PaymentSuccessScreen() {
                 totalAmount: invoice.totalAmount,
             };
 
-            await generateInvoicePDF(invoiceData);
+            const escapeHtml = (unsafe: string) => unsafe.replace(/[&<"'>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
+            const safeInvoiceData = {
+                ...invoiceData,
+                invoiceNumber: escapeHtml(invoiceData.invoiceNumber),
+                items: invoiceData.items.map(i => ({
+                    ...i,
+                    description: escapeHtml(i.description)
+                }))
+            };
+
+            await generateInvoicePDF(safeInvoiceData);
         } catch (error) {
             console.error('Invoice Download Error:', error);
             Alert.alert('Error', 'Could not download invoice. Please try again later.');

@@ -1011,15 +1011,9 @@ export function SaathiView({
           
           return displayList.map((v) => {
             const isConnectTab = activeTab === 'CONNECT';
-            const CardWrapper = (isConnectTab ? View : TouchableOpacity) as React.ElementType;
-            const cardProps = isConnectTab ? { style: styles.volunteerCard } : { 
-              style: styles.volunteerCard, 
-              onPress: () => router.push(`/(beneficiary)/sathi-details/${v.id}?status=CONNECTED`),
-              activeOpacity: 0.95
-            };
 
-            return (
-              <CardWrapper key={v.id} {...cardProps}>
+            return isConnectTab ? (
+              <View key={v.id} style={styles.volunteerCard}>
                 <View style={styles.volHeader}>
                   <Image source={{ uri: sanitizeImageUri(v.photo) }} style={styles.volPhoto} />
                 <View style={styles.volInfo}>
@@ -1105,8 +1099,98 @@ export function SaathiView({
                       <Text style={styles.feedBtnText}>Feedback</Text>
                     </TouchableOpacity>
                   </View>
+                  </View>
                 )}
-              </CardWrapper>
+              </View>
+            ) : (
+              <TouchableOpacity
+                key={v.id}
+                style={styles.volunteerCard}
+                onPress={() => router.push(`/(beneficiary)/sathi-details/${v.id}?status=CONNECTED`)}
+                activeOpacity={0.95}
+              >
+                <View style={styles.volHeader}>
+                  <Image source={{ uri: sanitizeImageUri(v.photo) }} style={styles.volPhoto} />
+                <View style={styles.volInfo}>
+                  <Text style={styles.volName}>{v.name}</Text>
+                  
+                  <View style={styles.locationRow}>
+                    <Feather name="map-pin" size={14} color="#6B7280" />
+                    <Text style={styles.locationText}>{v.location}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Stats */}
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Feather name="star" size={14} color="#F59E0B" />
+                  <Text style={styles.statText}>{v.rating} Rating</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Feather name="check-circle" size={14} color="#10B981" />
+                  <Text style={styles.statText}>{v.completedVisits} Visits</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Feather name="shield" size={14} color="#3B82F6" />
+                  <Text style={styles.statText}>Verified</Text>
+                </View>
+              </View>
+
+              {/* Bio & Details */}
+              <Text style={styles.bioText} numberOfLines={2}>
+                {v.bio}
+              </Text>
+
+              {v.availability && v.availability.length > 0 && (
+                <View style={styles.availabilityBox}>
+                  <Feather name="calendar" size={20} color="#16A34A" />
+                  <View style={styles.availabilityTextCol}>
+                    <Text style={styles.availabilityLabel}>Available</Text>
+                    <Text style={styles.availabilityText}>{v.availability.join(', ')}</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Languages */}
+              {v.languages && v.languages.length > 0 && (
+                <View style={styles.languagesContainer}>
+                  <Text style={[styles.sectionTitleText, { marginLeft: 0 }]}>Languages:</Text>
+                  <View style={styles.pillsRow}>
+                    {v.languages.map((lang: string, index: number) => (
+                      <View key={index} style={styles.languagePill}>
+                        <Text style={styles.languagePillText}>{lang}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Interests */}
+              {v.interests && v.interests.length > 0 && (
+                <View style={styles.interestsContainer}>
+                  <Text style={[styles.sectionTitleText, { marginLeft: 0 }]}>Interests:</Text>
+                  <View style={styles.pillsRow}>
+                    {v.interests.map((interest: string, index: number) => (
+                      <View key={index} style={styles.interestPill}>
+                        <Text style={styles.interestPillText}>{interest}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.reqBtn} onPress={() => setSelectedVolunteer(v)}>
+                  <Feather name="user-plus" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.reqBtnText}>Request Visit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.feedBtn} onPress={() => { setFeedbackTarget(v); setShowFeedbackModal(true); setFeedbackRating(5); setFeedbackText(''); }}>
+                  <Feather name="message-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.feedBtnText}>Feedback</Text>
+                </TouchableOpacity>
+              </View>
+              </TouchableOpacity>
             );
           })
         })()}

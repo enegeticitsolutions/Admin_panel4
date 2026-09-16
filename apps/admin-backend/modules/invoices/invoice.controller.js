@@ -505,7 +505,7 @@ async function getInvoiceHtml(req, res) {
     res.send(html);
   } catch (err) {
     console.error('[InvoiceController] getInvoiceHtml error:', err);
-    res.status(500).send('Error generating invoice preview: ' + err.message);
+    res.status(500).send('<h3>Error generating invoice preview</h3>');
   }
 }
 

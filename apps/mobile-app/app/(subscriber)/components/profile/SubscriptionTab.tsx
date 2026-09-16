@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Platform, Modal, TextInput, ScrollView } from 'react-native';
+import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { formatHours } from '@/utils/timeFormat';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
-import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { scale } from '@/utils/responsive';
 
 interface SubscriptionTabProps {
@@ -131,7 +131,7 @@ const SubscriptionTab = ({ plan, beneficiaries }: SubscriptionTabProps) => {
                         >
                             <View style={[styles.benAvatar]}>
                                 {b.photo ? (
-                                    <Image source={{ uri: b.photo }} style={styles.benPhoto} />
+                                    <Image source={{ uri: sanitizeImageUri(b.photo) }} style={styles.benPhoto} />
                                 ) : (
                                     <View style={styles.initialsBox}>
                                         <Text style={styles.benInitials}>{b.name[0]}</Text>
