@@ -7,28 +7,28 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0894748B9E78FB63030097DA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BBFADDF074B47DFBB93891D5 /* PrivacyInfo.xcprivacy */; };
+		0E960E6E096943AC88FC87BB /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 35505177E1FF4A12B0DFE638 /* GoogleService-Info.plist */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		19F072301DE3A1D0D446F542 /* libPods-SaathiNetwork.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E0E79DB9715B734F05EC7871 /* libPods-SaathiNetwork.a */; };
+		30B3AADD7B751FACD654A4D8 /* libPods-SaathiNetwork.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 724687557342DFA9EF0EFBE3 /* libPods-SaathiNetwork.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		80BB0D1A6EBE485D8B5050BE /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = DD3F24CE2CEB42048B9F3A25 /* GoogleService-Info.plist */; };
-		AE0B67054946A86D2F241058 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 63DAA42F394173CA55AA5FBB /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		D2E8D1674F45AFCB403FDC8F /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DADEFD5DD73C8DC94C9EEC0 /* ExpoModulesProvider.swift */; };
+		E78DC7320D44E24134254BC6 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B7397377F794D6CDE5CAC9E /* ExpoModulesProvider.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0FB6DBFDB2FD113EF545F00A /* Pods-SaathiNetwork.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SaathiNetwork.release.xcconfig"; path = "Target Support Files/Pods-SaathiNetwork/Pods-SaathiNetwork.release.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* SaathiNetwork.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SaathiNetwork.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = SaathiNetwork/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = SaathiNetwork/Info.plist; sourceTree = "<group>"; };
-		2BF7489117FC07DF60B06B77 /* Pods-SaathiNetwork.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SaathiNetwork.debug.xcconfig"; path = "Target Support Files/Pods-SaathiNetwork/Pods-SaathiNetwork.debug.xcconfig"; sourceTree = "<group>"; };
-		4DADEFD5DD73C8DC94C9EEC0 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-SaathiNetwork/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		5CBAB4892B34E2490E598CC5 /* Pods-SaathiNetwork.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SaathiNetwork.release.xcconfig"; path = "Target Support Files/Pods-SaathiNetwork/Pods-SaathiNetwork.release.xcconfig"; sourceTree = "<group>"; };
-		63DAA42F394173CA55AA5FBB /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = SaathiNetwork/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		35505177E1FF4A12B0DFE638 /* GoogleService-Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "SaathiNetwork/GoogleService-Info.plist"; sourceTree = "<group>"; };
+		724687557342DFA9EF0EFBE3 /* libPods-SaathiNetwork.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-SaathiNetwork.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B7397377F794D6CDE5CAC9E /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-SaathiNetwork/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		A53DDEEA1ABB0728F4C2E86B /* Pods-SaathiNetwork.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-SaathiNetwork.debug.xcconfig"; path = "Target Support Files/Pods-SaathiNetwork/Pods-SaathiNetwork.debug.xcconfig"; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = SaathiNetwork/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		DD3F24CE2CEB42048B9F3A25 /* GoogleService-Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "SaathiNetwork/GoogleService-Info.plist"; sourceTree = "<group>"; };
-		E0E79DB9715B734F05EC7871 /* libPods-SaathiNetwork.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-SaathiNetwork.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		BBFADDF074B47DFBB93891D5 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = SaathiNetwork/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = SaathiNetwork/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* SaathiNetwork-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "SaathiNetwork-Bridging-Header.h"; path = "SaathiNetwork/SaathiNetwork-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -39,7 +39,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				19F072301DE3A1D0D446F542 /* libPods-SaathiNetwork.a in Frameworks */,
+				30B3AADD7B751FACD654A4D8 /* libPods-SaathiNetwork.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -55,45 +55,45 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				DD3F24CE2CEB42048B9F3A25 /* GoogleService-Info.plist */,
-				63DAA42F394173CA55AA5FBB /* PrivacyInfo.xcprivacy */,
+				35505177E1FF4A12B0DFE638 /* GoogleService-Info.plist */,
+				BBFADDF074B47DFBB93891D5 /* PrivacyInfo.xcprivacy */,
 			);
 			name = SaathiNetwork;
-			sourceTree = "<group>";
-		};
-		2862A6955E51DFBE34DC6DB1 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				77D789CA807B16C629531122 /* SaathiNetwork */,
-			);
-			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				E0E79DB9715B734F05EC7871 /* libPods-SaathiNetwork.a */,
+				724687557342DFA9EF0EFBE3 /* libPods-SaathiNetwork.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		61EDEE93D198D1B2140D08E0 /* Pods */ = {
+		3CE2FC6BCD12B50DDECDDCDA /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				2BF7489117FC07DF60B06B77 /* Pods-SaathiNetwork.debug.xcconfig */,
-				5CBAB4892B34E2490E598CC5 /* Pods-SaathiNetwork.release.xcconfig */,
+				46E27A352EC85701FAA5723F /* SaathiNetwork */,
+			);
+			name = ExpoModulesProviders;
+			sourceTree = "<group>";
+		};
+		46E27A352EC85701FAA5723F /* SaathiNetwork */ = {
+			isa = PBXGroup;
+			children = (
+				8B7397377F794D6CDE5CAC9E /* ExpoModulesProvider.swift */,
+			);
+			name = SaathiNetwork;
+			sourceTree = "<group>";
+		};
+		4C6CC36EBD61D00751593029 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				A53DDEEA1ABB0728F4C2E86B /* Pods-SaathiNetwork.debug.xcconfig */,
+				0FB6DBFDB2FD113EF545F00A /* Pods-SaathiNetwork.release.xcconfig */,
 			);
 			name = Pods;
 			path = Pods;
-			sourceTree = "<group>";
-		};
-		77D789CA807B16C629531122 /* SaathiNetwork */ = {
-			isa = PBXGroup;
-			children = (
-				4DADEFD5DD73C8DC94C9EEC0 /* ExpoModulesProvider.swift */,
-			);
-			name = SaathiNetwork;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -110,8 +110,8 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				61EDEE93D198D1B2140D08E0 /* Pods */,
-				2862A6955E51DFBE34DC6DB1 /* ExpoModulesProviders */,
+				4C6CC36EBD61D00751593029 /* Pods */,
+				3CE2FC6BCD12B50DDECDDCDA /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -143,13 +143,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "SaathiNetwork" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				C8A433047F168FA20FDF18D1 /* [Expo] Configure project */,
+				7573EB742E686AA6119DF247 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				D02CB3C1EC54417F19E910A9 /* [CP] Embed Pods Frameworks */,
+				E5BA9022E07C2ECFB560778A /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -199,8 +199,8 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				80BB0D1A6EBE485D8B5050BE /* GoogleService-Info.plist in Resources */,
-				AE0B67054946A86D2F241058 /* PrivacyInfo.xcprivacy in Resources */,
+				0E960E6E096943AC88FC87BB /* GoogleService-Info.plist in Resources */,
+				0894748B9E78FB63030097DA /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,6 +245,30 @@
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
+		};
+		7573EB742E686AA6119DF247 /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/SaathiNetwork/SaathiNetwork.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-SaathiNetwork/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-SaathiNetwork/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-SaathiNetwork/expo-configure-project.sh\"\n";
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -300,31 +324,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-SaathiNetwork/Pods-SaathiNetwork-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		C8A433047F168FA20FDF18D1 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/SaathiNetwork/SaathiNetwork.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-SaathiNetwork/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-SaathiNetwork/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-SaathiNetwork/expo-configure-project.sh\"\n";
-		};
-		D02CB3C1EC54417F19E910A9 /* [CP] Embed Pods Frameworks */ = {
+		E5BA9022E07C2ECFB560778A /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -360,7 +360,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				D2E8D1674F45AFCB403FDC8F /* ExpoModulesProvider.swift in Sources */,
+				E78DC7320D44E24134254BC6 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,7 +369,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 2BF7489117FC07DF60B06B77 /* Pods-SaathiNetwork.debug.xcconfig */;
+			baseConfigurationReference = A53DDEEA1ABB0728F4C2E86B /* Pods-SaathiNetwork.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -398,14 +398,14 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "SaathiNetwork/SaathiNetwork-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5CBAB4892B34E2490E598CC5 /* Pods-SaathiNetwork.release.xcconfig */;
+			baseConfigurationReference = 0FB6DBFDB2FD113EF545F00A /* Pods-SaathiNetwork.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -428,7 +428,7 @@
 				PRODUCT_NAME = SaathiNetwork;
 				SWIFT_OBJC_BRIDGING_HEADER = "SaathiNetwork/SaathiNetwork-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
