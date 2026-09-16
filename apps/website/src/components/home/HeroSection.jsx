@@ -70,11 +70,11 @@ const HeroSection = ({ openForm }) => {
 
         </div>
       </div>
-      
+
       <div className="hero-cutout-wrapper">
-        <img 
-          src={homePageCutOut} 
-          alt="MaiHoonNa Care Mitras assisting elder seniors in Gurugram with home companionship and healthcare" 
+        <img
+          src={homePageCutOut}
+          alt="MaiHoonNa Care Mitras assisting elder seniors in Gurugram with home companionship and healthcare"
           className="hero-cutout"
           width="540"
           height="480"
