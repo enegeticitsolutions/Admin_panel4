@@ -615,18 +615,20 @@ export default function ApplyVolunteerScreen() {
                           <Text style={styles.iosPickerDoneText}>Done</Text>
                         </TouchableOpacity>
                       </View>
-                      <DateTimePicker
-                        value={dateOfBirth || new Date(new Date().setFullYear(new Date().getFullYear() - 18))}
-                        mode="date"
-                        display="inline"
-                        maximumDate={new Date(new Date().setFullYear(new Date().getFullYear() - 18))}
-                        accentColor="#FE6700"
-                        themeVariant="light"
-                        onChange={(event: any, selectedDate?: Date) => {
-                          if (selectedDate) setDateOfBirth(selectedDate);
-                        }}
-                        style={{ backgroundColor: '#FFFFFF' }}
-                      />
+                      <View style={{ alignItems: 'center', width: '100%' }}>
+                        <DateTimePicker
+                          value={dateOfBirth || new Date(new Date().setFullYear(new Date().getFullYear() - 18))}
+                          mode="date"
+                          display="inline"
+                          maximumDate={new Date(new Date().setFullYear(new Date().getFullYear() - 18))}
+                          accentColor="#FE6700"
+                          themeVariant="light"
+                          onChange={(event: any, selectedDate?: Date) => {
+                            if (selectedDate) setDateOfBirth(selectedDate);
+                          }}
+                          style={{ backgroundColor: '#FFFFFF' }}
+                        />
+                      </View>
                     </View>
                   </View>
                 </Modal>

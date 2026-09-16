@@ -111,6 +111,28 @@ router.patch('/:id/toggle-website-visibility', async (req, res) => {
   }
 });
 
+// PATCH /api/volunteers/:id/toggle-active — toggle isActive status
+router.patch('/:id/toggle-active', async (req, res) => {
+  const { isActive } = req.body;
+  if (typeof isActive !== 'boolean') {
+    return res.status(400).json({ success: false, message: 'isActive boolean is required' });
+  }
+
+  try {
+    const volunteer = await prisma.volunteer.update({
+      where: { id: req.params.id },
+      data: { isActive },
+    });
+
+    res.json({ success: true, data: volunteer, message: `Profile ${isActive ? 'activated' : 'deactivated'} successfully` });
+  } catch (err) {
+    if (err.code === 'P2025') {
+      return res.status(404).json({ success: false, message: 'Volunteer not found' });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // PATCH /api/volunteers/:id/verify — approve application
 router.patch('/:id/verify', async (req, res) => {
   try {
@@ -192,7 +214,7 @@ router.get('/match-candidates/:beneficiaryId', async (req, res) => {
     const beneficiary = await prisma.beneficiary.findUnique({
       where: { id: beneficiaryId },
       include: {
-        volunteerAssignments: { where: { isActive: true } }
+        volunteerAssignments: { where: { isActive: true, volunteer: { isActive: true } } }
       }
     });
 
@@ -208,7 +230,7 @@ router.get('/match-candidates/:beneficiaryId', async (req, res) => {
     const isBeneficiaryFull = currentBeneficiaryVolCount >= maxPerBeneficiary;
 
     // ── Rapido-Style Spatial Geo-Bounding Box DB Query ──
-    let spatialWhereClause = { applicationStatus: 'APPROVED' };
+    let spatialWhereClause = { applicationStatus: 'APPROVED', isActive: true };
 
     if (
       beneficiary.latitude !== null &&
@@ -248,7 +270,7 @@ router.get('/match-candidates/:beneficiaryId', async (req, res) => {
     // Fallback if no nearby candidates found (or initial setup without GPS)
     if (volunteers.length === 0) {
       volunteers = await prisma.volunteer.findMany({
-        where: { applicationStatus: 'APPROVED' },
+        where: { applicationStatus: 'APPROVED', isActive: true },
         include: {
           assignments: {
             where: { isActive: true },

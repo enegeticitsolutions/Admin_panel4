@@ -285,6 +285,7 @@ export interface Volunteer {
   volunteeredHours?: number;
   joinedDate?: string;
   isActive?: boolean;
+  showOnWebsite?: boolean;
   totalCreditHours?: number;
   totalCreditPoints?: number;
   monthlyGoalHours?: number;

@@ -8,7 +8,5 @@
     <false/>
     <key>EXUpdatesLaunchWaitMs</key>
     <integer>0</integer>
-    <key>EXUpdatesEnableBsdiffPatchSupport</key>
-    <true/>
   </dict>
 </plist>

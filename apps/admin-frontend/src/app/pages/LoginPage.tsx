@@ -8,19 +8,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
-import { Switch } from '../components/ui/switch';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../../services/api';
-import { Fingerprint, Phone, Lock } from 'lucide-react';
+import { Phone, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login, biometricLogin } = useAuth();
+  const { login } = useAuth();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
 
 
 
@@ -37,20 +35,6 @@ export default function LoginPage() {
       navigate('/dashboard');
     } catch (error) {
       toast.error('Invalid credentials');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBiometricLogin = async () => {
-    setLoading(true);
-    try {
-      // In production, this would use actual biometric API
-      await biometricLogin('U001'); // Demo: auto-login as master admin
-      toast.success('Biometric authentication successful');
-      navigate('/dashboard');
-    } catch (error) {
-      toast.error('Biometric authentication failed');
     } finally {
       setLoading(false);
     }
@@ -109,41 +93,6 @@ export default function LoginPage() {
               {loading ? 'Logging in...' : 'Login'}
             </Button>
           </form>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">Or</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-input-background">
-            <div className="flex items-center gap-2">
-              <Fingerprint className="w-5 h-5 text-primary" />
-              <span className="text-sm">Biometric Login</span>
-            </div>
-            <Switch
-              checked={biometricEnabled}
-              onCheckedChange={setBiometricEnabled}
-              disabled={loading}
-            />
-          </div>
-
-          {biometricEnabled && (
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full border-primary text-primary hover:bg-primary/10"
-              onClick={handleBiometricLogin}
-              disabled={loading}
-            >
-              <Fingerprint className="w-4 h-4 mr-2" />
-              Authenticate with Biometric
-            </Button>
-          )}
-
           <div className="text-center text-xs text-muted-foreground pt-4 border-t border-border">
             <p>© 2026 MaiHoonNa Senior Care</p>
           </div>

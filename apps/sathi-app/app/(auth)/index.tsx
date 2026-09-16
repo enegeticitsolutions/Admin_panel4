@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,17 @@ export default function AuthScreen() {
   const [otpCode, setOtpCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (resendTimer > 0 && otpSent) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer, otpSent]);
   const { push, replace } = useNavigationStack();
   useAndroidBackHandler();
   const { login } = useAuth();
@@ -80,6 +91,7 @@ export default function AuthScreen() {
       const data = await response.json();
       if (response.ok || data.success) {
         setOtpSent(true);
+        setResendTimer(60);
       } else {
         const message = data.message || 'Account not found. Please register first.';
         setErrorMessage(message);
@@ -90,6 +102,30 @@ export default function AuthScreen() {
       }
     } catch (error) {
       console.error('OTP Send Error:', error);
+      setErrorMessage('Could not connect to the backend server.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendTimer > 0 || isLoading) return;
+    setErrorMessage('');
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/sathi/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: `+91${form.phone}` }),
+      });
+      const data = await response.json();
+      if (response.ok || data.success) {
+        setResendTimer(60);
+        setOtpCode('');
+      } else {
+        setErrorMessage(data.message || 'Failed to resend OTP.');
+      }
+    } catch (error) {
       setErrorMessage('Could not connect to the backend server.');
     } finally {
       setIsLoading(false);
@@ -300,6 +336,15 @@ export default function AuthScreen() {
                         editable={!isLoading}
                       />
                     </View>
+                    <TouchableOpacity
+                      onPress={handleResendOtp}
+                      disabled={resendTimer > 0 || isLoading}
+                      style={styles.resendContainer}
+                    >
+                      <Text style={[styles.resendText, (resendTimer > 0 || isLoading) && styles.resendTextDisabled]}>
+                        {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
+                      </Text>
+                    </TouchableOpacity>
                   </>
                 )}
 
@@ -519,5 +564,18 @@ const styles = StyleSheet.create({
     color: '#FF6F00',
     fontWeight: '700',
     fontSize: scale(14),
+  },
+  resendContainer: {
+    alignItems: 'center',
+    marginTop: scale(-8),
+    marginBottom: scale(16),
+  },
+  resendText: {
+    fontSize: scale(13),
+    color: '#FF6F00',
+    fontWeight: '600',
+  },
+  resendTextDisabled: {
+    color: '#9CA3AF',
   },
 });
