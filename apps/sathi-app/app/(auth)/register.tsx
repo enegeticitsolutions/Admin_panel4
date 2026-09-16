@@ -110,7 +110,7 @@ export default function RegisterVolunteerScreen() {
       });
       const data = await response.json();
       if (response.ok || data.success) {
-        setResendTimer(30);
+        setResendTimer(60);
         setOtp(['', '', '', '', '', '']);
       } else {
         Alert.alert('Error', data.message || 'Failed to resend OTP.');
@@ -228,7 +228,7 @@ export default function RegisterVolunteerScreen() {
 
         if (response.ok || data.success) {
           setStep('otp');
-          setResendTimer(30);
+          setResendTimer(60);
           setOtp(['', '', '', '', '', '']);
         } else {
           const message = data.message || 'Failed to send OTP.';

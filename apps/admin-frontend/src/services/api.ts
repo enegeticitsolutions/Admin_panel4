@@ -811,6 +811,13 @@ export const volunteerApi = {
     });
   },
 
+  async toggleActiveStatus(id: string, isActive: boolean): Promise<Volunteer> {
+    return apiJson<Volunteer>(`/volunteers/${id}/toggle-active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    });
+  },
+
   async assignBeneficiary(volunteerId: string, beneficiaryId: string): Promise<any> {
     return apiJson(`/volunteers/${volunteerId}/assignments`, {
       method: 'POST',

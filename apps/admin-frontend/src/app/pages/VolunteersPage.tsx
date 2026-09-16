@@ -637,6 +637,11 @@ export default function VolunteersPage() {
                           {activeCount}/{maxVolLimit} Assigned
                         </span>
                       )}
+                      {v.isActive === false && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-500 text-white rounded-full">
+                          Deactivated
+                        </span>
+                      )}
                       <StatusChip status="Verified" />
                     </div>
                   </div>
@@ -720,17 +725,33 @@ export default function VolunteersPage() {
                     >
                       View History
                     </button>
-                    <button
-                      onClick={() => handleOpenAssign(v)}
-                      disabled={isFull}
-                      className={`flex-1 text-xs py-2 font-medium rounded-lg flex items-center justify-center gap-1 ${
-                        isFull
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'bg-primary text-primary-foreground hover:bg-primary/95'
-                      }`}
-                    >
-                      <Plus className="w-3.5 h-3.5" /> {isFull ? `At Limit (${activeCount}/${maxVolLimit})` : 'Assign Senior'}
-                    </button>
+                    {v.isActive === false ? (
+                      <button
+                        onClick={async () => {
+                          try {
+                            const updated = await volunteerApi.toggleActiveStatus(v.id, true);
+                            setVolunteers(prev => prev.map(vol => vol.id === v.id ? { ...vol, isActive: updated.isActive } : vol));
+                          } catch (err: any) {
+                            alert(err.message || 'Failed to reactivate profile.');
+                          }
+                        }}
+                        className="flex-1 text-xs py-2 bg-green-500 text-white hover:bg-green-600 font-medium rounded-lg flex items-center justify-center gap-1"
+                      >
+                        Reactivate
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleOpenAssign(v)}
+                        disabled={isFull}
+                        className={`flex-1 text-xs py-2 font-medium rounded-lg flex items-center justify-center gap-1 ${
+                          isFull
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-primary text-primary-foreground hover:bg-primary/95'
+                        }`}
+                      >
+                        <Plus className="w-3.5 h-3.5" /> {isFull ? `At Limit (${activeCount}/${maxVolLimit})` : 'Assign Senior'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </DataCard>

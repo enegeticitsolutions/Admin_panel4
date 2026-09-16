@@ -199,7 +199,11 @@ export const getLinkedVolunteers = async (beneficiaryId: string) => {
   });
 
   const assignments = await prisma.volunteerAssignment.findMany({
-    where: { beneficiaryId, isActive: true },
+    where: { 
+      beneficiaryId, 
+      isActive: true,
+      volunteer: { isActive: true }
+    },
     include: {
       volunteer: {
         include: {
