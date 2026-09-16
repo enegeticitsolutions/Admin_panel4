@@ -14,8 +14,8 @@
     "primaryColor": "#ffffff",
     "ios": {
       "icon": "./assets/images/icon.png",
-      "supportsTablet": false,
-      "buildNumber": "13",
+      "supportsTablet": true,
+      "buildNumber": "14",
       "config": {
         "googleMapsApiKey": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU"
       },
