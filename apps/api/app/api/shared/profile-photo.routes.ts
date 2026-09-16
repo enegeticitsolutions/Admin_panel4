@@ -39,7 +39,11 @@ async function uploadFile(
  * Generate a unique storage path for a profile photo
  */
 function generateProfilePath(entityType: string, entityId: string, originalName: string): string {
-  const ext = originalName.split('.').pop() || 'jpg';
+  let ext = originalName.split('.').pop() || 'jpg';
+  const validExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif'];
+  if (!validExts.includes(ext.toLowerCase())) {
+    ext = 'jpg';
+  }
   const timestamp = Date.now();
   const uid = uuidv4().split('-')[0];
   return `profiles/${entityType}/${entityId}/${timestamp}_${uid}.${ext}`;

@@ -20,6 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { API_URL } from '@/constants/api';
 import { SathiBottomNav } from '@/components/shared/SathiBottomNav';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { deleteSathiAccount } from '@/utils/deleteAccount';
@@ -150,19 +151,20 @@ export default function SathiProfile() {
         else type = `image/${match[1]}`;
       }
 
-      const formData = new FormData();
-      formData.append('file', { uri, name: filename, type } as any);
-      formData.append('targetType', 'self');
-
-      const response = await fetch(`${API_URL}/profile-photo/upload`, {
-        method: 'POST',
+      const response = await FileSystem.uploadAsync(`${API_URL}/profile-photo/upload`, uri, {
+        fieldName: 'file',
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        mimeType: type,
         headers: {
           'Authorization': `Bearer ${token}`,
         },
-        body: formData,
+        parameters: {
+          'targetType': 'self'
+        }
       });
 
-      const responseText = await response.text();
+      const responseText = response.body;
       let data: any;
       try {
         data = JSON.parse(responseText);
@@ -173,7 +175,7 @@ export default function SathiProfile() {
         throw new Error(`Upload failed (Server HTTP ${response.status || 'unknown'}). Please try again.`);
       }
 
-      if (response.ok && data.success) {
+      if (response.status >= 200 && response.status < 300 && data.success) {
         setProfile((prev: any) => ({ ...prev, profilePhoto: data.url }));
         try {
           const stored = await AsyncStorage.getItem('userData');
