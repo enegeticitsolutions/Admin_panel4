@@ -39,6 +39,7 @@ export default function SathiProfile() {
   const [uploading, setUploading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [supportModalVisible, setSupportModalVisible] = useState(false);
   const [reviewsModalVisible, setReviewsModalVisible] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -208,37 +209,29 @@ export default function SathiProfile() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account?\n\nThis action will deactivate your profile and you will no longer be able to log in. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            const success = await deleteSathiAccount();
-            if (success) {
-              Alert.alert(
-                'Account Deleted',
-                'Your account has been deleted successfully.\n\nTo reactivate in the future, please contact the Saathi coordinator on aastha@maihoonna.com',
-                [
-                  {
-                    text: 'OK',
-                    onPress: async () => {
-                      await logout();
-                      router.replace('/(auth)');
-                    },
-                  },
-                ]
-              );
-            } else {
-              Alert.alert('Error', 'Failed to delete account. Please try again later.');
-            }
-          }
-        }
-      ]
-    );
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDeleteAccount = async () => {
+    setDeleteModalVisible(false);
+    const success = await deleteSathiAccount();
+    if (success) {
+      Alert.alert(
+        'Account Deleted',
+        'Your account has been deleted successfully.\n\nTo reactivate in the future, please contact the Saathi coordinator on aastha@maihoonna.com',
+        [
+          {
+            text: 'OK',
+            onPress: async () => {
+              await logout();
+              router.replace('/(auth)');
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert('Error', 'Failed to delete account. Please try again later.');
+    }
   };
 
   const handleOpenSupport = () => {
@@ -483,6 +476,39 @@ export default function SathiProfile() {
                 onPress={confirmLogout}
               >
                 <Text style={styles.modalLogoutBtnText}>Log out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Delete Account Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={deleteModalVisible}
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="trash-outline" size={28} color="#EF4444" />
+              <Text style={styles.modalTitle}>Delete Account</Text>
+            </View>
+            <Text style={styles.modalMessage}>Are you sure you want to delete your account?{'\n\n'}This action will deactivate your profile and you will no longer be able to log in. This action cannot be undone.</Text>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.modalCancelBtn} 
+                onPress={() => setDeleteModalVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalLogoutBtn, { backgroundColor: '#EF4444' }]} 
+                onPress={confirmDeleteAccount}
+              >
+                <Text style={[styles.modalLogoutBtnText, { color: '#FFFFFF' }]}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
