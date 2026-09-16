@@ -1006,9 +1006,7 @@ const SaathiPage = () => {
               Have questions about volunteering or senior visits? Reach out to us at:
               <br />
               <a href="mailto:info@maihoonna.com">info@maihoonna.com</a>,{" "}
-              <a href="mailto:aastha@maihoonna.com">aastha@maihoonna.com</a>,{" "}
-              <a href="mailto:nidhi.hora@maihoonna.com">nidhi.hora@maihoonna.com</a>
-            </p>
+              </p>
           </div>
 
           <div className="saathi-faq__list">
