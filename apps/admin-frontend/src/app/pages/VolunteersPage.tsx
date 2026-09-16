@@ -219,6 +219,17 @@ export default function VolunteersPage() {
     }
   };
 
+  const handleDeleteVolunteer = async (volunteerId: string) => {
+    if (!confirm('Now this sathi will be permanently deleted and remove all records of that saathi')) return;
+    try {
+      await volunteerApi.delete(volunteerId);
+      alert('Sathi deleted successfully.');
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete sathi.');
+    }
+  };
+
   // Helper for spatial distance calculation (Haversine formula)
   const getDistanceKm = (lat1?: number | null, lon1?: number | null, lat2?: number | null, lon2?: number | null) => {
     if (!lat1 || !lon1 || !lat2 || !lon2) return null;
@@ -623,7 +634,23 @@ export default function VolunteersPage() {
             const isFull = activeCount >= maxVolLimit;
 
             return (
-              <DataCard key={v.id} title={v.name} description={v.phone}>
+              <DataCard 
+                key={v.id} 
+                title={v.name} 
+                description={v.phone}
+                headerAction={
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteVolunteer(v.id);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete Sathi"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                }
+              >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Status</span>

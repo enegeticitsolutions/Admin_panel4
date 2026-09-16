@@ -507,4 +507,29 @@ router.delete('/:id/assignments/:beneficiaryId', async (req, res) => {
   }
 });
 
+// DELETE /api/volunteers/:id — completely delete a volunteer and all their records
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Delete all related records in a transaction to ensure data consistency
+    await prisma.$transaction([
+      prisma.volunteerAssignment.deleteMany({ where: { volunteerId: id } }),
+      prisma.volunteerVisitLog.deleteMany({ where: { volunteerId: id } }),
+      prisma.volunteerCreditTransaction.deleteMany({ where: { volunteerId: id } }),
+      prisma.volunteerRewardCoupon.deleteMany({ where: { volunteerId: id } }),
+      prisma.volunteerReview.deleteMany({ where: { volunteerId: id } }),
+      prisma.volunteer.delete({ where: { id } })
+    ]);
+
+    res.json({ success: true, message: 'Volunteer and all associated records permanently deleted' });
+  } catch (err) {
+    console.error('DELETE volunteer error:', err);
+    if (err.code === 'P2025') {
+      return res.status(404).json({ success: false, message: 'Volunteer not found' });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

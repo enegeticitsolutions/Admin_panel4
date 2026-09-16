@@ -834,6 +834,12 @@ export const volunteerApi = {
       method: 'DELETE',
     });
   },
+
+  async delete(id: string): Promise<any> {
+    return apiJson(`/volunteers/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 // ============================================================================
