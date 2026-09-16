@@ -353,7 +353,7 @@ const AboutPage = ({ openForm, setActivePage }) => {
                 </button>
               </form>
             )}
-            <p className="about-cta__phone">Or call us directly · <a href="tel:+919876543210">+91 98765 43210</a></p>
+            <p className="about-cta__phone">Or call us directly · <a href="tel:+918527070049">+91 85270 70049</a></p>
           </div>
         </div>
       </section>
