@@ -60,7 +60,15 @@ const PHONES = [
   '8081152565',
   '9971661223'
 ];
-const PASSWORD_PLAIN = '901221';
+
+const PASSWORD_PLAIN = process.env.MASTER_ADMIN_PASSWORD;
+
+if (!PASSWORD_PLAIN) {
+  console.error('[Master Admin Seed] ERROR: MASTER_ADMIN_PASSWORD is not provided in the environment or .env file.');
+  console.error('Please add MASTER_ADMIN_PASSWORD to your .env file before running this seed script.');
+  process.exit(1);
+}
+
 const ROLE = 'master_admin';
 
 async function seed() {
