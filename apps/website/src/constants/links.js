@@ -28,7 +28,7 @@ export const SITE_LINKS = {
   // Contact Info
   contact: {
     email: "info@maihoonna.com",
-    phone: "+91 98765 43210",
+    phone: "+91 85270 70049",
     supportEmail: "support@maihoonna.in",
     address: "Gurugram Sectors 53 to 57, Haryana, India",
   },
