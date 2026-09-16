@@ -138,8 +138,17 @@ export default function SathiProfile() {
       if (!token) return;
 
       const filename = uri.split('/').pop() || 'photo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
+      const match = /\.(\w+)$/.exec(filename.toLowerCase());
+      
+      // Android strictly requires valid MIME types. 'image/jpg' will cause fetch to fail.
+      let type = 'image/jpeg';
+      if (match) {
+        if (match[1] === 'png') type = 'image/png';
+        else if (match[1] === 'jpg' || match[1] === 'jpeg') type = 'image/jpeg';
+        else if (match[1] === 'gif') type = 'image/gif';
+        else if (match[1] === 'webp') type = 'image/webp';
+        else type = `image/${match[1]}`;
+      }
 
       const formData = new FormData();
       formData.append('file', { uri, name: filename, type } as any);
