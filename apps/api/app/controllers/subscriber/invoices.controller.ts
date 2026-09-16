@@ -90,6 +90,8 @@ export const getInvoiceByOrderId = async (req: AuthRequest, res: Response) => {
 // ─── GET /subscriber/invoices/:id/html ───────────────────────────────────────
 // Returns printable HTML for a tax invoice (subscriber-scoped).
 
+import escapeHtml from 'escape-html';
+
 export const getInvoiceHtml = async (req: AuthRequest, res: Response) => {
   try {
     const subscriberId = req.userId!;
@@ -135,7 +137,7 @@ export const getInvoiceHtml = async (req: AuthRequest, res: Response) => {
     res.send(html);
   } catch (err: any) {
     console.error('[InvoicesController.getInvoiceHtml]', err.message);
-    res.status(500).send(`<h3>Error generating invoice: ${err.message}</h3>`);
+    res.status(500).send(`<h3>Error generating invoice: ${escapeHtml(err.message)}</h3>`);
   }
 };
 

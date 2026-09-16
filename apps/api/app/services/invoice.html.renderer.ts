@@ -1,3 +1,5 @@
+import escapeHtml from 'escape-html';
+
 // ─── InvoiceHtmlRenderer ───────────────────────────────────────────────────────
 //
 // Pure class responsible for rendering a GST Tax Invoice matching the mobile app
@@ -82,15 +84,15 @@ export class InvoiceHtmlRenderer {
   static render(invoice: any, companyOverride?: Partial<CompanyDetails>): string {
     const co = { ...InvoiceHtmlRenderer.defaultCompany(), ...companyOverride };
 
-    const subscriberName = invoice.subscriber?.name || 'Valued Customer';
-    const subscriberPhone = invoice.subscriber?.phone || '';
-    const subscriberEmail = invoice.subscriber?.email || '';
-    const subscriberAddress = invoice.subscriber?.address || invoice.placeOfSupply || 'Haryana';
-    const placeOfSupply = invoice.placeOfSupply || 'Haryana';
-    const issuedDate = invoice.issuedAt
+    const subscriberName = escapeHtml(invoice.subscriber?.name || 'Valued Customer');
+    const subscriberPhone = escapeHtml(invoice.subscriber?.phone || '');
+    const subscriberEmail = escapeHtml(invoice.subscriber?.email || '');
+    const subscriberAddress = escapeHtml(invoice.subscriber?.address || invoice.placeOfSupply || 'Haryana');
+    const placeOfSupply = escapeHtml(invoice.placeOfSupply || 'Haryana');
+    const issuedDate = escapeHtml(invoice.issuedAt
       ? new Date(invoice.issuedAt).toLocaleDateString('en-IN')
-      : new Date().toLocaleDateString('en-IN');
-    const status = (invoice.status || 'PAID').toUpperCase();
+      : new Date().toLocaleDateString('en-IN'));
+    const status = escapeHtml((invoice.status || 'PAID').toUpperCase());
 
     const items = invoice.items || [];
     const itemsHtml = items.map((item: any, index: number) => {
@@ -113,8 +115,8 @@ export class InvoiceHtmlRenderer {
       return `
     <tr>
       <td>${index + 1}</td>
-      <td>${item.description || item.name || 'Service'}</td>
-      <td>${item.hsnSacCode || '998399'}</td>
+      <td>${escapeHtml(item.description || item.name || 'Service')}</td>
+      <td>${escapeHtml(item.hsnSacCode || '998399')}</td>
       <td>${qty}</td>
       <td>₹${price.toFixed(2)}</td>
       <td>${taxRate}%</td>
@@ -139,7 +141,7 @@ export class InvoiceHtmlRenderer {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tax Invoice - ${invoice.invoiceNumber}</title>
+  <title>Tax Invoice - ${escapeHtml(invoice.invoiceNumber)}</title>
   <style>
     body {
       font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -277,17 +279,17 @@ export class InvoiceHtmlRenderer {
 
   <div class="header">
     <div class="company-details">
-      <h1>${co.name}</h1>
-      <p>${co.address}</p>
-      <p><strong>GSTIN:</strong> ${co.gstin}</p>
-      <p><strong>PAN:</strong> ${co.pan}</p>
-      <p><strong>CIN:</strong> ${co.cin}</p>
-      <p><strong>Email:</strong> ${co.email}</p>
-      <p><strong>Phone:</strong> ${co.phone}</p>
+      <h1>${escapeHtml(co.name)}</h1>
+      <p>${escapeHtml(co.address)}</p>
+      <p><strong>GSTIN:</strong> ${escapeHtml(co.gstin)}</p>
+      <p><strong>PAN:</strong> ${escapeHtml(co.pan)}</p>
+      <p><strong>CIN:</strong> ${escapeHtml(co.cin)}</p>
+      <p><strong>Email:</strong> ${escapeHtml(co.email)}</p>
+      <p><strong>Phone:</strong> ${escapeHtml(co.phone)}</p>
     </div>
     <div class="invoice-title">
       <h2>TAX INVOICE</h2>
-      <p><strong>Invoice No:</strong> ${invoice.invoiceNumber}</p>
+      <p><strong>Invoice No:</strong> ${escapeHtml(invoice.invoiceNumber)}</p>
       <p><strong>Date:</strong> ${issuedDate}</p>
       <p><strong>Status:</strong> ${status}</p>
     </div>
@@ -352,7 +354,7 @@ export class InvoiceHtmlRenderer {
     <div class="bank-details">
     </div>
     <div class="auth-sign">
-      <p>For ${co.name}</p>
+      <p>For ${escapeHtml(co.name)}</p>
       <div class="signature-line"></div>
       <p>Authorised Signatory</p>
     </div>
