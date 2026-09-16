@@ -95,6 +95,7 @@ const navigationSections: NavSection[] = [
   {
     title: 'SYSTEM',
     items: [
+      { path: '/website-content', label: 'Website Content', icon: FileText, roles: ['master_admin'] },
       { path: '/config', label: 'System Settings', icon: Settings, roles: ['master_admin'] },
       { path: '/subscriptions', label: 'Subscription Packages', icon: Package, roles: ['master_admin'] },
       { path: '/benefit-types', label: 'Benefit Types', icon: Settings, roles: ['master_admin'] },

@@ -448,17 +448,11 @@ const SaathiPage = () => {
           <div className="saathi-community__grid">
             {saathis && saathis.length > 0 ? (
               saathis.map((saathi, idx) => {
-                const tierPresets = [
+              const tierPresets = [
                 { tier: "Top Saathi", tierBg: "#FE6700", color: "#FE6700" },
                 { tier: "Senior Saathi", tierBg: "#7C3AED", color: "#7C3AED" },
                 { tier: "Legend Saathi", tierBg: "#059669", color: "#059669" },
                 { tier: "New Saathi", tierBg: "#0EA5E9", color: "#0EA5E9" }
-              ];
-              const defaultPhotos = [
-                "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500&auto=format&fit=crop&q=80",
-                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80",
-                "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=500&auto=format&fit=crop&q=80",
-                "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500&auto=format&fit=crop&q=80"
               ];
               const preset = tierPresets[idx % tierPresets.length];
               const creditHours = Math.round(Number(saathi.totalCreditHours || 0) * 10) / 10;
@@ -487,7 +481,7 @@ const SaathiPage = () => {
                 themeColor = "#0EA5E9";
               }
 
-              const photoSrc = saathi.profilePhoto || defaultPhotos[idx % defaultPhotos.length];
+              const photoSrc = saathi.profilePhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(saathi.name || 'S')}&background=${tierBg.replace('#', '')}&color=FFFFFF&size=500&bold=true`;
 
               return (
                 <div key={idx} className="saathi-card">

@@ -1,31 +1,5 @@
 import React, { useState, useEffect } from "react";
-
-const testimonials = [
-  {
-    name: "Anita Kapoor",
-    role: "Daughter · caring for her 82-year-old mother",
-    location: "New Delhi",
-    tag: "Found a Care Mitra in 2 days",
-    quote: "MaiHoonNa found us a wonderful Care Mitra in just 2 days. She is now like family to my mother. What gave us the most peace of mind was the 24/7 support line — knowing someone is always there, even at 2 AM.",
-    image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=600&h=600",
-  },
-  {
-    name: "Rajesh Menon",
-    role: "Son · caring for his 78-year-old father",
-    location: "Bengaluru",
-    tag: "Matched with Hindi & Malayalam speaker",
-    quote: "Finding a Care Mitra who could speak both Hindi and Malayalam was a blessing. The weekly vitals reports give me real peace of mind since I reside in Chicago. The live Happiness Score is genuine transparency.",
-    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=600&h=600",
-  },
-  {
-    name: "Sunita Sharma",
-    role: "Daughter · caring for her 85-year-old father",
-    location: "Mumbai",
-    tag: "Daily walks & medicine tracking",
-    quote: "My father looks forward to his Saathi visits every Tuesday and Friday. From medicine tracking to daily walks, the Care Mitra manages everything professionally. It feels like having a second family member in India.",
-    image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=600&h=600",
-  }
-];
+import { API_BASE } from "../../services/api";
 
 /**
  * TestimonialsSection Component - Interactive carousel of family testimonials
@@ -33,14 +7,38 @@ const testimonials = [
 const TestimonialsSection = () => {
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+  const [testimonials, setTestimonials] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (isHovered) return;
+    const fetchContent = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/website/content/home`);
+        const data = await res.json();
+
+        if (data.success && data.data.content?.testimonials) {
+          setTestimonials(data.data.content.testimonials);
+        }
+      } catch (err) {
+        console.error("Failed to fetch testimonials", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchContent();
+  }, []);
+
+  useEffect(() => {
+    if (isHovered || testimonials.length <= 1) return;
     const timer = setInterval(() => {
       setActiveTestimonial((prev) => (prev === testimonials.length - 1 ? 0 : prev + 1));
     }, 5000);
     return () => clearInterval(timer);
-  }, [isHovered]);
+  }, [isHovered, testimonials.length]);
+
+  if (loading || testimonials.length === 0) {
+    return null;
+  }
 
   return (
     <section className="testimonial">

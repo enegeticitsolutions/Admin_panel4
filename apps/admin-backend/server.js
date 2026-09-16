@@ -117,6 +117,7 @@ app.use('/api/location', staffOnly, require('./routes/location'));
 app.use('/api/regions', adminsOnly, require('./routes/regions'));
 app.use('/api/config', mastersOnly, require('./routes/config'));
 app.use('/api/saathi-guide', adminsOnly, require('./routes/saathi-guide'));
+app.use('/api/website-content', adminsOnly, require('./routes/website-content'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/invoices', staffOnly, require('./modules/invoices/invoice.routes'));
 

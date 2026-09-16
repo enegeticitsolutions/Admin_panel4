@@ -83,6 +83,35 @@ router.get('/content/sathi', async (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/website/content/home
+ * Returns dynamic CMS content for the Home page, including testimonials.
+ */
+router.get('/content/home', async (_req: Request, res: Response) => {
+  try {
+    const content = await (prisma as any).websiteContent.findUnique({
+      where: { pageKey: 'home_page' },
+    });
+
+    if (!content) {
+      return res.status(404).json({ success: false, message: 'Home page content not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        content: content.content,
+      },
+    });
+  } catch (error: any) {
+    console.error('❌ [Website Home Content Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching home page content.',
+    });
+  }
+});
+
+/**
  * GET /api/website/content/legal
  * Returns all active legal policies ordered by sortOrder
  */

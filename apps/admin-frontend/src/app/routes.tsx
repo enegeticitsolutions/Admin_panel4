@@ -33,6 +33,7 @@ import BenefitsPage from './pages/BenefitsPage';
 import AddonsPage from './pages/AddonsPage';
 import RegionsPage from './pages/RegionsPage';
 import ConfigurationPage from './pages/ConfigurationPage';
+import WebsiteContentPage from './pages/WebsiteContentPage';
 
 import CouponsPage from './pages/CouponsPage';
 import SubscriberProfilePage from './pages/SubscriberProfilePage';
@@ -247,6 +248,10 @@ export const router = createBrowserRouter([
       {
         path: 'config',
         Component: ConfigurationPage,
+      },
+      {
+        path: 'website-content',
+        Component: WebsiteContentPage,
       },
     ],
   },
