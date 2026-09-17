@@ -255,7 +255,7 @@ const App = () => {
           openForm={openForm}
         />
 
-        <ErrorBoundary>
+        <ErrorBoundary key={activePage}>
           {activePage === "home" ? (
             <HomePage openForm={openForm} />
           /* ) : activePage === "auth" ? (

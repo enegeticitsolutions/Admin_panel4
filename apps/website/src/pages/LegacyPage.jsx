@@ -179,20 +179,6 @@ const DOMAINS = [
   "Other (please specify)",
 ];
 
-const POPULAR_DOMAINS = [
-  "All",
-  "General Management / Leadership",
-  "Corporate Law",
-  "Chartered Accountancy / Auditing",
-  "Information Technology / Software",
-  "Civil Services (IAS/IPS/IFS etc.)",
-  "Operations & Supply Chain",
-  "Strategy & Consulting",
-  "Banking",
-  "Medicine (Doctor/Physician)",
-  "Defence Services (Army/Navy/Air Force)",
-];
-
 const FAQ_ITEMS = [
   {
     question: "What is Legacy Circle?",
@@ -226,7 +212,7 @@ const FAQ_ITEMS = [
   },
 ];
 
-const LegacyPage = ({ openForm, setActivePage }) => {
+const LegacyPage = ({ openForm }) => {
   // Directory Filters State
   const [selectedDomain, setSelectedDomain] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -284,6 +270,10 @@ const LegacyPage = ({ openForm, setActivePage }) => {
   };
 
   const handleOpenJoinModal = () => {
+    if (typeof openForm === "function") {
+      openForm();
+      return;
+    }
     setSelectedExpert(null);
     setActiveModal("join");
     setFormSubmitted(false);

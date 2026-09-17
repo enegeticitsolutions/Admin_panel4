@@ -19,7 +19,14 @@ class ErrorBoundary extends React.Component {
       return (
         <div style={{ padding: "80px 24px", textAlign: "center", minHeight: "50vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           <h2 style={{ fontSize: "24px", fontWeight: "800", color: "#14110f", marginBottom: "12px" }}>Something went wrong.</h2>
-          <p style={{ color: "#6f6a66", marginBottom: "24px", maxWidth: "480px" }}>An unexpected error occurred while loading this section.</p>
+          <p style={{ color: "#6f6a66", marginBottom: "16px", maxWidth: "600px" }}>
+            {this.state.error?.message || "An unexpected error occurred while loading this section."}
+          </p>
+          {this.state.error?.stack && (
+            <pre style={{ textAlign: "left", background: "#f5f5f5", padding: "16px", borderRadius: "8px", maxWidth: "800px", overflowX: "auto", fontSize: "12px", color: "#e11d48", marginBottom: "20px" }}>
+              {this.state.error.stack}
+            </pre>
+          )}
           <button
             onClick={() => {
               this.setState({ hasError: false, error: null });
