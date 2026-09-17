@@ -26,12 +26,21 @@ class S3Storage extends StorageService {
     this.bucketName = process.env.STORAGE_BUCKET || 'maihoonna-media-staging';
 
     const region = process.env.AWS_REGION || 'ap-south-1';
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID ? process.env.AWS_ACCESS_KEY_ID.trim() : '';
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY ? process.env.AWS_SECRET_ACCESS_KEY.trim() : '';
 
     const clientConfig = { region };
     if (accessKeyId && secretAccessKey) {
       clientConfig.credentials = { accessKeyId, secretAccessKey };
+      console.log('[Storage] S3 credentials: using explicit AWS_ACCESS_KEY_ID from environment.');
+    } else {
+      // On EC2/Ubuntu with IAM instance profile or ECS Task Role this is fine.
+      // On a plain Ubuntu server WITHOUT an instance profile, uploads WILL fail.
+      console.warn(
+        '[Storage] AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY not set in environment. ' +
+        'Relying on IAM instance profile / ECS task role / ~/.aws/credentials. ' +
+        'If this is a plain Ubuntu server (not EC2/ECS), set explicit credentials in .env or run: aws configure'
+      );
     }
 
     this.s3Client = new S3Client(clientConfig);
@@ -40,15 +49,42 @@ class S3Storage extends StorageService {
   }
 
   async upload(fileBuffer, path, mimeType) {
-    await this.s3Client.send(new PutObjectCommand({
-      Bucket: this.bucketName,
-      Key: path,
-      Body: fileBuffer,
-      ContentType: mimeType,
-      // Bucket is private — access via presigned URLs only
-    }));
+    try {
+      await this.s3Client.send(new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: path,
+        Body: fileBuffer,
+        ContentType: mimeType,
+        // Bucket is private — access via presigned URLs only
+      }));
 
-    return { path, url: path };
+      return { path, url: path };
+    } catch (error) {
+      // Surface a clear error message for common S3 failure modes
+      const name = error.name || error.Code || '';
+      if (name === 'CredentialsProviderError' || name === 'NoCredentialProviders') {
+        throw new Error(
+          `[S3] AWS credentials not found. On a plain Ubuntu server set AWS_ACCESS_KEY_ID and ` +
+          `AWS_SECRET_ACCESS_KEY in your .env file, or attach an IAM instance profile to the EC2 instance. ` +
+          `Original: ${error.message}`
+        );
+      }
+      if (name === 'AccessDenied' || name === 'InvalidAccessKeyId' || name === 'SignatureDoesNotMatch') {
+        throw new Error(
+          `[S3] Access Denied to bucket "${this.bucketName}". ` +
+          `Check that the IAM user/role has s3:PutObject permission on this bucket. ` +
+          `Original: ${error.message}`
+        );
+      }
+      if (name === 'NoSuchBucket') {
+        throw new Error(
+          `[S3] Bucket "${this.bucketName}" does not exist in region "${this.region}". ` +
+          `Check STORAGE_BUCKET in your .env. Original: ${error.message}`
+        );
+      }
+      // Re-throw with bucket context for all other errors
+      throw new Error(`[S3] Upload failed for key "${path}" in bucket "${this.bucketName}": ${error.message}`);
+    }
   }
 
   async delete(path) {
