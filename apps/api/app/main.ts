@@ -1,4 +1,4 @@
-import 'express-async-errors';
+// import 'express-async-errors'; (Express 5 natively supports async error handling)
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
