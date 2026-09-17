@@ -9958,56 +9958,6 @@ a {
   background: #e05b00;
 }
 
-/* Category Filter Tags */
-.legacy-domain-tags {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 36px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-}
-
-.legacy-domain-label {
-  font-size: 12px;
-  font-weight: 800;
-  color: #8c8c8c;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-
-.legacy-domain-scroll {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-}
-
-.legacy-domain-pill {
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid #e5dfd6;
-  background: #ffffff;
-  color: #55504a;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-}
-
-.legacy-domain-pill:hover {
-  border-color: #fe6700;
-  color: #fe6700;
-}
-
-.legacy-domain-pill.active {
-  background: #14110f;
-  border-color: #14110f;
-  color: #ffffff;
-}
-
 /* Expert Cards Grid */
 .legacy-cards-grid {
   display: grid;
@@ -10272,48 +10222,6 @@ a {
 .mhn-expert-card__btn:hover .mhn-expert-card__btn-arrow {
   transform: translateX(3px);
   stroke: #FFFFFF;
-}
-
-.legacy-card__stats {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.legacy-rating {
-  font-weight: 800;
-  color: #fe6700;
-}
-
-.legacy-reviews {
-  color: #6f6a66;
-}
-
-.legacy-sessions {
-  color: #8c8c8c;
-  margin-left: auto;
-  font-weight: 600;
-}
-
-.legacy-card__action-btn {
-  width: 100%;
-  padding: 10px 16px;
-  background: #fff0e7;
-  color: #fe6700;
-  border: 1px solid rgba(254, 103, 0, 0.3);
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.legacy-card__action-btn:hover {
-  background: #fe6700;
-  color: #ffffff;
-  border-color: #fe6700;
-  box-shadow: 0 4px 12px rgba(254, 103, 0, 0.25);
 }
 
 .legacy-empty-state {
