@@ -258,6 +258,55 @@ const SEO_CONFIG = {
     ]
   },
 
+  legacy: {
+    title: "Legacy Circle | Senior Expertise & Advisory Network | MaiHoonNa",
+    description:
+      "Connect with retired senior civil servants, corporate executives, and industry leaders for board advisory, mentorship, and project consulting across India.",
+    keywords:
+      "senior advisory network, retired executive consulting, senior civil servant advisors, startup mentorship, board advisory India, MaiHoonNa legacy",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.com/og-image.jpg",
+    schemas: [
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "serviceType": "Senior Professional Advisory & Mentorship",
+        "provider": {
+          "@type": "Organization",
+          "name": "MaiHoonNa Legacy Circle",
+          "url": "https://maihoonna.com"
+        },
+        "description":
+          "Premier network of retired and veteran senior leaders providing strategic counsel, board guidance, and mentorship to businesses and institutions."
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is Legacy Circle?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text":
+                "Legacy Circle connects accomplished senior professionals, retired civil servants, and veteran corporate leaders with startups, businesses, and institutions seeking seasoned wisdom and strategic counsel."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Who can join as a Senior Expert / Advisor?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text":
+                "We welcome retired or semi-retired senior professionals with 20+ years of domain experience across corporate management, civil services, legal counsel, healthcare, finance, defense, technology, or academia."
+            }
+          }
+        ]
+      }
+    ]
+  },
+
   plans: {
     title: "Senior Care Plans & Pricing | Transparent Elder Care | MaiHoonNa",
     description:
