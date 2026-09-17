@@ -67,6 +67,16 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
         >
           Saathi Network
         </a>
+        <a
+          href="/legacy"
+          className={activePage === "legacy" ? "active" : ""}
+          onClick={(e) => {
+            e.preventDefault();
+            handleNavClick("legacy");
+          }}
+        >
+          Legacy Circle
+        </a>
       </nav>
 
       <div className="topbar__actions">
@@ -159,6 +169,16 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             }}
           >
             🤝 Saathi Network
+          </a>
+          <a
+            href="/legacy"
+            className={activePage === "legacy" ? "active" : ""}
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick("legacy");
+            }}
+          >
+            🌟 Legacy Circle
           </a>
           {/* <a
             href="/plans"

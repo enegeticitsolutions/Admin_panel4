@@ -5,6 +5,7 @@ import WaitlistModal from "./components/modals/WaitlistModal";
 import HomePage from "./pages/HomePage";
 import ServicesPage from "./pages/ServicesPage";
 import SaathiPage from "./pages/SaathiPage";
+import LegacyPage from "./pages/LegacyPage";
 import AboutPage from "./pages/AboutPage";
 import AuthPage from "./pages/AuthPage";
 import AccountPage from "./pages/AccountPage";
@@ -16,6 +17,7 @@ import { fetchSubscriptionPackages, isTokenExpired } from "./services/api";
 import SeoHead from "./components/seo/SeoHead";
 import NotFoundPage from "./pages/NotFoundPage";
 import LegalPage from "./pages/LegalPage";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const ROUTE_ALIASES = {
   about: "story",
@@ -28,6 +30,8 @@ const ROUTE_ALIASES = {
   "child-policy": "child-safety",
   "saathi-terms": "saathi-tc",
   "saathi-tc": "saathi-tc",
+  "legacy-in-action": "legacy",
+  "legacy-circle": "legacy",
 };
 
 const LEGAL_PAGES = [
@@ -43,6 +47,7 @@ const VALID_PAGES = [
   "home",
   "services",
   "saathi",
+  "legacy",
   "account",
   "checkout",
   "story",
@@ -250,35 +255,39 @@ const App = () => {
           openForm={openForm}
         />
 
-        {activePage === "home" ? (
-          <HomePage openForm={openForm} />
-        /* ) : activePage === "auth" ? (
-          <AuthPage onAuthSuccess={handleAuthSuccess} onGoBack={() => setActivePage("home")} /> */
-        ) : activePage === "account" ? (
-          <AccountPage
-            user={user}
-            token={token}
-            onLogout={handleLogout}
-            onNavigateToPlans={() => setActivePage("services")}
-            onGoHome={() => setActivePage("home")}
-          />
-        ) : activePage === "services" ? (
-          <ServicesPage setActivePage={setActivePage} openForm={openForm} />
-        ) : activePage === "saathi" ? (
-          <SaathiPage />
-        ) : activePage === "story" ? (
-          <AboutPage openForm={openForm} setActivePage={setActivePage} />
-        /* ) : activePage === "plans" ? (
-          <PlansPage
-            livePackages={livePackages}
-            onSelectPackage={handleSelectPackageForBuy}
-            openForm={openForm}
-          /> */
-        ) : LEGAL_PAGES.includes(activePage) ? (
-          <LegalPage initialTab={activePage} setActivePage={setActivePage} />
-        ) : (
-          <NotFoundPage setActivePage={setActivePage} />
-        )}
+        <ErrorBoundary>
+          {activePage === "home" ? (
+            <HomePage openForm={openForm} />
+          /* ) : activePage === "auth" ? (
+            <AuthPage onAuthSuccess={handleAuthSuccess} onGoBack={() => setActivePage("home")} /> */
+          ) : activePage === "account" ? (
+            <AccountPage
+              user={user}
+              token={token}
+              onLogout={handleLogout}
+              onNavigateToPlans={() => setActivePage("services")}
+              onGoHome={() => setActivePage("home")}
+            />
+          ) : activePage === "services" ? (
+            <ServicesPage setActivePage={setActivePage} openForm={openForm} />
+          ) : activePage === "saathi" ? (
+            <SaathiPage />
+          ) : activePage === "legacy" ? (
+            <LegacyPage openForm={openForm} setActivePage={setActivePage} />
+          ) : activePage === "story" ? (
+            <AboutPage openForm={openForm} setActivePage={setActivePage} />
+          /* ) : activePage === "plans" ? (
+            <PlansPage
+              livePackages={livePackages}
+              onSelectPackage={handleSelectPackageForBuy}
+              openForm={openForm}
+            /> */
+          ) : LEGAL_PAGES.includes(activePage) ? (
+            <LegalPage initialTab={activePage} setActivePage={setActivePage} />
+          ) : (
+            <NotFoundPage setActivePage={setActivePage} />
+          )}
+        </ErrorBoundary>
 
         <Footer setActivePage={setActivePage} />
 
