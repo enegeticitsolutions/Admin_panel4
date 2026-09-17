@@ -53,6 +53,7 @@ import EmergencyRadarPage from './pages/EmergencyRadarPage';
 import RequestedVisitsPage from './pages/RequestedVisitsPage';
 import CheckoutPage from './pages/CheckoutPage';
 import RouteErrorBoundary from './components/common/RouteErrorBoundary';
+import LegacyCirclePage from './pages/LegacyCirclePage';
 
 export const router = createBrowserRouter([
   {
@@ -252,6 +253,10 @@ export const router = createBrowserRouter([
       {
         path: 'website-content',
         Component: WebsiteContentPage,
+      },
+      {
+        path: 'legacy-circle',
+        Component: LegacyCirclePage,
       },
     ],
   },

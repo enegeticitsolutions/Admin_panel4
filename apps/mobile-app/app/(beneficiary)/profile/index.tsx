@@ -251,7 +251,15 @@ export default function ProfileScreen() {
                                     size: 90,
                                     editable: true,
                                     initials: profile.name ? profile.name.charAt(0).toUpperCase() : 'B',
-                                    onSuccess: (url) => setProfile(prev => ({ ...prev, profilePhoto: url }))
+                                    onSuccess: async (url) => {
+                                        setProfile(prev => ({ ...prev, profilePhoto: url }));
+                                        const userDataStr = await AsyncStorage.getItem('userData');
+                                        if (userDataStr) {
+                                            const userData = JSON.parse(userDataStr);
+                                            userData.photo = url;
+                                            await AsyncStorage.setItem('userData', JSON.stringify(userData));
+                                        }
+                                    }
                                 }}
                             />
                         </View>

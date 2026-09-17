@@ -308,6 +308,7 @@ model Beneficiary {
   sathiVisitRequests   SathiVisitRequest[]
   invoices             Invoice[]                @relation("BeneficiaryInvoices")
   volunteerReviews     VolunteerReview[]
+  legacyCircleProfile  LegacyCircleProfile?
 
   @@index([name])
   @@index([city])
@@ -1816,6 +1817,26 @@ model ActivityLog {
   @@index([userId])
   @@index([type])
   @@map("activity_logs")
+}
+
+model LegacyCircleProfile {
+  id              String      @id @default(uuid())
+  beneficiaryId   String      @unique
+  title           String
+  yearsOfExperience String
+  headline        String      @db.VarChar(500)
+  industry        String
+  email           String
+  agreedToTerms   Boolean     @default(false)
+  status          String      @default("pending") // "pending", "approved", "rejected"
+  connectRequests Int         @default(0)
+  profileStrength Int         @default(100)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  beneficiary     Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+
+  @@map("legacy_circle_profiles")
 }
 
 model Hobby {
