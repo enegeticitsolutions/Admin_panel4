@@ -34,6 +34,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
@@ -217,43 +218,60 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
         mimeType = 'image/jpeg';
       }
 
-      const formData = new FormData();
+      let data: any;
 
       if (Platform.OS === 'web') {
-        // On web: fetch the blob from the data/blob URI — the only way browser fetch understands it
+        const formData = new FormData();
         const blobResponse = await fetch(asset.uri);
         const blob = await blobResponse.blob();
         formData.append('file', blob, fileName);
+        
+        formData.append('targetType', targetType);
+        if (targetType === 'beneficiary' && targetId) {
+          formData.append('targetId', targetId);
+        }
+
+        const response = await fetch(`${API_URL}/profile-photo/upload`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        const responseText = await response.text();
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseErr) {
+          console.error('[profile photo upload debug] Raw response not JSON:', responseText);
+          throw new Error(`Server returned invalid response (Status ${response.status || 'unknown'}).`);
+        }
       } else {
-        // On iOS/Android: use React Native's native FormData URI format
-        formData.append('file', {
-          uri: asset.uri,
-          name: fileName,
-          type: mimeType,
-        } as any);
-      }
+        // Native platforms: Use FileSystem.uploadAsync to prevent Android binary corruption
+        const uploadTask = await FileSystem.uploadAsync(
+          `${API_URL}/profile-photo/upload`,
+          asset.uri,
+          {
+            httpMethod: 'POST',
+            uploadType: 1, // FileSystem.FileSystemUploadType.MULTIPART
+            fieldName: 'file',
+            mimeType: mimeType,
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            parameters: {
+              targetType,
+              ...(targetType === 'beneficiary' && targetId ? { targetId } : {})
+            }
+          }
+        );
 
-      formData.append('targetType', targetType);
-      if (targetType === 'beneficiary' && targetId) {
-        formData.append('targetId', targetId);
-      }
-
-      const response = await fetch(`${API_URL}/profile-photo/upload`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          // Do NOT set Content-Type — let fetch set the multipart boundary automatically
-        },
-        body: formData,
-      });
-
-      const responseText = await response.text();
-      let data: any;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseErr) {
-        console.error('[profile photo upload debug] Raw response not JSON:', responseText);
-        throw new Error(`Server returned invalid response (Status ${response.status || 'unknown'}).`);
+        try {
+          data = JSON.parse(uploadTask.body);
+        } catch (parseErr) {
+          console.error('[profile photo upload debug] Raw response not JSON:', uploadTask.body);
+          throw new Error(`Server returned invalid response (Status ${uploadTask.status || 'unknown'}).`);
+        }
       }
 
       if (!data.success) throw new Error(data.message || 'Upload failed');

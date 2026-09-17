@@ -1967,6 +1967,47 @@ export interface BeneficiaryVitalConfigItem {
   selectedBySubscriber: boolean;
 }
 
+// ============================================================================
+// LEGACY CIRCLE APPROVAL API
+// ============================================================================
 
+export interface LegacyCircleRequest {
+  id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  title: string;
+  headline: string;
+  industry: string;
+  yearsOfExperience: string;
+  email: string;
+  connectRequests: number;
+  profileStrength: number;
+  createdAt: string;
+  updatedAt: string;
+  // Beneficiary info
+  beneficiaryId: string;
+  name: string;
+  age: number;
+  dateOfBirth: string | null;
+  gender: string;
+  address: string;
+  city: string | null;
+  state: string | null;
+  pincode: string | null;
+  photo: string | null;
+}
 
+export const legacyCircleApi = {
+  async getPending(): Promise<LegacyCircleRequest[]> {
+    return apiJson<LegacyCircleRequest[]>('/legacy-circle?status=pending');
+  },
 
+  async getApproved(): Promise<LegacyCircleRequest[]> {
+    return apiJson<LegacyCircleRequest[]>('/legacy-circle?status=approved');
+  },
+
+  async approve(id: string): Promise<LegacyCircleRequest> {
+    return apiJson<LegacyCircleRequest>(`/legacy-circle/${id}/approve`, {
+      method: 'PATCH',
+    });
+  },
+};

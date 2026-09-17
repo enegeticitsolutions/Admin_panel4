@@ -40,6 +40,7 @@ export default function SathiProfile() {
   const [profile, setProfile] = useState<any>(null);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [accountDeletedModalVisible, setAccountDeletedModalVisible] = useState(false);
   const [supportModalVisible, setSupportModalVisible] = useState(false);
   const [reviewsModalVisible, setReviewsModalVisible] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -216,22 +217,16 @@ export default function SathiProfile() {
     setDeleteModalVisible(false);
     const success = await deleteSathiAccount();
     if (success) {
-      Alert.alert(
-        'Account Deleted',
-        'Your account has been deleted successfully.\n\nTo reactivate in the future, please contact the Saathi coordinator on aastha@maihoonna.com',
-        [
-          {
-            text: 'OK',
-            onPress: async () => {
-              await logout();
-              router.replace('/(auth)');
-            },
-          },
-        ]
-      );
+      setAccountDeletedModalVisible(true);
     } else {
       Alert.alert('Error', 'Failed to delete account. Please try again later.');
     }
+  };
+
+  const handleAccountDeletedOk = async () => {
+    setAccountDeletedModalVisible(false);
+    await logout();
+    router.replace('/(auth)');
   };
 
   const handleOpenSupport = () => {
@@ -509,6 +504,31 @@ export default function SathiProfile() {
                 onPress={confirmDeleteAccount}
               >
                 <Text style={[styles.modalLogoutBtnText, { color: '#FFFFFF' }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Account Deleted Success Modal */}
+      <Modal visible={accountDeletedModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="checkmark-circle" size={28} color="#10B981" />
+              <Text style={styles.modalTitle}>Account Deleted</Text>
+            </View>
+            <Text style={styles.modalMessage}>
+              Your account has been deleted successfully.
+              {'\n\n'}
+              To reactivate in the future, please contact the Saathi coordinator on aastha@maihoonna.com
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={[styles.modalLogoutBtn, { backgroundColor: '#10B981', width: '100%', alignItems: 'center' }]} 
+                onPress={handleAccountDeletedOk}
+              >
+                <Text style={[styles.modalLogoutBtnText, { color: '#FFFFFF' }]}>OK</Text>
               </TouchableOpacity>
             </View>
           </View>

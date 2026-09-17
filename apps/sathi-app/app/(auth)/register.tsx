@@ -12,6 +12,7 @@ import {
   ScrollView,
   Dimensions,
   Linking,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,6 +44,9 @@ export default function RegisterVolunteerScreen() {
     whyJoin: '',
   });
 
+  const [errorMessage, setErrorMessage] = useState('');
+  const [deletedAccountModalVisible, setDeletedAccountModalVisible] = useState(false);
+  const [deletedAccountMsg, setDeletedAccountMsg] = useState('');
   const [address, setAddress] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [customInterest, setCustomInterest] = useState('');
@@ -123,20 +127,8 @@ export default function RegisterVolunteerScreen() {
   };
 
   const showDeletedAccountAlert = (customMsg?: string) => {
-    Alert.alert(
-      'Account Deleted',
-      customMsg ||
-        'This account has been deleted.\n\nTo reactivate, please contact the Saathi coordinator on aastha@maihoonna.com',
-      [
-        {
-          text: 'Contact Coordinator',
-          onPress: () => {
-            Linking.openURL('mailto:aastha@maihoonna.com?subject=Reactivate%20Saathi%20Account');
-          },
-        },
-        { text: 'OK', style: 'cancel' },
-      ]
-    );
+    setDeletedAccountMsg(customMsg || 'This account has been deleted.\n\nTo reactivate, please contact the Saathi coordinator on aastha@maihoonna.com');
+    setDeletedAccountModalVisible(true);
   };
 
   const handleVerifyOtp = async () => {
@@ -394,6 +386,37 @@ export default function RegisterVolunteerScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal visible={deletedAccountModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={28} color="#EF4444" />
+              <Text style={styles.modalTitle}>Account Deleted</Text>
+            </View>
+            <Text style={styles.modalMessage}>
+              {deletedAccountMsg}
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.modalCancelBtn} 
+                onPress={() => setDeletedAccountModalVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.modalContactBtn} 
+                onPress={() => {
+                  setDeletedAccountModalVisible(false);
+                  Linking.openURL('mailto:aastha@maihoonna.com?subject=Reactivate%20Saathi%20Account');
+                }}
+              >
+                <Text style={styles.modalContactBtnText}>Contact Coordinator</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -610,6 +633,67 @@ const styles = StyleSheet.create({
   },
   resendTextDisabled: {
     color: '#9CA3AF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: width * 0.85,
+    backgroundColor: '#FFFFFF',
+    borderRadius: scale(20),
+    padding: scale(24),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: scale(12),
+    gap: scale(10),
+  },
+  modalTitle: {
+    fontSize: scale(20),
+    fontWeight: '700',
+    color: '#111827',
+  },
+  modalMessage: {
+    fontSize: scale(15),
+    color: '#4B5563',
+    lineHeight: scale(22),
+    marginBottom: scale(24),
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: scale(12),
+  },
+  modalCancelBtn: {
+    paddingVertical: scale(10),
+    paddingHorizontal: scale(16),
+    borderRadius: scale(10),
+    backgroundColor: '#F3F4F6',
+  },
+  modalCancelText: {
+    fontSize: scale(15),
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  modalContactBtn: {
+    paddingVertical: scale(10),
+    paddingHorizontal: scale(20),
+    borderRadius: scale(10),
+    backgroundColor: '#FEF2F2',
+  },
+  modalContactBtnText: {
+    fontSize: scale(15),
+    fontWeight: '700',
+    color: '#EF4444',
   },
   loginLink: {
     marginTop: scale(20),

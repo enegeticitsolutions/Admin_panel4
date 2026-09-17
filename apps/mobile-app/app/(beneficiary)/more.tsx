@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Image, useWindowDimensions, Alert, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
     Feather, MaterialCommunityIcons,
     FontAwesome5, Ionicons, AntDesign
@@ -12,6 +12,7 @@ import { API_URL } from '@/constants/api';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
+import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -38,15 +39,18 @@ export default function MoreOptionsScreen() {
     const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
 
     const [profileName, setProfileName] = useState('Margaret Williams');
+    const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
     const safeBack = useSafeBack();
     const logoutWithConfirm = useLogoutWithConfirm();
     const deleteAccountWithConfirm = useDeleteAccountWithConfirm();
     const { availableRoles, isSwitchingRole, switchRole } = useAuth();
     const isDualRole = availableRoles.includes('subscriber') && availableRoles.includes('beneficiary');
 
-    useEffect(() => {
-        loadProfileName();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            loadProfileName();
+        }, [])
+    );
 
     const loadProfileName = async () => {
         try {
@@ -55,6 +59,9 @@ export default function MoreOptionsScreen() {
                 const userData = JSON.parse(userDataStr);
                 if (userData.name) {
                     setProfileName(userData.name);
+                }
+                if (userData.photo) {
+                    setProfilePhoto(userData.photo);
                 }
             }
         } catch (e) {
@@ -102,6 +109,12 @@ export default function MoreOptionsScreen() {
             iconBg: '#FDF2F8',
             onPress: () => router.push('/(beneficiary)/sathi-request'),
         },
+        {
+            icon: <MaterialCommunityIcons name="star-circle-outline" size={20} color="#F59E0B" />,
+            label: 'Legacy Circle',
+            iconBg: '#FEF3C7',
+            onPress: () => router.push('/(beneficiary)/legacy-circle'),
+        },
     ];
 
     return (
@@ -123,11 +136,18 @@ export default function MoreOptionsScreen() {
                     onPress={() => router.push('/(beneficiary)/profile')}
                     activeOpacity={0.9}
                 >
-                    <Image
-                        source={require('../../assets/images/group4.png')}
-                        style={styles.profileAvatar}
-                        defaultSource={require('../../assets/images/group4.png')}
-                    />
+                    {profilePhoto ? (
+                        <Image
+                            source={{ uri: sanitizeImageUri(profilePhoto) }}
+                            style={styles.profileAvatar}
+                        />
+                    ) : (
+                        <Image
+                            source={require('../../assets/images/group4.png')}
+                            style={styles.profileAvatar}
+                            defaultSource={require('../../assets/images/group4.png')}
+                        />
+                    )}
                     <View style={styles.profileTextWrap}>
                         <Text style={styles.profileName}>{profileName}</Text>
                         <Text style={styles.profileSubtitle}>View & edit profile</Text>
