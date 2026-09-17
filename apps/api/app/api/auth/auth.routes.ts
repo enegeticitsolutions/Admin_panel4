@@ -8,6 +8,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { ApiResponse } from '../../utils/ApiResponse';
 
 import { isBypassPhone } from '../../core/otp/otp_bypass';
+import { verifyTurnstileToken } from '../../core/turnstile';
 
 const router = Router();
 
@@ -47,7 +48,12 @@ const loginLimiter = rateLimit({
 
 
 router.post('/send-otp', otpLimiter as unknown as RequestHandler, validate(sendOtpSchema), asyncHandler(async (req: Request, res: Response) => {
-  const result = await authService.sendOtp(req.body.phone);
+  const { phone, turnstileToken } = req.body;
+  if (turnstileToken || process.env.REQUIRE_TURNSTILE === 'true') {
+    const clientIp = ((req.headers['x-forwarded-for'] as string) || '').split(',')[0].trim() || req.ip;
+    await verifyTurnstileToken(turnstileToken, clientIp);
+  }
+  const result = await authService.sendOtp(phone);
   res.json(new ApiResponse(200, result, 'OTP sent successfully'));
 }));
 
@@ -80,7 +86,11 @@ router.post('/register-otp', loginLimiter as unknown as RequestHandler, asyncHan
 }));
 
 router.post('/login-password', loginLimiter as unknown as RequestHandler, validate(loginPasswordSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { phone, password } = req.body;
+  const { phone, password, turnstileToken } = req.body;
+  if (turnstileToken || process.env.REQUIRE_TURNSTILE === 'true') {
+    const clientIp = ((req.headers['x-forwarded-for'] as string) || '').split(',')[0].trim() || req.ip;
+    await verifyTurnstileToken(turnstileToken, clientIp);
+  }
   const result = await authService.loginWithPassword(phone, password);
   res.json(new ApiResponse(200, result, 'Login successful'));
 }));

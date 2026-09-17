@@ -2,6 +2,7 @@ import Joi from 'joi';
 
 export const sendOtpSchema = Joi.object({
   phone: Joi.string().required(),
+  turnstileToken: Joi.string().allow(null, '').optional(),
 });
 
 export const verifyOtpSchema = Joi.object({
@@ -25,9 +26,11 @@ export const registerPasswordSchema = Joi.object({
   location: Joi.string().allow(null, '').optional(),
   latitude: Joi.number().allow(null).optional(),
   longitude: Joi.number().allow(null).optional(),
+  turnstileToken: Joi.string().allow(null, '').optional(),
 });
 
 export const loginPasswordSchema = Joi.object({
   phone: Joi.string().required(),
   password: Joi.string().required(),
+  turnstileToken: Joi.string().allow(null, '').optional(),
 });

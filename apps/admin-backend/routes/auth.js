@@ -10,6 +10,7 @@ const {
 } = require('../utils/jwt');
 const { comparePassword } = require('../utils/password');
 const { verifyToken } = require('../middleware/auth');
+const { verifyTurnstileToken } = require('../utils/turnstile');
 
 const router = express.Router();
 
@@ -20,7 +21,11 @@ const router = express.Router();
 router.post(
   '/login',
   asyncHandler(async (req, res) => {
-    const { phone, password } = req.body;
+    const { phone, password, turnstileToken } = req.body;
+
+    // Verify Cloudflare Turnstile captcha before checking credentials
+    const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip;
+    await verifyTurnstileToken(turnstileToken, clientIp);
 
     if (!phone || !password) {
       throw new ApiError(400, 'Phone number and password are required');

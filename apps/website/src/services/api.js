@@ -89,11 +89,11 @@ const secureFetch = async (url, options = {}) => {
  * 1. Send OTP to user phone
  * Endpoint: POST /api/auth/send-otp
  */
-export const sendOtp = async (phoneRaw) => {
+export const sendOtp = async (phoneRaw, turnstileToken) => {
   const phone = formatPhone(phoneRaw, false); // "919999999999"
   const response = await secureFetch(`${API_BASE}/auth/send-otp`, {
     method: 'POST',
-    body: JSON.stringify({ phone }),
+    body: JSON.stringify({ phone, ...(turnstileToken ? { turnstileToken } : {}) }),
   });
   const data = await response.json();
   if (!response.ok || !data.success) {
@@ -159,11 +159,11 @@ export const registerUser = registerWithOtp;
  * 4. Login with phone & password
  * Endpoint: POST /api/auth/login-password
  */
-export const loginWithPassword = async ({ phoneRaw, password }) => {
+export const loginWithPassword = async ({ phoneRaw, password, turnstileToken }) => {
   const phone = formatPhone(phoneRaw, true); // "+919999999999"
   const response = await secureFetch(`${API_BASE}/auth/login-password`, {
     method: 'POST',
-    body: JSON.stringify({ phone, password }),
+    body: JSON.stringify({ phone, password, ...(turnstileToken ? { turnstileToken } : {}) }),
   });
   const data = await response.json();
   if (!response.ok || !data.success) {

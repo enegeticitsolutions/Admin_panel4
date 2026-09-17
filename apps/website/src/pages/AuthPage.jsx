@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { sendOtp, verifyOtp, registerWithOtp } from "../services/api";
 import logo from "../assets/logo.svg";
 import { LEGAL_CONFIG } from "../constants/legal";
+import { ShieldCheck } from "lucide-react";
+import TurnstileWidget from "../components/TurnstileWidget";
 
 export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN" }) {
   // mode: 'LOGIN' | 'REGISTER'
@@ -21,6 +23,14 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
   const [location, setLocation] = useState("");
   const [consentGiven, setConsentGiven] = useState(false);
   const [dpdpConsent, setDpdpConsent] = useState(false);
+
+  // Cloudflare Turnstile Verification State
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [registerTurnstileToken, setRegisterTurnstileToken] = useState("");
+  const loginTurnstileRef = useRef(null);
+  const registerTurnstileRef = useRef(null);
+
+  const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
   // 6-digit OTP state
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -52,6 +62,10 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
     setInfoMessage("");
     setMode(newMode);
     setOtp(["", "", "", "", "", ""]);
+    setTurnstileToken("");
+    setRegisterTurnstileToken("");
+    loginTurnstileRef.current?.reset();
+    registerTurnstileRef.current?.reset();
     if (newMode === "LOGIN") {
       setLoginStep("PHONE");
     } else {
@@ -104,15 +118,22 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
       return;
     }
 
+    if (turnstileSiteKey && !turnstileToken) {
+      setError("Please complete the human security verification below before requesting OTP.");
+      return;
+    }
+
     setLoading(true);
     try {
-      await sendOtp(cleanPhone);
+      await sendOtp(cleanPhone, turnstileToken);
       setInfoMessage(`We've sent a 6-digit verification code to +91 ${cleanPhone}`);
       setLoginStep("OTP");
       setResendTimer(60);
       setOtp(["", "", "", "", "", ""]);
     } catch (err) {
       setError(err.message || "Failed to send OTP. Please try again.");
+      setTurnstileToken("");
+      loginTurnstileRef.current?.reset();
     } finally {
       setLoading(false);
     }
@@ -178,15 +199,22 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
       return;
     }
 
+    if (turnstileSiteKey && !registerTurnstileToken) {
+      setError("Please complete the human security verification below before requesting OTP.");
+      return;
+    }
+
     setLoading(true);
     try {
-      await sendOtp(cleanPhone);
+      await sendOtp(cleanPhone, registerTurnstileToken);
       setInfoMessage(`We've sent a 6-digit verification code to +91 ${cleanPhone}`);
       setRegisterStep("OTP");
       setResendTimer(60);
       setOtp(["", "", "", "", "", ""]);
     } catch (err) {
       setError(err.message || "Failed to send verification code. Please check your connection.");
+      setRegisterTurnstileToken("");
+      registerTurnstileRef.current?.reset();
     } finally {
       setLoading(false);
     }
@@ -455,9 +483,40 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                 </div>
               </div>
 
+              {/* Cloudflare Turnstile Human Verification */}
+              {turnstileSiteKey && (
+                <div style={{ margin: "4px 0" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      marginBottom: "4px",
+                      color: "#64748b",
+                      fontSize: "0.8rem",
+                      fontWeight: "600",
+                    }}
+                  >
+                    <ShieldCheck size={16} color="var(--orange, #fe6700)" />
+                    <span>Verify You Are Human</span>
+                  </div>
+                  <TurnstileWidget
+                    ref={loginTurnstileRef}
+                    siteKey={turnstileSiteKey}
+                    onVerify={(token) => setTurnstileToken(token)}
+                    onExpire={() => setTurnstileToken("")}
+                    onError={() => {
+                      setTurnstileToken("");
+                      setError("Security verification challenge failed. Please retry.");
+                    }}
+                  />
+                </div>
+              )}
+
               <button
                 type="submit"
-                disabled={loading || cleanPhoneNumber(phone).length < 10}
+                disabled={loading || cleanPhoneNumber(phone).length < 10 || (Boolean(turnstileSiteKey) && !turnstileToken)}
                 style={{
                   width: "100%",
                   padding: "14px",
@@ -468,8 +527,8 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                   fontSize: "1rem",
                   border: "none",
                   boxShadow: "0 4px 14px rgba(254, 103, 0, 0.35)",
-                  opacity: loading || cleanPhoneNumber(phone).length < 10 ? 0.6 : 1,
-                  cursor: loading || cleanPhoneNumber(phone).length < 10 ? "not-allowed" : "pointer",
+                  opacity: loading || cleanPhoneNumber(phone).length < 10 || (Boolean(turnstileSiteKey) && !turnstileToken) ? 0.6 : 1,
+                  cursor: loading || cleanPhoneNumber(phone).length < 10 || (Boolean(turnstileSiteKey) && !turnstileToken) ? "not-allowed" : "pointer",
                   transition: "all 0.2s",
                 }}
               >
@@ -810,9 +869,40 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                 </label>
               </div>
 
+              {/* Cloudflare Turnstile Human Verification */}
+              {turnstileSiteKey && (
+                <div style={{ margin: "4px 0" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      marginBottom: "4px",
+                      color: "#64748b",
+                      fontSize: "0.8rem",
+                      fontWeight: "600",
+                    }}
+                  >
+                    <ShieldCheck size={16} color="var(--orange, #fe6700)" />
+                    <span>Verify You Are Human</span>
+                  </div>
+                  <TurnstileWidget
+                    ref={registerTurnstileRef}
+                    siteKey={turnstileSiteKey}
+                    onVerify={(token) => setRegisterTurnstileToken(token)}
+                    onExpire={() => setRegisterTurnstileToken("")}
+                    onError={() => {
+                      setRegisterTurnstileToken("");
+                      setError("Security verification challenge failed. Please retry.");
+                    }}
+                  />
+                </div>
+              )}
+
               <button
                 type="submit"
-                disabled={loading || cleanPhoneNumber(phone).length < 10 || !name.trim() || !consentGiven || !dpdpConsent}
+                disabled={loading || cleanPhoneNumber(phone).length < 10 || !name.trim() || !consentGiven || !dpdpConsent || (Boolean(turnstileSiteKey) && !registerTurnstileToken)}
                 style={{
                   width: "100%",
                   padding: "14px",
@@ -823,8 +913,8 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                   fontSize: "1rem",
                   border: "none",
                   boxShadow: "0 4px 14px rgba(254, 103, 0, 0.35)",
-                  opacity: loading || cleanPhoneNumber(phone).length < 10 || !name.trim() || !consentGiven ? 0.6 : 1,
-                  cursor: loading || cleanPhoneNumber(phone).length < 10 || !name.trim() || !consentGiven ? "not-allowed" : "pointer",
+                  opacity: loading || cleanPhoneNumber(phone).length < 10 || !name.trim() || !consentGiven || !dpdpConsent || (Boolean(turnstileSiteKey) && !registerTurnstileToken) ? 0.6 : 1,
+                  cursor: loading || cleanPhoneNumber(phone).length < 10 || !name.trim() || !consentGiven || !dpdpConsent || (Boolean(turnstileSiteKey) && !registerTurnstileToken) ? "not-allowed" : "pointer",
                   marginTop: "2px",
                   transition: "all 0.2s",
                 }}

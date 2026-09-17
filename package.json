@@ -24,6 +24,7 @@
     "build:packages": "npm run build --workspaces --if-present",
     "seed:config": "npm run seed:config --workspace=@maihoonna/database",
     "seed:sathi-guide": "npm run seed:sathi-guide --workspace=@maihoonna/database",
+    "seed:benefit-types": "npm run seed:benefit-types --workspace=@maihoonna/database",
     "seed:all": "npm run seed:config && npm run seed:sathi-guide"
   },
   "dependencies": {

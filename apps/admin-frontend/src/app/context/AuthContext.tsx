@@ -10,7 +10,7 @@ import { authApi } from '../../services/api';
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (phone: string, password: string) => Promise<void>;
+  login: (phone: string, password: string, turnstileToken?: string) => Promise<void>;
   biometricLogin: (userId: string) => Promise<void>;
   logout: () => void;
   hasAccess: (requiredRole?: UserRole[]) => boolean;
@@ -37,9 +37,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = async (phone: string, password: string) => {
+  const login = async (phone: string, password: string, turnstileToken?: string) => {
     try {
-      const authResponse = await authApi.login(phone, password);
+      const authResponse = await authApi.login(phone, password, turnstileToken);
       // authResponse = { user, accessToken, refreshToken }
       setUser(authResponse.user);
       setIsAuthenticated(true);

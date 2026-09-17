@@ -197,7 +197,9 @@ We enforce strict **resource-level isolation** — staging and production enviro
   "CORS_ORIGIN": "https://staging.maihoonna.in,https://admin-staging.maihoonna.com",
 
   "PUBSUB_DRIVER": "redis",
-  "ENABLE_PUBSUB_WORKER": "true"
+  "ENABLE_PUBSUB_WORKER": "true",
+
+  "TURNSTILE_SECRET_KEY": "[STAGING_TURNSTILE_SECRET_KEY]"
 }
 ```
 
@@ -213,6 +215,7 @@ We enforce strict **resource-level isolation** — staging and production enviro
 - `CORS_ORIGIN` → `https://maihoonna.in,https://admin.maihoonna.com`
 - `FRONTEND_URL` → `https://maihoonna.in`
 - `GOOGLE_MAPS_API_KEY` → Production IP-restricted Maps key
+- `TURNSTILE_SECRET_KEY` → `[PROD_TURNSTILE_SECRET_KEY]` (Preprod: `[PREPROD_TURNSTILE_SECRET_KEY]`)
 
 ### 3.4 Creating Secrets via AWS CLI
 ```bash
@@ -810,6 +813,22 @@ aws s3 sync dist/assets/ s3://mhn-website-staging/assets/ --cache-control "max-a
 aws cloudfront create-invalidation \
   --distribution-id $STAGING_WEBSITE_CF_ID \
   --paths "/*"
+
+# Build apps/admin-frontend for staging
+cd apps/admin-frontend
+VITE_API_BASE=https://admin-api-staging.maihoonna.com/api \
+VITE_TURNSTILE_SITE_KEY=[STAGING_TURNSTILE_SITE_KEY] \
+npm run build
+
+# Build apps/admin-frontend for preprod
+# VITE_API_BASE=https://admin-api-preprod.maihoonna.com/api \
+# VITE_TURNSTILE_SITE_KEY=[PREPROD_TURNSTILE_SITE_KEY] \
+# npm run build
+
+# Build apps/admin-frontend for production
+# VITE_API_BASE=https://admin-api.maihoonna.com/api \
+# VITE_TURNSTILE_SITE_KEY=[PROD_TURNSTILE_SITE_KEY] \
+# npm run build
 ```
 
 > The `--cache-control` split strategy busts the HTML cache on every deploy while keeping asset files (JS/CSS with hash names) cached for 1 year — maximizing performance.

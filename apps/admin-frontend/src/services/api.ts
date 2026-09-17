@@ -91,16 +91,17 @@ export const apiJson = async <T>(path: string, options: RequestInit = {}): Promi
 
 export const authApi = {
   /**
-   * Login with phone and OTP
+   * Login with phone and password
    * @param phone - User's phone number
-   * @param otp - One-time password
+   * @param password - User's password
+   * @param turnstileToken - Optional Cloudflare Turnstile verification token
    * @returns User object if credentials are valid
    */
-  async login(phone: string, password: string): Promise<any> {
+  async login(phone: string, password: string, turnstileToken?: string): Promise<any> {
     const response = await window.fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, password })
+      body: JSON.stringify({ phone, password, turnstileToken })
     });
     const result = await response.json();
     if (!result.success) throw new Error(result.message || 'Invalid credentials');
