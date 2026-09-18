@@ -27,6 +27,11 @@ interface EntityAvatarProps {
 
 export function EntityAvatar({ name, photoUrl, type, className, style }: EntityAvatarProps) {
   const [isViewerOpen, setIsViewerOpen] = useState(false);
+  const [hasError, setHasError] = useState(false);
+
+  React.useEffect(() => {
+    setHasError(false);
+  }, [photoUrl]);
 
   const getBackgroundColor = (type: EntityType) => {
     switch (type) {
@@ -48,17 +53,22 @@ export function EntityAvatar({ name, photoUrl, type, className, style }: EntityA
   return (
     <>
       <div 
-        onClick={() => photoUrl && setIsViewerOpen(true)}
+        onClick={() => photoUrl && !hasError && setIsViewerOpen(true)}
         className={cn(
           "rounded-2xl flex items-center justify-center font-bold overflow-hidden shrink-0",
-          photoUrl ? "cursor-pointer" : "cursor-default",
+          photoUrl && !hasError ? "cursor-pointer" : "cursor-default",
           getBackgroundColor(type),
           className
         )}
         style={style}
       >
-        {photoUrl ? (
-          <img src={sanitizeImgSrc(photoUrl)} alt={name || 'Avatar'} className="w-full h-full object-cover" />
+        {photoUrl && !hasError ? (
+          <img 
+            src={sanitizeImgSrc(photoUrl)} 
+            alt={name || 'Avatar'} 
+            onError={() => setHasError(true)}
+            className="w-full h-full object-cover" 
+          />
         ) : (
           <span>{initials}</span>
         )}

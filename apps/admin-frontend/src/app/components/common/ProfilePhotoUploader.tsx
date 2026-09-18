@@ -101,6 +101,7 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
   } = config;
 
   const [photoUrl, setPhotoUrl] = useState<string | null>(currentPhotoUrl ?? null);
+  const [imageLoadError, setImageLoadError] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -117,13 +118,19 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
     let isMounted = true;
     async function resolvePhoto() {
       if (!currentPhotoUrl) {
-        if (isMounted) setPhotoUrl(null);
+        if (isMounted) {
+          setPhotoUrl(null);
+          setImageLoadError(false);
+        }
         return;
       }
 
       // Already a presigned URL (has AWS signature) — use directly
       if (currentPhotoUrl.includes('X-Amz-Signature')) {
-        if (isMounted) setPhotoUrl(currentPhotoUrl);
+        if (isMounted) {
+          setPhotoUrl(currentPhotoUrl);
+          setImageLoadError(false);
+        }
         return;
       }
 
@@ -133,10 +140,10 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
 
       if (isRawKey || isUnsignedS3Url) {
         try {
-          const resType = targetType === 'beneficiary' ? 'profile_photo' : 'profile_photo';
-          const freshUrl = await fileAccessApi.getPresignedUrl(resType, targetId);
+          const freshUrl = await fileAccessApi.getPresignedUrl('profile_photo', targetId);
           if (isMounted && freshUrl) {
             setPhotoUrl(freshUrl);
+            setImageLoadError(false);
             return;
           }
         } catch {
@@ -145,7 +152,10 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
       }
 
       // Already a valid https URL (Supabase, CDN, etc.) — use directly
-      if (isMounted) setPhotoUrl(currentPhotoUrl);
+      if (isMounted) {
+        setPhotoUrl(currentPhotoUrl);
+        setImageLoadError(false);
+      }
     }
     resolvePhoto();
     return () => { isMounted = false; };
@@ -191,6 +201,7 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
       const result = await uploadApi.uploadProfilePhoto(targetType, targetId, file);
       // result.url is already a presigned URL from the backend
       setPhotoUrl(result.url);
+      setImageLoadError(false);
       onSuccess?.(result.url);
     } catch (err: any) {
       const msg = err.message || 'Upload failed';
@@ -253,10 +264,11 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
         }}
       >
         {/* Photo or initials */}
-        {photoUrl ? (
+        {photoUrl && !imageLoadError ? (
           <img
             src={sanitizeImgSrc(photoUrl)}
             alt={name || 'Profile'}
+            onError={() => setImageLoadError(true)}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
         ) : (
@@ -403,11 +415,12 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
           <DialogHeader className="sr-only">
             <DialogTitle>Profile Photo</DialogTitle>
           </DialogHeader>
-          {photoUrl && (
+          {photoUrl && !imageLoadError && (
             <div className="relative flex items-center justify-center min-h-[300px]">
               <img 
                 src={sanitizeImgSrc(photoUrl)} 
                 alt={name || 'Profile'} 
+                onError={() => setImageLoadError(true)}
                 className="w-full h-auto max-h-[85vh] object-contain rounded-lg"
               />
             </div>
