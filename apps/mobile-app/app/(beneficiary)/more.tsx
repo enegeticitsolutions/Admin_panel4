@@ -109,12 +109,12 @@ export default function MoreOptionsScreen() {
             iconBg: '#FDF2F8',
             onPress: () => router.push('/(beneficiary)/sathi-request'),
         },
-        {
-            icon: <MaterialCommunityIcons name="star-circle-outline" size={20} color="#F59E0B" />,
-            label: 'Legacy Circle',
-            iconBg: '#FEF3C7',
-            onPress: () => router.push('/(beneficiary)/legacy-circle'),
-        },
+        // {
+        //     icon: <MaterialCommunityIcons name="star-circle-outline" size={20} color="#F59E0B" />,
+        //     label: 'Legacy Circle',
+        //     iconBg: '#FEF3C7',
+        //     onPress: () => router.push('/(beneficiary)/legacy-circle'),
+        // },
     ];
 
     return (

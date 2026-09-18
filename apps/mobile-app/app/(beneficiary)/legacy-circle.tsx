@@ -64,6 +64,8 @@ export default function LegacyCircleScreen() {
     const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
 
     const [userData, setUserData] = useState<any>(null);
+    const [successModalVisible, setSuccessModalVisible] = useState(false);
+    const [successMessage, setSuccessMessage] = useState({ title: '', message: '' });
 
     useFocusEffect(
         useCallback(() => {
@@ -123,7 +125,62 @@ export default function LegacyCircleScreen() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['legacyCircleProfile'] });
-            Alert.alert('Success', 'Your Legacy Circle profile has been submitted for review.');
+            setSuccessMessage({ title: 'Success', message: 'Your Legacy Circle profile has been submitted for review.' });
+            setSuccessModalVisible(true);
+        },
+        onError: (err: any) => {
+            Alert.alert('Error', err.message);
+        }
+    });
+
+    const toggleActiveMutation = useMutation({
+        mutationFn: async () => {
+            const token = await AsyncStorage.getItem('userToken');
+            const res = await fetch(`${API_URL}/beneficiary/legacy-circle/active`, {
+                method: 'PATCH',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                throw new Error(json.message || 'Failed to toggle account status');
+            }
+            return json.data;
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ['legacyCircleProfile'] });
+            const actionText = data.isActive ? 'activated' : 'deactivated';
+            setSuccessMessage({ title: 'Success', message: `Your Legacy Circle profile has been ${actionText}.` });
+            setSuccessModalVisible(true);
+        },
+        onError: (err: any) => {
+            Alert.alert('Error', err.message);
+        }
+    });
+
+    const updateProfileMutation = useMutation({
+        mutationFn: async (formData: any) => {
+            const token = await AsyncStorage.getItem('userToken');
+            const res = await fetch(`${API_URL}/beneficiary/legacy-circle`, {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+            const json = await res.json();
+            if (!res.ok || !json.success) {
+                throw new Error(json.message || 'Failed to update profile');
+            }
+            return json.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['legacyCircleProfile'] });
+            setSuccessMessage({ title: 'Success', message: 'Your Legacy Circle profile has been updated.' });
+            setSuccessModalVisible(true);
+            setIsEditing(false);
         },
         onError: (err: any) => {
             Alert.alert('Error', err.message);
@@ -139,10 +196,50 @@ export default function LegacyCircleScreen() {
     const [agreed, setAgreed] = useState(false);
     const [industryModalVisible, setIndustryModalVisible] = useState(false);
     const [industrySearch, setIndustrySearch] = useState('');
+    const [isEditing, setIsEditing] = useState(false);
 
     const filteredIndustries = INDUSTRIES.filter((ind) =>
         ind.toLowerCase().includes(industrySearch.trim().toLowerCase())
     );
+
+    const handleEditClick = () => {
+        setIsEditing(true);
+        setTitle(profile?.title || '');
+        setYearsOfExperience(profile?.yearsOfExperience ? String(profile?.yearsOfExperience) : '');
+        setHeadline(profile?.headline || '');
+        setEmail(profile?.email || '');
+        setAgreed(profile?.agreedToTerms ?? true);
+
+        const ind = profile?.industry || '';
+        if (INDUSTRIES.includes(ind)) {
+            setIndustry(ind);
+            setOtherIndustry('');
+        } else if (ind) {
+            setIndustry('Other (please specify)');
+            setOtherIndustry(ind);
+        } else {
+            setIndustry('');
+            setOtherIndustry('');
+        }
+    };
+
+    const handleToggleActiveClick = () => {
+        const isCurrentlyActive = profile?.isActive;
+        Alert.alert(
+            isCurrentlyActive ? 'Deactivate Account' : 'Activate Account',
+            isCurrentlyActive 
+                ? 'Are you sure you want to deactivate your Legacy Circle profile? It will no longer be visible to others.' 
+                : 'Are you sure you want to activate your Legacy Circle profile? It will become visible to others.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { 
+                    text: isCurrentlyActive ? 'Deactivate' : 'Activate', 
+                    style: isCurrentlyActive ? 'destructive' : 'default',
+                    onPress: () => toggleActiveMutation.mutate() 
+                }
+            ]
+        );
+    };
 
     const handleSubmit = () => {
         if (!title || !yearsOfExperience || !headline || !industry || !email || !agreed) {
@@ -156,14 +253,20 @@ export default function LegacyCircleScreen() {
             return;
         }
 
-        createProfileMutation.mutate({
+        const formData = {
             title,
-            yearsOfExperience,
+            yearsOfExperience: String(yearsOfExperience),
             headline,
             industry: finalIndustry,
             email,
             agreedToTerms: agreed
-        });
+        };
+
+        if (isEditing) {
+            updateProfileMutation.mutate(formData);
+        } else {
+            createProfileMutation.mutate(formData);
+        }
     };
 
     if (isLoading || !userData) {
@@ -196,9 +299,9 @@ export default function LegacyCircleScreen() {
         <ScrollView style={styles.scrollContainer} contentContainerStyle={[styles.content, responsiveStyle]}>
             <View style={styles.orangeBanner}>
                 <Feather name="clock" size={24} color="#FFFFFF" style={{ marginBottom: 12 }} />
-                <Text style={styles.bannerTitle}>Create Your Legacy Profile</Text>
+                <Text style={styles.bannerTitle}>{isEditing ? 'Edit Your Profile' : 'Create Your Legacy Profile'}</Text>
                 <Text style={styles.bannerDesc}>
-                    Your profile will be shared with the community and featured on the MaiHoonNa website.
+                    {isEditing ? 'Update your information below.' : 'Your profile will be shared with the community and featured on the MaiHoonNa website.'}
                 </Text>
             </View>
 
@@ -319,14 +422,14 @@ export default function LegacyCircleScreen() {
             </View>
 
             <TouchableOpacity
-                style={[styles.submitBtn, createProfileMutation.isPending && { opacity: 0.7 }]}
+                style={[styles.submitBtn, (createProfileMutation.isPending || updateProfileMutation.isPending) && { opacity: 0.7 }]}
                 onPress={handleSubmit}
-                disabled={createProfileMutation.isPending}
+                disabled={createProfileMutation.isPending || updateProfileMutation.isPending}
             >
-                {createProfileMutation.isPending ? (
+                {createProfileMutation.isPending || updateProfileMutation.isPending ? (
                     <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                    <Text style={styles.submitBtnText}>Submit for Approval</Text>
+                    <Text style={styles.submitBtnText}>{isEditing ? 'Save Changes' : 'Submit for Approval'}</Text>
                 )}
             </TouchableOpacity>
         </ScrollView>
@@ -461,6 +564,19 @@ export default function LegacyCircleScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
+
+                    <TouchableOpacity style={styles.bottomEditBtn} onPress={handleEditClick}>
+                        <Text style={styles.bottomEditBtnText}>Edit Profile</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity 
+                        style={[styles.bottomEditBtn, profile.isActive ? styles.deactivateBtn : styles.activateBtn]} 
+                        onPress={handleToggleActiveClick}
+                    >
+                        <Text style={[styles.bottomEditBtnText, profile.isActive ? styles.deactivateBtnText : styles.activateBtnText]}>
+                            {profile.isActive ? 'Deactivate Account' : 'Activate Account'}
+                        </Text>
+                    </TouchableOpacity>
                 </View>
             </ScrollView>
         );
@@ -469,18 +585,13 @@ export default function LegacyCircleScreen() {
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={[styles.header, responsiveStyle]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity onPress={() => isEditing ? setIsEditing(false) : router.back()} style={styles.backBtn}>
                     <Feather name="arrow-left" size={22} color="#111827" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Legacy Circle</Text>
-                {profile?.status === 'approved' && (
-                    <TouchableOpacity style={styles.editBtn}>
-                        <Text style={styles.editBtnText}>Edit</Text>
-                    </TouchableOpacity>
-                )}
+                <Text style={styles.headerTitle}>{isEditing ? 'Edit Profile' : 'Legacy Circle'}</Text>
             </View>
 
-            {!profile ? renderForm() : profile.status === 'pending' ? renderPending() : renderApproved()}
+            {(!profile || isEditing) ? renderForm() : profile.status === 'pending' ? renderPending() : renderApproved()}
 
             {/* Modern Industry Selection Bottom Sheet Modal */}
             <Modal
@@ -590,6 +701,32 @@ export default function LegacyCircleScreen() {
                         />
                     </View>
                 </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Custom Success Modal */}
+            <Modal
+                visible={successModalVisible}
+                animationType="fade"
+                transparent={true}
+                statusBarTranslucent={true}
+                onRequestClose={() => setSuccessModalVisible(false)}
+            >
+                <View style={styles.successModalOverlay}>
+                    <View style={styles.successModalContent}>
+                        <View style={styles.successIconBox}>
+                            <Feather name="check" size={32} color="#FFFFFF" />
+                        </View>
+                        <Text style={styles.successModalTitle}>{successMessage.title}</Text>
+                        <Text style={styles.successModalText}>{successMessage.message}</Text>
+                        
+                        <TouchableOpacity
+                            style={styles.successModalBtn}
+                            onPress={() => setSuccessModalVisible(false)}
+                        >
+                            <Text style={styles.successModalBtnText}>Done</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </Modal>
         </SafeAreaView>
     );
@@ -829,5 +966,20 @@ const styles = StyleSheet.create({
     shareTitle: { fontFamily: 'Poppins-SemiBold', fontSize: 14, color: '#111827' },
     shareDesc: { fontFamily: 'Poppins-Regular', fontSize: 12, color: '#6B7280' },
     resendBtn: { backgroundColor: '#10B981', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
-    resendBtnText: { fontFamily: 'Poppins-Medium', fontSize: 13, color: '#FFFFFF' }
+    resendBtnText: { fontFamily: 'Poppins-Medium', fontSize: 13, color: '#FFFFFF' },
+    bottomEditBtn: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#FF6A00', height: 56, justifyContent: 'center', alignItems: 'center', marginTop: 24 },
+    bottomEditBtnText: { color: '#FF6A00', fontFamily: 'Poppins-SemiBold', fontSize: 16 },
+    deactivateBtn: { borderColor: '#EF4444', marginTop: 16 },
+    deactivateBtnText: { color: '#EF4444' },
+    activateBtn: { borderColor: '#10B981', marginTop: 16 },
+    activateBtnText: { color: '#10B981' },
+    
+    // Success Modal Styles
+    successModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+    successModalContent: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 24, width: '100%', maxWidth: 340, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 10 },
+    successIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#10B981', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+    successModalTitle: { fontFamily: 'Poppins-Bold', fontSize: 20, color: '#111827', marginBottom: 8, textAlign: 'center' },
+    successModalText: { fontFamily: 'Poppins-Regular', fontSize: 15, color: '#6B7280', textAlign: 'center', marginBottom: 24, lineHeight: 22 },
+    successModalBtn: { backgroundColor: '#FF6A00', borderRadius: 16, height: 52, width: '100%', justifyContent: 'center', alignItems: 'center' },
+    successModalBtnText: { color: '#FFFFFF', fontFamily: 'Poppins-SemiBold', fontSize: 15 }
 });

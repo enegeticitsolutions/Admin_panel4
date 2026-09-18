@@ -98,11 +98,48 @@ router.put('/', authenticate, async (req: AuthRequest, res: Response) => {
             where: { beneficiaryId: beneficiary.id },
             data: {
                 title,
-                yearsOfExperience,
+                yearsOfExperience: String(yearsOfExperience),
                 headline,
                 industry,
                 email,
-                status: 'pending' // Usually edits go back to pending
+                status: existingProfile.status
+            }
+        });
+
+        res.json({
+            success: true,
+            data: updatedProfile
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Toggle legacy circle profile active status
+router.patch('/active', authenticate, async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.userId!;
+
+        const beneficiary = await prisma.beneficiary.findFirst({
+            where: { userId }
+        });
+
+        if (!beneficiary) {
+            return res.status(404).json({ success: false, message: 'Beneficiary not found' });
+        }
+
+        const existingProfile = await prisma.legacyCircleProfile.findUnique({
+            where: { beneficiaryId: beneficiary.id }
+        });
+
+        if (!existingProfile) {
+            return res.status(404).json({ success: false, message: 'Profile not found' });
+        }
+
+        const updatedProfile = await prisma.legacyCircleProfile.update({
+            where: { beneficiaryId: beneficiary.id },
+            data: {
+                isActive: !existingProfile.isActive
             }
         });
 
