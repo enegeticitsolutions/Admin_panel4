@@ -742,7 +742,9 @@ router.get('/:id', async (req, res) => {
     }
 
     if (b.photo) {
+      console.log('[BeneficiaryProfile] photo in DB:', b.photo?.substring(0, 80));
       b.photo = await resolveFileUrl(b.photo);
+      console.log('[BeneficiaryProfile] resolved photo URL:', b.photo?.substring(0, 80));
     }
 
     res.json({

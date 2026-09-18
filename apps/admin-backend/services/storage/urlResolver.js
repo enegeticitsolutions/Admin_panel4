@@ -39,7 +39,10 @@ async function resolveFileUrl(keyOrUrl, ttlSeconds = 1800) {
   if (!key) return trimmed;
 
   try {
-    return await storageService.getPresignedUrl(key, ttlSeconds);
+    console.log('[urlResolver] Presigning key:', key.substring(0, 60));
+    const url = await storageService.getPresignedUrl(key, ttlSeconds);
+    console.log('[urlResolver] Presigned OK, URL starts:', url?.substring(0, 60));
+    return url;
   } catch (error) {
     console.warn(`[urlResolver] Failed to presign URL for key "${key}":`, error.message);
     return trimmed;
