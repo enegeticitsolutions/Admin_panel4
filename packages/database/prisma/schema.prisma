@@ -1829,6 +1829,7 @@ model LegacyCircleProfile {
   email           String
   agreedToTerms   Boolean     @default(false)
   status          String      @default("pending") // "pending", "approved", "rejected"
+  isActive        Boolean     @default(true)
   connectRequests Int         @default(0)
   profileStrength Int         @default(100)
   createdAt       DateTime    @default(now())
