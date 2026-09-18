@@ -170,5 +170,71 @@ router.get('/content/legal/:slug', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/website/content/legacy-circle
+ * Returns all approved Legacy Circle senior expert profiles with their beneficiary data for the website.
+ */
+router.get('/content/legacy-circle', async (_req: Request, res: Response) => {
+  try {
+    const profiles = await (prisma as any).legacyCircleProfile.findMany({
+      where: { status: 'approved' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        beneficiary: {
+          select: {
+            id: true,
+            name: true,
+            photo: true,
+            city: true,
+            state: true,
+            age: true,
+            gender: true,
+          },
+        },
+      },
+    });
+
+    const AVATAR_COLORS = ["#fe6700", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#ec4899", "#14b8a6"];
+
+    const experts = await Promise.all(
+      profiles.map(async (p: any, idx: number) => {
+        const b = p.beneficiary || {};
+        const photoUrl = b.photo ? await resolveFileUrl(b.photo) : null;
+        const expNum = parseInt(String(p.yearsOfExperience || '').replace(/\D/g, ''), 10) || 25;
+
+        return {
+          id: p.id,
+          name: b.name || p.title || 'Senior Advisor',
+          role: p.title || 'Consultant & Advisor',
+          company: p.industry || 'Domain Specialist',
+          location: b.city || 'Delhi NCR',
+          experience: expNum,
+          domain: p.industry || 'Strategy & Consulting',
+          email: p.email || '',
+          bio: p.headline || '',
+          tags: p.industry ? [p.industry] : ['Advisory', 'Consulting'],
+          profilePhoto: photoUrl,
+          photoUrl: photoUrl,
+          avatarColor: AVATAR_COLORS[idx % AVATAR_COLORS.length],
+          verified: true,
+          status: p.status,
+        };
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: experts.length,
+      data: experts,
+    });
+  } catch (error: any) {
+    console.error('❌ [Website Legacy Circle Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching Legacy Circle profiles.',
+    });
+  }
+});
+
 export default router;
 

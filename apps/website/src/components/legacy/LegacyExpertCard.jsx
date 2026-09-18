@@ -34,7 +34,6 @@ const LegacyExpertCard = ({
     name = "Keshav Ram",
     role = expert.designation || "Corporate Lawyer & Arbitrator",
     location = expert.city || "Noida",
-    availability = expert.availabilitySchedule || expert.statusText || "Weekends",
     experience = expert.yearsOfExperience || expert.exp || 40,
     tags = expert.expertiseTags || expert.skills || ["Law", "Arbitration", "Governance"],
     avatarColor = expert.avatarColor || "#0EA5E9",
@@ -75,7 +74,7 @@ const LegacyExpertCard = ({
         </div>
       </div>
 
-      {/* ── 2. Location & Availability Status Row ── */}
+      {/* ── 2. Location Row ── */}
       <div className="mhn-expert-card__subrow">
         <div className="mhn-expert-card__location">
           <svg
@@ -95,13 +94,6 @@ const LegacyExpertCard = ({
           </svg>
           <span>{location}</span>
         </div>
-
-        {availability && (
-          <div className="mhn-expert-card__availability">
-            <span className="mhn-expert-card__status-dot" />
-            <span className="mhn-expert-card__status-text">{availability}</span>
-          </div>
-        )}
       </div>
 
       {/* ── 3. Category / Domain Tags ── */}
@@ -128,7 +120,19 @@ const LegacyExpertCard = ({
         <button
           type="button"
           className="mhn-expert-card__btn"
-          onClick={() => onConsultation && onConsultation(expert)}
+          onClick={() => {
+            if (typeof onConsultation === "function") {
+              onConsultation(expert);
+            } else {
+              const email =
+                expert.email ||
+                `${name.toLowerCase().replace(/[^a-z0-9]/g, ".") || "contact"}@maihoonna.com`;
+              const subject = encodeURIComponent(
+                `Connection Request: Consultation with ${name}`
+              );
+              window.location.href = `mailto:${email}?subject=${subject}`;
+            }
+          }}
           aria-label={`${buttonText} with ${name}`}
         >
           <span>{buttonText}</span>

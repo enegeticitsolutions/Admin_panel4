@@ -374,4 +374,20 @@ export const fetchLegalPolicyBySlug = async (slug) => {
   }
 };
 
+/**
+ * 11. Fetch Approved Legacy Circle Profiles from Database
+ * Endpoint: GET /api/website/content/legacy-circle
+ */
+export const fetchLegacyCircleProfiles = async () => {
+  try {
+    const response = await fetch(`${API_BASE}/website/content/legacy-circle`);
+    if (!response.ok) return null;
+    const json = await response.json();
+    return json.success ? json.data : null;
+  } catch (err) {
+    console.warn('Unable to reach legacy-circle profiles endpoint, using fallback:', err);
+    return null;
+  }
+};
+
 
