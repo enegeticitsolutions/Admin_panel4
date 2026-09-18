@@ -107,23 +107,49 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Always fetch a fresh presigned URL on mount and when targetId changes.
-  // The URL from the API may be a raw S3 key or an expired presigned URL.
+  // Sync and resolve presigned URL when currentPhotoUrl changes.
+  // Mirrors the exact Sathi pattern:
+  //   - null/empty            → show initials, no API call
+  //   - already presigned URL → use directly (X-Amz-Signature present)
+  //   - raw S3 key or unsigned S3 URL → call /api/files/presigned to get a fresh URL
+  //   - any other https URL   → use directly (Supabase public, etc.)
   useEffect(() => {
-    let cancelled = false;
-    async function refreshPhoto() {
-      if (!targetId) return;
-      try {
-        const freshUrl = await fileAccessApi.getPresignedUrl('profile_photo', targetId);
-        if (!cancelled) setPhotoUrl(freshUrl);
-      } catch {
-        // fallback: use the currentPhotoUrl prop if presigned fetch fails
-        if (!cancelled) setPhotoUrl(currentPhotoUrl ?? null);
+    let isMounted = true;
+    async function resolvePhoto() {
+      if (!currentPhotoUrl) {
+        if (isMounted) setPhotoUrl(null);
+        return;
       }
+
+      // Already a presigned URL (has AWS signature) — use directly
+      if (currentPhotoUrl.includes('X-Amz-Signature')) {
+        if (isMounted) setPhotoUrl(currentPhotoUrl);
+        return;
+      }
+
+      // Raw S3 key (not http/https) or un-signed S3 HTTPS URL — needs presigning
+      const isRawKey = !currentPhotoUrl.startsWith('http://') && !currentPhotoUrl.startsWith('https://');
+      const isUnsignedS3Url = currentPhotoUrl.includes('s3.') && !currentPhotoUrl.includes('X-Amz-Signature');
+
+      if (isRawKey || isUnsignedS3Url) {
+        try {
+          const resType = targetType === 'beneficiary' ? 'profile_photo' : 'profile_photo';
+          const freshUrl = await fileAccessApi.getPresignedUrl(resType, targetId);
+          if (isMounted && freshUrl) {
+            setPhotoUrl(freshUrl);
+            return;
+          }
+        } catch {
+          // Presign failed (e.g. no photo in DB) — fall through to use currentPhotoUrl as-is
+        }
+      }
+
+      // Already a valid https URL (Supabase, CDN, etc.) — use directly
+      if (isMounted) setPhotoUrl(currentPhotoUrl);
     }
-    refreshPhoto();
-    return () => { cancelled = true; };
-  }, [targetId, currentPhotoUrl]);
+    resolvePhoto();
+    return () => { isMounted = false; };
+  }, [currentPhotoUrl, targetType, targetId]);
 
   const initials = getInitials(name);
   const badgeSize = Math.round(size * 0.32);
