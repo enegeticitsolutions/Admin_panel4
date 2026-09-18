@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import LegacyExpertCard from "../components/legacy/LegacyExpertCard";
+import { fetchLegacyCircleProfiles } from "../services/api";
 
 // Mock Senior Expert Profiles with rich details matching the design
 const EXPERTS_DATA = [
@@ -9,7 +10,8 @@ const EXPERTS_DATA = [
     avatarColor: "#fe6700",
     role: "Ex-Chief Financial Officer",
     company: "BHEL & L&T Heavy Eng.",
-    location: "Gurugram",
+    location: "Gurgaon",
+    email: "arun.kumar@maihoonna.com",
     experience: 34,
     domain: "Chartered Accountancy / Auditing",
     verified: true,
@@ -25,7 +27,8 @@ const EXPERTS_DATA = [
     avatarColor: "#8b5cf6",
     role: "Senior Legal Counsel & Advocate",
     company: "Supreme Court & High Court Bar",
-    location: "Delhi NCR",
+    location: "Delhi",
+    email: "deepak.sharma@maihoonna.com",
     experience: 31,
     domain: "Corporate Law",
     verified: true,
@@ -41,7 +44,8 @@ const EXPERTS_DATA = [
     avatarColor: "#06b6d4",
     role: "Ex-VP Engineering & Cloud",
     company: "Infosys & Wipro Digital",
-    location: "Bengaluru / Remote",
+    location: "Faridabad",
+    email: "meenakshi.s@maihoonna.com",
     experience: 28,
     domain: "Information Technology / Software",
     verified: true,
@@ -57,7 +61,8 @@ const EXPERTS_DATA = [
     avatarColor: "#10b981",
     role: "Former Principal Secretary",
     company: "Ministry of Urban Development",
-    location: "Delhi NCR",
+    location: "Delhi",
+    email: "rajesh.mathur@maihoonna.com",
     experience: 36,
     domain: "Civil Services (IAS/IPS/IFS etc.)",
     verified: true,
@@ -73,7 +78,8 @@ const EXPERTS_DATA = [
     avatarColor: "#f59e0b",
     role: "Ex-Director HR & Transformation",
     company: "Larsen & Toubro",
-    location: "Mumbai / Remote",
+    location: "Ghaziabaad",
+    email: "sunita.rao@maihoonna.com",
     experience: 27,
     domain: "Human Resources",
     verified: true,
@@ -89,7 +95,8 @@ const EXPERTS_DATA = [
     avatarColor: "#ef4444",
     role: "Ex-Director Logistics & Ops",
     company: "Indian Armed Forces & Supply Chain",
-    location: "Gurugram",
+    location: "Gurgaon",
+    email: "ravindra.singh@maihoonna.com",
     experience: 33,
     domain: "Defence Services (Army/Navy/Air Force)",
     verified: true,
@@ -105,7 +112,8 @@ const EXPERTS_DATA = [
     avatarColor: "#ec4899",
     role: "Former Head of Product & UX",
     company: "Times Internet & NDTV",
-    location: "Gurugram / Remote",
+    location: "Noida",
+    email: "vandana.sengupta@maihoonna.com",
     experience: 24,
     domain: "Information Technology / Software",
     verified: true,
@@ -121,7 +129,8 @@ const EXPERTS_DATA = [
     avatarColor: "#14b8a6",
     role: "Ex-Managing Director",
     company: "Precision Engineering Ltd.",
-    location: "Pune / Remote",
+    location: "Noida",
+    email: "pradeep.deshmukh@maihoonna.com",
     experience: 35,
     domain: "Operations & Supply Chain",
     verified: true,
@@ -133,86 +142,86 @@ const EXPERTS_DATA = [
   }
 ];
 
-const DOMAINS = [
-  "All",
-  "General Management / Leadership",
-  "Sales & Marketing",
-  "Human Resources",
-  "Operations & Supply Chain",
-  "Strategy & Consulting",
-  "Entrepreneurship / Business Ownership",
-  "Banking",
-  "Chartered Accountancy / Auditing",
-  "Investment & Wealth Management",
-  "Insurance",
-  "Taxation",
-  "Information Technology / Software",
-  "Civil Engineering",
-  "Mechanical Engineering",
-  "Electrical Engineering",
-  "Telecommunications",
-  "Civil Services (IAS/IPS/IFS etc.)",
-  "Defence Services (Army/Navy/Air Force)",
-  "Public Sector Undertakings (PSU)",
-  "Judiciary & Legal Services",
-  "Police Services",
-  "Medicine (Doctor/Physician)",
-  "Nursing",
-  "Pharmacy",
-  "Public Health / Hospital Administration",
-  "Dentistry",
-  "Corporate Law",
-  "Litigation",
-  "Legal Consulting",
-  "School Teaching",
-  "College/University Professor (Academia)",
-  "Educational Administration",
-  "Research & Development",
-  "Journalism / Media",
-  "Publishing / Writing",
-  "Fine Arts / Performing Arts",
-  "Design / Architecture",
-  "Agriculture / Agri-Science",
-  "NGO / Social Work",
-  "Government Policy / Public Administration",
-  "Homemaker with Professional Background",
-  "Other (please specify)",
-];
 
 const FAQ_ITEMS = [
   {
     question: "What is Legacy Circle?",
     answer:
-      "Legacy Circle is MaiHoonNa's advisory and knowledge-sharing network that connects accomplished senior professionals, retired civil servants, and veteran corporate leaders with startups, businesses, and institutions seeking seasoned wisdom and strategic counsel.",
+      "Legacy Circles is a space within MaiHoonNa for seniors who want to stay professionally and intellectually engaged after retirement. It's where accomplished professionals from corporate leaders to doctors, civil servants, educators, and specialists who continue sharing their knowledge through consulting and mentoring, rather than stepping back from meaningful work entirely. It's built on a simple idea: purpose doesn't retire.",
   },
   {
     question: "How are consultations conducted?",
     answer:
-      "Consultations can be held virtually via high-definition video calls or in-person (for Gurugram & Delhi NCR locations). You can request one-off strategic discovery calls, recurring advisory board sessions, or project-based milestone reviews.",
+      "Sessions can take place over a phone or video call, in person, or through message-based exchange for simpler queries — whatever works best for both sides.",
   },
   {
-    question: "Who can join as a Senior Expert / Advisor?",
+    question: "Who can join Legacy Circle?",
     answer:
-      "We welcome retired or semi-retired senior professionals with 20+ years of domain experience across corporate management, civil services, legal counsel, healthcare, finance, defense, technology, or academia looking to meaningfully share their expertise on flexible terms.",
+      "Any senior enrolled with MaiHoonNa who has professional or domain expertise they'd like to continue sharing can join — whether that experience comes from a corporate career, government or defence service, medicine, law, academia, or another field. There's no requirement to have held a particular title; what matters is having knowledge others would value.",
   },
   {
     question: "Can adult children register their retired parents?",
     answer:
-      "Yes! Many families register their parents on Legacy Circle to help them stay intellectually engaged, socially connected, and valued for their lifelong achievements. Our team handles onboarding and profile creation with personalized care.",
+      "Participation in legacy circle is the senior's own choice and they need to register directly from the mobile application. MaiHoonNa team is aways available to guide the seniors on how to register.",
   },
   {
     question: "How are advisors vetted and credentials verified?",
     answer:
-      "Every advisor undergoes thorough background verification, career history review, identity validation, and an initial alignment interview with our leadership team before their profile is activated on the platform.",
+      "Legacy Circle profiles are self-reported by our members, similar to how professional details work on platforms like LinkedIn. MaiHooNa does not independently verify credentials or conduct background checks on the professional history shared. We encourage members reaching out for a consultation to review a Legacy Circle member's profile and ask questions directly to satisfy themselves of fit before proceeding.",
   },
   {
     question: "What are the advisory fees or pricing structure?",
     answer:
-      "Advisors set their consultation preferences — many offer initial discovery calls complimentary, with structured hourly or monthly retainer arrangements for ongoing advisory. MaiHoonNa provides transparent escrow and scheduling support.",
+      "Legacy Circles is free for seniors to join. It's a platform to help you stay visible and connected to opportunities to share your expertise, not a paid service. Any fees for consultations or advisory work are decided directly and mutually between the Legacy Circle member and the person seeking their guidance. MaiHoonNa does not set, collect, or take a share of these fees.",
   },
 ];
 
+
 const LegacyPage = ({ openForm }) => {
+  // Live Experts List from Backend (with fallback)
+  const [expertsList, setExpertsList] = useState(EXPERTS_DATA);
+  const [isLoadingExperts, setIsLoadingExperts] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingExperts(true);
+    fetchLegacyCircleProfiles()
+      .then((data) => {
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          setExpertsList(data);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch legacy circle profiles from backend:", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingExperts(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Dynamic filter options derived from live data
+  const dynamicDomains = useMemo(() => {
+    const domains = expertsList
+      .map((e) => e.domain)
+      .filter(Boolean)
+      .filter((d, i, arr) => arr.indexOf(d) === i)
+      .sort();
+    return domains;
+  }, [expertsList]);
+
+  const dynamicLocations = useMemo(() => {
+    const locs = expertsList
+      .map((e) => (e.location || e.city || "").trim())
+      .filter(Boolean)
+      .filter((l, i, arr) => arr.indexOf(l) === i)
+      .sort();
+    return locs;
+  }, [expertsList]);
+
   // Directory Filters State
   const [selectedDomain, setSelectedDomain] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -236,37 +245,65 @@ const LegacyPage = ({ openForm }) => {
 
   // Filtered Experts
   const filteredExperts = useMemo(() => {
-    return EXPERTS_DATA.filter((expert) => {
+    return expertsList.filter((expert) => {
       // Domain filter
       if (selectedDomain !== "All" && expert.domain !== selectedDomain) {
         return false;
       }
       // Location filter
       if (selectedLocation !== "All") {
-        if (selectedLocation === "Gurugram" && !expert.location.toLowerCase().includes("gurugram")) return false;
-        if (selectedLocation === "Delhi NCR" && !expert.location.toLowerCase().includes("delhi")) return false;
-        if (selectedLocation === "Remote" && !expert.location.toLowerCase().includes("remote")) return false;
+        const loc = (expert.location || expert.city || "").toLowerCase();
+        const sel = selectedLocation.toLowerCase();
+        if (sel === "gurgaon" || sel === "gurugram") {
+          if (!loc.includes("gurgaon") && !loc.includes("gurugram")) return false;
+        } else if (sel.includes("ghaziab")) {
+          if (!loc.includes("ghaziab")) return false;
+        } else {
+          if (!loc.includes(sel)) return false;
+        }
       }
       // Search query filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesName = expert.name.toLowerCase().includes(q);
-        const matchesRole = expert.role.toLowerCase().includes(q);
-        const matchesCompany = expert.company.toLowerCase().includes(q);
-        const matchesTags = expert.tags.some((t) => t.toLowerCase().includes(q));
-        const matchesBio = expert.bio.toLowerCase().includes(q);
-        if (!matchesName && !matchesRole && !matchesCompany && !matchesTags && !matchesBio) {
+        const name = String(expert.name || "").toLowerCase();
+        const role = String(expert.role || "").toLowerCase();
+        const company = String(expert.company || "").toLowerCase();
+        const bio = String(expert.bio || expert.headline || "").toLowerCase();
+        const tags = Array.isArray(expert.tags)
+          ? expert.tags
+          : expert.tags
+          ? [expert.tags]
+          : [];
+        const matchesTags = tags.some((t) => String(t).toLowerCase().includes(q));
+
+        if (
+          !name.includes(q) &&
+          !role.includes(q) &&
+          !company.includes(q) &&
+          !matchesTags &&
+          !bio.includes(q)
+        ) {
           return false;
         }
       }
       return true;
     });
-  }, [selectedDomain, searchQuery, selectedLocation]);
+  }, [expertsList, selectedDomain, searchQuery, selectedLocation]);
 
   const handleOpenConsultation = (expert) => {
-    setSelectedExpert(expert);
-    setActiveModal("consultation");
-    setFormSubmitted(false);
+    if (!expert) return;
+    const email =
+      expert.email ||
+      `${expert.name.toLowerCase().replace(/[^a-z0-9]/g, ".") || "contact"}@maihoonna.com`;
+    const subject = encodeURIComponent(
+      `Connection Request: Consultation with ${expert.name}`
+    );
+    const body = encodeURIComponent(
+      `Hello ${expert.name},\n\nI came across your profile on MaiHoonNa's Legacy Circle and would like to request a connection / consultation regarding your expertise in ${
+        (expert.tags && expert.tags[0]) || expert.domain || "your field"
+      }.\n\nLooking forward to hearing from you.\n\nBest regards,`
+    );
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
   };
 
   const handleOpenJoinModal = () => {
@@ -342,12 +379,6 @@ const LegacyPage = ({ openForm }) => {
                   <polyline points="12 5 19 12 12 19" />
                 </svg>
               </a>
-              <button
-                className="legacy-btn legacy-btn--outline"
-                onClick={handleOpenJoinModal}
-              >
-                List your Profile
-              </button>
             </div>
           </div>
 
@@ -630,7 +661,7 @@ const LegacyPage = ({ openForm }) => {
                 aria-label="Filter by Domain"
               >
                 <option value="All">All Domains</option>
-                {DOMAINS.filter((d) => d !== "All").map((dom) => (
+                {dynamicDomains.map((dom) => (
                   <option key={dom} value={dom}>{dom}</option>
                 ))}
               </select>
@@ -642,9 +673,9 @@ const LegacyPage = ({ openForm }) => {
                 aria-label="Filter by Location"
               >
                 <option value="All">All Locations</option>
-                <option value="Gurugram">Gurugram</option>
-                <option value="Delhi NCR">Delhi NCR</option>
-                <option value="Remote">Remote / Online</option>
+                {dynamicLocations.map((loc) => (
+                  <option key={loc} value={loc}>{loc}</option>
+                ))}
               </select>
 
               <button
@@ -687,16 +718,6 @@ const LegacyPage = ({ openForm }) => {
             )}
           </div>
 
-          {/* Bottom Directory Button */}
-          <div className="legacy-directory__bottom-cta">
-            <button
-              className="legacy-btn-dark-pill"
-              onClick={handleOpenJoinModal}
-            >
-              Open an Expert Profile ↗
-            </button>
-          </div>
-
         </div>
       </section>
 
@@ -717,8 +738,7 @@ const LegacyPage = ({ openForm }) => {
               </div>
 
               <h2 className="legacy-cta-heading">
-                Is your parent ready <br />
-                to be asked again?
+                Is your parent ready to be asked again?
               </h2>
 
               <p className="legacy-cta-desc">
@@ -749,23 +769,6 @@ const LegacyPage = ({ openForm }) => {
                   </svg>
                   <span>You set the engagement terms</span>
                 </div>
-              </div>
-            </div>
-
-            <div className="legacy-cta-card__right">
-              <div className="legacy-cta-btns">
-                <button
-                  className="legacy-btn-white"
-                  onClick={handleOpenJoinModal}
-                >
-                  Start here
-                </button>
-                <button
-                  className="legacy-btn-glass"
-                  onClick={handleOpenJoinModal}
-                >
-                  List your organisation
-                </button>
               </div>
             </div>
 
