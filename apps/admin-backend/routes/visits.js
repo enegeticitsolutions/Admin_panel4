@@ -800,7 +800,10 @@ router.post('/:id/upload-image', uploadMemory.single('image'), async (req, res) 
 
     await prisma.visit.update({ where: { id }, data: { imageUrls: JSON.stringify(existing) } });
 
-    res.json({ success: true, url, imageUrls: existing });
+    const resolvedUrl = await resolveFileUrl(url);
+    const resolvedImageUrls = await Promise.all(existing.map(resolveFileUrl));
+
+    res.json({ success: true, data: { url: resolvedUrl, imageUrls: resolvedImageUrls } });
   } catch (err) {
     console.error('POST /visits/:id/upload-image error:', err);
     res.status(500).json({ success: false, message: err.message });

@@ -265,7 +265,12 @@ router.post('/general', upload.single('file'), async (req, res) => {
   try {
     const fileKey = `general/${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`;
     const { url } = await storageService.upload(file.buffer, fileKey, file.mimetype);
-    res.json({ success: true, url });
+    
+    // Generate a presigned URL so the frontend can preview it immediately
+    const { resolveFileUrl } = require('../services/storage/urlResolver');
+    const previewUrl = await resolveFileUrl(url);
+
+    res.json({ success: true, url, previewUrl });
   } catch (error) {
     console.error('General upload failed:', error);
     res.status(500).json({ success: false, message: error.message });

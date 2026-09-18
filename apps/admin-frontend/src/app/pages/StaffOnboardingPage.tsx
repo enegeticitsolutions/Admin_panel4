@@ -114,7 +114,7 @@ const DOCUMENT_CONFIG: Record<
 
 type FormState = {
   role: StaffOnboardingRole;
-  personal: StaffOnboardingPayload['personal'];
+  personal: StaffOnboardingPayload['personal'] & { previewUrl?: string };
   professional: StaffOnboardingPayload['professional'];
   assignment: StaffOnboardingPayload['assignment'];
   documents: StaffOnboardingDocumentInput[];
@@ -408,7 +408,7 @@ export default function StaffOnboardingPage() {
   const getDocument = (documentType: StaffDocumentType) =>
     formState.documents.find((document) => document.documentType === documentType);
 
-  const setPersonalField = (field: keyof StaffOnboardingPayload['personal'], value: string) => {
+  const setPersonalField = (field: keyof StaffOnboardingPayload['personal'] | 'previewUrl', value: string | undefined) => {
     setFormState((previousState) => ({
       ...previousState,
       personal: {
@@ -762,6 +762,7 @@ export default function StaffOnboardingPage() {
                             const res = await staffOnboardingApi.uploadFile(file);
                             if (res.success) {
                               setPersonalField('photoUrl', res.url);
+                              setPersonalField('previewUrl', res.previewUrl);
                               toast.success('Photo uploaded');
                             }
                           } catch (err) {
@@ -778,8 +779,8 @@ export default function StaffOnboardingPage() {
                       >
                         {uploadingPhoto ? (
                           <Loader2 className="w-8 h-8 text-[#FF7A00] animate-spin" />
-                        ) : formState.personal.photoUrl ? (
-                          <img src={formState.personal.photoUrl} alt="Profile" className="w-full h-full object-cover" />
+                        ) : formState.personal.previewUrl || formState.personal.photoUrl ? (
+                          <img src={formState.personal.previewUrl || formState.personal.photoUrl} alt="Profile" className="w-full h-full object-cover" />
                         ) : (
                           <div className="flex flex-col items-center gap-2">
                             <Camera className="w-8 h-8 text-gray-400 group-hover:text-[#FF7A00] transition-colors" />
@@ -787,7 +788,7 @@ export default function StaffOnboardingPage() {
                           </div>
                         )}
                         
-                        {formState.personal.photoUrl && !uploadingPhoto && (
+                        {(formState.personal.previewUrl || formState.personal.photoUrl) && !uploadingPhoto && (
                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                             <span className="text-[10px] font-black text-white uppercase bg-[#FF7A00] px-3 py-1 rounded-full shadow-lg">Change</span>
                           </div>

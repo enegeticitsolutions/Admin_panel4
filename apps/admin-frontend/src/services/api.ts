@@ -1204,9 +1204,12 @@ export const visitApi = {
     });
   },
   async uploadVisitImage(id: string, file: File): Promise<{ url: string; imageUrls: string[] }> {
-    const form = new FormData();
-    form.append('image', file);
-    return apiJson(`/visits/${id}/upload-image`, { method: 'POST', body: form });
+    const formData = new FormData();
+    formData.append('image', file);
+    return apiJson(`/visits/${id}/upload-image`, {
+      method: 'POST',
+      body: formData,
+    });
   },
   async create(data: { beneficiaryId: string; careCompanionId?: string | null; is3rdParty?: boolean; thirdPartyNotes?: string; scheduledTime: string; durationMinutes: number; benefitId?: string }): Promise<any> {
     return apiJson('/visits', {
@@ -1395,7 +1398,7 @@ export const staffOnboardingApi = {
   /**
    * General upload of a file for temporary usage or before linking to an entity.
    */
-  async uploadFile(file: File): Promise<{ success: boolean; url: string }> {
+  async uploadFile(file: File): Promise<{ success: boolean; url: string; previewUrl?: string }> {
     const formData = new FormData();
     formData.append('file', file);
 
