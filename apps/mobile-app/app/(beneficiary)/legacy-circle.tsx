@@ -493,7 +493,7 @@ export default function LegacyCircleScreen() {
             <ScrollView style={styles.scrollContainer} bounces={false}>
                 <View style={styles.heroBannerContainer}>
                     <ImageBackground
-                        source={require('../../assets/images/legacy-circle-bg.png')}
+                        source={require('../../assets/images/legacy-circle-bg.jpg')}
                         style={styles.heroBannerImage}
                         imageStyle={{ opacity: 0.60 }}
                         resizeMode="cover"
