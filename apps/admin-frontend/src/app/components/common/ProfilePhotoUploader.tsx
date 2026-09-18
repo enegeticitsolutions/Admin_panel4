@@ -21,7 +21,7 @@
 
 import React, { useRef,useEffect, useState } from 'react';
 import { sanitizeImgSrc } from '../../utils/sanitizeUrl';
-import { uploadApi } from '@/services/api';
+import { uploadApi, fileAccessApi } from '@/services/api';
 import { 
   Dialog, 
   DialogContent, 
@@ -107,9 +107,23 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Always fetch a fresh presigned URL on mount and when targetId changes.
+  // The URL from the API may be a raw S3 key or an expired presigned URL.
   useEffect(() => {
-    setPhotoUrl(currentPhotoUrl ?? null);
-  }, [currentPhotoUrl]);
+    let cancelled = false;
+    async function refreshPhoto() {
+      if (!targetId) return;
+      try {
+        const freshUrl = await fileAccessApi.getPresignedUrl('profile_photo', targetId);
+        if (!cancelled) setPhotoUrl(freshUrl);
+      } catch {
+        // fallback: use the currentPhotoUrl prop if presigned fetch fails
+        if (!cancelled) setPhotoUrl(currentPhotoUrl ?? null);
+      }
+    }
+    refreshPhoto();
+    return () => { cancelled = true; };
+  }, [targetId, currentPhotoUrl]);
 
   const initials = getInitials(name);
   const badgeSize = Math.round(size * 0.32);
@@ -149,6 +163,7 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
     setError(null);
     try {
       const result = await uploadApi.uploadProfilePhoto(targetType, targetId, file);
+      // result.url is already a presigned URL from the backend
       setPhotoUrl(result.url);
       onSuccess?.(result.url);
     } catch (err: any) {

@@ -4,6 +4,7 @@ const upload = require('../middleware/upload');
 const storageService = require('../services/storage');
 const { generateDocumentPath, generateProfilePath } = require('../utils/fileHelper');
 const { prisma } = require('../lib/prisma');
+const { resolveFileUrl } = require('../services/storage/urlResolver');
 
 /**
  * POST /api/upload-document
@@ -243,9 +244,13 @@ router.post('/profile-photo', upload.single('file'), async (req, res) => {
       }
     }
 
+    // Generate a presigned URL so the frontend can display the photo immediately
+    const presignedUrl = await resolveFileUrl(fileUrl);
+
     res.status(200).json({
       success: true,
-      url: fileUrl,
+      url: presignedUrl,     // presigned URL — safe to use in <img> src
+      storageKey: fileUrl,   // raw storage key — persisted in DB
       data: updatedRecord,
       entityType: targetType,
       targetId: targetId,
