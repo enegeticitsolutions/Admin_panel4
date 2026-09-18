@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "maihoonna.app"
-               BlueprintName = "maihoonna"
-               ReferencedContainer = "container:maihoonna.xcodeproj">
+               BuildableName = "FamilyConnect.app"
+               BlueprintName = "FamilyConnect"
+               ReferencedContainer = "container:FamilyConnect.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "maihoonnaTests.xctest"
-               BlueprintName = "maihoonnaTests"
-               ReferencedContainer = "container:maihoonna.xcodeproj">
+               BuildableName = "FamilyConnectTests.xctest"
+               BlueprintName = "FamilyConnectTests"
+               ReferencedContainer = "container:FamilyConnect.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "maihoonna.app"
-            BlueprintName = "maihoonna"
-            ReferencedContainer = "container:maihoonna.xcodeproj">
+            BuildableName = "FamilyConnect.app"
+            BlueprintName = "FamilyConnect"
+            ReferencedContainer = "container:FamilyConnect.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "maihoonna.app"
-            BlueprintName = "maihoonna"
-            ReferencedContainer = "container:maihoonna.xcodeproj">
+            BuildableName = "FamilyConnect.app"
+            BlueprintName = "FamilyConnect"
+            ReferencedContainer = "container:FamilyConnect.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -7,31 +7,31 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0FA5BC6B3EE94F7CF8F219E4 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D5CC78DD19250FE6D5A69BF5 /* PrivacyInfo.xcprivacy */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		233B8368AEACF49A7B100657 /* libPods-maihoonna.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3E2ACBE6BBCBF23141430239 /* libPods-maihoonna.a */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		5D9C41E22ECA45429B69F92F /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = E9A919140F3A4D1DA0980260 /* GoogleService-Info.plist */; };
+		5F0FC819D416448EAD4B6C8F /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 006B3A44853E4D4484B3CDFB /* GoogleService-Info.plist */; };
+		9EC36F5FCBF6EFFBA968B2C4 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 28782B2A9E2F03DF4D786906 /* PrivacyInfo.xcprivacy */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		D5CDEC34985680986237D68E /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 934B75DDB6701112C41918A6 /* ExpoModulesProvider.swift */; };
+		E2A8C3D4FC7C26BF34418E0A /* libPods-FamilyConnect.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 392CCB5A197015A76E83B389 /* libPods-FamilyConnect.a */; };
+		EB4D09217C01AB42B151921F /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FEA6A9EC38431714EA1694 /* ExpoModulesProvider.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		11DB4700F75926D61E469C78 /* Pods-maihoonna.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-maihoonna.debug.xcconfig"; path = "Target Support Files/Pods-maihoonna/Pods-maihoonna.debug.xcconfig"; sourceTree = "<group>"; };
-		13B07F961A680F5B00A75B9A /* maihoonna.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = maihoonna.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = maihoonna/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = maihoonna/Info.plist; sourceTree = "<group>"; };
-		3E2ACBE6BBCBF23141430239 /* libPods-maihoonna.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-maihoonna.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		8AEC139DDBBBC649973D237A /* Pods-maihoonna.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-maihoonna.release.xcconfig"; path = "Target Support Files/Pods-maihoonna/Pods-maihoonna.release.xcconfig"; sourceTree = "<group>"; };
-		934B75DDB6701112C41918A6 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-maihoonna/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = maihoonna/SplashScreen.storyboard; sourceTree = "<group>"; };
+		006B3A44853E4D4484B3CDFB /* GoogleService-Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "FamilyConnect/GoogleService-Info.plist"; sourceTree = "<group>"; };
+		13B07F961A680F5B00A75B9A /* FamilyConnect.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyConnect.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = FamilyConnect/Images.xcassets; sourceTree = "<group>"; };
+		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = FamilyConnect/Info.plist; sourceTree = "<group>"; };
+		163E21044B75927F7719169B /* Pods-FamilyConnect.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-FamilyConnect.debug.xcconfig"; path = "Target Support Files/Pods-FamilyConnect/Pods-FamilyConnect.debug.xcconfig"; sourceTree = "<group>"; };
+		28782B2A9E2F03DF4D786906 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = FamilyConnect/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		392CCB5A197015A76E83B389 /* libPods-FamilyConnect.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-FamilyConnect.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		39FEA6A9EC38431714EA1694 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-FamilyConnect/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		5718503D44B40E310752ECBF /* Pods-FamilyConnect.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-FamilyConnect.release.xcconfig"; path = "Target Support Files/Pods-FamilyConnect/Pods-FamilyConnect.release.xcconfig"; sourceTree = "<group>"; };
+		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = FamilyConnect/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		D5CC78DD19250FE6D5A69BF5 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = maihoonna/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		E9A919140F3A4D1DA0980260 /* GoogleService-Info.plist */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "maihoonna/GoogleService-Info.plist"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = maihoonna/AppDelegate.swift; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* maihoonna-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "maihoonna-Bridging-Header.h"; path = "maihoonna/maihoonna-Bridging-Header.h"; sourceTree = "<group>"; };
+		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = FamilyConnect/AppDelegate.swift; sourceTree = "<group>"; };
+		F11748442D0722820044C1D9 /* FamilyConnect-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "FamilyConnect-Bridging-Header.h"; path = "FamilyConnect/FamilyConnect-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,60 +39,61 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				233B8368AEACF49A7B100657 /* libPods-maihoonna.a in Frameworks */,
+				E2A8C3D4FC7C26BF34418E0A /* libPods-FamilyConnect.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		134A2886DDA6AF6EEC37B63A /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				3E444DC22D8BA4064D0F2B61 /* maihoonna */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
-		13B07FAE1A68108700A75B9A /* maihoonna */ = {
+		13B07FAE1A68108700A75B9A /* FamilyConnect */ = {
 			isa = PBXGroup;
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
-				F11748442D0722820044C1D9 /* maihoonna-Bridging-Header.h */,
+				F11748442D0722820044C1D9 /* FamilyConnect-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				D5CC78DD19250FE6D5A69BF5 /* PrivacyInfo.xcprivacy */,
-				E9A919140F3A4D1DA0980260 /* GoogleService-Info.plist */,
+				006B3A44853E4D4484B3CDFB /* GoogleService-Info.plist */,
+				28782B2A9E2F03DF4D786906 /* PrivacyInfo.xcprivacy */,
 			);
-			name = maihoonna;
+			name = FamilyConnect;
 			sourceTree = "<group>";
 		};
-		152D9A013E0783CF6AE72AC2 /* Pods */ = {
+		17AF6BF7D91F830AFFE1E87E /* FamilyConnect */ = {
 			isa = PBXGroup;
 			children = (
-				11DB4700F75926D61E469C78 /* Pods-maihoonna.debug.xcconfig */,
-				8AEC139DDBBBC649973D237A /* Pods-maihoonna.release.xcconfig */,
+				39FEA6A9EC38431714EA1694 /* ExpoModulesProvider.swift */,
 			);
-			path = Pods;
+			name = FamilyConnect;
 			sourceTree = "<group>";
 		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				3E2ACBE6BBCBF23141430239 /* libPods-maihoonna.a */,
+				392CCB5A197015A76E83B389 /* libPods-FamilyConnect.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		3E444DC22D8BA4064D0F2B61 /* maihoonna */ = {
+		53B52DB8C19141129DA12A3E /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				934B75DDB6701112C41918A6 /* ExpoModulesProvider.swift */,
+				163E21044B75927F7719169B /* Pods-FamilyConnect.debug.xcconfig */,
+				5718503D44B40E310752ECBF /* Pods-FamilyConnect.release.xcconfig */,
 			);
-			name = maihoonna;
+			name = Pods;
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		632C094E0BDBC80BED65A05E /* ExpoModulesProviders */ = {
+			isa = PBXGroup;
+			children = (
+				17AF6BF7D91F830AFFE1E87E /* FamilyConnect */,
+			);
+			name = ExpoModulesProviders;
 			sourceTree = "<group>";
 		};
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
@@ -105,12 +106,12 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
-				13B07FAE1A68108700A75B9A /* maihoonna */,
+				13B07FAE1A68108700A75B9A /* FamilyConnect */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				152D9A013E0783CF6AE72AC2 /* Pods */,
-				134A2886DDA6AF6EEC37B63A /* ExpoModulesProviders */,
+				53B52DB8C19141129DA12A3E /* Pods */,
+				632C094E0BDBC80BED65A05E /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -120,7 +121,7 @@
 		83CBBA001A601CBA00E9B192 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				13B07F961A680F5B00A75B9A /* maihoonna.app */,
+				13B07F961A680F5B00A75B9A /* FamilyConnect.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -131,32 +132,32 @@
 				BB2F792C24A3F905000567C9 /* Expo.plist */,
 			);
 			name = Supporting;
-			path = maihoonna/Supporting;
+			path = FamilyConnect/Supporting;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		13B07F861A680F5B00A75B9A /* maihoonna */ = {
+		13B07F861A680F5B00A75B9A /* FamilyConnect */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "maihoonna" */;
+			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "FamilyConnect" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				2663EB6F0D8B1F9089C95708 /* [Expo] Configure project */,
+				F5D7246164C58975D6D3B16C /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				4755F72D3A6E6BD7AAD22359 /* [CP] Embed Pods Frameworks */,
+				E16AB5E18386CC2EC0AE788E /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = maihoonna;
-			productName = maihoonna;
-			productReference = 13B07F961A680F5B00A75B9A /* maihoonna.app */;
+			name = FamilyConnect;
+			productName = FamilyConnect;
+			productReference = 13B07F961A680F5B00A75B9A /* FamilyConnect.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -172,7 +173,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "maihoonna" */;
+			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "FamilyConnect" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -185,7 +186,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				13B07F861A680F5B00A75B9A /* maihoonna */,
+				13B07F861A680F5B00A75B9A /* FamilyConnect */,
 			);
 		};
 /* End PBXProject section */
@@ -198,8 +199,8 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				0FA5BC6B3EE94F7CF8F219E4 /* PrivacyInfo.xcprivacy in Resources */,
-				5D9C41E22ECA45429B69F92F /* GoogleService-Info.plist in Resources */,
+				5F0FC819D416448EAD4B6C8F /* GoogleService-Info.plist in Resources */,
+				9EC36F5FCBF6EFFBA968B2C4 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -238,63 +239,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-maihoonna-checkManifestLockResult.txt",
+				"$(DERIVED_FILE_DIR)/Pods-FamilyConnect-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		2663EB6F0D8B1F9089C95708 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/maihoonna/maihoonna.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-maihoonna/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-maihoonna/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-maihoonna/expo-configure-project.sh\"\n";
-		};
-		4755F72D3A6E6BD7AAD22359 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-maihoonna/Pods-maihoonna-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/razorpay-core-pod/Razorpay.framework/Razorpay",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/razorpay-core-pod/RazorpayCore.framework/RazorpayCore",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/razorpay-pod/RazorpayStandard.framework/RazorpayStandard",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Razorpay.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/RazorpayCore.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/RazorpayStandard.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-maihoonna/Pods-maihoonna-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
@@ -303,7 +252,7 @@
 			files = (
 			);
 			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-maihoonna/Pods-maihoonna-resources.sh",
+				"${PODS_ROOT}/Target Support Files/Pods-FamilyConnect/Pods-FamilyConnect-resources.sh",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXApplication/ExpoApplication_privacy.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
 				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
@@ -348,8 +297,60 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-maihoonna/Pods-maihoonna-resources.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-FamilyConnect/Pods-FamilyConnect-resources.sh\"\n";
 			showEnvVarsInLog = 0;
+		};
+		E16AB5E18386CC2EC0AE788E /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-FamilyConnect/Pods-FamilyConnect-frameworks.sh",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework/hermes",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/razorpay-core-pod/Razorpay.framework/Razorpay",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/razorpay-core-pod/RazorpayCore.framework/RazorpayCore",
+				"${PODS_XCFRAMEWORKS_BUILD_DIR}/razorpay-pod/RazorpayStandard.framework/RazorpayStandard",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermes.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Razorpay.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/RazorpayCore.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/RazorpayStandard.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-FamilyConnect/Pods-FamilyConnect-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		F5D7246164C58975D6D3B16C /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/FamilyConnect/FamilyConnect.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-FamilyConnect/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-FamilyConnect/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-FamilyConnect/expo-configure-project.sh\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -359,7 +360,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				D5CDEC34985680986237D68E /* ExpoModulesProvider.swift in Sources */,
+				EB4D09217C01AB42B151921F /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -368,18 +369,18 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 11DB4700F75926D61E469C78 /* Pods-maihoonna.debug.xcconfig */;
+			baseConfigurationReference = 163E21044B75927F7719169B /* Pods-FamilyConnect.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = maihoonna/maihoonna.entitlements;
+				CODE_SIGN_ENTITLEMENTS = FamilyConnect/FamilyConnect.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
 					"FB_SONARKIT_ENABLED=1",
 				);
-				INFOPLIST_FILE = maihoonna/Info.plist;
+				INFOPLIST_FILE = FamilyConnect/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -393,24 +394,24 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.maihoonna.app;
-				PRODUCT_NAME = maihoonna;
-				SWIFT_OBJC_BRIDGING_HEADER = "maihoonna/maihoonna-Bridging-Header.h";
+				PRODUCT_NAME = FamilyConnect;
+				SWIFT_OBJC_BRIDGING_HEADER = "FamilyConnect/FamilyConnect-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 8AEC139DDBBBC649973D237A /* Pods-maihoonna.release.xcconfig */;
+			baseConfigurationReference = 5718503D44B40E310752ECBF /* Pods-FamilyConnect.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = maihoonna/maihoonna.entitlements;
+				CODE_SIGN_ENTITLEMENTS = FamilyConnect/FamilyConnect.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
-				INFOPLIST_FILE = maihoonna/Info.plist;
+				INFOPLIST_FILE = FamilyConnect/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -424,10 +425,10 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.maihoonna.app;
-				PRODUCT_NAME = maihoonna;
-				SWIFT_OBJC_BRIDGING_HEADER = "maihoonna/maihoonna-Bridging-Header.h";
+				PRODUCT_NAME = FamilyConnect;
+				SWIFT_OBJC_BRIDGING_HEADER = "FamilyConnect/FamilyConnect-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
@@ -553,7 +554,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "maihoonna" */ = {
+		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "FamilyConnect" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
@@ -562,7 +563,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "maihoonna" */ = {
+		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "FamilyConnect" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
