@@ -1976,7 +1976,7 @@ export interface BeneficiaryVitalConfigItem {
 
 export interface LegacyCircleRequest {
   id: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'suspended';
   title: string;
   headline: string;
   industry: string;
@@ -2010,6 +2010,12 @@ export const legacyCircleApi = {
 
   async approve(id: string): Promise<LegacyCircleRequest> {
     return apiJson<LegacyCircleRequest>(`/legacy-circle/${id}/approve`, {
+      method: 'PATCH',
+    });
+  },
+
+  async deactivate(id: string): Promise<LegacyCircleRequest> {
+    return apiJson<LegacyCircleRequest>(`/legacy-circle/${id}/deactivate`, {
       method: 'PATCH',
     });
   },

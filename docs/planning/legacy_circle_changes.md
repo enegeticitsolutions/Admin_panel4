@@ -209,3 +209,26 @@ The screen handles three distinct states:
 | **Mobile App** | Form validation requires all fields + Terms & Conditions agreement | Verified |
 | **Mobile App** | Screen invalidates cache on screen focus and transitions from Pending to Approved without restarting app | Verified |
 | **Mobile App** | Approved view displays city network background image with orange overlay and overlapping avatar matching Figma | Verified |
+
+---
+
+## 8. Website Public Portal & Deep Linking (Session 2 Updates)
+
+### 8.1 Public API (`apps/api`)
+- **Endpoint**: `GET /api/website/content/legacy-circle/:id`
+- **Description**: Exposes a public, unauthenticated route to fetch an approved legacy profile by ID. Ensures `isActive` and `status === 'approved'` checks are strictly enforced.
+
+### 8.2 Admin Panel Link Generation
+- **Environment Awareness**: Updated `LegacyCirclePage.tsx` to conditionally build the share URL using `import.meta.env.DEV ? 'http://localhost:5174' : 'https://maihoonna.com'`.
+
+### 8.3 Mobile App Share Modal (`apps/mobile-app`)
+- **Share Profile Button**: Added to the Approved Profile view.
+- **Custom Bottom Sheet**: Built a completely custom, native-feeling share modal in `legacy-circle.tsx` to handle the `https://maihoonna.com/legacy/:id` link.
+- **Functionality**:
+  - `expo-clipboard` integration for quick copy-to-clipboard functionality.
+  - Native quick-share handlers for **WhatsApp**, **Email**, **SMS**, and a fallback to the system **Share dialog (More)**.
+  - Correctly split the string message and URL in the iOS `Share.share()` API to prevent duplicate URLs from being appended by the system.
+
+### 8.4 Website Public Views (`apps/website`)
+- **Legacy Page (`LegacyPage.jsx`)**: Implemented a public landing page featuring a grid of legacy experts with a dynamic location filter.
+- **Profile Modal (`LegacyExpertProfile.jsx`)**: Built a compact, visually appealing modal overlay to view the full details of a specific expert and initiate a connection request, replacing the previous full-page approach.

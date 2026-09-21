@@ -136,6 +136,10 @@ router.patch('/active', authenticate, async (req: AuthRequest, res: Response) =>
             return res.status(404).json({ success: false, message: 'Profile not found' });
         }
 
+        if (existingProfile.status === 'suspended') {
+            return res.status(403).json({ success: false, message: 'Your profile has been suspended by the admin and cannot be reactivated.' });
+        }
+
         const updatedProfile = await prisma.legacyCircleProfile.update({
             where: { beneficiaryId: beneficiary.id },
             data: {

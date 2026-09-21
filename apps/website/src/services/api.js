@@ -389,5 +389,14 @@ export const fetchLegacyCircleProfiles = async () => {
     return null;
   }
 };
-
-
+export const fetchLegacyCircleProfileById = async (id) => {
+  try {
+    const response = await fetch(`${API_BASE}/website/content/legacy-circle/${encodeURIComponent(id)}`);
+    if (!response.ok) return null;
+    const json = await response.json();
+    return json.success ? json.data : null;
+  } catch (err) {
+    console.warn(`Unable to fetch legacy-circle profile for ${id}:`, err);
+    return null;
+  }
+};

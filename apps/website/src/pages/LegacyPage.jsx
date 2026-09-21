@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import LegacyExpertCard from "../components/legacy/LegacyExpertCard";
+import LegacyExpertProfile from "./LegacyExpertProfile";
 import { fetchLegacyCircleProfiles } from "../services/api";
 
 // Mock Senior Expert Profiles with rich details matching the design
@@ -181,6 +182,30 @@ const LegacyPage = ({ openForm }) => {
   // Live Experts List from Backend (with fallback)
   const [expertsList, setExpertsList] = useState(EXPERTS_DATA);
   const [isLoadingExperts, setIsLoadingExperts] = useState(false);
+  
+  // Profile Modal State
+  const [selectedExpertId, setSelectedExpertId] = useState(null);
+
+  // Initialize selected expert from URL on mount
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path.startsWith("/legacy/")) {
+      const id = path.split("/").pop();
+      if (id && id !== "legacy") {
+        setSelectedExpertId(id);
+      }
+    }
+  }, []);
+
+  const handleOpenExpertProfile = (expert) => {
+    setSelectedExpertId(expert.id);
+    window.history.pushState(null, "", `/legacy/${expert.id}`);
+  };
+
+  const handleCloseExpertProfile = () => {
+    setSelectedExpertId(null);
+    window.history.pushState(null, "", `/legacy`);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -694,11 +719,15 @@ const LegacyPage = ({ openForm }) => {
           <div className="legacy-cards-grid">
             {filteredExperts.length > 0 ? (
               filteredExperts.map((expert) => (
-                <LegacyExpertCard
-                  key={expert.id}
-                  expert={expert}
-                  onConsultation={handleOpenConsultation}
-                />
+                <div key={expert.id} onClick={() => handleOpenExpertProfile(expert)} style={{ cursor: 'pointer' }}>
+                  <LegacyExpertCard
+                    expert={expert}
+                    onConsultation={(e) => {
+                      e.stopPropagation(); // prevent card click
+                      handleOpenConsultation(expert);
+                    }}
+                  />
+                </div>
               ))
             ) : (
               <div className="legacy-empty-state">
@@ -959,6 +988,13 @@ const LegacyPage = ({ openForm }) => {
             )}
           </div>
         </div>
+      )}
+
+      {selectedExpertId && (
+        <LegacyExpertProfile 
+          id={selectedExpertId} 
+          onClose={handleCloseExpertProfile} 
+        />
       )}
 
     </main>

@@ -177,7 +177,7 @@ router.get('/content/legal/:slug', async (req: Request, res: Response) => {
 router.get('/content/legacy-circle', async (_req: Request, res: Response) => {
   try {
     const profiles = await (prisma as any).legacyCircleProfile.findMany({
-      where: { status: 'approved' },
+      where: { status: 'approved', isActive: true },
       orderBy: { createdAt: 'desc' },
       include: {
         beneficiary: {
@@ -232,6 +232,76 @@ router.get('/content/legacy-circle', async (_req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Server error while fetching Legacy Circle profiles.',
+    });
+  }
+});
+
+/**
+ * GET /api/website/content/legacy-circle/:id
+ * Returns a specific approved Legacy Circle senior expert profile by ID.
+ */
+router.get('/content/legacy-circle/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const profile = await (prisma as any).legacyCircleProfile.findFirst({
+      where: { 
+        id, 
+        status: 'approved',
+        isActive: true
+      },
+      include: {
+        beneficiary: {
+          select: {
+            id: true,
+            name: true,
+            photo: true,
+            city: true,
+            state: true,
+            age: true,
+            gender: true,
+          },
+        },
+      },
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: `Approved Legacy Circle profile not found.`,
+      });
+    }
+
+    const b = profile.beneficiary || {};
+    const photoUrl = b.photo ? await resolveFileUrl(b.photo) : null;
+    const expNum = parseInt(String(profile.yearsOfExperience || '').replace(/\D/g, ''), 10) || 25;
+
+    const expert = {
+      id: profile.id,
+      name: b.name || profile.title || 'Senior Advisor',
+      role: profile.title || 'Consultant & Advisor',
+      company: profile.industry || 'Domain Specialist',
+      location: b.city || 'Delhi NCR',
+      experience: expNum,
+      domain: profile.industry || 'Strategy & Consulting',
+      email: profile.email || '',
+      bio: profile.headline || '',
+      tags: profile.industry ? [profile.industry] : ['Advisory', 'Consulting'],
+      profilePhoto: photoUrl,
+      photoUrl: photoUrl,
+      avatarColor: "#fe6700", // Default single color for detail view
+      verified: true,
+      status: profile.status,
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: expert,
+    });
+  } catch (error: any) {
+    console.error('❌ [Website Legacy Circle By Id Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching Legacy Circle profile.',
     });
   }
 });
