@@ -400,3 +400,22 @@ export const fetchLegacyCircleProfileById = async (id) => {
     return null;
   }
 };
+
+/**
+ * 12. Submit Career Interest / Team Application
+ * Endpoint: POST /api/website/career-interest
+ */
+export const submitCareerInterest = async (formData) => {
+  const response = await fetch(`${API_BASE}/website/career-interest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(formData),
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || 'Something went wrong. Please try again.');
+  }
+  return data;
+};
+

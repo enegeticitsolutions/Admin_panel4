@@ -1,0 +1,734 @@
+/* ==========================================================================
+   TeamPage.css — MaiHoonNa Team Page Styles
+   Matches brand guidelines, exact mock design layout, typography & responsiveness
+   ========================================================================== */
+
+.team-page {
+  width: 100%;
+  min-height: 100vh;
+  background-color: #FFFFFF;
+  color: #1F2937;
+  overflow-x: hidden;
+  font-family: inherit;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   1. HERO SECTION (Figma Spec)
+   ───────────────────────────────────────────────────────────────────────────── */
+.team-hero {
+  position: relative;
+  width: 100%;
+  min-height: 520px;
+  padding: 80px 24px 88px;
+  background: #F7F7F7;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  overflow: hidden;
+}
+
+.team-hero__glow {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  right: 8%;
+  top: -100px;
+  background: radial-gradient(70.71% 70.71% at 50% 50%, rgba(254, 103, 0, 0.047) 0%, rgba(254, 103, 0, 0) 70%);
+  border-radius: 250px;
+  pointer-events: none;
+}
+
+.team-hero__container {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.team-hero__badge {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 6px 18px;
+  gap: 8px;
+  background: #FFF1E8;
+  border: 0.666667px solid #FFD6BF;
+  border-radius: 50px;
+  margin-bottom: 24px;
+  font-family: 'Poppins', inherit;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #FE6700;
+}
+
+.team-hero__title {
+  font-family: 'Poppins', sans-serif;
+  font-style: normal;
+  font-weight: 700;
+  font-size: clamp(32px, 4.2vw, 60.27px);
+  line-height: clamp(38px, 4.6vw, 66.29px);
+  letter-spacing: 0px;
+  text-align: center;
+  color: #111111;
+  margin: 0 auto;
+  max-width: 921px;
+}
+
+.team-hero__title-highlight {
+  color: #FE6700;
+  display: block;
+}
+
+.team-hero__desc {
+  max-width: 691px;
+  padding-top: 20px;
+  margin: 0 auto;
+  font-family: 'Poppins', sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-size: clamp(15px, 1.5vw, 18px);
+  line-height: clamp(24px, 2.3vw, 33.3px);
+  letter-spacing: 0px;
+  text-align: center;
+  color: #666666;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   2. LEADERSHIP SECTION ("The people behind the promise")
+   ───────────────────────────────────────────────────────────────────────────── */
+.team-leadership {
+  width: 100%;
+  padding: 40px 24px 80px;
+  background: #FFFFFF;
+}
+
+.team-leadership__container {
+  max-width: 1157px;
+  margin: 0 auto;
+}
+
+.team-section-kicker {
+  font-family: 'Poppins', sans-serif;
+  font-style: normal;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 19.5px;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: #FE6700;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.team-leadership__heading {
+  font-family: 'Poppins', sans-serif;
+  font-size: clamp(28px, 3.2vw, 38px);
+  font-weight: 800;
+  color: #111827;
+  letter-spacing: -0.02em;
+  margin: 0 0 40px;
+}
+
+.team-leadership__list {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.team-leader-card {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 376px;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  background: #FFFFFF;
+  border: 2px solid #E5E5E5;
+  box-shadow: 0px 2px 16px rgba(0, 0, 0, 0.04);
+  border-radius: 28px;
+  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.team-leader-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  border-color: #D1D5DB;
+}
+
+.team-leader-card__photo-col {
+  flex: 0 0 320px;
+  width: 320px;
+  align-self: stretch;
+  position: relative;
+  background: #F7F7F7;
+  overflow: hidden;
+}
+
+.team-leader-card__photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  border-radius: 0px;
+  transition: transform 0.4s ease;
+  display: block;
+}
+
+.team-leader-card:hover .team-leader-card__photo {
+  transform: scale(1.03);
+}
+
+.team-leader-card__content-col {
+  flex: 1;
+  padding: 32px 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.team-leader-card__header {
+  margin-bottom: 12px;
+}
+
+.team-leader-card__name {
+  font-family: 'Poppins', sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 45px;
+  color: #111111;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.team-leader-card__role {
+  font-family: 'Poppins', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  margin: 4px 0 0;
+  display: block;
+}
+
+.team-leader-card__role--orange {
+  color: #FE6700;
+}
+
+.team-leader-card__role--purple {
+  color: #7C3AED;
+}
+
+.team-leader-card__role--teal {
+  color: #0D9488;
+}
+
+.team-leader-card__bio {
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 26px;
+  color: #666666;
+  margin: 0 0 20px;
+}
+
+.team-leader-card__footer {
+  display: flex;
+  align-items: center;
+  margin-top: auto;
+}
+
+.team-leader-card__linkedin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #0A66C2;
+  color: #FFFFFF;
+  text-decoration: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.team-leader-card__linkedin-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   3. "INSIDE THE TEAM" CAROUSEL SECTION
+   ───────────────────────────────────────────────────────────────────────────── */
+.team-gallery {
+  width: 100%;
+  padding: 80px 24px 52px;
+  background: #FFE1CC;
+}
+
+.team-gallery__container {
+  max-width: 1157px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.team-gallery__kicker {
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: #FE6700;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.team-gallery__heading {
+  font-family: 'Poppins', sans-serif;
+  font-size: clamp(28px, 3.2vw, 36.16px);
+  font-weight: 700;
+  line-height: 54px;
+  color: #111111;
+  letter-spacing: -0.02em;
+  margin: 0 0 36px;
+}
+
+/* Main Display Frame */
+.team-gallery__main-frame {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: #111111;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+}
+
+.team-gallery__img-wrap {
+  position: relative;
+  width: 100%;
+  height: 560px;
+  overflow: hidden;
+  background: #111111;
+}
+
+.team-gallery__main-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.team-gallery__counter-badge {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #FFFFFF;
+  padding: 6px 14px;
+  border-radius: 50px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 20px;
+  border: none;
+  z-index: 2;
+}
+
+/* Arrow controls */
+.team-gallery__nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 0.67px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.team-gallery__nav-arrow:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-50%) scale(1.05);
+}
+
+.team-gallery__nav-arrow--prev {
+  left: 20px;
+}
+
+.team-gallery__nav-arrow--next {
+  right: 20px;
+}
+
+/* Caption Card Below Image */
+.team-gallery__caption-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 36px 48px 24px;
+  gap: 12px;
+  text-align: left;
+  background: #111111;
+}
+
+.team-gallery__overlay-tag {
+  font-family: 'Poppins', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 1.32px;
+  color: #FE6700;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.team-gallery__overlay-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 34px;
+  color: #FFFFFF;
+  margin: 0;
+}
+
+.team-gallery__overlay-sub {
+  font-family: 'Poppins', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 28px;
+  letter-spacing: 0px;
+  color: rgba(255, 255, 255, 0.58);
+  max-width: 1060px;
+  margin: 0;
+}
+
+/* Dots Navigation */
+.team-gallery__dots {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  padding: 0 0 28px;
+  gap: 10px;
+  background: #111111;
+  width: 100%;
+}
+
+.team-gallery__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.25s ease;
+}
+
+.team-gallery__dot--active {
+  background: #FE6700;
+  width: 28px;
+  height: 8px;
+  border-radius: 99px;
+}
+
+/* Thumbnails Row */
+.team-gallery__thumbs {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  padding: 14px 0 0;
+  width: 100%;
+}
+
+.team-gallery__thumb-item {
+  position: relative;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0;
+  border: 2px solid transparent;
+  opacity: 0.55;
+  transition: all 0.2s ease;
+  background: transparent;
+}
+
+.team-gallery__thumb-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+}
+
+.team-gallery__thumb-item:hover {
+  opacity: 0.85;
+}
+
+.team-gallery__thumb-item--active {
+  opacity: 1;
+  border: 2px solid #FE6700;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   4. "ARE YOU EMPATHETIC ENOUGH" CAREERS SECTION
+   ───────────────────────────────────────────────────────────────────────────── */
+.team-careers {
+  width: 100%;
+  padding: 80px 24px 100px;
+  background: #FFFFFF;
+}
+
+.team-careers__box {
+  max-width: 1157px;
+  margin: 0 auto;
+  background: #111827;
+  border-radius: 28px;
+  padding: 56px 48px;
+  color: #FFFFFF;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.team-careers__glow {
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 480px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(254, 103, 0, 0.16) 0%, rgba(254, 103, 0, 0) 70%);
+  pointer-events: none;
+}
+
+/* Content */
+.team-careers__left {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 700px;
+}
+
+.team-careers__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  background: rgba(254, 103, 0, 0.15);
+  border: 1px solid rgba(254, 103, 0, 0.35);
+  color: #FE6700;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.team-careers__title {
+  font-size: clamp(30px, 3.8vw, 44px);
+  font-weight: 800;
+  line-height: 1.18;
+  color: #FFFFFF;
+  letter-spacing: -0.02em;
+  margin: 0 0 18px;
+}
+
+.team-careers__title-orange {
+  color: #FE6700;
+}
+
+.team-careers__desc {
+  font-size: 16px;
+  line-height: 1.65;
+  color: #9CA3AF;
+  margin: 0 0 32px;
+  max-width: 620px;
+}
+
+.team-careers__traits-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: #E5E7EB;
+  margin: 0 0 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.team-careers__traits-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 36px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px 22px;
+}
+
+.team-careers__trait-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #D1D5DB;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 8px 16px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.team-careers__trait-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #FE6700;
+  flex-shrink: 0;
+}
+
+.team-careers__action {
+  margin-top: 8px;
+}
+
+.team-careers__cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 30px;
+  border-radius: 9999px;
+  background: #FE6700;
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(254, 103, 0, 0.35);
+  transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.team-careers__cta-btn:hover {
+  background: #E55D00;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(254, 103, 0, 0.45);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RESPONSIVE BREAKPOINTS
+   ───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .team-leader-card {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .team-leader-card__photo-col {
+    flex: 0 0 320px;
+    width: 100%;
+    height: 320px;
+    min-height: auto;
+  }
+
+  .team-leader-card__content-col {
+    padding: 28px 24px;
+  }
+
+  .team-leader-card__name {
+    font-size: 26px;
+    line-height: 36px;
+  }
+
+  .team-careers__box {
+    grid-template-columns: 1fr;
+    padding: 36px 24px;
+    gap: 36px;
+  }
+
+  .team-gallery__img-wrap {
+    height: 420px;
+  }
+
+  .team-gallery__caption-card {
+    padding: 28px 32px 20px;
+  }
+
+  .team-gallery__thumbs {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .team-hero {
+    padding: 50px 16px 40px;
+  }
+
+  .team-leadership {
+    padding: 20px 16px 50px;
+  }
+
+  .team-gallery {
+    padding: 50px 16px 60px;
+  }
+
+  .team-gallery__img-wrap {
+    height: 280px;
+  }
+
+  .team-gallery__caption-card {
+    padding: 20px 16px 16px;
+  }
+
+  .team-gallery__overlay-title {
+    font-size: 20px;
+    line-height: 26px;
+  }
+
+  .team-gallery__thumbs {
+    gap: 8px;
+  }
+
+  .team-gallery__thumb-item {
+    height: 56px;
+  }
+
+  .team-careers {
+    padding: 50px 16px 60px;
+  }
+
+  .team-careers__box {
+    padding: 28px 18px;
+    border-radius: 20px;
+  }
+
+  .team-careers__form-card {
+    padding: 20px;
+  }
+}
