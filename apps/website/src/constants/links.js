@@ -36,6 +36,7 @@ export const SITE_LINKS = {
   // About Us Links
   about: [
     { label: "Our Story", page: "story", href: "/story" },
+    { label: "Our Team", page: "team", href: "/team" },
     { label: "Contact Us", href: "mailto:info@maihoonna.com" },
   ],
 

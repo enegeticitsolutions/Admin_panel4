@@ -430,6 +430,29 @@ const SEO_CONFIG = {
     ]
   },
 
+  team: {
+    title: "Our Team | MaiHoonNa – People Who Show Up For Your Parents",
+    description:
+      "Meet the dedicated leadership, healthcare experts, and operations team behind MaiHoonNa. Led by Sumit Kumar, Rajeev Thukral, and Dr. Narasimhan Subramanian.",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.com/og-image.jpg",
+    schemas: [
+      {
+        "@context": "https://schema.org",
+        "@type": "AboutPage",
+        "name": "Our Team - MaiHoonNa Eldercare",
+        "description":
+          "People who show up, so your parents aren't alone. Meet the team driving India's connected elder care ecosystem.",
+        "publisher": {
+          "@type": "Organization",
+          "name": "MaiHoonNa Eldercare Private Limited",
+          "url": "https://maihoonna.com"
+        }
+      }
+    ]
+  },
+
   terms: {
     title: "Terms of Service | MaiHoonNa Eldercare Platform",
     description:

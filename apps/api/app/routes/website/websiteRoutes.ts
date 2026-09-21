@@ -15,6 +15,8 @@ import leadRouter from './lead.routes';
 import sathiRouter from './sathi.routes';
 import contentRouter from './content.routes';
 
+import careerRouter from './career.routes';
+
 const router = Router();
 
 // Waitlist lead signup
@@ -22,6 +24,9 @@ router.use('/', leadRouter);
 
 // Saathi volunteer enrollment
 router.use('/', sathiRouter);
+
+// Career / Express Interest
+router.use('/', careerRouter);
 
 // Health check & CMS content
 router.use('/', contentRouter);

@@ -7,6 +7,7 @@ import ServicesPage from "./pages/ServicesPage";
 import SaathiPage from "./pages/SaathiPage";
 import LegacyPage from "./pages/LegacyPage";
 import AboutPage from "./pages/AboutPage";
+import TeamPage from "./pages/TeamPage";
 import AuthPage from "./pages/AuthPage";
 import AccountPage from "./pages/AccountPage";
 import CheckoutPage from "./pages/CheckoutPage";
@@ -32,6 +33,7 @@ const ROUTE_ALIASES = {
   "saathi-tc": "saathi-tc",
   "legacy-in-action": "legacy",
   "legacy-circle": "legacy",
+  "our-team": "team",
 };
 
 const LEGAL_PAGES = [
@@ -51,6 +53,7 @@ const VALID_PAGES = [
   "account",
   "checkout",
   "story",
+  "team",
   ...LEGAL_PAGES,
 ];
 
@@ -276,6 +279,8 @@ const App = () => {
             <LegacyPage openForm={openForm} setActivePage={setActivePage} />
           ) : activePage === "story" ? (
             <AboutPage openForm={openForm} setActivePage={setActivePage} />
+          ) : activePage === "team" ? (
+            <TeamPage />
           /* ) : activePage === "plans" ? (
             <PlansPage
               livePackages={livePackages}
