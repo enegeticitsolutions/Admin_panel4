@@ -20,6 +20,8 @@ import {
   Award,
   RefreshCw,
   Crown,
+  XCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '../components/ui/utils';
 
@@ -172,7 +174,17 @@ function RequestCard({ request, onApprove, approving }: RequestCardProps) {
 
 // ─── Approved Card ────────────────────────────────────────────────────────────
 
-function ApprovedCard({ request }: { request: LegacyCircleRequest }) {
+function ApprovedCard({
+  request,
+  onToggleStatus,
+  toggling,
+}: {
+  request: LegacyCircleRequest;
+  onToggleStatus: (id: string, status: string) => void;
+  toggling: boolean;
+}) {
+  const isSuspended = request.status === 'suspended';
+  
   return (
     <DataCard
       title={request.name}
@@ -186,10 +198,17 @@ function ApprovedCard({ request }: { request: LegacyCircleRequest }) {
         />
       }
       headerAction={
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#DFF4E6] text-green-800 text-[10px] font-bold uppercase">
-          <CheckCircle className="w-3 h-3" />
-          Approved
-        </span>
+        isSuspended ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary text-muted-foreground text-[10px] font-bold uppercase">
+            <XCircle className="w-3 h-3" />
+            Suspended
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#DFF4E6] text-green-800 text-[10px] font-bold uppercase">
+            <CheckCircle className="w-3 h-3" />
+            Approved
+          </span>
+        )
       }
     >
       <div className="space-y-2">
@@ -231,6 +250,49 @@ function ApprovedCard({ request }: { request: LegacyCircleRequest }) {
             <p className="text-xs text-muted-foreground line-clamp-2">{request.headline}</p>
           </div>
         )}
+
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            onClick={() => onToggleStatus(request.id, request.status)}
+            disabled={toggling}
+            className={cn(
+              'flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200',
+              toggling
+                ? 'bg-secondary text-muted-foreground cursor-not-allowed'
+                : isSuspended
+                ? 'bg-green-50 text-green-700 hover:bg-green-100 active:scale-[0.98]'
+                : 'bg-red-50 text-red-700 hover:bg-red-100 active:scale-[0.98]'
+            )}
+          >
+            {toggling ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Updating...
+              </>
+            ) : isSuspended ? (
+              <>
+                <CheckCircle className="w-4 h-4" />
+                Activate
+              </>
+            ) : (
+              <>
+                <XCircle className="w-4 h-4" />
+                Deactivate
+              </>
+            )}
+          </button>
+          
+          <button
+            onClick={() => {
+              const baseUrl = import.meta.env.DEV ? 'http://localhost:5174' : 'https://maihoonna.com';
+              window.open(`${baseUrl}/legacy/${request.id}`, '_blank');
+            }}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 bg-secondary text-foreground hover:bg-secondary/80 active:scale-[0.98] transition-all duration-200"
+          >
+            <ExternalLink className="w-4 h-4" />
+            View Profile
+          </button>
+        </div>
       </div>
     </DataCard>
   );
@@ -272,6 +334,7 @@ export default function LegacyCirclePage() {
   const [loadingApproved, setLoadingApproved] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const loadPending = useCallback(async () => {
     setLoadingPending(true);
@@ -315,6 +378,27 @@ export default function LegacyCirclePage() {
       alert(err.message || 'Failed to approve profile. Please try again.');
     } finally {
       setApprovingId(null);
+    }
+  };
+
+  const handleToggleStatus = async (id: string, currentStatus: string) => {
+    const isSuspending = currentStatus === 'approved';
+    const actionText = isSuspending ? 'deactivate' : 'activate';
+    
+    if (!confirm(`Are you sure you want to ${actionText} this account?`)) return;
+    
+    setTogglingId(id);
+    try {
+      if (isSuspending) {
+        await legacyCircleApi.deactivate(id);
+      } else {
+        await legacyCircleApi.approve(id);
+      }
+      await loadApproved();
+    } catch (err: any) {
+      alert(err.message || `Failed to ${actionText} profile.`);
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -418,7 +502,12 @@ export default function LegacyCirclePage() {
           ) : approved.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {approved.map((req) => (
-                <ApprovedCard key={req.id} request={req} />
+                <ApprovedCard
+                  key={req.id}
+                  request={req}
+                  onToggleStatus={handleToggleStatus}
+                  toggling={togglingId === req.id}
+                />
               ))}
             </div>
           ) : (

@@ -76,6 +76,10 @@ const App = () => {
 
     // 1. Inspect direct pathname first (e.g., /terms, /privacy, /refund-policy, /services)
     if (cleanPath) {
+      if (cleanPath.startsWith("legacy/")) {
+        return "legacy";
+      }
+      
       const normalized = ROUTE_ALIASES[cleanPath] || cleanPath;
       if (VALID_PAGES.includes(normalized)) {
         return normalized;
@@ -273,7 +277,7 @@ const App = () => {
           ) : activePage === "saathi" ? (
             <SaathiPage />
           ) : activePage === "legacy" ? (
-            <LegacyPage openForm={openForm} setActivePage={setActivePage} />
+            <LegacyPage openForm={() => window.open('https://app.maihoonna.com', '_blank')} />
           ) : activePage === "story" ? (
             <AboutPage openForm={openForm} setActivePage={setActivePage} />
           /* ) : activePage === "plans" ? (

@@ -69,7 +69,7 @@ const navigationSections: NavSection[] = [
       { path: '/care-companions', label: 'Care Companions', icon: UserCheck, roles: ['master_admin', 'operations_manager'] },
       { path: '/volunteers', label: 'Saathi Volunteers', icon: Handshake, roles: ['master_admin', 'operations_manager'] },
       { path: '/volunteer-requests', label: 'Saathi Onboarding', icon: UserPlus, roles: ['master_admin', 'operations_manager'] },
-      // { path: '/legacy-circle', label: 'Legacy Circle Approval', icon: Crown, roles: ['master_admin', 'operations_manager'] },
+      { path: '/legacy-circle', label: 'Legacy Circle Approval', icon: Crown, roles: ['master_admin', 'operations_manager'] },
       { path: '/staff-onboarding', label: 'Staff Onboarding', icon: UserPlus, roles: ['master_admin', 'operations_manager'] },
       { path: '/operations-managers', label: 'Operations Managers', icon: Users, roles: ['master_admin'] },
       { path: '/customer-service-agents', label: 'CSA', icon: HeadphonesIcon, roles: ['master_admin', 'operations_manager'] },

@@ -65,8 +65,13 @@ router.get('/', async (req, res) => {
       });
     }
 
+    let whereClause = { status };
+    if (status === 'approved') {
+      whereClause = { status: { in: ['approved', 'suspended'] } };
+    }
+
     const profiles = await prisma.legacyCircleProfile.findMany({
-      where: { status },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       include: BENEFICIARY_INCLUDE,
     });
@@ -109,7 +114,7 @@ router.patch('/:id/approve', async (req, res) => {
 
     const updated = await prisma.legacyCircleProfile.update({
       where: { id },
-      data: { status: 'approved' },
+      data: { status: 'approved', isActive: true },
       include: BENEFICIARY_INCLUDE,
     });
 
@@ -127,6 +132,51 @@ router.patch('/:id/approve', async (req, res) => {
     });
   } catch (err) {
     console.error('[legacy-circle] PATCH /:id/approve error:', err.message);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── PATCH /api/legacy-circle/:id/deactivate ─────────────────────────────────
+router.patch('/:id/deactivate', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const profile = await prisma.legacyCircleProfile.findUnique({
+      where: { id },
+      include: BENEFICIARY_INCLUDE,
+    });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: `Legacy Circle profile "${id}" not found.`,
+      });
+    }
+
+    if (profile.status === 'suspended') {
+      const enriched = await enrichProfile(profile);
+      return res.json({
+        success: true,
+        message: 'Profile was already deactivated.',
+        data: enriched,
+      });
+    }
+
+    const updated = await prisma.legacyCircleProfile.update({
+      where: { id },
+      data: { status: 'suspended', isActive: false },
+      include: BENEFICIARY_INCLUDE,
+    });
+
+    const enriched = await enrichProfile(updated);
+
+    return res.json({
+      success: true,
+      message: 'Legacy Circle profile deactivated successfully.',
+      data: enriched,
+    });
+  } catch (err) {
+    console.error('[legacy-circle] PATCH /:id/deactivate error:', err.message);
     return res.status(500).json({ success: false, message: err.message });
   }
 });

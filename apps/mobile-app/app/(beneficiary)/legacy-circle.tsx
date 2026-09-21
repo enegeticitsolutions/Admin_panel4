@@ -2,11 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     TextInput, ActivityIndicator, Alert, Image, ImageBackground, useWindowDimensions,
-    Modal, FlatList, KeyboardAvoidingView, Platform, TouchableWithoutFeedback
+    Modal, FlatList, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Share, Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { API_URL } from '@/constants/api';
@@ -66,6 +67,7 @@ export default function LegacyCircleScreen() {
     const [userData, setUserData] = useState<any>(null);
     const [successModalVisible, setSuccessModalVisible] = useState(false);
     const [successMessage, setSuccessMessage] = useState({ title: '', message: '' });
+    const [isShareModalVisible, setIsShareModalVisible] = useState(false);
 
     useFocusEffect(
         useCallback(() => {
@@ -224,21 +226,56 @@ export default function LegacyCircleScreen() {
     };
 
     const handleToggleActiveClick = () => {
-        const isCurrentlyActive = profile?.isActive;
         Alert.alert(
-            isCurrentlyActive ? 'Deactivate Account' : 'Activate Account',
-            isCurrentlyActive 
-                ? 'Are you sure you want to deactivate your Legacy Circle profile? It will no longer be visible to others.' 
-                : 'Are you sure you want to activate your Legacy Circle profile? It will become visible to others.',
+            profile.isActive ? "Deactivate Account?" : "Activate Account?",
+            profile.isActive ? "Are you sure you want to deactivate your Legacy Circle profile? It will no longer be visible on the website." : "Are you sure you want to activate your Legacy Circle profile? It will be visible on the website.",
             [
-                { text: 'Cancel', style: 'cancel' },
-                { 
-                    text: isCurrentlyActive ? 'Deactivate' : 'Activate', 
-                    style: isCurrentlyActive ? 'destructive' : 'default',
-                    onPress: () => toggleActiveMutation.mutate() 
-                }
+                { text: "Cancel", style: "cancel" },
+                { text: "Yes", onPress: () => toggleActiveMutation.mutate() }
             ]
         );
+    };
+
+    const handleShareProfile = () => {
+        if (!profile || !profile.id) return;
+        setIsShareModalVisible(true);
+    };
+
+    const handleCopyLink = async () => {
+        if (!profile) return;
+        const url = `https://maihoonna.com/legacy/${profile.id}`;
+        await Clipboard.setStringAsync(url);
+        Alert.alert('Copied', 'Profile link copied to clipboard!');
+    };
+
+    const handleQuickShare = async (platform: 'whatsapp' | 'email' | 'sms' | 'more') => {
+        if (!profile) return;
+        const url = `https://maihoonna.com/legacy/${profile.id}`;
+        const baseMessage = `Discover my professional journey and expertise on MaiHoonNa's Legacy Circle! Connect with me here:`;
+        const fullMessage = `${baseMessage} ${url}`;
+        
+        try {
+            if (platform === 'whatsapp') {
+                const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(fullMessage)}`;
+                const canOpen = await Linking.canOpenURL(whatsappUrl);
+                if (canOpen) await Linking.openURL(whatsappUrl);
+                else Alert.alert('Error', 'WhatsApp is not installed on this device.');
+            } else if (platform === 'email') {
+                const emailUrl = `mailto:?subject=${encodeURIComponent('My MaiHoonNa Legacy Circle Profile')}&body=${encodeURIComponent(fullMessage)}`;
+                await Linking.openURL(emailUrl);
+            } else if (platform === 'sms') {
+                const smsUrl = Platform.OS === 'ios' ? `sms:&body=${encodeURIComponent(fullMessage)}` : `sms:?body=${encodeURIComponent(fullMessage)}`;
+                await Linking.openURL(smsUrl);
+            } else if (platform === 'more') {
+                await Share.share({
+                    message: Platform.OS === 'ios' ? baseMessage : fullMessage,
+                    url: url, // For iOS
+                    title: 'My MaiHoonNa Profile' // For Android
+                });
+            }
+        } catch (error: any) {
+            Alert.alert('Error', error.message);
+        }
     };
 
     const handleSubmit = () => {
@@ -552,15 +589,15 @@ export default function LegacyCircleScreen() {
                         </View>
 
                         <View style={styles.shareBox}>
-                            <View style={styles.shareIconWrap}>
-                                <MaterialCommunityIcons name="whatsapp" size={24} color="#FFFFFF" />
+                            <View style={[styles.shareIconWrap, { backgroundColor: '#10B981' }]}>
+                                <Feather name="share-2" size={24} color="#FFFFFF" />
                             </View>
                             <View style={styles.shareTextWrap}>
                                 <Text style={styles.shareTitle}>Share your profile</Text>
-                                <Text style={styles.shareDesc}>Your link was sent via WhatsApp</Text>
+                                <Text style={styles.shareDesc}>Send your link to your network</Text>
                             </View>
-                            <TouchableOpacity style={styles.resendBtn}>
-                                <Text style={styles.resendBtnText}>Resend</Text>
+                            <TouchableOpacity style={styles.resendBtn} onPress={handleShareProfile}>
+                                <Text style={styles.resendBtnText}>Share</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -727,6 +764,73 @@ export default function LegacyCircleScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
+            </Modal>
+
+            {/* Share Profile Modal */}
+            <Modal
+                visible={isShareModalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setIsShareModalVisible(false)}
+            >
+                <TouchableOpacity 
+                    style={styles.shareModalOverlay} 
+                    activeOpacity={1} 
+                    onPress={() => setIsShareModalVisible(false)}
+                >
+                    <TouchableWithoutFeedback>
+                        <View style={styles.shareModalContent}>
+                            <View style={styles.shareModalHeader}>
+                                <Text style={styles.shareModalTitle}>Share Profile</Text>
+                                <TouchableOpacity onPress={() => setIsShareModalVisible(false)}>
+                                    <Feather name="x" size={24} color="#6B7280" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.linkContainer}>
+                                <Text style={styles.shareLinkText} numberOfLines={1} ellipsizeMode="tail">
+                                    {profile ? `https://maihoonna.com/legacy/${profile.id}` : ''}
+                                </Text>
+                                <TouchableOpacity style={styles.copyBtn} onPress={handleCopyLink}>
+                                    <Feather name="copy" size={16} color="#FFFFFF" />
+                                    <Text style={styles.copyBtnText}>Copy</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <Text style={styles.shareViaText}>Share via</Text>
+                            
+                            <View style={styles.shareIconsRow}>
+                                <TouchableOpacity style={styles.shareIconCol} onPress={() => handleQuickShare('whatsapp')}>
+                                    <View style={[styles.shareModalIconWrap, { backgroundColor: '#25D366' }]}>
+                                        <FontAwesome name="whatsapp" size={24} color="#FFF" />
+                                    </View>
+                                    <Text style={styles.shareIconLabel}>WhatsApp</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.shareIconCol} onPress={() => handleQuickShare('email')}>
+                                    <View style={[styles.shareModalIconWrap, { backgroundColor: '#DB4437' }]}>
+                                        <Feather name="mail" size={22} color="#FFF" />
+                                    </View>
+                                    <Text style={styles.shareIconLabel}>Email</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.shareIconCol} onPress={() => handleQuickShare('sms')}>
+                                    <View style={[styles.shareModalIconWrap, { backgroundColor: '#34B7F1' }]}>
+                                        <Feather name="message-square" size={22} color="#FFF" />
+                                    </View>
+                                    <Text style={styles.shareIconLabel}>SMS</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.shareIconCol} onPress={() => handleQuickShare('more')}>
+                                    <View style={[styles.shareModalIconWrap, { backgroundColor: '#6B7280' }]}>
+                                        <Feather name="more-horizontal" size={24} color="#FFF" />
+                                    </View>
+                                    <Text style={styles.shareIconLabel}>More</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </TouchableWithoutFeedback>
+                </TouchableOpacity>
             </Modal>
         </SafeAreaView>
     );
@@ -981,5 +1085,20 @@ const styles = StyleSheet.create({
     successModalTitle: { fontFamily: 'Poppins-Bold', fontSize: 20, color: '#111827', marginBottom: 8, textAlign: 'center' },
     successModalText: { fontFamily: 'Poppins-Regular', fontSize: 15, color: '#6B7280', textAlign: 'center', marginBottom: 24, lineHeight: 22 },
     successModalBtn: { backgroundColor: '#FF6A00', borderRadius: 16, height: 52, width: '100%', justifyContent: 'center', alignItems: 'center' },
-    successModalBtnText: { color: '#FFFFFF', fontFamily: 'Poppins-SemiBold', fontSize: 15 }
+    successModalBtnText: { color: '#FFFFFF', fontFamily: 'Poppins-SemiBold', fontSize: 15 },
+
+    // Share Modal Styles
+    shareModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
+    shareModalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24 },
+    shareModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    shareModalTitle: { fontFamily: 'Poppins-Bold', fontSize: 18, color: '#111827' },
+    linkContainer: { flexDirection: 'row', backgroundColor: '#F3F4F6', borderRadius: 12, padding: 12, alignItems: 'center', marginBottom: 24 },
+    shareLinkText: { flex: 1, fontFamily: 'Poppins-Regular', fontSize: 13, color: '#4B5563', marginRight: 12 },
+    copyBtn: { backgroundColor: '#FF6A00', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 6 },
+    copyBtnText: { color: '#FFFFFF', fontFamily: 'Poppins-Medium', fontSize: 13 },
+    shareViaText: { fontFamily: 'Poppins-Medium', fontSize: 15, color: '#374151', marginBottom: 16 },
+    shareIconsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10 },
+    shareIconCol: { alignItems: 'center', width: 70 },
+    shareModalIconWrap: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    shareIconLabel: { fontFamily: 'Poppins-Medium', fontSize: 12, color: '#4B5563', textAlign: 'center' }
 });
