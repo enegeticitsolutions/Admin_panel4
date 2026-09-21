@@ -50,13 +50,30 @@ function RootNavigator() {
   const { resetStack } = useNavigationStack();
   const router = useRouter();
 
+  // Hide splash screen only when auth state is fully loaded 
+  // (we already know fonts are loaded because this component wouldn't mount otherwise)
+  useEffect(() => {
+    if (!isLoading) {
+      // Add a small delay to ensure the navigation stack has time to paint the first frame
+      // before the native splash screen is dismissed.
+      const timer = setTimeout(() => {
+        SplashScreen.hideAsync();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
+
+  const wasLoggedIn = useRef(isLoggedIn);
+
   // Reset logical navigation stack when auth state changes
   useEffect(() => {
     resetStack();
-    if (!isLoading && !isLoggedIn) {
-      // Force navigation back to the auth stack globally upon logout
+    // Only force navigation back to the auth stack if the user actually logged out,
+    // otherwise this redirects on app launch and skips the custom animated splash screen!
+    if (wasLoggedIn.current && !isLoggedIn && !isLoading) {
       router.replace('/(auth)');
     }
+    wasLoggedIn.current = isLoggedIn;
   }, [isLoggedIn, isLoading, resetStack]);
 
   // Register for push notifications and listen for incoming messages when logged in
@@ -223,13 +240,6 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, []);
 
-  // Hide splash screen once fonts have loaded
-  useEffect(() => {
-    console.log('Fonts status:', { fontsLoaded, error });
-    if (fontsLoaded || error) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded, error]);
   console.log('RootLayout Render:', { fontsLoaded, error });
   if (!fontsLoaded && !error) return null;
 
