@@ -10,7 +10,7 @@ const router = Router();
 // ─── Config from .env ─────────────────────────────────────────────────────────
 
 const VISIT_IMAGE_MAX_COUNT = parseInt(process.env.VISIT_IMAGE_MAX_COUNT || '10', 10);
-const VISIT_IMAGE_MAX_SIZE_MB = parseFloat(process.env.VISIT_IMAGE_MAX_SIZE_MB || '25');
+const VISIT_IMAGE_MAX_SIZE_MB = parseFloat(process.env.VISIT_IMAGE_MAX_SIZE_MB || '12');
 const VISIT_IMAGE_ALLOWED_TYPES = (
   process.env.VISIT_IMAGE_ALLOWED_TYPES ||
   'image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif'

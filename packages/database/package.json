@@ -11,6 +11,7 @@
     "seed:config": "node scripts/seed_system_configs.js",
     "seed:sathi-guide": "node scripts/seed_sathi_guide.js",
     "seed:benefit-types": "node scripts/seed_benefit_types.js",
+    "seed:master-admin": "node scripts/seed_master_admin.js",
     "seed:all": "node scripts/seed_system_configs.js && node scripts/seed_sathi_guide.js"
   },
   "dependencies": {

@@ -13,13 +13,45 @@ router.post('/', authenticate, validate(createVisitSchema), async (req: Request,
 });
 
 router.get('/beneficiary/:beneficiaryId', authenticate, async (req: Request, res: Response) => {
-  const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-  const visits = await visitService.getBeneficiaryVisits(req.params.beneficiaryId as string, limit);
+  const authReq = req as any;
+  const beneficiaryId = req.params.beneficiaryId as string;
+  const userId = authReq.userId;
+  const userRole = authReq.userRole;
+
+  if (!['admin', 'master_admin', 'super_admin', 'field_manager', 'operations_manager', 'customer_service'].includes(userRole || '')) {
+    const ben = await prisma.beneficiary.findUnique({
+      where: { id: beneficiaryId },
+      include: { primaryCC: true, secondaryCC: true }
+    });
+    if (!ben) {
+      return res.status(404).json({ success: false, message: 'Beneficiary not found' });
+    }
+    const isOwnerOrBen = ben.subscriberId === userId || ben.userId === userId;
+    const isAssignedCC = (ben.primaryCC && ben.primaryCC.userId === userId) || (ben.secondaryCC && ben.secondaryCC.userId === userId);
+    if (!isOwnerOrBen && !isAssignedCC) {
+      return res.status(403).json({ success: false, message: 'Access denied: Unauthorized to view visits for this beneficiary.' });
+    }
+  }
+
+  const limit = req.query.limit ? Math.min(100, Math.max(1, parseInt(req.query.limit as string))) : 50;
+  const visits = await visitService.getBeneficiaryVisits(beneficiaryId, limit);
   res.json({ success: true, data: visits });
 });
 
 router.get('/care_companion/:ccId', authenticate, async (req: Request, res: Response) => {
-  const visits = await visitService.getCareCompanionVisits(req.params.ccId as string, req.query.date as string);
+  const authReq = req as any;
+  const ccId = req.params.ccId as string;
+  const userId = authReq.userId;
+  const userRole = authReq.userRole;
+
+  if (!['admin', 'master_admin', 'super_admin', 'field_manager', 'operations_manager', 'customer_service'].includes(userRole || '')) {
+    const cc = await prisma.careCompanion.findUnique({ where: { id: ccId } });
+    if (!cc || cc.userId !== userId) {
+      return res.status(403).json({ success: false, message: 'Access denied: Unauthorized to view visits for this care companion.' });
+    }
+  }
+
+  const visits = await visitService.getCareCompanionVisits(ccId, req.query.date as string);
   res.json({ success: true, data: visits });
 });
 

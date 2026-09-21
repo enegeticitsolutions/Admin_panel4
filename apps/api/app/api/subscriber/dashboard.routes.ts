@@ -5,42 +5,60 @@ import prisma from '../../core/database';
 const router = Router();
 
 router.get('/subscriber/:subscriberId', authenticate, async (req: Request, res: Response) => {
-  const beneficiaries = await prisma.beneficiary.findMany({
-    where: { subscriberId: req.params.subscriberId as string, status: { not: 'deleted' } },
-  });
+  const authReq = req as AuthRequest;
+  const targetSubscriberId = req.params.subscriberId as string;
 
-  const dashboardData = await Promise.all(
-    beneficiaries.map(async (b: any) => {
-      const recentVisits = await prisma.visit.findMany({
-        where: { beneficiaryId: b.id },
+  // Prevent IDOR: Users can only view their own subscriber dashboard unless admin/staff
+  if (authReq.userId !== targetSubscriberId && authReq.userRole !== 'admin' && authReq.userRole !== 'super_admin' && authReq.userRole !== 'field_manager') {
+    return res.status(403).json({ success: false, message: 'Access denied: Unauthorized to view this subscriber dashboard.' });
+  }
+
+  const beneficiaries = await prisma.beneficiary.findMany({
+    where: { subscriberId: targetSubscriberId, status: { not: 'deleted' } },
+    include: {
+      visits: {
         orderBy: { scheduledTime: 'desc' },
         take: 5,
-      });
+        select: {
+          id: true,
+          visitCode: true,
+          encounterId: true,
+          status: true,
+          scheduledTime: true,
+          mood: true,
+        },
+      },
+      primaryCC: {
+        include: {
+          user: {
+            select: { isActive: true },
+          },
+        },
+      },
+    },
+  });
 
-      let cc = null;
-      if (b.primaryCcId) {
-        cc = await prisma.careCompanion.findFirst({ 
-          where: { 
-            id: b.primaryCcId,
-            user: { isActive: true }
-          } 
-        });
-      }
-
-      return {
-        beneficiary: { id: b.id, name: b.name, age: b.age, emotionalScore: b.emotionalScore === 8.0 ? 85 : (b.emotionalScore || 85), address: b.address },
-        recentVisits: recentVisits.map((v: any) => ({
-          id: v.id,
-          visitCode: v.visitCode,
-          encounterId: v.encounterId,
-          status: v.status,
-          scheduledTime: v.scheduledTime,
-          mood: v.mood,
-        })),
-        careCompanion: cc ? { id: cc.id, name: cc.name, zone: cc.zone, isAvailable: cc.isAvailable } : null,
-      };
-    })
-  );
+  const dashboardData = beneficiaries.map((b: any) => {
+    const cc = b.primaryCC && b.primaryCC.user?.isActive ? b.primaryCC : null;
+    return {
+      beneficiary: {
+        id: b.id,
+        name: b.name,
+        age: b.age,
+        emotionalScore: b.emotionalScore === 8.0 ? 85 : (b.emotionalScore || 85),
+        address: b.address,
+      },
+      recentVisits: (b.visits || []).map((v: any) => ({
+        id: v.id,
+        visitCode: v.visitCode,
+        encounterId: v.encounterId,
+        status: v.status,
+        scheduledTime: v.scheduledTime,
+        mood: v.mood,
+      })),
+      careCompanion: cc ? { id: cc.id, name: cc.name, zone: cc.zone, isAvailable: cc.isAvailable } : null,
+    };
+  });
 
   res.json({ success: true, data: { beneficiaries: dashboardData } });
 });
@@ -105,26 +123,10 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
 
     const now = new Date();
 
-    // ── Auto-deactivate subscriptions past their endDate ───────────────────────
-    await prisma.subscription.updateMany({
-      where: {
-        subscriberId: userId,
-        isActive: true,
-        endDate: { lte: now }
-      },
-      data: {
-        isActive: false
-      }
-    }).catch((e: any) => console.warn('[Dashboard] Auto-deactivate sub error:', e.message));
-
-    // Core data (exclude queued plans from active subscriptions)
-    const allActiveSubscriptions = await prisma.subscription.findMany({
-      where: { 
-        subscriberId: userId, 
-        isActive: true,
-        isQueued: false,
-        cancellationNote: { not: 'QUEUED' }
-      },
+    // ── Single query for all subscriptions with packages and benefit balances ──
+    const allUserSubscriptions = await prisma.subscription.findMany({
+      where: { subscriberId: userId },
+      orderBy: { createdAt: 'desc' },
       include: {
         package: true,
         benefitBalances: {
@@ -135,16 +137,32 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
       }
     });
 
-    // All subscriptions (including expired & queued) to calculate beneficiary package health status
-    const allUserSubscriptions = await prisma.subscription.findMany({
-      where: { subscriberId: userId },
-      orderBy: { createdAt: 'desc' },
-      include: { package: true }
-    });
+    // Derive active and queued subscriptions in memory (eliminating redundant DB roundtrip)
+    const allActiveSubscriptions = allUserSubscriptions.filter((s: any) =>
+      s.isActive &&
+      !s.isQueued &&
+      s.cancellationNote !== 'QUEUED' &&
+      new Date(s.endDate) > now
+    );
 
     const queuedSubscriptions = allUserSubscriptions.filter((s: any) =>
       (s.isQueued === true || s.cancellationNote === 'QUEUED') && s.beneficiaryId
     );
+
+    // Auto-deactivate any expired subscriptions in the background only if expired active ones are found
+    const hasExpiredActive = allUserSubscriptions.some((s: any) => s.isActive && new Date(s.endDate) <= now);
+    if (hasExpiredActive) {
+      prisma.subscription.updateMany({
+        where: {
+          subscriberId: userId,
+          isActive: true,
+          endDate: { lte: now }
+        },
+        data: {
+          isActive: false
+        }
+      }).catch((e: any) => console.warn('[Dashboard] Auto-deactivate sub error:', e.message));
+    }
 
     const beneficiaries = await prisma.beneficiary.findMany({
       where: { subscriberId: userId, status: { not: 'deleted' } }

@@ -21,9 +21,9 @@ const pool =
   new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: isLocal ? false : { rejectUnauthorized: false },
-    max: 3,                        // small pool for transaction-mode pooler
-    idleTimeoutMillis: 10000,      // release idle connections quickly
-    connectionTimeoutMillis: 15000, // wait up to 15s for a connection
+    max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+    idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT_MS || '10000', 10),
+    connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONN_TIMEOUT_MS || '15000', 10),
   });
 
 pool.on('error', (err) => {

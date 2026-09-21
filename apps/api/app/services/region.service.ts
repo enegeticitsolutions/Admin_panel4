@@ -62,13 +62,37 @@ export class RegionService {
     return (degrees * Math.PI) / 180;
   }
 
+  // In-memory cache for active regions (refreshes every 5 mins)
+  private cachedRegions: any[] | null = null;
+  private cacheExpiresAt: number = 0;
+  private readonly CACHE_TTL_MS = 5 * 60 * 1000;
+
+  /**
+   * Returns active regions from memory cache or database.
+   */
+  public async getActiveRegions(): Promise<any[]> {
+    const now = Date.now();
+    if (this.cachedRegions && now < this.cacheExpiresAt) {
+      return this.cachedRegions;
+    }
+    const regions = await prisma.region.findMany({
+      where: { isActive: true },
+    });
+    this.cachedRegions = regions;
+    this.cacheExpiresAt = now + this.CACHE_TTL_MS;
+    return regions;
+  }
+
+  public clearCache(): void {
+    this.cachedRegions = null;
+    this.cacheExpiresAt = 0;
+  }
+
   /**
    * Finds all active regions in the database that cover the given GPS coordinates.
    */
   public async findMatchingRegions(latitude: number, longitude: number): Promise<ServiceableRegionDTO[]> {
-    const activeRegions = await prisma.region.findMany({
-      where: { isActive: true },
-    });
+    const activeRegions = await this.getActiveRegions();
 
     const matchingRegions: ServiceableRegionDTO[] = [];
 

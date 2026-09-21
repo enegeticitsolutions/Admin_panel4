@@ -8,3 +8,4 @@ dist/
 bins.json
 out.json
 test-db.ts
+apps\api\.env.example

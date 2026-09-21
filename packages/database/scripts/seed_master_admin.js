@@ -19,9 +19,11 @@ const { PrismaClient } = require('@prisma/client');
 // Auto-discover DATABASE_URL if not directly supplied in process.env
 if (!process.env.DATABASE_URL) {
   const candidateEnvPaths = [
-    path.resolve(__dirname, '../.env'),
-    path.resolve(__dirname, '../../../apps/api/.env'),
     path.resolve(process.cwd(), '.env'),
+    path.resolve(__dirname, '../.env'),
+    path.resolve(__dirname, '../../../.env'),
+    path.resolve(__dirname, '../../../apps/api/.env'),
+    path.resolve(__dirname, '../../../apps/admin-backend/.env'),
   ];
 
   for (const envPath of candidateEnvPaths) {
@@ -63,13 +65,7 @@ const PHONES = [
 
 const PASSWORD_PLAIN = process.env.MASTER_ADMIN_PASSWORD;
 
-if (!PASSWORD_PLAIN) {
-  console.error('[Master Admin Seed] ERROR: MASTER_ADMIN_PASSWORD is not provided in the environment or .env file.');
-  console.error('Please add MASTER_ADMIN_PASSWORD to your .env file before running this seed script.');
-  process.exit(1);
-}
-
-const ROLE = 'master_admin';
+const ROLE = 'master_admin'; 
 
 async function seed() {
   const sanitizedUrl = process.env.DATABASE_URL.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:***@');
@@ -92,17 +88,25 @@ async function seed() {
   console.log('\n--- 1. Seeding Master Admin Profiles ---');
 
   let bcrypt;
-  try {
-    bcrypt = require('bcryptjs');
-  } catch (err) {
-    console.warn('[Master Admin Seed] Warning: bcryptjs not found in standard resolution. Trying to require from apps/api...');
+  const candidateBcryptPaths = [
+    'bcryptjs',
+    path.resolve(process.cwd(), 'node_modules/bcryptjs'),
+    path.resolve(__dirname, '../../../node_modules/bcryptjs'),
+    path.resolve(__dirname, '../../../apps/api/node_modules/bcryptjs'),
+    path.resolve(__dirname, '../../../apps/admin-backend/node_modules/bcryptjs'),
+  ];
+
+  for (const bPath of candidateBcryptPaths) {
     try {
-      bcrypt = require(path.resolve(__dirname, '../../../apps/api/node_modules/bcryptjs'));
-    } catch (e2) {
-      console.error('[Master Admin Seed] ERROR: Could not find bcryptjs module to hash the password.');
-      console.error('Please run this script from the root directory where node_modules are installed, or run "npm install bcryptjs" temporarily.');
-      process.exit(1);
-    }
+      bcrypt = require(bPath);
+      if (bcrypt) break;
+    } catch (err) {}
+  }
+
+  if (!bcrypt) {
+    console.error('[Master Admin Seed] ERROR: Could not find bcryptjs module to hash the password.');
+    console.error('Please run this script from the root directory where node_modules are installed, or run "npm install bcryptjs" temporarily.');
+    process.exit(1);
   }
 
   const salt = await bcrypt.genSalt(10);
