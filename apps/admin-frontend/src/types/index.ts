@@ -15,6 +15,8 @@ export type UserRole =
   | 'care_companion' 
   | 'emergency_coordinator'
   | 'customer_service'
+  | 'customer_service_manager'
+  | 'saathi_coordinator'
   | 'volunteer'
   | 'command_center';
 
@@ -396,7 +398,9 @@ export type StaffOnboardingRole =
   | 'care_companion'
   | 'field_manager'
   | 'operations_manager'
-  | 'customer_service';
+  | 'customer_service'
+  | 'customer_service_manager'
+  | 'saathi_coordinator';
 
 export type StaffOnboardingGender =
   | 'male'

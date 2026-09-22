@@ -14,6 +14,8 @@ const SUPPORTED_ONBOARDING_ROLES = new Set([
   'operations_manager',
   'sales',
   'customer_service',
+  'customer_service_manager',
+  'saathi_coordinator',
 ]);
 
 const SUPPORTED_BACKGROUND_CHECK_TYPES = new Set([
@@ -49,6 +51,8 @@ const REQUIRED_DOCUMENTS_BY_ROLE = {
   field_manager: ['aadhaar_front', 'aadhaar_back'],
   operations_manager: ['aadhaar_front', 'aadhaar_back'],
   customer_service: ['aadhaar_front', 'aadhaar_back'],
+  customer_service_manager: ['aadhaar_front', 'aadhaar_back'],
+  saathi_coordinator: ['aadhaar_front', 'aadhaar_back'],
 };
 
 const TRAININGS_BY_ROLE = {
@@ -693,7 +697,7 @@ router.post('/staff/onboard', async (req, res) => {
     const backgroundCheckAgency = asNullableString(assignment.bgvAgency);
 
     console.log('[DEBUG] Onboarding:', { role, zoneIdsLength: zoneIds.length });
-    if (!zoneIds.length && role !== 'customer_service') {
+    if (!zoneIds.length && role !== 'customer_service' && role !== 'customer_service_manager') {
       return res
         .status(400)
         .json({
@@ -753,7 +757,7 @@ router.post('/staff/onboard', async (req, res) => {
           where: {
             OR: [{ phone: mobileNumber }, ...(email ? [{ email }] : [])],
           },
-          select: { id: true, phone: true, email: true },
+          select: { id: true, phone: true, email: true, role: true },
         }),
         prisma.zone.findMany({
           where: { id: { in: zoneIds } },
@@ -779,7 +783,9 @@ router.post('/staff/onboard', async (req, res) => {
           : Promise.resolve(null),
       ]);
 
-    if (existingUser) {
+    const isVolunteerUser = existingUser && existingUser.role === 'volunteer';
+
+    if (existingUser && !isVolunteerUser) {
       return res.status(409).json({
         success: false,
         message: 'A user with the same phone number or email already exists',
@@ -876,12 +882,47 @@ router.post('/staff/onboard', async (req, res) => {
         );
       }
 
-      const user = await tx.user.create({
-        data: userData,
-      });
+      let user;
+      if (isVolunteerUser) {
+        user = await tx.user.update({
+          where: { id: existingUser.id },
+          data: userData,
+        });
+      } else {
+        user = await tx.user.create({
+          data: userData,
+        });
+      }
 
-      const staffProfile = await tx.staffProfile.create({
-        data: {
+      const staffProfile = await tx.staffProfile.upsert({
+        where: { userId: user.id },
+        update: {
+          role,
+          preferredName,
+          dateOfBirth: asOptionalDate(personal.dateOfBirth),
+          gender: asTrimmedString(personal.gender) || 'prefer_not_to_say',
+          whatsappPhone: asNullableString(personal.whatsappNumber),
+          alternatePhone: asNullableString(personal.alternatePhone),
+          addressLine1: asNullableString(personal.addressLine1),
+          addressLine2: asNullableString(personal.addressLine2),
+          city: asNullableString(personal.city),
+          state: asNullableString(personal.state),
+          pincode: asNullableString(personal.pincode),
+          aadhaarNumberEncrypted: aadhaarNumber,
+          panNumberEncrypted: panNumber,
+          languages: languageList,
+          specialization: asStringArray(professional.specialization),
+          zoneId: primaryZoneId,
+          teamId,
+          reportsToUserId,
+          bgvType: backgroundCheckType,
+          bgvAgency: backgroundCheckAgency,
+          bgvVerified: Boolean(assignment.bgvVerified),
+          kycVerified: Boolean(assignment.kycVerified),
+          employmentStatus,
+          notes: asNullableString(req.body?.notes),
+        },
+        create: {
           userId: user.id,
           role,
           preferredName,
@@ -914,8 +955,30 @@ router.post('/staff/onboard', async (req, res) => {
       let roleRecord = null;
 
       if (role === 'care_companion') {
-        roleRecord = await tx.careCompanion.create({
-          data: {
+        roleRecord = await tx.careCompanion.upsert({
+          where: { userId: user.id },
+          update: {
+            name: fullName,
+            bio: asTrimmedString(professional.bio) || '',
+            zone: primaryZone?.name || '',
+            experience: asOptionalInt(professional.experience),
+            qualifications: [
+              asTrimmedString(professional.qualification),
+            ].filter(Boolean),
+            languages: languageList,
+            nursingRegistrationNumber: asNullableString(
+              professional.nursingRegistrationNumber
+            ),
+            nursingCouncil: asNullableString(professional.nursingCouncil),
+            ccType: asTrimmedString(professional.ccType) || 'care_assistant',
+            shiftPreference,
+            maxDailyVisits: asOptionalInt(professional.maxDailyVisits),
+            willingClinicVisits: Boolean(professional.willingClinicVisits),
+            hasTwoWheeler: Boolean(professional.hasTwoWheeler),
+            teamId,
+            isAvailable: true,
+          },
+          create: {
             userId: user.id,
             name: fullName,
             bio: asTrimmedString(professional.bio) || '',
@@ -942,8 +1005,23 @@ router.post('/staff/onboard', async (req, res) => {
       }
 
       if (role === 'field_manager') {
-        roleRecord = await tx.fieldManager.create({
-          data: {
+        roleRecord = await tx.fieldManager.upsert({
+          where: { userId: user.id },
+          update: {
+            name: fullName,
+            bio: asTrimmedString(professional.bio) || '',
+            zone: primaryZone?.name || '',
+            phone: mobileNumber,
+            qualification: asNullableString(professional.qualification),
+            experience: asOptionalInt(professional.experience),
+            previousEmployer: asNullableString(professional.previousEmployer),
+            maxTeamSize: asOptionalInt(professional.maxTeamSize) || 15,
+            canApproveRoster: professional.canApproveRoster !== false,
+            canOnboardCCs: Boolean(professional.canOnboardCCs),
+            reportsToUserId,
+            isAvailable: true,
+          },
+          create: {
             userId: user.id,
             name: fullName,
             bio: asTrimmedString(professional.bio) || '',
@@ -963,8 +1041,17 @@ router.post('/staff/onboard', async (req, res) => {
       }
 
       if (role === 'operations_manager') {
-        roleRecord = await tx.operationsManager.create({
-          data: {
+        roleRecord = await tx.operationsManager.upsert({
+          where: { userId: user.id },
+          update: {
+            name: fullName,
+            bio: asTrimmedString(professional.bio) || '',
+            phone: mobileNumber,
+            qualification: asNullableString(professional.qualification),
+            experience: asOptionalInt(professional.experience),
+            isAvailable: true,
+          },
+          create: {
             userId: user.id,
             name: fullName,
             bio: asTrimmedString(professional.bio) || '',
@@ -986,8 +1073,17 @@ router.post('/staff/onboard', async (req, res) => {
       }
 
       if (role === 'customer_service') {
-        roleRecord = await tx.customerServiceAgent.create({
-          data: {
+        roleRecord = await tx.customerServiceAgent.upsert({
+          where: { userId: user.id },
+          update: {
+            name: fullName,
+            bio: asTrimmedString(professional.bio) || '',
+            phone: mobileNumber,
+            qualification: asNullableString(professional.qualification),
+            experience: asOptionalInt(professional.experience),
+            isAvailable: true,
+          },
+          create: {
             userId: user.id,
             name: fullName,
             bio: asTrimmedString(professional.bio) || '',
@@ -1082,18 +1178,49 @@ router.post('/staff', async (req, res) => {
   try {
     const { name, phone, role, zoneId, bio, specialization } = req.body;
 
-    const user = await prisma.user.create({
-      data: {
-        name,
-        phone,
-        role: role || 'care_companion',
-        isActive: true,
-      },
+    const existingUser = await prisma.user.findFirst({
+      where: { phone },
+      select: { id: true, role: true },
     });
 
-    if (user.role === 'care_companion') {
-      await prisma.careCompanion.create({
+    let user;
+    if (existingUser) {
+      if (existingUser.role === 'volunteer') {
+        user = await prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            name,
+            role: role || 'care_companion',
+            isActive: true,
+          },
+        });
+      } else {
+        return res
+          .status(409)
+          .json({ success: false, message: 'A user with this phone number already exists' });
+      }
+    } else {
+      user = await prisma.user.create({
         data: {
+          name,
+          phone,
+          role: role || 'care_companion',
+          isActive: true,
+        },
+      });
+    }
+
+    if (user.role === 'care_companion') {
+      await prisma.careCompanion.upsert({
+        where: { userId: user.id },
+        update: {
+          name,
+          zone: zoneId || 'Unassigned',
+          bio: bio || 'Professional Care Companion',
+          specialization: specialization || ['General Care'],
+          isAvailable: true,
+        },
+        create: {
           userId: user.id,
           name,
           zone: zoneId || 'Unassigned',
@@ -1103,8 +1230,14 @@ router.post('/staff', async (req, res) => {
         },
       });
     } else if (user.role === 'field_manager') {
-      await prisma.fieldManager.create({
-        data: {
+      await prisma.fieldManager.upsert({
+        where: { userId: user.id },
+        update: {
+          name,
+          zone: zoneId || 'Unassigned',
+          isAvailable: true,
+        },
+        create: {
           userId: user.id,
           name,
           zone: zoneId || 'Unassigned',

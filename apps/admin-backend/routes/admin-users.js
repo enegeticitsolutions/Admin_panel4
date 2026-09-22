@@ -62,8 +62,9 @@ router.get(
       'operations_manager',
       'field_manager',
       'care_companion',
+      'customer_service_manager',
       'customer_service',
-      'volunteer',
+      'saathi_coordinator',
       'command_center',
       'emergency_coordinator'
     ];

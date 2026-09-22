@@ -84,8 +84,9 @@ export default function AdminUsersPage() {
     { value: 'operations_manager', label: 'Operation Manager' },
     { value: 'field_manager', label: 'Field Manager' },
     { value: 'care_companion', label: 'Care-Companion' },
+    { value: 'customer_service_manager', label: 'Customer Service Manager' },
     { value: 'customer_service', label: 'Customer Service Agent' },
-    { value: 'volunteer', label: 'Volunteer' },
+    { value: 'saathi_coordinator', label: 'Saathi Coordinator' },
     { value: 'command_center', label: 'Command Center Team' },
   ];
 
@@ -166,7 +167,9 @@ export default function AdminUsersPage() {
       case 'operations_manager': return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'field_manager': return 'bg-green-100 text-green-700 border-green-200';
       case 'care_companion': return 'bg-pink-100 text-pink-700 border-pink-200';
+      case 'customer_service_manager': return 'bg-purple-100 text-purple-700 border-purple-200';
       case 'customer_service': return 'bg-cyan-100 text-cyan-700 border-cyan-200';
+      case 'saathi_coordinator': return 'bg-amber-100 text-amber-700 border-amber-200';
       case 'command_center': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
       case 'volunteer': return 'bg-amber-100 text-amber-700 border-amber-200';
       default: return 'bg-slate-100 text-slate-700 border-slate-200';

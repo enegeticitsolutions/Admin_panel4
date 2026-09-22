@@ -38,36 +38,14 @@ export default function MoreOptionsScreen() {
     const MAX_CONTENT_WIDTH = 440;
     const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
 
-    const [profileName, setProfileName] = useState('Margaret Williams');
-    const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
     const safeBack = useSafeBack();
     const logoutWithConfirm = useLogoutWithConfirm();
     const deleteAccountWithConfirm = useDeleteAccountWithConfirm();
-    const { availableRoles, isSwitchingRole, switchRole } = useAuth();
+    const { user, availableRoles, isSwitchingRole, switchRole } = useAuth();
     const isDualRole = availableRoles.includes('subscriber') && availableRoles.includes('beneficiary');
 
-    useFocusEffect(
-        useCallback(() => {
-            loadProfileName();
-        }, [])
-    );
-
-    const loadProfileName = async () => {
-        try {
-            const userDataStr = await AsyncStorage.getItem('userData');
-            if (userDataStr) {
-                const userData = JSON.parse(userDataStr);
-                if (userData.name) {
-                    setProfileName(userData.name);
-                }
-                if (userData.photo) {
-                    setProfilePhoto(userData.photo);
-                }
-            }
-        } catch (e) {
-            console.error('Error loading profile name:', e);
-        }
-    };
+    const profileName = user?.name || 'Margaret Williams';
+    const profilePhoto = user?.photo || user?.profilePhoto || null;
 
     const handleSwitchToSubscriber = async () => {
         try {

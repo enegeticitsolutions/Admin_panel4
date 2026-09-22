@@ -16,13 +16,17 @@ import {
   Activity,
   UserCheck,
   Layers,
-  ChevronDown
+  ChevronDown,
+  SlidersHorizontal,
+  FileText
 } from 'lucide-react';
 import { subscriptionApi } from '../../services/api';
 import { toast } from 'sonner';
 import { AddonBenefitModal } from './addons/AddonBenefitModal';
+import { AdjustBenefitQuotaModal, BenefitBalanceForAdjustment } from './beneficiary/AdjustBenefitQuotaModal';
 
 interface BenefitBalance {
+  balanceId?: string;
   benefitId: string;
   benefitName: string;
   unitLabel: string;
@@ -94,6 +98,22 @@ interface SubscriptionHistoryItem {
   createdAt: string;
 }
 
+interface QuotaAdjustmentLog {
+  id: string;
+  balanceId: string;
+  benefitName: string;
+  unitLabel: string;
+  units: number;
+  totalBefore: number;
+  totalAfter: number;
+  availableBefore: number;
+  availableAfter: number;
+  reason: string;
+  performedBy: string;
+  performedByRole: string;
+  createdAt: string;
+}
+
 interface UtilizationData {
   subscription: SubscriptionSummary | null;
   allSubscriptions?: SubscriptionHistoryItem[];
@@ -109,6 +129,7 @@ interface UtilizationData {
   } | null;
   benefits: BenefitBalance[];
   recentLogs: LogEntry[];
+  recentAdjustments?: QuotaAdjustmentLog[];
 }
 
 interface Props {
@@ -251,6 +272,8 @@ export function PackageUtilizationPanel({
   const [showAllLogs, setShowAllLogs] = useState(false);
   const [initializing, setInitializing] = useState(false);
   const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [selectedBalanceForAdjust, setSelectedBalanceForAdjust] = useState<BenefitBalanceForAdjustment | null>(null);
 
   const load = async (subId?: string) => {
     setLoading(true);
@@ -791,6 +814,35 @@ export function PackageUtilizationPanel({
                       </span>
                     </div>
 
+                    {/* Adjust Quota Action Button */}
+                    <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-gray-400">
+                        Quota: <strong className="text-gray-700">{b.totalUnits} {b.unitLabel}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedBalanceForAdjust({
+                            balanceId: b.balanceId,
+                            benefitId: b.benefitId,
+                            benefitName: b.benefitName,
+                            unitLabel: b.unitLabel,
+                            totalUnits: b.totalUnits,
+                            usedUnits: b.usedUnits,
+                            remainingUnits: b.remainingUnits,
+                            packageName: subscription.packageName,
+                          });
+                          setIsAdjustModalOpen(true);
+                        }}
+                        className="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-[#FF7A00] text-[#FF7A00] hover:text-white font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 border border-orange-200 hover:border-[#FF7A00] shadow-2xs cursor-pointer"
+                        title={`Adjust Quota for ${b.benefitName}`}
+                      >
+                        <SlidersHorizontal size={11} />
+                        <span>Adjust Quota</span>
+                      </button>
+                    </div>
+
                     {/* Selected indicator line at bottom */}
                     {isSelected && (
                       <div className="mt-2 pt-2 border-t border-[#FFE4D3]">
@@ -806,6 +858,65 @@ export function PackageUtilizationPanel({
           </div>
         )}
       </div>
+
+      {/* ── Quota Adjustment Audit Trail ── */}
+      {data?.recentAdjustments && data.recentAdjustments.length > 0 && (
+        <div className="bg-white rounded-[28px] p-6 border border-[#E7DED6] shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <SlidersHorizontal size={14} className="text-[#FF7A00]" />
+              Benefit Quota Adjustment Audit Trail
+            </h4>
+            <span className="text-[10px] font-bold text-[#FF7A00] bg-orange-50 px-2.5 py-0.5 rounded-full border border-orange-100">
+              {data.recentAdjustments.length} logged adjustment{data.recentAdjustments.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {data.recentAdjustments.map((adj) => (
+              <div
+                key={adj.id}
+                className="p-3.5 rounded-2xl bg-[#FAFAFA] border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs hover:border-[#E7DED6] transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                      adj.units > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                    }`}
+                  >
+                    {adj.units > 0 ? `+${adj.units}` : adj.units}
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-800">
+                      <span className="text-gray-900 font-black">{adj.benefitName}</span>: quota adjusted by{' '}
+                      <span className={adj.units > 0 ? 'text-emerald-600 font-black' : 'text-red-600 font-black'}>
+                        {adj.units > 0 ? `+${adj.units}` : adj.units} {adj.unitLabel}
+                      </span>{' '}
+                      ({adj.totalBefore} → {adj.totalAfter})
+                    </p>
+                    <p className="text-gray-500 text-[11px] mt-0.5 italic">
+                      &ldquo;{adj.reason}&rdquo;
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      Updated by <strong className="text-gray-700">{adj.performedBy}</strong> ({adj.performedByRole.replace('_', ' ')})
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] font-bold text-gray-400 bg-white px-2 py-1 rounded-lg border border-gray-100 shadow-2xs">
+                    {new Date(adj.createdAt).toLocaleString('en-IN', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Recent Activity Log ── */}
       {recentLogs.length > 0 && (
@@ -883,6 +994,14 @@ export function PackageUtilizationPanel({
         subscriberPhone={subscriberPhone}
         subscriberEmail={subscriberEmail}
         defaultPincode={defaultPincode}
+        onSuccess={() => load(subscription.id)}
+      />
+
+      {/* Quota Adjustment Modal */}
+      <AdjustBenefitQuotaModal
+        isOpen={isAdjustModalOpen}
+        onClose={() => setIsAdjustModalOpen(false)}
+        balance={selectedBalanceForAdjust}
         onSuccess={() => load(subscription.id)}
       />
     </div>

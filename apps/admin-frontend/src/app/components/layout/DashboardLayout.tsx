@@ -67,22 +67,22 @@ const navigationSections: NavSection[] = [
       { path: '/field-managers', label: 'Field Managers List', icon: Calendar, roles: ['master_admin', 'operations_manager'] },
       { path: '/allocation', label: 'Beneficiary Allocation', icon: Activity, roles: ['master_admin', 'operations_manager'] },
       { path: '/care-companions', label: 'Care Companions', icon: UserCheck, roles: ['master_admin', 'operations_manager'] },
-      { path: '/volunteers', label: 'Saathi Volunteers', icon: Handshake, roles: ['master_admin', 'operations_manager'] },
-      { path: '/volunteer-requests', label: 'Saathi Onboarding', icon: UserPlus, roles: ['master_admin', 'operations_manager'] },
-      { path: '/legacy-circle', label: 'Legacy Circle Approval', icon: Crown, roles: ['master_admin', 'operations_manager'] },
+      { path: '/volunteers', label: 'Saathi Volunteers', icon: Handshake, roles: ['master_admin', 'operations_manager', 'saathi_coordinator'] },
+      { path: '/volunteer-requests', label: 'Saathi Onboarding', icon: UserPlus, roles: ['master_admin', 'operations_manager', 'saathi_coordinator'] },
+      { path: '/legacy-circle', label: 'Legacy Circle Approval', icon: Crown, roles: ['master_admin', 'operations_manager', 'saathi_coordinator'] },
       { path: '/staff-onboarding', label: 'Staff Onboarding', icon: UserPlus, roles: ['master_admin', 'operations_manager'] },
       { path: '/operations-managers', label: 'Operations Managers', icon: Users, roles: ['master_admin'] },
-      { path: '/customer-service-agents', label: 'CSA', icon: HeadphonesIcon, roles: ['master_admin', 'operations_manager'] },
+      { path: '/customer-service-agents', label: 'CSA', icon: HeadphonesIcon, roles: ['master_admin', 'operations_manager', 'customer_service_manager'] },
     ]
   },
   {
     title: 'CLIENTS',
     items: [
-      { path: '/subscribers', label: 'Subscribers', icon: UserCircle, roles: ['master_admin', 'operations_manager'] },
+      { path: '/subscribers', label: 'Subscribers', icon: UserCircle, roles: ['master_admin', 'operations_manager', 'customer_service_manager'] },
       { path: '/enroll', label: 'Enroll Subscriber', icon: UserPlus, roles: ['master_admin', 'operations_manager'] },
-      { path: '/renewals', label: 'Renewals Worklist', icon: RefreshCw, roles: ['master_admin', 'operations_manager', 'customer_service'] },
-      { path: '/beneficiaries', label: 'Beneficiaries', icon: Heart, roles: ['master_admin', 'operations_manager'] },
-      { path: '/callback-requests', label: 'Callback Requests', icon: PhoneCall, roles: ['master_admin', 'operations_manager', 'customer_service'] },
+      { path: '/renewals', label: 'Renewals Worklist', icon: RefreshCw, roles: ['master_admin', 'operations_manager', 'customer_service', 'customer_service_manager'] },
+      { path: '/beneficiaries', label: 'Beneficiaries', icon: Heart, roles: ['master_admin', 'operations_manager', 'customer_service_manager'] },
+      { path: '/callback-requests', label: 'Callback Requests', icon: PhoneCall, roles: ['master_admin', 'operations_manager', 'customer_service', 'customer_service_manager'] },
     ]
   },
   {

@@ -1571,6 +1571,8 @@ enum UserRole {
   admin
   master_admin
   customer_service
+  customer_service_manager
+  saathi_coordinator
   command_center
 }
 
