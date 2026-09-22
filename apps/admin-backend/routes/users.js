@@ -14,6 +14,8 @@ const SUPPORTED_ONBOARDING_ROLES = new Set([
   'operations_manager',
   'sales',
   'customer_service',
+  'customer_service_manager',
+  'saathi_coordinator',
 ]);
 
 const SUPPORTED_BACKGROUND_CHECK_TYPES = new Set([
@@ -49,6 +51,8 @@ const REQUIRED_DOCUMENTS_BY_ROLE = {
   field_manager: ['aadhaar_front', 'aadhaar_back'],
   operations_manager: ['aadhaar_front', 'aadhaar_back'],
   customer_service: ['aadhaar_front', 'aadhaar_back'],
+  customer_service_manager: ['aadhaar_front', 'aadhaar_back'],
+  saathi_coordinator: ['aadhaar_front', 'aadhaar_back'],
 };
 
 const TRAININGS_BY_ROLE = {
@@ -693,7 +697,7 @@ router.post('/staff/onboard', async (req, res) => {
     const backgroundCheckAgency = asNullableString(assignment.bgvAgency);
 
     console.log('[DEBUG] Onboarding:', { role, zoneIdsLength: zoneIds.length });
-    if (!zoneIds.length && role !== 'customer_service') {
+    if (!zoneIds.length && role !== 'customer_service' && role !== 'customer_service_manager') {
       return res
         .status(400)
         .json({

@@ -58,6 +58,16 @@ const ROLE_CONFIG: Record<
     subtitle: 'Create a Customer Service Agent profile for system-wide support and query handling.',
     accent: 'bg-[#7C3AED]',
   },
+  customer_service_manager: {
+    title: 'Onboard Customer Service Manager',
+    subtitle: 'Create a Customer Service Manager profile for team oversight and support leadership.',
+    accent: 'bg-[#9333EA]',
+  },
+  saathi_coordinator: {
+    title: 'Onboard Saathi Coordinator',
+    subtitle: 'Set up a Saathi Coordinator profile to manage and coordinate Saathi network activities.',
+    accent: 'bg-[#D97706]',
+  },
 };
 
 const LANGUAGE_OPTIONS = ['Hindi', 'English', 'Punjabi', 'Urdu', 'Tamil', 'Bengali', 'Marathi', 'Telugu'];
@@ -80,11 +90,11 @@ const DOCUMENT_CONFIG: Record<
 > = {
   aadhaar_front: {
     label: 'Aadhaar card (front)',
-    requiredFor: ['care_companion', 'field_manager', 'operations_manager', 'customer_service'],
+    requiredFor: ['care_companion', 'field_manager', 'operations_manager', 'customer_service', 'customer_service_manager', 'saathi_coordinator'],
   },
   aadhaar_back: {
     label: 'Aadhaar card (back)',
-    requiredFor: ['care_companion', 'field_manager', 'operations_manager', 'customer_service'],
+    requiredFor: ['care_companion', 'field_manager', 'operations_manager', 'customer_service', 'customer_service_manager', 'saathi_coordinator'],
   },
   pan_card: {
     label: 'PAN card',
@@ -124,7 +134,9 @@ function normalizeRole(roleParam: string | null): StaffOnboardingRole {
   if (
     roleParam === 'field_manager' ||
     roleParam === 'operations_manager' ||
-    roleParam === 'customer_service'
+    roleParam === 'customer_service' ||
+    roleParam === 'customer_service_manager' ||
+    roleParam === 'saathi_coordinator'
   ) {
     return roleParam;
   }
@@ -190,7 +202,7 @@ function adaptFormStateForRole(previousState: FormState, role: StaffOnboardingRo
     assignment: {
       ...previousState.assignment,
       teamId: role === 'care_companion' ? previousState.assignment.teamId || '' : '',
-      reportsToUserId: role === 'field_manager' ? previousState.assignment.reportsToUserId || '' : '',
+      reportsToUserId: (role === 'field_manager' || role === 'saathi_coordinator') ? previousState.assignment.reportsToUserId || '' : '',
       zoneIds:
         role === 'operations_manager'
           ? previousState.assignment.zoneIds || []
@@ -214,7 +226,7 @@ function adaptFormStateForRole(previousState: FormState, role: StaffOnboardingRo
     nextState.assignment.reportsToUserId = '';
   }
 
-  if (role === 'customer_service') {
+  if (role === 'customer_service' || role === 'customer_service_manager') {
     nextState.assignment.teamId = '';
     nextState.assignment.reportsToUserId = '';
     nextState.assignment.zoneId = '';
@@ -541,10 +553,10 @@ export default function StaffOnboardingPage() {
       if (role === 'operations_manager' && !(formState.assignment.zoneIds || []).length) {
         return 'Assign at least one managed zone to the operations manager.';
       }
-      if (role !== 'operations_manager' && role !== 'customer_service' && !formState.assignment.zoneId) {
+      if (role !== 'operations_manager' && role !== 'customer_service' && role !== 'customer_service_manager' && !formState.assignment.zoneId) {
         return 'Please select a zone for this staff member.';
       }
-      if (role === 'field_manager' && metadata?.operationsManagers?.length && !formState.assignment.reportsToUserId) {
+      if ((role === 'field_manager' || role === 'saathi_coordinator') && metadata?.operationsManagers?.length && !formState.assignment.reportsToUserId) {
         return 'Please select the reporting operations manager.';
       }
       if (!formState.assignment.bgvType) {
@@ -586,10 +598,10 @@ export default function StaffOnboardingPage() {
         specialization: formState.professional.specialization || [],
       },
       assignment: {
-        zoneId: (role === 'operations_manager' || role === 'customer_service') ? undefined : formState.assignment.zoneId,
+        zoneId: (role === 'operations_manager' || role === 'customer_service' || role === 'customer_service_manager') ? undefined : formState.assignment.zoneId,
         zoneIds: role === 'operations_manager' ? formState.assignment.zoneIds || [] : undefined,
         teamId: role === 'care_companion' ? formState.assignment.teamId : undefined,
-        reportsToUserId: role === 'field_manager' ? formState.assignment.reportsToUserId : undefined,
+        reportsToUserId: (role === 'field_manager' || role === 'saathi_coordinator') ? formState.assignment.reportsToUserId : undefined,
         bgvType: formState.assignment.bgvType,
         bgvAgency: formState.assignment.bgvAgency,
         bgvVerified: formState.assignment.bgvVerified,
@@ -630,7 +642,9 @@ export default function StaffOnboardingPage() {
             ? '/field-managers'
             : role === 'operations_manager'
               ? '/operations-managers'
-              : '/admin-users';
+              : role === 'saathi_coordinator'
+                ? '/volunteers'
+                : '/admin-users';
 
       navigate(nextPath);
     } catch (error: any) {
@@ -670,7 +684,7 @@ export default function StaffOnboardingPage() {
             </div>
 
             <div className="bg-white rounded-3xl p-3 shadow-sm border border-[#E7DED6] flex flex-wrap gap-2">
-              {(['care_companion', 'field_manager', 'operations_manager', 'customer_service'] as StaffOnboardingRole[]).map((roleOption) => (
+              {(['care_companion', 'field_manager', 'operations_manager', 'saathi_coordinator', 'customer_service_manager', 'customer_service'] as StaffOnboardingRole[]).map((roleOption) => (
                 <button
                   key={roleOption}
                   onClick={() => setSearchParams({ role: roleOption })}
@@ -686,7 +700,11 @@ export default function StaffOnboardingPage() {
                       ? 'Field Manager'
                       : roleOption === 'operations_manager'
                         ? 'Operations Manager'
-                        : 'CSA'}
+                        : roleOption === 'saathi_coordinator'
+                          ? 'Saathi Coordinator'
+                          : roleOption === 'customer_service_manager'
+                            ? 'CS Manager'
+                            : 'CSA'}
                 </button>
               ))}
             </div>
@@ -1173,7 +1191,7 @@ export default function StaffOnboardingPage() {
                     </div>
                   )}
 
-                  {role !== 'customer_service' && (
+                  {role !== 'customer_service' && role !== 'customer_service_manager' && (
                     <div className="mt-6">
                       <p className="text-sm font-black text-gray-700 mb-3">Expert skills & specializations</p>
                       <div className="flex flex-wrap gap-2">
@@ -1392,14 +1410,18 @@ export default function StaffOnboardingPage() {
                     </div>
                   </div>
 
-                  {role === 'customer_service' ? (
+                  {(role === 'customer_service' || role === 'customer_service_manager') ? (
                     <div className="rounded-3xl border border-[#E7DED6] bg-blue-50/30 p-6 flex items-center gap-4">
                       <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-[#7C3AED] shadow-sm">
                         <ShieldCheck size={24} />
                       </div>
                       <div>
                         <p className="font-bold text-gray-800">Direct System Access</p>
-                        <p className="text-sm text-gray-500">CSAs are onboarded with global support access. No specific zone assignment is required.</p>
+                        <p className="text-sm text-gray-500">
+                          {role === 'customer_service_manager'
+                            ? 'Customer Service Managers are onboarded with global support management access. No specific zone assignment is required.'
+                            : 'CSAs are onboarded with global support access. No specific zone assignment is required.'}
+                        </p>
                       </div>
                     </div>
                   ) : (
