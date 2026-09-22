@@ -1339,6 +1339,7 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
       totalUsedUnits += (b.usedUnits || 0);
 
       return {
+        balanceId: b.id,
         benefitId: b.benefitId,
         benefitName: b.snapshotBenefitName || b.benefit?.name,
         unitLabel: b.snapshotUnitLabel || b.benefit?.unitLabel || 'units',
@@ -1383,6 +1384,50 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
       actualMinutes: l.visit?.durationMinutes || null,
     }));
 
+    // Query recent quota adjustment audit logs
+    const balanceIds = subscription.benefitBalances.map((b) => b.id);
+    let recentAdjustments = [];
+    if (balanceIds.length > 0) {
+      const adjustmentTx = await prisma.benefitTransaction.findMany({
+        where: {
+          balanceId: { in: balanceIds },
+          transactionType: 'ADJUSTED',
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+
+      const userIds = [...new Set(adjustmentTx.map((a) => a.performedByUserId).filter(Boolean))];
+      let userMap = {};
+      if (userIds.length > 0) {
+        const users = await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, phone: true, role: true },
+        });
+        users.forEach((u) => { userMap[u.id] = u; });
+      }
+
+      recentAdjustments = adjustmentTx.map((tx) => {
+        const bal = subscription.benefitBalances.find((b) => b.id === tx.balanceId);
+        const performer = tx.performedByUserId ? userMap[tx.performedByUserId] : null;
+        return {
+          id: tx.id,
+          balanceId: tx.balanceId,
+          benefitName: bal?.snapshotBenefitName || bal?.benefit?.name || 'Benefit',
+          unitLabel: bal?.snapshotUnitLabel || bal?.benefit?.unitLabel || 'units',
+          units: tx.units,
+          totalBefore: tx.totalBefore,
+          totalAfter: tx.totalAfter,
+          availableBefore: tx.availableBefore,
+          availableAfter: tx.availableAfter,
+          reason: tx.reason,
+          performedBy: performer?.name || performer?.phone || 'Staff Admin',
+          performedByRole: performer?.role || 'admin',
+          createdAt: tx.createdAt,
+        };
+      });
+    }
+
     res.json({
       success: true,
       data: {
@@ -1424,6 +1469,7 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
         },
         benefits,
         recentLogs: logs,
+        recentAdjustments,
       },
     });
   } catch (err) {
@@ -1456,6 +1502,8 @@ router.get('/expiring', async (req, res) => {
           select: {
             id: true,
             name: true,
+            status: true,
+            isActive: true,
             age: true,
             dateOfBirth: true,
             gender: true,
@@ -1477,7 +1525,27 @@ router.get('/expiring', async (req, res) => {
       },
     });
 
-    res.json({ success: true, data: subscriptions });
+    const now = new Date();
+    const enriched = subscriptions.map((sub) => {
+      const isCancelled = !sub.isActive || Boolean(sub.cancelledAt);
+      const subEnd = new Date(sub.endDate);
+      const isExpired = subEnd < now;
+      const daysLeft = Math.ceil((subEnd.getTime() - now.getTime()) / (1000 * 3600 * 24));
+
+      let planStatus = 'active';
+      if (isCancelled) planStatus = 'terminated';
+      else if (isExpired || daysLeft <= 0) planStatus = 'expired';
+      else if (daysLeft <= 7) planStatus = 'expiring_soon';
+
+      return {
+        ...sub,
+        planStatus,
+        isExpired,
+        daysLeft,
+      };
+    });
+
+    res.json({ success: true, data: enriched });
   } catch (err) {
     console.error('GET /subscriptions/expiring error:', err);
     res.status(500).json({ success: false, message: err.message });
@@ -1548,6 +1616,138 @@ router.post('/:id/terminate', async (req, res) => {
     res.json({ success: true, data: updated });
   } catch (err) {
     console.error('POST /subscriptions/:id/terminate error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── POST /api/subscriptions/balances/:balanceId/adjust ───────────────────────
+// Manually increase or decrease benefit balance count/quota with full audit trail
+router.post('/balances/:balanceId/adjust', async (req, res) => {
+  const { balanceId } = req.params;
+  const { deltaUnits, reason } = req.body;
+
+  if (!reason || typeof reason !== 'string' || !reason.trim()) {
+    return res.status(400).json({ success: false, message: 'A reason is required to adjust benefit quota.' });
+  }
+
+  const delta = parseInt(deltaUnits, 10);
+  if (isNaN(delta) || delta === 0) {
+    return res.status(400).json({ success: false, message: 'Please provide a non-zero whole number to adjust the quota.' });
+  }
+
+  try {
+    const balance = await prisma.subscriptionBenefitBalance.findUnique({
+      where: { id: balanceId },
+      include: {
+        benefit: true,
+        subscription: {
+          select: {
+            id: true,
+            subscriberId: true,
+            beneficiaryId: true,
+            hoursTotal: true,
+            hoursUsed: true,
+          },
+        },
+      },
+    });
+
+    if (!balance) {
+      return res.status(404).json({ success: false, message: 'Benefit balance record not found.' });
+    }
+
+    const newTotal = balance.totalUnits + delta;
+    const newAvailable = balance.availableUnits + delta;
+
+    if (newTotal < balance.usedUnits) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reduce total quota (${newTotal}) below the ${balance.usedUnits} units already consumed. Current total is ${balance.totalUnits}.`,
+      });
+    }
+
+    if (newAvailable < 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reduce available quota below 0. Current available units: ${balance.availableUnits}.`,
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update the balance quota
+      const updatedBalance = await tx.subscriptionBenefitBalance.update({
+        where: { id: balanceId },
+        data: {
+          totalUnits: newTotal,
+          availableUnits: newAvailable,
+        },
+      });
+
+      // 2. If this is an hour-based benefit, synchronize subscription companion hours
+      const unitLabel = (balance.snapshotUnitLabel || balance.benefit?.unitLabel || '').toLowerCase();
+      const isHourBased = unitLabel.includes('hour');
+      if (isHourBased && balance.subscription) {
+        await tx.subscription.update({
+          where: { id: balance.subscriptionId },
+          data: {
+            hoursTotal: Math.max(balance.subscription.hoursUsed, balance.subscription.hoursTotal + delta),
+          },
+        });
+      }
+
+      // 3. Record immutable BenefitTransaction audit log
+      const transaction = await tx.benefitTransaction.create({
+        data: {
+          balanceId: balance.id,
+          transactionType: 'ADJUSTED',
+          units: delta,
+          totalBefore: balance.totalUnits,
+          totalAfter: newTotal,
+          reservedBefore: balance.reservedUnits,
+          reservedAfter: balance.reservedUnits,
+          usedBefore: balance.usedUnits,
+          usedAfter: balance.usedUnits,
+          availableBefore: balance.availableUnits,
+          availableAfter: newAvailable,
+          reason: reason.trim(),
+          performedByUserId: req.user?.id || null,
+        },
+      });
+
+      // 4. Record ActivityLog
+      await tx.activityLog.create({
+        data: {
+          userId: balance.subscription.subscriberId,
+          type: 'BENEFIT_QUOTA',
+          action: 'MANUAL_ADJUSTMENT',
+          details: {
+            entity: 'benefit_balance',
+            balanceId: balance.id,
+            benefitName: balance.snapshotBenefitName || balance.benefit?.name,
+            unitLabel: balance.snapshotUnitLabel || balance.benefit?.unitLabel,
+            deltaUnits: delta,
+            totalBefore: balance.totalUnits,
+            totalAfter: newTotal,
+            availableBefore: balance.availableUnits,
+            availableAfter: newAvailable,
+            reason: reason.trim(),
+            performedBy: req.user?.name || req.user?.phone || 'Staff Admin',
+            performedByRole: req.user?.role || 'admin',
+          },
+        },
+      });
+
+      return { updatedBalance, transaction };
+    });
+
+    res.json({
+      success: true,
+      message: `Benefit quota adjusted by ${delta > 0 ? `+${delta}` : delta} units successfully.`,
+      data: result.updatedBalance,
+      transaction: result.transaction,
+    });
+  } catch (err) {
+    console.error('POST /subscriptions/balances/:balanceId/adjust error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });

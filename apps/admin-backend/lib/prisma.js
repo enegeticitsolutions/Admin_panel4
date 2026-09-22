@@ -21,7 +21,7 @@ const pool =
   new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: isLocal ? false : { rejectUnauthorized: false },
-    max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+    max: parseInt(process.env.DB_POOL_MAX || '5', 10),
     idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT_MS || '10000', 10),
     connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONN_TIMEOUT_MS || '15000', 10),
   });

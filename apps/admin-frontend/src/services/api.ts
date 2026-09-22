@@ -1068,6 +1068,18 @@ export const subscriptionApi = {
     const query = subscriptionId ? `?subscriptionId=${encodeURIComponent(subscriptionId)}` : '';
     return apiJson(`/subscriptions/beneficiary/${beneficiaryId}/utilization${query}`);
   },
+  /** Manually adjust (increase/decrease) benefit quota with mandatory reason for audit */
+  async adjustBenefitBalance(balanceId: string, payload: { deltaUnits: number; reason: string }): Promise<{
+    success: boolean;
+    message: string;
+    data: any;
+    transaction: any;
+  }> {
+    return apiJson(`/subscriptions/balances/${balanceId}/adjust`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
   /** Initialize/backfill missing benefit balances for a subscription */
   async initializeBalances(subscriptionId: string): Promise<{ created: number; message: string; benefits: any[] }> {
     return apiJson(`/subscriptions/${subscriptionId}/initialize-balances`, { method: 'POST' });

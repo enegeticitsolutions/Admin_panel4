@@ -251,9 +251,37 @@ export default function RenewalsWorklistPage() {
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-green-100 text-green-700">
-                          <CheckCircle2 size={12} /> Active
-                        </span>
+                        {(() => {
+                          const isCancelled = !sub.isActive || Boolean(sub.cancelledAt);
+                          const isExpired = daysLeft <= 0;
+
+                          if (isCancelled) {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
+                                <Ban size={12} /> Terminated
+                              </span>
+                            );
+                          }
+                          if (isExpired) {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-red-100 text-red-700 border border-red-200">
+                                <AlertCircle size={12} /> Expired
+                              </span>
+                            );
+                          }
+                          if (daysLeft <= 7) {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
+                                <Clock size={12} /> Expiring Soon
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-green-100 text-green-700 border border-green-200">
+                              <CheckCircle2 size={12} /> Active
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="p-4 pr-6 text-right">
                         <div className="flex justify-end gap-2">
