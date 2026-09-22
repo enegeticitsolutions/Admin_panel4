@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     TextInput, ActivityIndicator, Alert, Image, ImageBackground, useWindowDimensions,
-    Modal, FlatList, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Share, Linking
+    Modal, FlatList, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Share, Linking, RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { API_URL } from '@/constants/api';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import { useAuth } from '@/contexts/AuthContext';
 
 const INDUSTRIES = [
     "General Management / Leadership",
@@ -64,22 +65,10 @@ export default function LegacyCircleScreen() {
     const MAX_CONTENT_WIDTH = 440;
     const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
 
-    const [userData, setUserData] = useState<any>(null);
+    const { user: userData } = useAuth();
     const [successModalVisible, setSuccessModalVisible] = useState(false);
     const [successMessage, setSuccessMessage] = useState({ title: '', message: '' });
     const [isShareModalVisible, setIsShareModalVisible] = useState(false);
-
-    useFocusEffect(
-        useCallback(() => {
-            const loadUser = async () => {
-                const data = await AsyncStorage.getItem('userData');
-                if (data) {
-                    setUserData(JSON.parse(data));
-                }
-            };
-            loadUser();
-        }, [])
-    );
 
     // Re-fetch the profile every time the screen is focused so that
     // admin approval is reflected immediately without an app restart.
@@ -101,7 +90,7 @@ export default function LegacyCircleScreen() {
         return json.data;
     };
 
-    const { data: profile, isLoading, error } = useQuery({
+    const { data: profile, isLoading, error, refetch, isRefetching } = useQuery({
         queryKey: ['legacyCircleProfile'],
         queryFn: fetchProfile,
         staleTime: 0, // Always treat as stale so focus invalidation triggers a re-fetch
@@ -333,7 +322,13 @@ export default function LegacyCircleScreen() {
     }
 
     const renderForm = () => (
-        <ScrollView style={styles.scrollContainer} contentContainerStyle={[styles.content, responsiveStyle]}>
+        <ScrollView 
+            style={styles.scrollContainer} 
+            contentContainerStyle={[styles.content, responsiveStyle]}
+            refreshControl={
+                <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6A00" colors={['#FF6A00']} />
+            }
+        >
             <View style={styles.orangeBanner}>
                 <Feather name="clock" size={24} color="#FFFFFF" style={{ marginBottom: 12 }} />
                 <Text style={styles.bannerTitle}>{isEditing ? 'Edit Your Profile' : 'Create Your Legacy Profile'}</Text>
@@ -343,8 +338,8 @@ export default function LegacyCircleScreen() {
             </View>
 
             <View style={styles.profilePicContainer}>
-                {userData?.photo ? (
-                    <Image source={{ uri: sanitizeImageUri(userData.photo) }} style={styles.profilePic} />
+                {userData?.photo || userData?.profilePhoto ? (
+                    <Image source={{ uri: sanitizeImageUri(userData?.photo || userData?.profilePhoto) }} style={styles.profilePic} />
                 ) : (
                     <View style={[styles.profilePic, { backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' }]}>
                         <Feather name="user" size={40} color="#9CA3AF" />
@@ -476,7 +471,13 @@ export default function LegacyCircleScreen() {
         const submittedDate = new Date(profile.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
         return (
-            <ScrollView style={styles.scrollContainer} contentContainerStyle={[styles.content, responsiveStyle]}>
+            <ScrollView 
+                style={styles.scrollContainer} 
+                contentContainerStyle={[styles.content, responsiveStyle]}
+                refreshControl={
+                    <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6A00" colors={['#FF6A00']} />
+                }
+            >
                 <View style={styles.pendingHeader}>
                     <View style={styles.clockIconWrap}>
                         <Feather name="clock" size={40} color="#FF6A00" />
@@ -527,7 +528,12 @@ export default function LegacyCircleScreen() {
         const approvedDate = new Date(profile.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
         return (
-            <ScrollView style={styles.scrollContainer} bounces={false}>
+            <ScrollView 
+                style={styles.scrollContainer}
+                refreshControl={
+                    <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#FF6A00" colors={['#FF6A00']} />
+                }
+            >
                 <View style={styles.heroBannerContainer}>
                     <ImageBackground
                         source={require('../../assets/images/legacy-circle-bg.jpg')}
@@ -538,8 +544,8 @@ export default function LegacyCircleScreen() {
                         {/* Orange tint overlay matching Figma */}
                         <View style={styles.heroBannerOverlay} />
                     </ImageBackground>
-                    {userData?.photo ? (
-                        <Image source={{ uri: sanitizeImageUri(userData.photo) }} style={styles.heroAvatar} />
+                    {userData?.photo || userData?.profilePhoto ? (
+                        <Image source={{ uri: sanitizeImageUri(userData?.photo || userData?.profilePhoto) }} style={styles.heroAvatar} />
                     ) : (
                         <View style={[styles.heroAvatar, { backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' }]}>
                             <Feather name="user" size={40} color="#9CA3AF" />

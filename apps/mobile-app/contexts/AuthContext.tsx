@@ -122,6 +122,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isSwitchingRole: false,
             isLoggingOut: false,
           });
+
+          // Background refresh of the profile photo URL since presigned URLs expire
+          fetch(`${API_URL}/profile-photo/me`, {
+            headers: { Authorization: `Bearer ${storedToken}` }
+          })
+            .then(res => res.json())
+            .then(async (json) => {
+              if (json.success && json.data?.profilePhoto) {
+                const updatedUser = { 
+                  ...parsedUser, 
+                  photo: json.data.profilePhoto,
+                  profilePhoto: json.data.profilePhoto 
+                };
+                setState(prev => ({ ...prev, user: updatedUser }));
+                await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+                if (Platform.OS !== 'web') {
+                  await SecureStore.setItemAsync('secureUserData', JSON.stringify(updatedUser));
+                }
+              }
+            })
+            .catch(e => console.warn('[AuthContext] Failed to refresh profile photo on startup:', e));
+
         } else {
           setState(prev => ({ ...prev, isLoading: false }));
         }
