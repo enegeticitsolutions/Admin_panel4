@@ -32,9 +32,9 @@ const ServicesPage = ({ setActivePage, openForm }) => {
                 Explore Services
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
               </button>
-              {/* <button className="services-btn-plans" onClick={() => setActivePage("plans")}>
+              <button className="services-btn-plans" onClick={() => setActivePage("plans")}>
                 View Plans
-              </button> */}
+              </button>
             </div>
           </div>
           <div className="services-hero__features">
@@ -246,7 +246,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
             Join the waitlist for Gurugram Sectors 53 to 57. Limited early access. We'll match your first Care Mitra within 24 hours of onboarding.
           </p>
           <div className="svc-cta__actions">
-            {/* <button className="svc-cta-btn-plans" onClick={() => setActivePage("plans")}>View Plans</button> */}
+            <button className="svc-cta-btn-plans" onClick={() => setActivePage("plans")}>View Plans</button>
             <button className="svc-cta-btn-callback" onClick={openForm}>Request a Callback</button>
           </div>
         </div>

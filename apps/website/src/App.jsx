@@ -54,6 +54,7 @@ const VALID_PAGES = [
   "checkout",
   "story",
   "team",
+  "plans",
   ...LEGAL_PAGES,
 ];
 
@@ -272,7 +273,7 @@ const App = () => {
               user={user}
               token={token}
               onLogout={handleLogout}
-              onNavigateToPlans={() => setActivePage("services")}
+              onNavigateToPlans={() => setActivePage("plans")}
               onGoHome={() => setActivePage("home")}
             />
           ) : activePage === "services" ? (
@@ -285,12 +286,12 @@ const App = () => {
             <AboutPage openForm={openForm} setActivePage={setActivePage} />
           ) : activePage === "team" ? (
             <TeamPage />
-          /* ) : activePage === "plans" ? (
+          ) : activePage === "plans" ? (
             <PlansPage
               livePackages={livePackages}
               onSelectPackage={handleSelectPackageForBuy}
               openForm={openForm}
-            /> */
+            />
           ) : LEGAL_PAGES.includes(activePage) ? (
             <LegalPage initialTab={activePage} setActivePage={setActivePage} />
           ) : (

@@ -45,7 +45,7 @@ export const SITE_LINKS = {
     { label: "Care Mitra Visits", page: "services", href: "/services" },
     { label: "Saathi Network", page: "saathi", href: "/saathi" },
     { label: "Legacy Circle", page: "legacy", href: "/legacy" },
-    // { label: "Plans and Pricing", page: "plans", href: "/plans" },
+    { label: "Plans and Pricing", page: "plans", href: "/plans" },
   ],
 
   // Legal & Terms Policies

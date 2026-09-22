@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import PackageCard from "../components/packages/PackageCard";
+import PlanDetailsModal from "../components/modals/PlanDetailsModal";
 import planBgVideo from "../assets/Plan-Header-Background-Video.mp4";
 
 
@@ -25,9 +26,11 @@ export default function PlansPage({
   isSubmitting = false,
   showSuccess = false,
 }) {
-  const [selectedCycle, setSelectedCycle] = useState("1");
+  const [selectedCycle, setSelectedCycle] = useState("3");
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [modalPlan, setModalPlan] = useState(null);
+  const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [cardsPerView, setCardsPerView] = useState(() => {
     if (typeof window !== "undefined") {
       if (window.innerWidth < 768) return 1;
@@ -38,6 +41,13 @@ export default function PlansPage({
 
   const packagesToDisplay = livePackages;
   const maxSlide = Math.max(0, packagesToDisplay.length - cardsPerView);
+
+  const activePlanId = useMemo(() => {
+    if (selectedPlanId) return selectedPlanId;
+    const popular = packagesToDisplay.find((p) => p.isPopular || p.tone === "featured");
+    if (popular) return popular.id || popular.name;
+    return packagesToDisplay[0]?.id || packagesToDisplay[0]?.name || null;
+  }, [selectedPlanId, packagesToDisplay]);
 
   // ── Dynamic Comparison Table Logic ──
   // 1. Pick 3 packages to compare: prefer packages marked isCompared, or top 3 active
@@ -205,12 +215,6 @@ export default function PlansPage({
           <strong>All prices on enquiry · GST applicable</strong>
           <div className="billing-toggle" aria-label="Billing cycle">
             <button
-              className={selectedCycle === "1" ? "active" : ""}
-              onClick={() => setSelectedCycle("1")}
-            >
-              Monthly
-            </button>
-            <button
               className={selectedCycle === "3" ? "active" : ""}
               onClick={() => setSelectedCycle("3")}
             >
@@ -275,7 +279,10 @@ export default function PlansPage({
                 <PackageCard
                   plan={plan}
                   selectedCycle={selectedCycle}
+                  isSelected={(plan.id || plan.name) === activePlanId}
+                  onCardClick={() => setSelectedPlanId(plan.id || plan.name)}
                   onSelectPackage={onSelectPackage}
+                  onOpenDetails={(p) => setModalPlan(p)}
                 />
               </div>
             ))}
@@ -462,6 +469,14 @@ export default function PlansPage({
           ))}
         </div>
       </section>
+
+      {/* ── Full Package Details Popup Modal ── */}
+      <PlanDetailsModal
+        isOpen={!!modalPlan}
+        plan={modalPlan}
+        onClose={() => setModalPlan(null)}
+        onSelectPackage={onSelectPackage}
+      />
     </main>
   );
 }

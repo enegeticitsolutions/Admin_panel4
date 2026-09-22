@@ -80,7 +80,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
       </nav>
 
       <div className="topbar__actions">
-        {/* <a
+        <a
           href="/plans"
           className={`view-plan-button ${activePage === "plans" ? "active" : ""}`}
           onClick={(e) => {
@@ -89,7 +89,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
           }}
         >
           View Plans
-        </a> */}
+        </a>
 
 
 
@@ -180,7 +180,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
           >
             🌟 Legacy Circle
           </a>
-          {/* <a
+          <a
             href="/plans"
             className={activePage === "plans" ? "active" : ""}
             onClick={(e) => {
@@ -189,7 +189,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             }}
           >
             📋 View Plans
-          </a> */}
+          </a>
 
         </div>
       )}
