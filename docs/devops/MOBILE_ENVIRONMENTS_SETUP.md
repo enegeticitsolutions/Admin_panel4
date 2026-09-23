@@ -13,8 +13,10 @@ This guide covers both **Family Connect** (`apps/mobile-app`) and **Saathi Netwo
 
 * **Staging API:** `https://staging-api.maihoonna.com/app-api`
 * **Production API:** `https://api.maihoonna.com/app-api`
-* **Android Google Maps Key:** `AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0` (Whitelist all 4 package names)
-* **iOS Google Maps Key:** `AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU` (Whitelist all 4 bundle IDs)
+* **Android Google Maps Key (Production):** `AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0`
+* **Android Google Maps Key (Staging):** `AIzaSyAc2OCaGJetG6nEI0QSbR8kM9ltkufyD38`
+* **iOS Google Maps Key (Production):** `AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU`
+* **iOS Google Maps Key (Staging):** `AIzaSyBuCKlc976PA4YcAK1Vv5mm1-Bn1sPWeEY`
 * **Firebase Project:** `maihoonna-3d9ca`
 
 See the main guide for full details, Google Cloud Console restrictions, and EAS build commands.

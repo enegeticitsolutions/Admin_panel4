@@ -183,8 +183,8 @@ const SaathiPage = () => {
     title: "Companionship that doesn't run on the clock.",
     subtitle: "Community volunteers who visit for company, conversation, or assistance",
     stats: [
-      { number: "340+", label: "Active Saathis" },
-      { number: "8,200+", label: "Hours given" },
+      { number: "0", label: "Active Saathis" },
+      { number: "0", label: "Hours given" },
       { number: "100%", label: "Background verified" }
     ]
   };
@@ -247,19 +247,23 @@ const SaathiPage = () => {
           </div>
 
           <div className="saathi-hero__stats">
-            <div className="saathi-hero__stat-item">
-              <span className="saathi-hero__stat-number">
-                {liveStats.activeCount > 0 ? liveStats.activeCount : "340+"}
-              </span>
-              <span className="saathi-hero__stat-label">Active Saathis</span>
-            </div>
+            {liveStats.activeCount > 0 && (
+              <div className="saathi-hero__stat-item">
+                <span className="saathi-hero__stat-number">
+                  {liveStats.activeCount}
+                </span>
+                <span className="saathi-hero__stat-label">Active Saathis</span>
+              </div>
+            )}
 
-            <div className="saathi-hero__stat-item">
-              <span className="saathi-hero__stat-number">
-                {liveStats.totalHours > 0 ? `${parseFloat(liveStats.totalHours).toFixed(1)}+` : "8,200+"}
-              </span>
-              <span className="saathi-hero__stat-label">Hours given</span>
-            </div>
+            {liveStats.totalHours > 0 && (
+              <div className="saathi-hero__stat-item">
+                <span className="saathi-hero__stat-number">
+                  {`${parseFloat(liveStats.totalHours).toFixed(1)}+`}
+                </span>
+                <span className="saathi-hero__stat-label">Hours given</span>
+              </div>
+            )}
 
             <div className="saathi-hero__stat-item">
               <span className="saathi-hero__stat-number">100%</span>
@@ -448,88 +452,88 @@ const SaathiPage = () => {
           <div className="saathi-community__grid">
             {saathis && saathis.length > 0 ? (
               saathis.map((saathi, idx) => {
-              const tierPresets = [
-                { tier: "Top Saathi", tierBg: "#FE6700", color: "#FE6700" },
-                { tier: "Senior Saathi", tierBg: "#7C3AED", color: "#7C3AED" },
-                { tier: "Legend Saathi", tierBg: "#059669", color: "#059669" },
-                { tier: "New Saathi", tierBg: "#0EA5E9", color: "#0EA5E9" }
-              ];
-              const preset = tierPresets[idx % tierPresets.length];
-              const creditHours = Math.round(Number(saathi.totalCreditHours || 0) * 10) / 10;
-              const locationText = saathi.area ? saathi.area : [saathi.city, saathi.state].filter(Boolean).join(', ') || "Gurugram";
+                const tierPresets = [
+                  { tier: "Top Saathi", tierBg: "#FE6700", color: "#FE6700" },
+                  { tier: "Senior Saathi", tierBg: "#7C3AED", color: "#7C3AED" },
+                  { tier: "Legend Saathi", tierBg: "#059669", color: "#059669" },
+                  { tier: "New Saathi", tierBg: "#0EA5E9", color: "#0EA5E9" }
+                ];
+                const preset = tierPresets[idx % tierPresets.length];
+                const creditHours = Math.round(Number(saathi.totalCreditHours || 0) * 10) / 10;
+                const locationText = saathi.area ? saathi.area : [saathi.city, saathi.state].filter(Boolean).join(', ') || "Gurugram";
 
-              // Dynamic tier based on live credit hours
-              let tierName = preset.tier;
-              let tierBg = preset.tierBg;
-              let themeColor = preset.color;
+                // Dynamic tier based on live credit hours
+                let tierName = preset.tier;
+                let tierBg = preset.tierBg;
+                let themeColor = preset.color;
 
-              if (creditHours >= 50) {
-                tierName = "Legend Saathi";
-                tierBg = "#059669";
-                themeColor = "#059669";
-              } else if (creditHours >= 20) {
-                tierName = "Top Saathi";
-                tierBg = "#FE6700";
-                themeColor = "#FE6700";
-              } else if (creditHours >= 5) {
-                tierName = "Senior Saathi";
-                tierBg = "#7C3AED";
-                themeColor = "#7C3AED";
-              } else if (saathi.totalCreditHours !== undefined) {
-                tierName = "New Saathi";
-                tierBg = "#0EA5E9";
-                themeColor = "#0EA5E9";
-              }
+                if (creditHours >= 50) {
+                  tierName = "Legend Saathi";
+                  tierBg = "#059669";
+                  themeColor = "#059669";
+                } else if (creditHours >= 20) {
+                  tierName = "Top Saathi";
+                  tierBg = "#FE6700";
+                  themeColor = "#FE6700";
+                } else if (creditHours >= 5) {
+                  tierName = "Senior Saathi";
+                  tierBg = "#7C3AED";
+                  themeColor = "#7C3AED";
+                } else if (saathi.totalCreditHours !== undefined) {
+                  tierName = "New Saathi";
+                  tierBg = "#0EA5E9";
+                  themeColor = "#0EA5E9";
+                }
 
-              const photoSrc = saathi.profilePhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(saathi.name || 'S')}&background=${tierBg.replace('#', '')}&color=FFFFFF&size=500&bold=true`;
+                const photoSrc = saathi.profilePhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(saathi.name || 'S')}&background=${tierBg.replace('#', '')}&color=FFFFFF&size=500&bold=true`;
 
-              return (
-                <div key={idx} className="saathi-card">
-                  <div className="saathi-card__img-wrap">
-                    <img src={photoSrc} alt={`Saathi companion ${saathi.name} - Senior Companionship Volunteer`} loading="lazy" className="saathi-card__img" />
-                    <div className="saathi-card__img-overlay" />
-                    <div className="saathi-card__tier-badge" style={{ background: tierBg }}>
-                      {tierName}
-                    </div>
-                    <div className="saathi-card__shield">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={themeColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                        <polyline points="9 12 11 14 15 10" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  <div className="saathi-card__body">
-                    <h3 className="saathi-card__name">{saathi.name}</h3>
-                    <div className="saathi-card__location">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-                        <circle cx="12" cy="10" r="3" />
-                      </svg>
-                      <span className="truncate">{locationText}</span>
+                return (
+                  <div key={idx} className="saathi-card">
+                    <div className="saathi-card__img-wrap">
+                      <img src={photoSrc} alt={`Saathi companion ${saathi.name} - Senior Companionship Volunteer`} loading="lazy" className="saathi-card__img" />
+                      <div className="saathi-card__img-overlay" />
+                      <div className="saathi-card__tier-badge" style={{ background: tierBg }}>
+                        {tierName}
+                      </div>
+                      <div className="saathi-card__shield">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={themeColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          <polyline points="9 12 11 14 15 10" />
+                        </svg>
+                      </div>
                     </div>
 
-                    <div className="saathi-card__footer">
-                      <div className="saathi-card__rating-col">
-                        <div className="saathi-card__stars">
-                          {[...Array(5)].map((_, i) => (
-                            <svg key={i} width="13" height="13" viewBox="0 0 24 24" fill={i < 4 ? "#FE6700" : "none"} stroke="#FE6700" strokeWidth="1.5">
-                              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                            </svg>
-                          ))}
+                    <div className="saathi-card__body">
+                      <h3 className="saathi-card__name">{saathi.name}</h3>
+                      <div className="saathi-card__location">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                        <span className="truncate">{locationText}</span>
+                      </div>
+
+                      <div className="saathi-card__footer">
+                        <div className="saathi-card__rating-col">
+                          <div className="saathi-card__stars">
+                            {[...Array(5)].map((_, i) => (
+                              <svg key={i} width="13" height="13" viewBox="0 0 24 24" fill={i < 4 ? "#FE6700" : "none"} stroke="#FE6700" strokeWidth="1.5">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                              </svg>
+                            ))}
+                          </div>
+                          <span className="saathi-card__review-text">Verified</span>
                         </div>
-                        <span className="saathi-card__review-text">Verified</span>
-                      </div>
 
-                      <div className="saathi-card__hours-col">
-                        <span className="saathi-card__hours-num" style={{ color: themeColor }}>{creditHours}</span>
-                        <span className="saathi-card__hours-label">hours given</span>
+                        <div className="saathi-card__hours-col">
+                          <span className="saathi-card__hours-num" style={{ color: themeColor }}>{creditHours}</span>
+                          <span className="saathi-card__hours-label">hours given</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })
             ) : (
               <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "60px 20px", background: "#f9fafb", borderRadius: "16px", color: "#6b7280" }}>
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 16px auto" }}>
@@ -1006,7 +1010,7 @@ const SaathiPage = () => {
               Have questions about volunteering or senior visits? Reach out to us at:
               <br />
               <a href="mailto:info@maihoonna.com">info@maihoonna.com</a>,{" "}
-              </p>
+            </p>
           </div>
 
           <div className="saathi-faq__list">

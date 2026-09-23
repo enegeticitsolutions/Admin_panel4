@@ -834,6 +834,7 @@ export const purchaseSubscription = async (
       beneficiaryId: beneficiary?.id || null,
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
+      amountPaid: finalAmountPaid,
     };
   });
 
@@ -841,11 +842,12 @@ export const purchaseSubscription = async (
     success: true,
     message: 'Subscription purchased successfully!',
     subscriptionId: result.subscriptionId,
-    package: result.packageName,
+    packageName: result.packageName,
     beneficiaryName: result.beneficiaryName,
     beneficiaryId: result.beneficiaryId,
     invoiceId: result.invoiceId,
     invoiceNumber: result.invoiceNumber,
+    amountPaid: result.amountPaid,
   };
 };
 

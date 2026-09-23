@@ -401,6 +401,20 @@ export const fetchLegacyCircleProfileById = async (id) => {
   }
 };
 
+export const requestLegacyCircleConnection = async (id) => {
+  try {
+    const response = await fetch(`${API_BASE}/website/content/legacy-circle/${encodeURIComponent(id)}/request-connection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const json = await response.json();
+    return json;
+  } catch (err) {
+    console.warn(`Unable to request connection for legacy-circle profile ${id}:`, err);
+    return null;
+  }
+};
+
 /**
  * 12. Submit Career Interest / Team Application
  * Endpoint: POST /api/website/career-interest

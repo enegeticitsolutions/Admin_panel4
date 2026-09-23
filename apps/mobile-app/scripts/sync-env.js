@@ -65,6 +65,19 @@ if (fs.existsSync(buildGradlePath)) {
   console.log(`✅ [Android] Set applicationId to '${config.bundleId}' in build.gradle`);
 }
 
+// 2.4 Sync Google Maps API Key in AndroidManifest.xml
+const androidManifestPath = path.join(rootDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+if (fs.existsSync(androidManifestPath)) {
+  const mapsKey = isProd ? 'AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0' : 'AIzaSyAc2OCaGJetG6nEI0QSbR8kM9ltkufyD38';
+  let manifestContent = fs.readFileSync(androidManifestPath, 'utf8');
+  manifestContent = manifestContent.replace(
+    /<meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="[^"]+"\s*\/>/,
+    `<meta-data android:name="com.google.android.geo.API_KEY" android:value="${mapsKey}"/>`
+  );
+  fs.writeFileSync(androidManifestPath, manifestContent, 'utf8');
+  console.log(`✅ [Android] Set Google Maps API Key in AndroidManifest.xml to ${mapsKey}`);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. Sync iOS Files
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,6 +114,30 @@ if (!isProd && fs.existsSync(iosStagingGoogleServices)) {
 } else if (isProd && fs.existsSync(iosProdGoogleServices)) {
   fs.copyFileSync(iosProdGoogleServices, iosGoogleServices);
   console.log(`✅ [iOS] Copied production GoogleService-Info.plist -> ios/FamilyConnect/GoogleService-Info.plist`);
+}
+
+// 3.4 Sync Google Maps API Key in AppDelegate.swift & Info.plist
+const appDelegatePath = path.join(rootDir, 'ios', 'FamilyConnect', 'AppDelegate.swift');
+const iosMapsKey = isProd ? 'AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU' : 'AIzaSyBuCKlc976PA4YcAK1Vv5mm1-Bn1sPWeEY';
+
+if (fs.existsSync(appDelegatePath)) {
+  let appDelegateContent = fs.readFileSync(appDelegatePath, 'utf8');
+  appDelegateContent = appDelegateContent.replace(
+    /GMSServices\.provideAPIKey\("[^"]+"\)/,
+    `GMSServices.provideAPIKey("${iosMapsKey}")`
+  );
+  fs.writeFileSync(appDelegatePath, appDelegateContent, 'utf8');
+  console.log(`✅ [iOS] Set Google Maps API Key in AppDelegate.swift to ${iosMapsKey}`);
+}
+
+if (fs.existsSync(infoPlistPath)) {
+  let plistContent = fs.readFileSync(infoPlistPath, 'utf8');
+  plistContent = plistContent.replace(
+    /(<key>GMSApiKey<\/key>\s*<string>)[^<]*(<\/string>)/,
+    `$1${iosMapsKey}$2`
+  );
+  fs.writeFileSync(infoPlistPath, plistContent, 'utf8');
+  console.log(`✅ [iOS] Set GMSApiKey in Info.plist to ${iosMapsKey}`);
 }
 
 console.log(`\n🎉 [Sync-Env] Environment synchronization complete!\n`);

@@ -306,5 +306,43 @@ router.get('/content/legacy-circle/:id', async (req: Request, res: Response) => 
   }
 });
 
+/**
+ * POST /api/website/content/legacy-circle/:id/request-connection
+ * Increments the connection request count for a specific Legacy Circle profile.
+ */
+router.post('/content/legacy-circle/:id/request-connection', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // First check if profile exists and is approved
+    const existingProfile = await (prisma as any).legacyCircleProfile.findFirst({
+      where: { id, status: 'approved', isActive: true },
+    });
+
+    if (!existingProfile) {
+      return res.status(404).json({
+        success: false,
+        message: 'Approved Legacy Circle profile not found.',
+      });
+    }
+
+    // Increment count
+    await (prisma as any).legacyCircleProfile.update({
+      where: { id },
+      data: { connectRequests: { increment: 1 } },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Connection request count updated successfully.',
+    });
+  } catch (error: any) {
+    console.error('❌ [Website Legacy Circle Request Connection Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while updating connection requests.',
+    });
+  }
+});
 export default router;
 

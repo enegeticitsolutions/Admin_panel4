@@ -3,145 +3,6 @@ import LegacyExpertCard from "../components/legacy/LegacyExpertCard";
 import LegacyExpertProfile from "./LegacyExpertProfile";
 import { fetchLegacyCircleProfiles } from "../services/api";
 
-// Mock Senior Expert Profiles with rich details matching the design
-const EXPERTS_DATA = [
-  {
-    id: "exp-1",
-    name: "Arun Kumar",
-    avatarColor: "#fe6700",
-    role: "Ex-Chief Financial Officer",
-    company: "BHEL & L&T Heavy Eng.",
-    location: "Gurgaon",
-    email: "arun.kumar@maihoonna.com",
-    experience: 34,
-    domain: "Chartered Accountancy / Auditing",
-    verified: true,
-    rating: 4.9,
-    reviews: 42,
-    sessions: "150+ hrs",
-    tags: ["Corporate Finance", "Taxation & M&A", "Governance"],
-    bio: "Over three decades orchestrating large-scale corporate financial restructuring, institutional capital raising, and compliance for public and private enterprises.",
-  },
-  {
-    id: "exp-2",
-    name: "Deepak Sharma",
-    avatarColor: "#8b5cf6",
-    role: "Senior Legal Counsel & Advocate",
-    company: "Supreme Court & High Court Bar",
-    location: "Delhi",
-    email: "deepak.sharma@maihoonna.com",
-    experience: 31,
-    domain: "Corporate Law",
-    verified: true,
-    rating: 5.0,
-    reviews: 58,
-    sessions: "210+ hrs",
-    tags: ["Corporate Law", "Contract Negotiation", "Dispute Resolution"],
-    bio: "Specialized in regulatory navigation, commercial arbitration, corporate compliance, and joint venture drafting for domestic and overseas businesses.",
-  },
-  {
-    id: "exp-3",
-    name: "Meenakshi Sundaram",
-    avatarColor: "#06b6d4",
-    role: "Ex-VP Engineering & Cloud",
-    company: "Infosys & Wipro Digital",
-    location: "Faridabad",
-    email: "meenakshi.s@maihoonna.com",
-    experience: 28,
-    domain: "Information Technology / Software",
-    verified: true,
-    rating: 4.9,
-    reviews: 64,
-    sessions: "190+ hrs",
-    tags: ["Cloud Migration", "Scalable Systems", "Tech Due Diligence"],
-    bio: "Pioneered distributed systems architecture and enterprise modernization for Fortune 500 banks and high-growth technology scale-ups.",
-  },
-  {
-    id: "exp-4",
-    name: "Dr. Rajesh Mathur, IAS (Retd.)",
-    avatarColor: "#10b981",
-    role: "Former Principal Secretary",
-    company: "Ministry of Urban Development",
-    location: "Delhi",
-    email: "rajesh.mathur@maihoonna.com",
-    experience: 36,
-    domain: "Civil Services (IAS/IPS/IFS etc.)",
-    verified: true,
-    rating: 5.0,
-    reviews: 35,
-    sessions: "120+ hrs",
-    tags: ["Public Policy", "Civic Infrastructure", "Govt Approvals"],
-    bio: "Navigated 35+ years of government policy formulation, large-scale infrastructure clearance, public-private partnerships (PPP), and civic governance.",
-  },
-  {
-    id: "exp-5",
-    name: "Sunita Rao",
-    avatarColor: "#f59e0b",
-    role: "Ex-Director HR & Transformation",
-    company: "Larsen & Toubro",
-    location: "Ghaziabaad",
-    email: "sunita.rao@maihoonna.com",
-    experience: 27,
-    domain: "Human Resources",
-    verified: true,
-    rating: 4.8,
-    reviews: 39,
-    sessions: "140+ hrs",
-    tags: ["Executive Coaching", "Org Culture", "Conflict Mgmt"],
-    bio: "Guided top-tier leadership succession, cross-border talent integration, and high-performance workplace transformation across 15,000+ employee organizations.",
-  },
-  {
-    id: "exp-6",
-    name: "Col. Ravindra Singh (Retd.)",
-    avatarColor: "#ef4444",
-    role: "Ex-Director Logistics & Ops",
-    company: "Indian Armed Forces & Supply Chain",
-    location: "Gurgaon",
-    email: "ravindra.singh@maihoonna.com",
-    experience: 33,
-    domain: "Defence Services (Army/Navy/Air Force)",
-    verified: true,
-    rating: 4.9,
-    reviews: 47,
-    sessions: "165+ hrs",
-    tags: ["Supply Chain", "Crisis Logistics", "Risk Mitigation"],
-    bio: "Commanded mission-critical military logistics corridors and later consulted top FMCG supply chains in rapid fulfillment and risk planning.",
-  },
-  {
-    id: "exp-7",
-    name: "Vandana Sengupta",
-    avatarColor: "#ec4899",
-    role: "Former Head of Product & UX",
-    company: "Times Internet & NDTV",
-    location: "Noida",
-    email: "vandana.sengupta@maihoonna.com",
-    experience: 24,
-    domain: "Information Technology / Software",
-    verified: true,
-    rating: 4.9,
-    reviews: 51,
-    sessions: "130+ hrs",
-    tags: ["Product Strategy", "Consumer Retention", "Design Systems"],
-    bio: "Built digital media platforms reaching 50M+ monthly active users, mentoring product managers and founders on user delight and metric-driven roadmaps.",
-  },
-  {
-    id: "exp-8",
-    name: "Pradeep Deshmukh",
-    avatarColor: "#14b8a6",
-    role: "Ex-Managing Director",
-    company: "Precision Engineering Ltd.",
-    location: "Noida",
-    email: "pradeep.deshmukh@maihoonna.com",
-    experience: 35,
-    domain: "Operations & Supply Chain",
-    verified: true,
-    rating: 5.0,
-    reviews: 29,
-    sessions: "115+ hrs",
-    tags: ["Plant Operations", "Six Sigma", "Export Scaling"],
-    bio: "Turned around 4 manufacturing plants, scaled international exports to Europe and Japan, and implemented lean zero-defect quality systems.",
-  }
-];
 
 
 const FAQ_ITEMS = [
@@ -179,8 +40,8 @@ const FAQ_ITEMS = [
 
 
 const LegacyPage = ({ openForm }) => {
-  // Live Experts List from Backend (with fallback)
-  const [expertsList, setExpertsList] = useState(EXPERTS_DATA);
+  // Live Experts List from Backend
+  const [expertsList, setExpertsList] = useState([]);
   const [isLoadingExperts, setIsLoadingExperts] = useState(false);
   
   // Profile Modal State
@@ -411,51 +272,29 @@ const LegacyPage = ({ openForm }) => {
           <div className="legacy-hero__right" aria-hidden="true">
             <div className="legacy-floating-cards">
 
-              {/* Float Card 1: Arvind Kapoor */}
-              <div className="legacy-float-card legacy-float-card--1">
-                <div className="legacy-float-card__avatar" style={{ background: "#FE6700" }}>AK</div>
-                <div className="legacy-float-card__info">
-                  <div className="legacy-float-card__name">Arvind Kapoor</div>
-                  <div className="legacy-float-card__role">CFO · Finance</div>
+              {/* Center Orange Badge: Verified experts */}
+              {expertsList.length > 0 && (
+                <div className="legacy-float-badge-orange">
+                  <div className="legacy-float-badge-orange__title">{expertsList.length} verified experts</div>
+                  <div className="legacy-float-badge-orange__sub">across {dynamicDomains.length} domains · Gurugram pilot</div>
                 </div>
-                <div className="legacy-float-card__dot" />
-              </div>
+              )}
 
-              {/* Float Card 2: Dr. Meena Rajan */}
-              <div className="legacy-float-card legacy-float-card--2">
-                <div className="legacy-float-card__avatar" style={{ background: "#7C3AED" }}>MR</div>
-                <div className="legacy-float-card__info">
-                  <div className="legacy-float-card__name">Dr. Meena Rajan</div>
-                  <div className="legacy-float-card__role">Physician · Healthcare</div>
-                </div>
-                <div className="legacy-float-card__dot" />
-              </div>
-
-              {/* Center Orange Badge: 120+ verified experts */}
-              <div className="legacy-float-badge-orange">
-                <div className="legacy-float-badge-orange__title">120+ verified experts</div>
-                <div className="legacy-float-badge-orange__sub">across 15+ domains · Gurugram pilot</div>
-              </div>
-
-              {/* Float Card 3: Y. Krishnamurthy */}
-              <div className="legacy-float-card legacy-float-card--3">
-                <div className="legacy-float-card__avatar" style={{ background: "#14B8A6" }}>YK</div>
-                <div className="legacy-float-card__info">
-                  <div className="legacy-float-card__name">Y. Krishnamurthy</div>
-                  <div className="legacy-float-card__role">CTO · Technology</div>
-                </div>
-                <div className="legacy-float-card__dot" />
-              </div>
-
-              {/* Float Card 4: Padma Shah */}
-              <div className="legacy-float-card legacy-float-card--4">
-                <div className="legacy-float-card__avatar" style={{ background: "#10B981" }}>PS</div>
-                <div className="legacy-float-card__info">
-                  <div className="legacy-float-card__name">Padma Shah</div>
-                  <div className="legacy-float-card__role">HR Director</div>
-                </div>
-                <div className="legacy-float-card__dot" />
-              </div>
+              {/* Float Cards */}
+              {expertsList.slice(0, 4).map((expert, idx) => {
+                const initials = expert.name ? expert.name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() : "EX";
+                const bgColors = ["#FE6700", "#7C3AED", "#14B8A6", "#10B981"];
+                return (
+                  <div key={idx} className={`legacy-float-card legacy-float-card--${idx + 1}`}>
+                    <div className="legacy-float-card__avatar" style={{ background: expert.avatarColor || bgColors[idx] }}>{initials}</div>
+                    <div className="legacy-float-card__info">
+                      <div className="legacy-float-card__name">{expert.name}</div>
+                      <div className="legacy-float-card__role">{expert.role}</div>
+                    </div>
+                    <div className="legacy-float-card__dot" />
+                  </div>
+                )
+              })}
 
             </div>
           </div>
@@ -627,11 +466,11 @@ const LegacyPage = ({ openForm }) => {
           {/* Sleek Dark Metric Stat Cards (Figma Spec) */}
           <div className="legacy-stats-bar">
             <div className="legacy-stat-card">
-              <div className="legacy-stat-card__val">120+</div>
+              <div className="legacy-stat-card__val">{expertsList.length || 0}</div>
               <div className="legacy-stat-card__label">Verified experts</div>
             </div>
             <div className="legacy-stat-card">
-              <div className="legacy-stat-card__val">15+</div>
+              <div className="legacy-stat-card__val">{dynamicDomains.length || 0}</div>
               <div className="legacy-stat-card__label">Domains covered</div>
             </div>
             <div className="legacy-stat-card">
