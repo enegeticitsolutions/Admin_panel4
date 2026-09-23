@@ -151,84 +151,13 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
           <Ionicons name="warning" size={20} color="#D97706" />
           <Text style={styles.warningText}>
             {exhaustedCount > 0 
-              ? `${exhaustedCount} benefit(s) exhausted — renewal or top-up needed`
-              : `${lowCount} benefit(s) running low (< 20% remaining)`}
+              ? `${exhaustedCount} benefit${exhaustedCount > 1 ? 's' : ''} exhausted — renewal or top-up needed`
+              : `${lowCount} benefit${lowCount > 1 ? 's' : ''} running low (< 20% remaining)`}
           </Text>
         </View>
       )}
 
-      {/* Circular Quick-Stat Summary Rings Carousel */}
-      {benefits.length > 0 && (
-        <View style={styles.carouselContainer}>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.carouselScroll}
-          >
-            {benefits.map((b) => {
-              const isSelected = selectedBenefitId === b.benefitId;
-              const isHour = (b.unitLabel || '').toLowerCase().includes('hour') || (b.unitLabel || '').toLowerCase().includes('hr');
-              const remainDisplay = isHour ? formatHours(b.remainingUnits) : `${b.remainingUnits}`;
-              const totalDisplay = isHour ? formatHours(b.totalUnits) : `${b.totalUnits}`;
 
-              const ringBorderColor = b.isExhausted 
-                ? '#EF4444' 
-                : b.isLowBalance 
-                  ? '#F59E0B' 
-                  : isSelected 
-                    ? '#FF5B0A' 
-                    : '#10B981';
-
-              const ringBg = b.isExhausted 
-                ? '#FEF2F2' 
-                : b.isLowBalance 
-                  ? '#FEFCE8' 
-                  : isSelected 
-                    ? '#FFF7ED' 
-                    : '#F0FDF4';
-
-              return (
-                <TouchableOpacity
-                  key={`ring-${b.benefitId}`}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    if (b.isExhausted || b.remainingUnits <= 0) {
-                      const msg = `Benefit "${b.benefitName}" is exhausted. Please connect with support team to renew or top up your package.`;
-                      if (Platform.OS === 'web') {
-                        window.alert(`Benefit Exhausted\n\n${msg}`);
-                      } else {
-                        Alert.alert('Benefit Exhausted', msg);
-                      }
-                      return;
-                    }
-                    onSelectBenefit?.(b);
-                  }}
-                  style={styles.ringCard}
-                >
-                  <View style={[styles.ringCircle, { borderColor: ringBorderColor, backgroundColor: ringBg }]}>
-                    <Text style={[styles.ringValue, b.isExhausted && { color: '#DC2626' }]}>
-                      {remainDisplay}
-                    </Text>
-                    <Text style={styles.ringSubValue} numberOfLines={1}>
-                      / {totalDisplay} {b.unitLabel?.replace(/^per\s+/i, '')}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.ringName} numberOfLines={2}>
-                    {b.benefitName}
-                  </Text>
-
-                  {b.isExhausted ? (
-                    <Text style={styles.ringExhaustedBadge}>EXHAUSTED</Text>
-                  ) : isSelected ? (
-                    <Text style={styles.ringSelectedBadge}>SELECTED</Text>
-                  ) : null}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
 
       {/* Benefits List */}
       <View style={styles.section}>
@@ -327,11 +256,11 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
         <View style={styles.sectionHeader}>
           <Ionicons name="list" size={20} color="#FF5B0A" />
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <Text style={styles.logCount}>{recentLogs.length} entries</Text>
         </View>
 
         {recentLogs.length > 0 ? (
-          recentLogs.map((log) => {
+          <ScrollView style={{ maxHeight: 375 }} nestedScrollEnabled={true} showsVerticalScrollIndicator={true}>
+            {recentLogs.map((log) => {
             const isHours = (log.hoursConsumed ?? 0) > 0 || log.ccType === 'SATHI_COMPANION' || log.ccType === 'SATHI_HOURS';
             const billMinutes = log.actualMinutes != null
               ? log.actualMinutes
@@ -376,7 +305,8 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
               </View>
             );
 
-          })
+          })}
+          </ScrollView>
         ) : (
           <Text style={styles.emptySubText}>No usage logged yet. Activity will appear once visits are completed.</Text>
         )}

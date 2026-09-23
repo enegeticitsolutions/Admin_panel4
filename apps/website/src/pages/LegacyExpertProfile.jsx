@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { fetchLegacyCircleProfileById } from "../services/api";
+import { fetchLegacyCircleProfileById, requestLegacyCircleConnection } from "../services/api";
 
 const LegacyExpertProfile = ({ id, onClose }) => {
   const [expert, setExpert] = useState(null);
@@ -27,6 +27,12 @@ const LegacyExpertProfile = ({ id, onClose }) => {
 
   const handleOpenConsultation = () => {
     if (!expert) return;
+    
+    // Asynchronously send the connection request counter update
+    requestLegacyCircleConnection(expert.id).catch(err => {
+      console.warn("Could not increment connection request counter", err);
+    });
+
     const email = expert.email || `${expert.name.toLowerCase().replace(/[^a-z0-9]/g, ".") || "contact"}@maihoonna.com`;
     const subject = encodeURIComponent(`Connection Request: Consultation with ${expert.name}`);
     const body = encodeURIComponent(

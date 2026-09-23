@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import sumitKumarImg from "../assets/sumit-kejriwal-photo.png";
 import rajeevThukralImg from "../assets/team/Rajeev.png";
 import drSubramanianImg from "../assets/team/Subra.png";
-import teamGroupImg from "../assets/team/Team.png";
-import teamTrainingImg from "../assets/team/Team.png";
+import teamGroupImg from "../assets/team/team.png";
+import teamTrainingImg from "../assets/team/team.png";
 import "./TeamPage.css";
 
 // Leadership Profiles matching design spec
@@ -15,7 +15,7 @@ const LEADERSHIP_TEAM = [
     roleColorClass: "team-leader-card__role--orange",
     photo: sumitKumarImg,
     linkedin: "https://www.linkedin.com/in/sumit-kumar-a85166a/",
-    bio: "Sumit brings over 25 years of experience in healthcare technology, having worked with organizations including Highmark, Accenture, Infosys, etc.. Drawing on this deep understanding of how healthcare systems work — and where they fall short for India's ageing population — he founded MaiHooNa to bring professional, dependable care and companionship into the homes of seniors across Gurugram and the wider NCR. Sumit is hands-on across every part of the business, from building the Care Mitra and Saathi Network programs to shaping MaiHooNa's partner ecosystem, with a singular focus: making sure no senior has to face ageing alone.",
+    bio: "Sumit brings over 25 years of experience in healthcare technology, having worked with organizations including Highmark, Accenture, Infosys, etc.. Drawing on this deep understanding of how healthcare systems work and where they fall short for India's ageing population. He founded MaiHooNa to bring professional, dependable care and companionship into the homes of seniors across India and starting with NCR. Sumit is hands-on across every part of the business, from building the Care Mitra and Saathi Network programs to shaping MaiHooNa's partner ecosystem, with a singular focus: making sure no senior has to face ageing alone.",
   },
   {
     id: "rajeev-thukral",
@@ -24,7 +24,7 @@ const LEADERSHIP_TEAM = [
     roleColorClass: "team-leader-card__role--purple",
     photo: rajeevThukralImg,
     linkedin: "https://www.linkedin.com/in/rajeevthukral/",
-    bio: "Rajeev Thukral is Co-Founder & Director MaiHoonNa Elderare, where he brings his experience in building and governing businesses to the company's mission of quality eldercare. He has spent more than 35 years building and steering organizations, starting with two decades in corporate finance and strategy at GE Capital, Genpact, HCL Technologies and RPG Enterprises, and later as Chief Strategy Officer at Cargomen Logistics, where he also ran Finance and HR. An MIT Sloan alumnus, Rajeev holds independent director and board roles across healthcare, pharma, logistics and fintech, including with Mankind Group companies, and is an active investor and co-founder across several ventures, advising founders and boards on growth, strategy and governance.",
+    bio: "Rajeev Thukral is Co-Founder & Director MaiHoonNa Elderare, where he brings his experience in building and governing businesses to the company's mission of quality eldercare. He has spent more than 35 years building and steering organizations, starting with two decades in corporate finance and strategy at GE Capital, Genpact, HCL Technologies and RPG Enterprises, and later as Chief Strategy Officer at Cargomen Logistics. An MIT Sloan alumnus, Rajeev holds Independent Director and board roles across healthcare, pharma, logistics and fintech, including with Mankind Group companies, and is an active investor and co-founder across several ventures, advising founders and boards on growth, strategy and governance.",
   },
   {
     id: "dr-subramanian",
@@ -45,7 +45,7 @@ const GALLERY_SLIDES = [
     tag: "FIELD & OPERATIONS",
     title: "We don't do this from a distance.",
     subtitle:
-      "Our team sits in the same city as the families we serve. Every protocol, every script, every training module has been tested against real visits in real homes — not theorised in a conference room. When something doesn't work, we know within 48 hours.",
+      "Our team sits in the same city as the families we serve. Every protocol, every script, every training module has been tested against real visits in real homes — not theorised in a conference room.",
   },
   {
     id: 2,

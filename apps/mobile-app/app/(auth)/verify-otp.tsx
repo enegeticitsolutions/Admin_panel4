@@ -130,7 +130,7 @@ export default function VerifyOtpScreen() {
                     await login(result.token, result.user);
 
                     const role = result.user.role;
-                    if (role === "care_companion" || role === "volunteer") {
+                    if (role === "care_companion") {
                         replace("/(care-companion)");
                     } else if (role === "beneficiary") {
                         replace("/(beneficiary)");

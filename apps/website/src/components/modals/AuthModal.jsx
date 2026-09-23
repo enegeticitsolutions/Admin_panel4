@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { sendOtp, verifyOtp, registerUser, loginWithPassword } from "../../services/api";
+import { ValidatedInput } from "../ui/ValidatedInput";
 
 export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "", initialView = "PHONE" }) {
   const [view, setView] = useState(initialView); // 'PHONE' | 'OTP' | 'REGISTER' | 'PASSWORD_LOGIN'
@@ -244,11 +245,12 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
                 >
                   +91
                 </span>
-                <input
+                <ValidatedInput
+                  dataType="integer"
                   type="tel"
                   placeholder="Enter 10-digit number"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  onChange={(e) => setPhone(e.target.value.slice(0, 10))}
                   maxLength={10}
                   required
                   autoFocus
@@ -309,7 +311,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
           <form onSubmit={handleVerifyOtpSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
               {otp.map((digit, idx) => (
-                <input
+                <ValidatedInput
                   key={idx}
                   ref={(el) => (otpRefs.current[idx] = el)}
                   type="text"
@@ -388,7 +390,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
               <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#374151", display: "block", marginBottom: "4px" }}>
                 Full Name *
               </label>
-              <input
+              <ValidatedInput
                 type="text"
                 placeholder="e.g. Rahul Sharma"
                 value={name}
@@ -402,7 +404,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
               <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#374151", display: "block", marginBottom: "4px" }}>
                 Age *
               </label>
-              <input
+              <ValidatedInput
                 type="number"
                 placeholder="e.g. 35"
                 value={age}
@@ -418,7 +420,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
               <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#374151", display: "block", marginBottom: "4px" }}>
                 Create Password *
               </label>
-              <input
+              <ValidatedInput
                 type="password"
                 placeholder="At least 6 characters"
                 value={password}
@@ -458,7 +460,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
               <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#374151", display: "block", marginBottom: "4px" }}>
                 Mobile Phone Number
               </label>
-              <input
+              <ValidatedInput
                 type="tel"
                 placeholder="10-digit phone number"
                 value={phone}
@@ -472,7 +474,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
               <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#374151", display: "block", marginBottom: "4px" }}>
                 Password
               </label>
-              <input
+              <ValidatedInput
                 type="password"
                 placeholder="Enter your password"
                 value={password}

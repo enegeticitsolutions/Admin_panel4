@@ -7,6 +7,7 @@
   "scripts": {
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:sync": "prisma db push && prisma generate",
     "db:migrate": "prisma migrate dev",
     "seed:config": "node scripts/seed_system_configs.js",
     "seed:sathi-guide": "node scripts/seed_sathi_guide.js",

@@ -17,7 +17,7 @@ const AppCtaSection = () => {
           </div>
           <h2 className="app-cta__title">
             Stay Connected to Your Parent's World —
-            <em>From Anywhere</em>
+            <em> From Anywhere</em>
           </h2>
           <p className="app-cta__desc">
             Real-time visit logs, vitals trends, and a Happiness Score that tells you how your parent is actually feeling today — not just informed after something goes wrong.
@@ -59,28 +59,42 @@ const AppCtaSection = () => {
           <div className="app-download-cards">
             {/* Card 1: Family Connect App */}
             <div className="app-download-card">
+              <div className="app-download-card__header">
+                <div className="app-download-card__icon-badge">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2" /><line x1="12" y1="18" x2="12.01" y2="18" /></svg>
+                </div>
+                <div className="app-download-card__titles">
+                  <span className="app-download-card__label">Family Connect App</span>
+                </div>
+              </div>
               <div className="app-download-card__badges">
                 <a href={SITE_LINKS.appStore.familyConnect.googlePlay} className="store-badge-card" target="_blank" rel="noopener noreferrer">
-                  <img src={googlePlayImg} alt="Get MaiHoonNa Family Connect App on Google Play" loading="lazy" width="135" height="40" />
+                  <img src={googlePlayImg} alt="Get MaiHoonNa Family Connect App on Google Play" loading="lazy" width="125" height="38" />
                 </a>
                 <a href={SITE_LINKS.appStore.familyConnect.appleAppStore} className="store-badge-card" target="_blank" rel="noopener noreferrer">
-                  <img src={appStoreImg} alt="Download MaiHoonNa Family Connect App on Apple App Store" loading="lazy" width="135" height="40" />
+                  <img src={appStoreImg} alt="Download MaiHoonNa Family Connect App on Apple App Store" loading="lazy" width="125" height="38" />
                 </a>
               </div>
-              <span className="app-download-card__label">Family Connect App</span>
             </div>
 
             {/* Card 2: Saathi App */}
             <div className="app-download-card">
+              <div className="app-download-card__header">
+                <div className="app-download-card__icon-badge app-download-card__icon-badge--purple">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                </div>
+                <div className="app-download-card__titles">
+                  <span className="app-download-card__label">Saathi App</span>
+                </div>
+              </div>
               <div className="app-download-card__badges">
                 <a href={SITE_LINKS.appStore.saathi.googlePlay} className="store-badge-card" target="_blank" rel="noopener noreferrer">
-                  <img src={googlePlayImg} alt="Get MaiHoonNa Saathi App on Google Play" loading="lazy" width="135" height="40" />
+                  <img src={googlePlayImg} alt="Get MaiHoonNa Saathi App on Google Play" loading="lazy" width="125" height="38" />
                 </a>
                 <a href={SITE_LINKS.appStore.saathi.appleAppStore} className="store-badge-card" target="_blank" rel="noopener noreferrer">
-                  <img src={appStoreImg} alt="Download MaiHoonNa Saathi App on Apple App Store" loading="lazy" width="135" height="40" />
+                  <img src={appStoreImg} alt="Download MaiHoonNa Saathi App on Apple App Store" loading="lazy" width="125" height="38" />
                 </a>
               </div>
-              <span className="app-download-card__label">Saathi App</span>
             </div>
           </div>
         </div>

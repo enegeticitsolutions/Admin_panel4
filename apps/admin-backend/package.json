@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node --watch server.js",
+    "db:sync": "prisma db push --schema=../../packages/database/prisma/schema.prisma && prisma generate --schema=../../packages/database/prisma/schema.prisma",
     "build": "prisma generate --schema=../../packages/database/prisma/schema.prisma",
     "start": "node server.js",
     "postinstall": "prisma generate --schema=../../packages/database/prisma/schema.prisma",

@@ -756,7 +756,7 @@ router.post('/purchase', paymentLimiter as unknown as RequestHandler, authentica
         try {
           const subscriberPhone = updatedUser?.phone;
           if (subscriberPhone) {
-            const paidAmount = responseData.amount || responseData.total || 'Paid';
+            const paidAmount = responseData.amountPaid ?? responseData.amount ?? responseData.total ?? 'Paid';
             const benefName = (beneficiaryData as any)?.fullName || (beneficiaryData as any)?.name || 'Beneficiary';
             const pkgName = responseData.packageName || packageId;
 

@@ -194,7 +194,9 @@ export default function PackageUtilizationScreen() {
       }
 
       let url = `${API_URL}/shared/utilization`;
-      if (beneficiaryId) url += `?beneficiaryId=${beneficiaryId}`;
+      if (beneficiaryId && beneficiaryId !== 'undefined' && beneficiaryId !== 'null' && String(beneficiaryId).trim() !== '') {
+        url += `?beneficiaryId=${beneficiaryId}`;
+      }
 
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -611,9 +613,9 @@ export default function PackageUtilizationScreen() {
     fetchUtilization();
   }, [beneficiaryId]);
 
-  // Fetch add-ons once when we land on a detail view (subscriber only)
+  // Fetch add-ons once when we land on a detail view (non-beneficiary only)
   useEffect(() => {
-    if (beneficiaryId && userRole === 'subscriber') {
+    if (beneficiaryId && userRole !== 'beneficiary') {
       const initLocationAndAddons = async () => {
         try {
           const token = await AsyncStorage.getItem('userToken');
