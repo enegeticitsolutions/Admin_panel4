@@ -605,7 +605,7 @@ export default function VitalDefinitionsPage() {
               </FormField>
               <FormField label="Display order">
                 <Input
-                  type="number"
+                  type="number" dataType="integer"
                   placeholder="0"
                   value={form.displayOrder}
                   onChange={e => setForm(f => ({ ...f, displayOrder: e.target.value }))}
@@ -621,7 +621,7 @@ export default function VitalDefinitionsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <FormField label="Min allowed value">
                   <Input
-                    type="number"
+                    type="number" dataType="integer"
                     placeholder="e.g. 0"
                     value={form.inputMin}
                     onChange={e => setForm(f => ({ ...f, inputMin: e.target.value }))}
@@ -630,7 +630,7 @@ export default function VitalDefinitionsPage() {
                 </FormField>
                 <FormField label="Max allowed value">
                   <Input
-                    type="number"
+                    type="number" dataType="integer"
                     placeholder="e.g. 100"
                     value={form.inputMax}
                     onChange={e => setForm(f => ({ ...f, inputMax: e.target.value }))}
@@ -647,7 +647,7 @@ export default function VitalDefinitionsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <FormField label="Normal min">
                   <Input
-                    type="number"
+                    type="number" dataType="integer"
                     placeholder="e.g. 95"
                     value={form.normalMin}
                     onChange={e => setForm(f => ({ ...f, normalMin: e.target.value }))}
@@ -655,7 +655,7 @@ export default function VitalDefinitionsPage() {
                 </FormField>
                 <FormField label="Normal max">
                   <Input
-                    type="number"
+                    type="number" dataType="integer"
                     placeholder="e.g. 100"
                     value={form.normalMax}
                     onChange={e => setForm(f => ({ ...f, normalMax: e.target.value }))}
@@ -693,7 +693,7 @@ export default function VitalDefinitionsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <FormField label="Value 1 normal min">
                     <Input
-                      type="number"
+                      type="number" dataType="integer"
                       placeholder="90"
                       value={form.normalMin}
                       onChange={e => setForm(f => ({ ...f, normalMin: e.target.value }))}
@@ -701,7 +701,7 @@ export default function VitalDefinitionsPage() {
                   </FormField>
                   <FormField label="Value 1 normal max">
                     <Input
-                      type="number"
+                      type="number" dataType="integer"
                       placeholder="120"
                       value={form.normalMax}
                       onChange={e => setForm(f => ({ ...f, normalMax: e.target.value }))}
@@ -711,7 +711,7 @@ export default function VitalDefinitionsPage() {
                 <div className="grid grid-cols-2 gap-4 pt-2">
                   <FormField label="Value 2 normal min">
                     <Input
-                      type="number"
+                      type="number" dataType="integer"
                       placeholder="60"
                       value={form.normalMin2}
                       onChange={e => setForm(f => ({ ...f, normalMin2: e.target.value }))}
@@ -719,7 +719,7 @@ export default function VitalDefinitionsPage() {
                   </FormField>
                   <FormField label="Value 2 normal max">
                     <Input
-                      type="number"
+                      type="number" dataType="integer"
                       placeholder="80"
                       value={form.normalMax2}
                       onChange={e => setForm(f => ({ ...f, normalMax2: e.target.value }))}
