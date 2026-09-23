@@ -9,12 +9,14 @@
       "distribution": "internal",
       "node": "22.14.0",
       "env": {
+        "APP_ENV": "development",
+        "EXPO_PUBLIC_ENV": "local",
         "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T5r7EAjfxEsAtl",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0"
       }
     },
-    
+
     "development-simulator": {
       "developmentClient": true,
       "distribution": "internal",
@@ -23,7 +25,30 @@
       },
       "node": "22.14.0",
       "env": {
+        "APP_ENV": "development",
+        "EXPO_PUBLIC_ENV": "local",
         "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T5r7EAjfxEsAtl",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0"
+      }
+    },
+
+    "staging": {
+      "distribution": "internal",
+      "node": "22.14.0",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "APP_ENV": "staging",
+        "EXPO_PUBLIC_ENV": "staging",
+        "EXPO_PUBLIC_PRODUCTION_API_URL": "https://staging-api.maihoonna.com/app-api",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T5r7EAjfxEsAtl",
+        "EXPO_PUBLIC_APP_SECRET": "MaiHoonNaSecureApp2026!",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0"
       }
@@ -35,17 +60,63 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": false
+      },
       "env": {
+        "APP_ENV": "staging",
+        "EXPO_PUBLIC_ENV": "staging",
+        "EXPO_PUBLIC_PRODUCTION_API_URL": "https://staging-api.maihoonna.com/app-api",
         "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T5r7EAjfxEsAtl",
+        "EXPO_PUBLIC_APP_SECRET": "MaiHoonNaSecureApp2026!",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU",
         "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0"
       }
     },
 
+    "staging-simulator": {
+      "distribution": "internal",
+      "node": "22.14.0",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "APP_ENV": "staging",
+        "EXPO_PUBLIC_ENV": "staging",
+        "EXPO_PUBLIC_PRODUCTION_API_URL": "https://staging-api.maihoonna.com/app-api",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_test_T5r7EAjfxEsAtl",
+        "EXPO_PUBLIC_APP_SECRET": "MaiHoonNaSecureApp2026!",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU"
+      }
+    },
+
     "production": {
       "autoIncrement": true,
+      "distribution": "store",
       "node": "22.14.0",
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
+        "APP_ENV": "production",
+        "EXPO_PUBLIC_ENV": "production",
+        "EXPO_PUBLIC_PRODUCTION_API_URL": "https://api.maihoonna.com/app-api",
+        "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_live_TZ3KKOCt6TIiSt",
+        "EXPO_PUBLIC_APP_SECRET": "MaiHoonNaSecureApp2026!",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID": "AIzaSyAv8pjhFQ8ZURUW02cwHThYUCnRYkw6Rp0"
+      }
+    },
+
+    "production-apk": {
+      "distribution": "internal",
+      "node": "22.14.0",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "production",
         "EXPO_PUBLIC_ENV": "production",
         "EXPO_PUBLIC_PRODUCTION_API_URL": "https://api.maihoonna.com/app-api",
         "EXPO_PUBLIC_RAZORPAY_KEY_ID": "rzp_live_TZ3KKOCt6TIiSt",
