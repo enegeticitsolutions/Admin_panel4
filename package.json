@@ -22,6 +22,7 @@
     "redis:logs": "docker logs -f maihoonna-redis",
     "redis:check": "npx ts-node packages/notifications/check-redis.ts",
     "build:packages": "npm run build --workspaces --if-present",
+    "db:sync": "npm run db:sync --workspace=@maihoonna/database",
     "seed:config": "npm run seed:config --workspace=@maihoonna/database",
     "seed:sathi-guide": "npm run seed:sathi-guide --workspace=@maihoonna/database",
     "seed:benefit-types": "npm run seed:benefit-types --workspace=@maihoonna/database",
