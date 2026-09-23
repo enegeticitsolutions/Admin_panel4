@@ -10,7 +10,8 @@
     "postinstall": "prisma generate --schema=../../packages/database/prisma/schema.prisma",
     "seed:test": "ts-node --transpile-only prisma/seed_test.ts",
     "prisma:generate": "prisma generate --schema=../../packages/database/prisma/schema.prisma",
-    "prisma:push": "prisma db push --schema=../../packages/database/prisma/schema.prisma"
+    "prisma:push": "prisma db push --schema=../../packages/database/prisma/schema.prisma",
+    "db:sync": "prisma db push --schema=../../packages/database/prisma/schema.prisma && prisma generate --schema=../../packages/database/prisma/schema.prisma"
   },
   "dependencies": {
     "@aws-sdk/s3-request-presigner": "^3.1127.0",

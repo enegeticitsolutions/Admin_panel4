@@ -154,14 +154,14 @@ export default function Index() {
   }
 
   // Role-based redirection to the correct home dashboard
-  if (role === 'care_companion' || role === 'volunteer') {
-    return <Redirect href="/(care-companion)" />;
-  } else if (role === 'beneficiary') {
+  if (role === 'beneficiary') {
     return <Redirect href="/(beneficiary)" />;
+  } else if (role === 'care_companion') {
+    return <Redirect href="/(care-companion)" />;
   } else if (role === 'prospect') {
     return <Redirect href="/(setup)/subscription-packages" />;
   } else {
-    // Default: subscriber dashboard
+    // Default: subscriber dashboard (all customers, subscribers, volunteers & staff using customer app)
     return <Redirect href="/(subscriber)" />;
   }
 }

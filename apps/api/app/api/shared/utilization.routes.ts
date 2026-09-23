@@ -54,9 +54,10 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // SCENARIO 2: Subscriber requesting a specific beneficiary's details
+    // SCENARIO 2: Subscriber/Admin requesting a specific beneficiary's details
     // ─────────────────────────────────────────────────────────────────
-    if (userRole === 'subscriber' && beneficiaryId) {
+    const hasValidBeneficiaryId = beneficiaryId && beneficiaryId !== 'undefined' && beneficiaryId !== 'null' && String(beneficiaryId).trim() !== '';
+    if (userRole !== 'beneficiary' && hasValidBeneficiaryId) {
       if (String(beneficiaryId).startsWith('unlinked-')) {
         const subId = String(beneficiaryId).replace('unlinked-', '');
         const unlinkedSubscription = await prisma.subscription.findFirst({
@@ -111,13 +112,18 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         });
       }
 
-      // Ensure the requested beneficiary belongs to this subscriber
+      // Ensure the requested beneficiary belongs to this subscriber (or user is admin)
+      const isAdmin = ['admin', 'master_admin', 'super_admin', 'field_manager'].includes(userRole);
+      const benWhere: any = {
+        id: String(beneficiaryId),
+        isActive: true
+      };
+      if (!isAdmin) {
+        benWhere.subscriberId = userId;
+      }
+
       const beneficiary = await prisma.beneficiary.findFirst({
-        where: {
-          id: String(beneficiaryId),
-          subscriberId: userId,
-          isActive: true
-        },
+        where: benWhere,
         select: {
           id: true,
           name: true,
@@ -145,9 +151,9 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     // ─────────────────────────────────────────────────────────────────
-    // SCENARIO 3: Subscriber dashboard list (all beneficiaries & plans)
+    // SCENARIO 3: Subscriber/Admin dashboard list (all beneficiaries & plans)
     // ─────────────────────────────────────────────────────────────────
-    if (userRole === 'subscriber') {
+    if (userRole !== 'beneficiary') {
       // 1. Fetch normal linked beneficiaries
       const beneficiaries = await prisma.beneficiary.findMany({
         where: { subscriberId: userId, isActive: true },
@@ -612,8 +618,8 @@ router.post('/request-service', authenticate, async (req: AuthRequest, res: Resp
       return res.status(400).json({ success: false, message: 'Missing required parameters: beneficiaryId, benefitId, preferredDate, and preferredTiming are required.' });
     }
 
-    // Resolve subscriberId if userRole is subscriber
-    const subscriberId = userRole === 'subscriber' ? userId : null;
+    // Resolve subscriberId if userRole is not beneficiary
+    const subscriberId = userRole !== 'beneficiary' ? userId : null;
 
     // Validate benefit balance is not exhausted and resolve real beneficiaryId/subscriberId
     const cleanBenId = String(beneficiaryId).replace('unlinked-', '');
@@ -645,7 +651,7 @@ router.post('/request-service', authenticate, async (req: AuthRequest, res: Resp
     }
 
     const targetBeneficiaryId = activeSub?.beneficiaryId || cleanBenId;
-    const targetSubscriberId = activeSub?.subscriberId || (userRole === 'subscriber' ? userId : null);
+    const targetSubscriberId = activeSub?.subscriberId || (userRole !== 'beneficiary' ? userId : null);
 
     const request = await prisma.serviceRequest.create({
       data: {
@@ -678,7 +684,9 @@ router.get('/ledger/:beneficiaryId', authenticate, async (req: AuthRequest, res:
     const beneficiaryId = String(req.params.beneficiaryId || '');
     const { userId, userRole } = req;
 
-    // Check authorization: beneficiary viewing self OR subscriber viewing owned beneficiary OR admin
+    const isAdminOrStaff = ['admin', 'master_admin', 'super_admin', 'field_manager', 'operations_manager'].includes(userRole || '');
+
+    // Check authorization: beneficiary viewing self OR subscriber/user viewing owned beneficiary OR staff
     if (userRole === 'beneficiary') {
       const ben = await prisma.beneficiary.findFirst({
         where: { OR: [{ id: userId }, { userId: userId }] }
@@ -686,15 +694,14 @@ router.get('/ledger/:beneficiaryId', authenticate, async (req: AuthRequest, res:
       if (!ben || ben.id !== beneficiaryId) {
         return res.status(403).json({ success: false, message: 'Unauthorized' });
       }
-    } else if (userRole === 'subscriber') {
+    } else if (!isAdminOrStaff) {
+      // Must own this beneficiary as subscriber
       const ben = await prisma.beneficiary.findFirst({
         where: { id: beneficiaryId, subscriberId: userId }
       });
       if (!ben) {
         return res.status(403).json({ success: false, message: 'Unauthorized' });
       }
-    } else if (userRole !== 'admin' && userRole !== 'super_admin' && userRole !== 'field_manager') {
-      return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
     const activeSub = await prisma.subscription.findFirst({
