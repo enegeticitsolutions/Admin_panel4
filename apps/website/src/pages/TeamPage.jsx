@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import sumitKumarImg from "../assets/sumit-kejriwal-photo.png";
 import rajeevThukralImg from "../assets/team/Rajeev.png";
 import drSubramanianImg from "../assets/team/Subra.png";
-import teamGroupImg from "../assets/team/Team.png";
-import teamTrainingImg from "../assets/team/Team.png";
+import teamGroupImg from "../assets/team/team.png";
+import teamTrainingImg from "../assets/team/team.png";
 import "./TeamPage.css";
 
 // Leadership Profiles matching design spec
