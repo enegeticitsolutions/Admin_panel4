@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import LegacyExpertCard from "../components/legacy/LegacyExpertCard";
 import LegacyExpertProfile from "./LegacyExpertProfile";
 import { fetchLegacyCircleProfiles } from "../services/api";
+import heroBgVideo from "../assets/Header Video.mp4";
 
 // Mock Senior Expert Profiles with rich details matching the design
 const EXPERTS_DATA = [
@@ -365,6 +366,15 @@ const LegacyPage = ({ openForm }) => {
 
       {/* ── 1. HERO SECTION (Figma Spec) ── */}
       <section className="legacy-hero">
+        <video
+          className="legacy-hero__bg-video"
+          src={heroBgVideo}
+          autoPlay
+          muted
+          loop
+          playsInline
+          aria-hidden="true"
+        />
         <div className="legacy-hero__glow-orange" aria-hidden="true" />
         <div className="legacy-hero__glow-purple" aria-hidden="true" />
 
