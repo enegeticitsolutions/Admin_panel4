@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import LegacyExpertCard from "../components/legacy/LegacyExpertCard";
 import LegacyExpertProfile from "./LegacyExpertProfile";
 import { fetchLegacyCircleProfiles } from "../services/api";
-import heroBgVideo from "../assets/Header Video.mp4";
+import heroBgVideo from "../assets/header-video.mp4";
 
 
 

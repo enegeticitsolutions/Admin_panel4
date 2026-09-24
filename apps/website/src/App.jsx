@@ -34,6 +34,10 @@ const ROUTE_ALIASES = {
   "legacy-in-action": "legacy",
   "legacy-circle": "legacy",
   "our-team": "team",
+  signup: "auth",
+  "sign-up": "auth",
+  login: "auth",
+  register: "auth",
 };
 
 const LEGAL_PAGES = [
@@ -55,6 +59,7 @@ const VALID_PAGES = [
   "story",
   "team",
   "plans",
+  "auth",
   ...LEGAL_PAGES,
 ];
 
@@ -177,17 +182,25 @@ const App = () => {
 
   // Live Subscription Packages from API
   const [livePackages, setLivePackages] = useState([]);
+  const [isLoadingPackages, setIsLoadingPackages] = useState(true);
 
   useEffect(() => {
+    setIsLoadingPackages(true);
     fetchSubscriptionPackages()
       .then((pkgs) => {
         if (Array.isArray(pkgs) && pkgs.length > 0) {
           setLivePackages(pkgs);
+        } else {
+          setLivePackages([]);
         }
       })
-      .catch((err) =>
-        console.log("Backend offline or packages endpoint unavailable, falling back to static plans.", err)
-      );
+      .catch((err) => {
+        console.log("Backend offline or packages endpoint unavailable, falling back to static plans.", err);
+        setLivePackages([]);
+      })
+      .finally(() => {
+        setIsLoadingPackages(false);
+      });
   }, []);
 
   const handleAuthSuccess = (userData, tokenData) => {
@@ -266,8 +279,8 @@ const App = () => {
         <ErrorBoundary key={activePage}>
           {activePage === "home" ? (
             <HomePage openForm={openForm} />
-          /* ) : activePage === "auth" ? (
-            <AuthPage onAuthSuccess={handleAuthSuccess} onGoBack={() => setActivePage("home")} /> */
+          ) : activePage === "auth" ? (
+            <AuthPage onAuthSuccess={handleAuthSuccess} onGoBack={() => setActivePage("home")} />
           ) : activePage === "account" ? (
             <AccountPage
               user={user}
@@ -289,6 +302,7 @@ const App = () => {
           ) : activePage === "plans" ? (
             <PlansPage
               livePackages={livePackages}
+              isLoading={isLoadingPackages}
               onSelectPackage={handleSelectPackageForBuy}
               openForm={openForm}
             />

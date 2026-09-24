@@ -190,7 +190,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
             </div>
 
             {/* Hobby Circles */}
-            {/* <div className="svc-eco-small-card">
+            <div className="svc-eco-small-card">
               <span className="small-card-icon">🎨</span>
               <h3>Hobby Circles</h3>
               <p>
@@ -202,7 +202,7 @@ const ServicesPage = ({ setActivePage, openForm }) => {
                 <span>Interests</span>
                 <span>Privacy-first</span>
               </div>
-            </div> */}
+            </div>
 
             {/* Healthcare Partner Network */}
             <div className="svc-eco-small-card">

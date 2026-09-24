@@ -13,16 +13,18 @@ const services = [
     text: "Community volunteers for companionship between Care Mitra visits. No senior should feel alone between scheduled visits.",
     link: "saathi",
   },
-  // {
-  //   emoji: "🏆",
-  //   title: "Legacy Circles",
-  //   text: "A platform for seniors to share decades of expertise and rediscover purpose. Their wisdom deserves an audience.",
-  // },
-  // {
-  //   emoji: "🎨",
-  //   title: "Hobby Circles",
-  //   text: "Peer connections built around shared interests – chess, gardening, music, cooking. Joy comes from belonging.",
-  // },
+  {
+    emoji: "🏆",
+    title: "Legacy Circles",
+    text: "A platform for seniors to share decades of expertise and rediscover purpose. Their wisdom deserves an audience.",
+    link: "legacy",
+  },
+  {
+    emoji: "🎨",
+    title: "Hobby Circles",
+    text: "Peer connections built around shared interests – chess, gardening, music, cooking. Joy comes from belonging.",
+    link: "services",
+  },
 ];
 
 const visitFeatures = [

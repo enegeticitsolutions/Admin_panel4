@@ -972,9 +972,9 @@ a {
   display: grid;
   width: min(1200px, 100%);
   margin: 0 auto;
-  grid-template-columns: repeat(2, minmax(280px, 350px));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   justify-content: center;
-  gap: 28px;
+  gap: 24px;
 }
 
 .service-card {
@@ -2961,6 +2961,180 @@ a {
   padding: 96px 0 78px;
 }
 
+/* ── Plans Empty State (Custom Plans Arriving Shortly) ── */
+.plans-empty-state {
+  width: min(840px, 100%);
+  margin: 10px auto 56px;
+  background: #ffffff;
+  border: 1px solid rgba(254, 103, 0, 0.18);
+  border-radius: 28px;
+  padding: 64px 36px;
+  text-align: center;
+  box-shadow: 0 16px 40px -12px rgba(254, 103, 0, 0.08), 0 4px 20px rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.plans-empty-state::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #FE6700 0%, #FF8C38 50%, #7C3AED 100%);
+}
+
+.plans-empty-state__icon-wrap {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.plans-empty-state__glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90px;
+  height: 90px;
+  background: radial-gradient(circle, rgba(254, 103, 0, 0.22) 0%, rgba(254, 103, 0, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.plans-empty-state__icon-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(254, 103, 0, 0.12) 0%, rgba(254, 103, 0, 0.04) 100%);
+  border: 1.5px solid rgba(254, 103, 0, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FE6700;
+}
+
+.plans-empty-state__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(254, 103, 0, 0.08);
+  border: 1px solid rgba(254, 103, 0, 0.2);
+  color: #FE6700;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 6px 14px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.plans-empty-state__badge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #FE6700;
+  animation: plans-pulse-dot 2s infinite ease-in-out;
+}
+
+@keyframes plans-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.75); }
+}
+
+.plans-empty-state__title {
+  font-family: 'Poppins', sans-serif;
+  font-size: clamp(26px, 3.8vw, 36px);
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.25;
+  margin: 0 0 16px;
+  letter-spacing: -0.02em;
+}
+
+.plans-empty-state__subtext {
+  font-family: 'Poppins', sans-serif;
+  font-size: clamp(15px, 1.8vw, 17px);
+  line-height: 1.65;
+  color: #4b5563;
+  max-width: 600px;
+  margin: 0;
+}
+
+.plans-empty-state__actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.plans-empty-state__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #FE6700;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  padding: 14px 34px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 8px 24px -4px rgba(254, 103, 0, 0.35);
+  transition: all 0.25s ease;
+}
+
+.plans-empty-state__btn:hover {
+  background: #e05b00;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -4px rgba(254, 103, 0, 0.45);
+}
+
+.plans-empty-state__btn:active {
+  transform: translateY(0);
+}
+
+/* ── Loading Skeleton ── */
+.plans-loading-skeleton {
+  width: min(1180px, 100%);
+  margin: 30px auto 60px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.plans-skeleton-card {
+  height: 460px;
+  border-radius: 24px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e4e4e7 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: plans-skeleton-shimmer 1.5s infinite;
+}
+
+@keyframes plans-skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (max-width: 768px) {
+  .plans-empty-state {
+    padding: 42px 20px;
+    border-radius: 20px;
+    margin: 10px auto 36px;
+  }
+  .plans-empty-state__btn {
+    width: 100%;
+  }
+}
+
 .pricing-toolbar {
   display: flex;
   align-items: center;
@@ -4060,8 +4234,9 @@ a {
   box-shadow: 0px 4px 14px rgba(254, 103, 0, 0.25);
 }
 
+.quote-card label.quote-field-full,
 .quote-field-full {
-  margin-bottom: 18px;
+  margin-bottom: 24px;
 }
 
 .quote-card>button[type="submit"] {
@@ -4072,7 +4247,7 @@ a {
   width: 100%;
   height: 58px;
   padding: 17px;
-  margin-top: 4px;
+  margin-top: 8px;
   background: #FE6700;
   box-shadow: 0px 8px 24px rgba(254, 103, 0, 0.267);
   border-radius: 50px;
@@ -4373,14 +4548,15 @@ a {
 
   .auth-page-container {
     flex-direction: column !important;
+    margin-top: 0 !important;
   }
 
   .auth-hero-side {
-    padding: 40px 24px !important;
+    display: none !important;
   }
 
   .auth-form-side {
-    padding: 32px 20px !important;
+    padding: 16px 16px 40px !important;
   }
 
   .checkout-grid {
@@ -8792,12 +8968,13 @@ a {
   .auth-page-container {
     flex-direction: column !important;
     height: auto !important;
-    min-height: 100vh !important;
-    min-height: 100dvh !important;
+    min-height: calc(100vh - 72px) !important;
+    min-height: calc(100dvh - 72px) !important;
     width: 100% !important;
     background: #FAFAFC !important;
     justify-content: flex-start !important;
     align-items: center !important;
+    margin-top: 0 !important;
   }
 
   .auth-hero-side {
@@ -8809,7 +8986,7 @@ a {
     position: static !important;
     width: 100% !important;
     max-width: 410px !important;
-    margin: 20px auto 0 auto !important;
+    margin: 12px auto 0 auto !important;
     text-align: center !important;
   }
 
@@ -8817,9 +8994,8 @@ a {
     flex: 1 !important;
     width: 100% !important;
     height: auto !important;
-    min-height: 100vh !important;
-    min-height: 100dvh !important;
-    padding: 48px 16px 40px !important;
+    min-height: auto !important;
+    padding: 16px 16px 40px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
@@ -8835,11 +9011,11 @@ a {
   }
 
   .auth-form-card.auth-card--register {
-    margin: 36px auto 0 auto !important;
+    margin: 8px auto 0 auto !important;
   }
 
   .auth-form-card.auth-card--login {
-    margin: 72px auto 0 auto !important;
+    margin: 8px auto 0 auto !important;
   }
 
   .auth-otp-grid {
@@ -10030,7 +10206,7 @@ a {
 /* ── 1. HERO SECTION ── */
 .legacy-hero {
   position: relative;
-  background: #FFFFFF;
+  background: #d9d9d9;
   padding: 124px 24px 80px;
   overflow: hidden;
 }
@@ -10050,9 +10226,7 @@ a {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(150deg, rgba(255, 255, 255, 0.76) 0%, rgba(255, 248, 242, 0.64) 100%);
-  backdrop-filter: blur(1.5px);
-  -webkit-backdrop-filter: blur(1.5px);
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.42) 0 21%, rgba(255, 255, 255, 0.1) 21% 100%);
   z-index: 1;
   pointer-events: none;
 }
@@ -11672,7 +11846,7 @@ a {
   }
 
   .legacy-hero::before {
-    background: linear-gradient(150deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 248, 242, 0.55) 100%) !important;
+    background: linear-gradient(115deg, rgba(255, 255, 255, 0.42) 0 21%, rgba(255, 255, 255, 0.1) 21% 100%) !important;
   }
 
   .legacy-hero__title {

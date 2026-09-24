@@ -18,10 +18,11 @@ const defaultFaqs = [
 
 export default function PlansPage({
   livePackages = [],
+  isLoading = false,
   onSelectPackage,
   openForm,
   formData = {},
-  handleInputChange = () => {},
+  handleInputChange = () => { },
   handleSubmit = (e) => e.preventDefault(),
   isSubmitting = false,
   showSuccess = false,
@@ -153,22 +154,22 @@ export default function PlansPage({
             <div className="plans-hero__badges">
               <div className="plans-hero__badge">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <polyline points="9 12 11 14 15 10"/>
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <polyline points="9 12 11 14 15 10" />
                 </svg>
                 <span>No hidden fees</span>
               </div>
               <div className="plans-hero__badge">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="12 6 12 12 16 14"/>
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
                 </svg>
                 <span>Hours roll over 30 days</span>
               </div>
               <div className="plans-hero__badge">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FE6700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <polyline points="9 12 11 14 15 9"/>
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="9 12 11 14 15 9" />
                 </svg>
                 <span>Cancel anytime</span>
               </div>
@@ -211,162 +212,196 @@ export default function PlansPage({
 
       {/* ── Pricing Section ── */}
       <section className="pricing-section" id="plans">
-        <div className="pricing-toolbar">
-          <strong>All prices on enquiry · GST applicable</strong>
-          <div className="billing-toggle" aria-label="Billing cycle">
-            <button
-              className={selectedCycle === "3" ? "active" : ""}
-              onClick={() => setSelectedCycle("3")}
-            >
-              3 Months <span>Save 5%</span>
-            </button>
-            <button
-              className={selectedCycle === "6" ? "active" : ""}
-              onClick={() => setSelectedCycle("6")}
-            >
-              6 Months <span>Save 10%</span>
-            </button>
-            <button
-              className={selectedCycle === "12" ? "active" : ""}
-              onClick={() => setSelectedCycle("12")}
-            >
-              Annual <span>Save 20%</span>
-            </button>
+        {isLoading ? (
+          <div className="plans-loading-skeleton" aria-label="Loading plans...">
+            <div className="plans-skeleton-card" />
+            <div className="plans-skeleton-card" />
+            <div className="plans-skeleton-card" />
           </div>
-        </div>
+        ) : packagesToDisplay.length === 0 ? (
+          /* ── Empty State: When no data is available or coming from database ── */
+          <div className="plans-empty-state" id="plans-empty-state">
+            <div className="plans-empty-state__icon-wrap">
+              <div className="plans-empty-state__glow" aria-hidden="true" />
+              <div className="plans-empty-state__icon-circle">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </div>
+            </div>
 
-        {/* ── Card-wise Carousel Slider ── */}
-        <div
-          className="plan-slider-wrapper"
-          onMouseEnter={() => setIsPaused(true)}
-          onMouseLeave={() => setIsPaused(false)}
-        >
-          {maxSlide > 0 && (
-            <>
-              <button
-                type="button"
-                className="plan-slider-arrow plan-slider-arrow--prev"
-                onClick={handlePrevSlide}
-                aria-label="Previous plans"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                className="plan-slider-arrow plan-slider-arrow--next"
-                onClick={handleNextSlide}
-                aria-label="Next plans"
-              >
-                ›
-              </button>
-            </>
-          )}
+            <div className="plans-empty-state__badge">
+              <span className="plans-empty-state__badge-dot" />
+              <span>Updates in progress</span>
+            </div>
 
-          <div
-            className="plan-slider-track"
-            style={{
-              transform: `translateX(calc(-${currentSlide} * (100% + 22px) / ${cardsPerView}))`,
-            }}
-          >
-            {packagesToDisplay.map((plan) => (
+            <h2 className="plans-empty-state__title">Custom Plans Arriving Shortly</h2>
+
+            <p className="plans-empty-state__subtext">
+              Our standard plans are currently being updated.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="pricing-toolbar">
+              <strong>All prices on enquiry · GST applicable</strong>
+              <div className="billing-toggle" aria-label="Billing cycle">
+                <button
+                  className={selectedCycle === "3" ? "active" : ""}
+                  onClick={() => setSelectedCycle("3")}
+                >
+                  3 Months <span>Save 5%</span>
+                </button>
+                <button
+                  className={selectedCycle === "6" ? "active" : ""}
+                  onClick={() => setSelectedCycle("6")}
+                >
+                  6 Months <span>Save 10%</span>
+                </button>
+                <button
+                  className={selectedCycle === "12" ? "active" : ""}
+                  onClick={() => setSelectedCycle("12")}
+                >
+                  Annual <span>Save 20%</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ── Card-wise Carousel Slider ── */}
+            <div
+              className="plan-slider-wrapper"
+              onMouseEnter={() => setIsPaused(true)}
+              onMouseLeave={() => setIsPaused(false)}
+            >
+              {maxSlide > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="plan-slider-arrow plan-slider-arrow--prev"
+                    onClick={handlePrevSlide}
+                    aria-label="Previous plans"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    className="plan-slider-arrow plan-slider-arrow--next"
+                    onClick={handleNextSlide}
+                    aria-label="Next plans"
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+
               <div
-                className="plan-slider-item"
-                key={plan.id || plan.name}
+                className="plan-slider-track"
                 style={{
-                  width: `calc((100% - ${(cardsPerView - 1) * 22}px) / ${cardsPerView})`,
+                  transform: `translateX(calc(-${currentSlide} * (100% + 22px) / ${cardsPerView}))`,
                 }}
               >
-                <PackageCard
-                  plan={plan}
-                  selectedCycle={selectedCycle}
-                  isSelected={(plan.id || plan.name) === activePlanId}
-                  onCardClick={() => setSelectedPlanId(plan.id || plan.name)}
-                  onSelectPackage={onSelectPackage}
-                  onOpenDetails={(p) => setModalPlan(p)}
-                />
+                {packagesToDisplay.map((plan) => (
+                  <div
+                    className="plan-slider-item"
+                    key={plan.id || plan.name}
+                    style={{
+                      width: `calc((100% - ${(cardsPerView - 1) * 22}px) / ${cardsPerView})`,
+                    }}
+                  >
+                    <PackageCard
+                      plan={plan}
+                      selectedCycle={selectedCycle}
+                      isSelected={(plan.id || plan.name) === activePlanId}
+                      onCardClick={() => setSelectedPlanId(plan.id || plan.name)}
+                      onSelectPackage={onSelectPackage}
+                      onOpenDetails={(p) => setModalPlan(p)}
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Pagination Dot Indicators */}
-          {maxSlide > 0 && (
-            <div className="plan-slider-dots" aria-label="Package slider pagination">
-              {Array.from({ length: maxSlide + 1 }).map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className={`plan-slider-dot ${currentSlide === idx ? "active" : ""}`}
-                  onClick={() => setCurrentSlide(idx)}
-                  aria-label={`Go to slide ${idx + 1}`}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <p className="pricing-note">
-          No hidden caps - No surprise renewals - Plans available monthly, quarterly, and annually - Pricing on enquiry
-        </p>
-
-        {/* ── Dynamic Feature Comparison Table ── */}
-        <div className="comparison">
-          <div className="comparison__heading">
-            <h2>Full feature comparison</h2>
-            <p>Everything side by side, so you can choose with clarity.</p>
-          </div>
-          <div className="comparison-table" role="table" aria-label="Full feature comparison">
-            <div className="comparison-row comparison-row--head" role="row">
-              <span>Feature</span>
-              {comparedPackages.map((pkg) => (
-                <strong key={pkg.id || pkg.name}>{pkg.name}</strong>
-              ))}
-            </div>
-
-            {comparisonBenefits && comparisonBenefits.length > 0 ? (
-              comparisonBenefits.map((benefit) => (
-                <div className="comparison-row" role="row" key={benefit.id}>
-                  <span>{benefit.name}</span>
-                  {comparedPackages.map((pkg) => {
-                    const matchedPb = Array.isArray(pkg.packageBenefits)
-                      ? pkg.packageBenefits.find(
-                          (pb) =>
-                            pb.benefitId === benefit.id ||
-                            pb.benefit?.id === benefit.id
-                        )
-                      : null;
-                    const isIncluded = !!matchedPb;
-                    let displayVal = "-";
-                    if (isIncluded) {
-                      if (matchedPb.isUnlimited) {
-                        displayVal = "Unlimited";
-                      } else if (matchedPb.unitsPeriod === "yearly") {
-                        displayVal = `${matchedPb.unitsIncluded}/yr`;
-                      } else if (matchedPb.unitsPeriod === "one_time") {
-                        displayVal = `${matchedPb.unitsIncluded} (Once)`;
-                      } else {
-                        displayVal = `${matchedPb.unitsIncluded}/mo`;
-                      }
-                    }
-
-                    return (
-                      <strong
-                        className={isIncluded ? "included" : "not-included"}
-                        key={`${benefit.id}-${pkg.id || pkg.name}`}
-                        style={isIncluded ? { fontSize: "0.85rem", fontWeight: 700 } : {}}
-                      >
-                        {displayVal}
-                      </strong>
-                    );
-                  })}
+              {/* Pagination Dot Indicators */}
+              {maxSlide > 0 && (
+                <div className="plan-slider-dots" aria-label="Package slider pagination">
+                  {Array.from({ length: maxSlide + 1 }).map((_, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className={`plan-slider-dot ${currentSlide === idx ? "active" : ""}`}
+                      onClick={() => setCurrentSlide(idx)}
+                      aria-label={`Go to slide ${idx + 1}`}
+                    />
+                  ))}
                 </div>
-              ))
-            ) : (
-              <div style={{ padding: "24px", textAlign: "center", color: "#64748b" }}>
-                No active package benefits available for comparison.
+              )}
+            </div>
+
+            <p className="pricing-note">
+              No hidden caps - No surprise renewals - Plans available monthly, quarterly, and annually - Pricing on enquiry
+            </p>
+
+            {/* ── Dynamic Feature Comparison Table ── */}
+            <div className="comparison">
+              <div className="comparison__heading">
+                <h2>Full feature comparison</h2>
+                <p>Everything side by side, so you can choose with clarity.</p>
               </div>
-            )}
-          </div>
-        </div>
+              <div className="comparison-table" role="table" aria-label="Full feature comparison">
+                <div className="comparison-row comparison-row--head" role="row">
+                  <span>Feature</span>
+                  {comparedPackages.map((pkg) => (
+                    <strong key={pkg.id || pkg.name}>{pkg.name}</strong>
+                  ))}
+                </div>
+
+                {comparisonBenefits && comparisonBenefits.length > 0 ? (
+                  comparisonBenefits.map((benefit) => (
+                    <div className="comparison-row" role="row" key={benefit.id}>
+                      <span>{benefit.name}</span>
+                      {comparedPackages.map((pkg) => {
+                        const matchedPb = Array.isArray(pkg.packageBenefits)
+                          ? pkg.packageBenefits.find(
+                            (pb) =>
+                              pb.benefitId === benefit.id ||
+                              pb.benefit?.id === benefit.id
+                          )
+                          : null;
+                        const isIncluded = !!matchedPb;
+                        let displayVal = "-";
+                        if (isIncluded) {
+                          if (matchedPb.isUnlimited) {
+                            displayVal = "Unlimited";
+                          } else if (matchedPb.unitsPeriod === "yearly") {
+                            displayVal = `${matchedPb.unitsIncluded}/yr`;
+                          } else if (matchedPb.unitsPeriod === "one_time") {
+                            displayVal = `${matchedPb.unitsIncluded} (Once)`;
+                          } else {
+                            displayVal = `${matchedPb.unitsIncluded}/mo`;
+                          }
+                        }
+
+                        return (
+                          <strong
+                            className={isIncluded ? "included" : "not-included"}
+                            key={`${benefit.id}-${pkg.id || pkg.name}`}
+                            style={isIncluded ? { fontSize: "0.85rem", fontWeight: 700 } : {}}
+                          >
+                            {displayVal}
+                          </strong>
+                        );
+                      })}
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ padding: "24px", textAlign: "center", color: "#64748b" }}>
+                    No active package benefits available for comparison.
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* ── Bespoke Banner ── */}
         <div className="bespoke-banner">
@@ -392,7 +427,7 @@ export default function PlansPage({
         <form className="quote-card" onSubmit={handleSubmit}>
           <h2>Get a personalised quote</h2>
           <p>Tell us which plan interests you and we'll call back within 2 hours with pricing and availability for your area.</p>
-          
+
           <div className="quote-grid">
             <label>
               <span>Your name</span>
