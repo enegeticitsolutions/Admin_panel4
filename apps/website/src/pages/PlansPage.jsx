@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import PackageCard from "../components/packages/PackageCard";
+import PackageCard, { getPackageDisplayPrice } from "../components/packages/PackageCard";
 import PlanDetailsModal from "../components/modals/PlanDetailsModal";
 import planBgVideo from "../assets/Plan-Header-Background-Video.mp4";
 
@@ -40,7 +40,19 @@ export default function PlansPage({
     return 3;
   });
 
-  const packagesToDisplay = livePackages;
+  // Sort packages from low to high price based on the selected billing cycle
+  const packagesToDisplay = useMemo(() => {
+    if (!Array.isArray(livePackages)) return [];
+    return [...livePackages].sort((a, b) => {
+      const priceA = getPackageDisplayPrice(a, selectedCycle);
+      const priceB = getPackageDisplayPrice(b, selectedCycle);
+      if (priceA !== priceB) {
+        return priceA - priceB;
+      }
+      return (a.name || "").localeCompare(b.name || "");
+    });
+  }, [livePackages, selectedCycle]);
+
   const maxSlide = Math.max(0, packagesToDisplay.length - cardsPerView);
 
   const activePlanId = useMemo(() => {
@@ -56,10 +68,16 @@ export default function PlansPage({
     const pkgs = packagesToDisplay;
     const flagged = pkgs.filter((p) => p.isCompared);
     if (flagged.length > 0) {
-      return flagged.slice(0, 3);
+      return [...flagged]
+        .sort((a, b) => {
+          const priceA = getPackageDisplayPrice(a, selectedCycle);
+          const priceB = getPackageDisplayPrice(b, selectedCycle);
+          return priceA - priceB;
+        })
+        .slice(0, 3);
     }
     return pkgs.slice(0, 3);
-  }, [packagesToDisplay]);
+  }, [packagesToDisplay, selectedCycle]);
 
   // 2. Extract all unique Benefits from live packages (or all packages)
   const comparisonBenefits = useMemo(() => {
@@ -110,6 +128,11 @@ export default function PlansPage({
       setCurrentSlide(maxSlide);
     }
   }, [maxSlide, currentSlide]);
+
+  // Reset slide index when billing cycle changes so user views cards from lowest price
+  useEffect(() => {
+    setCurrentSlide(0);
+  }, [selectedCycle]);
 
   // Auto slide from right to left every 2.5 seconds (pauses on hover)
   useEffect(() => {
