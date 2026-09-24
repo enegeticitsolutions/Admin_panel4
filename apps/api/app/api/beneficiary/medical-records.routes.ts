@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../../core/database';
 import { authenticate, AuthRequest } from '../shared/deps';
+import { notificationProducer } from '@maihoonna/notifications';
 
 const router = Router();
 
@@ -146,6 +147,96 @@ router.post('/vitals', authenticate, async (req: AuthRequest, res: Response) => 
                 captureMethod: 'manual',
             }))
         });
+
+        // ── Fire-and-forget abnormal range notification ────────────────────────
+        (async () => {
+            try {
+                // Batch-fetch definitions to check normalMin / normalMax
+                const defIds = [...new Set(validVitals.map(v => v.vitalDefinitionId))];
+                const defRows = await prisma.vitalDefinition.findMany({ where: { id: { in: defIds } } });
+                const defMap = new Map(defRows.map(d => [d.id, d]));
+
+                const abnormalAlerts: { vitalName: string; unit: string; value: string; min: string; max: string; diff: string }[] = [];
+
+                for (const reading of validVitals) {
+                    const def = defMap.get(reading.vitalDefinitionId);
+                    if (!def) continue;
+
+                    if (def.dataType === 'numeric' && reading.valueNumeric != null) {
+                        const val = reading.valueNumeric;
+                        const belowMin = def.normalMin !== null && val < def.normalMin;
+                        const aboveMax = def.normalMax !== null && val > def.normalMax;
+                        if (belowMin || aboveMax) {
+                            const diff = belowMin ? def.normalMin! - val : val - def.normalMax!;
+                            abnormalAlerts.push({
+                                vitalName: def.name,
+                                unit: def.unit || '',
+                                value: `${val}`,
+                                min: def.normalMin != null ? `${def.normalMin}` : 'N/A',
+                                max: def.normalMax != null ? `${def.normalMax}` : 'N/A',
+                                diff: `${Math.abs(diff).toFixed(1)}`,
+                            });
+                        }
+                    } else if (def.dataType === 'dual_numeric' && reading.valueNumeric != null && reading.valueNumeric2 != null) {
+                        const val1 = reading.valueNumeric;
+                        const val2 = reading.valueNumeric2;
+                        let maxDiff = 0;
+                        let isAbnormal = false;
+
+                        if (def.normalMin !== null && val1 < def.normalMin) { isAbnormal = true; maxDiff = Math.max(maxDiff, def.normalMin - val1); }
+                        else if (def.normalMax !== null && val1 > def.normalMax) { isAbnormal = true; maxDiff = Math.max(maxDiff, val1 - def.normalMax); }
+                        if (def.normalMin2 !== null && val2 < def.normalMin2) { isAbnormal = true; maxDiff = Math.max(maxDiff, def.normalMin2 - val2); }
+                        else if (def.normalMax2 !== null && val2 > def.normalMax2) { isAbnormal = true; maxDiff = Math.max(maxDiff, val2 - def.normalMax2); }
+
+                        if (isAbnormal) {
+                            abnormalAlerts.push({
+                                vitalName: def.name,
+                                unit: def.unit || '',
+                                value: `${val1}/${val2}`,
+                                min: `${def.normalMin ?? 'N/A'}/${def.normalMin2 ?? 'N/A'}`,
+                                max: `${def.normalMax ?? 'N/A'}/${def.normalMax2 ?? 'N/A'}`,
+                                diff: `${maxDiff.toFixed(1)}`,
+                            });
+                        }
+                    }
+                }
+
+                if (abnormalAlerts.length === 0) return;
+
+                // Fetch the Subscriber's phone linked to this Beneficiary
+                const fullBeneficiary = await prisma.beneficiary.findUnique({
+                    where: { id: beneficiary.id },
+                    include: {
+                        subscriber: { select: { phone: true } },
+                        user: { select: { phone: true } },
+                    },
+                }) as any;
+
+                const subscriberPhone = fullBeneficiary?.subscriber?.phone;
+                const beneficiaryName = fullBeneficiary?.name || 'Beneficiary';
+
+                for (const alert of abnormalAlerts) {
+                    if (subscriberPhone) {
+                        await notificationProducer.publish({
+                            idempotencyKey: `vital-self-${beneficiary.id}-${alert.vitalName}-${now.getTime()}`,
+                            channel: 'whatsapp',
+                            event: 'VITALS_ALERT',
+                            recipient: { phone: subscriberPhone },
+                            variables: {
+                                beneficiaryName,
+                                vitalName: alert.vitalName,
+                                value: `${alert.value}${alert.unit ? ' ' + alert.unit : ''}`,
+                                normalRange: `${alert.min}-${alert.max}${alert.unit ? ' ' + alert.unit : ''}`,
+                                exceededBy: `${alert.diff}${alert.unit ? ' ' + alert.unit : ''}`,
+                                ccName: 'Self (Beneficiary)',
+                            },
+                        });
+                    }
+                }
+            } catch (notifErr: any) {
+                console.error('[MedicalRecords:SelfVitals] Abnormal Notification Error:', notifErr.message);
+            }
+        })();
 
         res.status(201).json({ success: true, data: { created: readings.count } });
     } catch (error: any) {
