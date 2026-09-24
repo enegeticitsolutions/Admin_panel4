@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import logo from "../../assets/logo.svg";
-import headerBgVideo from "../../assets/Header Video.mp4";
+import headerBgVideo from "../../assets/header-video.mp4";
 
 /**
  * Header Component - Site Navigation and User Actions Bar
@@ -114,13 +114,12 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             👤 {user.name || "My Account"}
           </button>
         ) : (
-          /* <button
+          <button
             className="pill-button pill-button--light"
             onClick={() => handleNavClick("auth")}
           >
             Sign Up
-          </button> */
-          null
+          </button>
         )}
 
         {/* Mobile Hamburger Menu Button */}
@@ -190,7 +189,29 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
           >
             📋 View Plans
           </a>
-
+          {user ? (
+            <a
+              href="/account"
+              className={activePage === "account" ? "active" : ""}
+              onClick={(e) => {
+                e.preventDefault();
+                handleNavClick("account");
+              }}
+            >
+              👤 My Account
+            </a>
+          ) : (
+            <a
+              href="/auth"
+              className={activePage === "auth" ? "active" : ""}
+              onClick={(e) => {
+                e.preventDefault();
+                handleNavClick("auth");
+              }}
+            >
+              🔐 Sign Up / Login
+            </a>
+          )}
         </div>
       )}
     </header>
