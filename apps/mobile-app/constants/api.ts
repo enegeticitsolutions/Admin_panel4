@@ -4,7 +4,9 @@ import { Platform } from 'react-native';
 // If EXPO_PUBLIC_ENV is explicitly set to 'local', use local. Otherwise default to 'production'
 const ENV = process.env.EXPO_PUBLIC_ENV || 'production';
 const USE_LOCAL = ENV === 'local';
+const USE_STAGING = ENV === 'staging';
 
+const STAGING_URL = (process.env.EXPO_PUBLIC_STAGING_API_URL ?? 'https://staging-api.maihoonna.com/app-api').replace(/\/+$/, '');
 const PRODUCTION_URL = (process.env.EXPO_PUBLIC_PRODUCTION_API_URL ?? 'https://api.maihoonna.com/app-api').replace(/\/+$/, '');
 
 const LOCAL_IP = process.env.EXPO_PUBLIC_LOCAL_IP ?? 'localhost';
@@ -35,7 +37,7 @@ const getLocalUrl = () => {
 };
 
 // ─── Export final URL ─────────────────────────────────────────────────────────
-export const API_URL = USE_LOCAL ? getLocalUrl() : PRODUCTION_URL;
+export const API_URL = USE_LOCAL ? getLocalUrl() : (USE_STAGING ? STAGING_URL : PRODUCTION_URL);
 
 // Handy for debugging — shows in Metro console on startup
-console.log(`[API] Platform: ${Platform.OS} | Environment: ${USE_LOCAL ? 'LOCAL' : 'PRODUCTION'} → ${API_URL}`);
+console.log(`[API] Platform: ${Platform.OS} | Environment: ${USE_LOCAL ? 'LOCAL' : (USE_STAGING ? 'STAGING' : 'PRODUCTION')} → ${API_URL}`);
