@@ -142,7 +142,7 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
       s.isActive &&
       !s.isQueued &&
       s.cancellationNote !== 'QUEUED' &&
-      new Date(s.endDate) > now
+      (!s.endDate || new Date(s.endDate) > now)
     );
 
     const queuedSubscriptions = allUserSubscriptions.filter((s: any) =>

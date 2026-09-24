@@ -375,6 +375,59 @@ export const updateVisitDetails = async (data: {
   });
 };
 
+// Helper: extract abnormal vital alerts from a vitalsList given definitions fetched from DB
+function extractAbnormalAlerts(
+  vitalsList: { vitalDefinitionId: string; valueNumeric?: number; valueNumeric2?: number; valueText?: string }[],
+  defs: Map<string, any>
+): { vitalName: string; unit: string; value: string; min: string; max: string; diff: string }[] {
+  const alerts: { vitalName: string; unit: string; value: string; min: string; max: string; diff: string }[] = [];
+
+  for (const reading of vitalsList) {
+    const def = defs.get(reading.vitalDefinitionId);
+    if (!def) continue;
+
+    if (def.dataType === 'numeric' && reading.valueNumeric != null) {
+      const val = reading.valueNumeric;
+      const belowMin = def.normalMin !== null && val < def.normalMin;
+      const aboveMax = def.normalMax !== null && val > def.normalMax;
+      if (belowMin || aboveMax) {
+        const diff = belowMin ? def.normalMin - val : val - def.normalMax;
+        alerts.push({
+          vitalName: def.name,
+          unit: def.unit || '',
+          value: `${val}`,
+          min: def.normalMin != null ? `${def.normalMin}` : 'N/A',
+          max: def.normalMax != null ? `${def.normalMax}` : 'N/A',
+          diff: `${Math.abs(diff).toFixed(1)}`,
+        });
+      }
+    } else if (def.dataType === 'dual_numeric' && reading.valueNumeric != null && reading.valueNumeric2 != null) {
+      const val1 = reading.valueNumeric;
+      const val2 = reading.valueNumeric2;
+      const anomalies: string[] = [];
+      let diff = 0;
+
+      if (def.normalMin !== null && val1 < def.normalMin) { anomalies.push(`${val1} (low)`); diff = def.normalMin - val1; }
+      else if (def.normalMax !== null && val1 > def.normalMax) { anomalies.push(`${val1} (high)`); diff = val1 - def.normalMax; }
+      if (def.normalMin2 !== null && val2 < def.normalMin2) { anomalies.push(`${val2} (low)`); diff = Math.max(diff, def.normalMin2 - val2); }
+      else if (def.normalMax2 !== null && val2 > def.normalMax2) { anomalies.push(`${val2} (high)`); diff = Math.max(diff, val2 - def.normalMax2); }
+
+      if (anomalies.length > 0) {
+        alerts.push({
+          vitalName: def.name,
+          unit: def.unit || '',
+          value: `${val1}/${val2}`,
+          min: `${def.normalMin ?? 'N/A'}/${def.normalMin2 ?? 'N/A'}`,
+          max: `${def.normalMax ?? 'N/A'}/${def.normalMax2 ?? 'N/A'}`,
+          diff: `${Math.abs(diff).toFixed(1)}`,
+        });
+      }
+    }
+  }
+
+  return alerts;
+}
+
 export const checkOut = async (data: {
   visitId: string;
   latitude?: number;
@@ -827,45 +880,49 @@ export const checkOut = async (data: {
         }
       }
 
-      // NT-030: VITALS_ALERT (if abnormal vitals recorded)
-      if (data.vitalsList && Array.isArray(data.vitalsList)) {
-        for (const reading of data.vitalsList) {
-          const def = await prisma.vitalDefinition.findUnique({ where: { id: reading.vitalDefinitionId } });
-          if (!def) continue;
-          let isAbnormal = false;
-          let displayReading = '';
+      // NT-030: VITALS_ALERT (per-vital, if reading exceeds normal range)
+      if (data.vitalsList && Array.isArray(data.vitalsList) && data.vitalsList.length > 0) {
+        // Batch-fetch definitions to avoid N+1 queries
+        const defIds = [...new Set(data.vitalsList.map(r => r.vitalDefinitionId))];
+        const defRows = await prisma.vitalDefinition.findMany({ where: { id: { in: defIds } } });
+        const defMap = new Map(defRows.map(d => [d.id, d]));
 
-          if (def.dataType === 'numeric' && reading.valueNumeric != null) {
-            displayReading = `${reading.valueNumeric} ${def.unit || ''}`.trim();
-            if ((def.normalMin != null && reading.valueNumeric < def.normalMin) || (def.normalMax != null && reading.valueNumeric > def.normalMax)) {
-              isAbnormal = true;
-            }
-          } else if (def.dataType === 'dual_numeric' && reading.valueNumeric != null && reading.valueNumeric2 != null) {
-            displayReading = `${reading.valueNumeric}/${reading.valueNumeric2} ${def.unit || ''}`.trim();
-            if (
-              (def.normalMin != null && reading.valueNumeric < def.normalMin) ||
-              (def.normalMax != null && reading.valueNumeric > def.normalMax) ||
-              (def.normalMin2 != null && reading.valueNumeric2 < def.normalMin2) ||
-              (def.normalMax2 != null && reading.valueNumeric2 > def.normalMax2)
-            ) {
-              isAbnormal = true;
-            }
-          }
+        const abnormalAlerts = extractAbnormalAlerts(data.vitalsList, defMap);
 
-          if (isAbnormal && subscriberPhone) {
+        for (const alert of abnormalAlerts) {
+          // Notify Subscriber
+          if (subscriberPhone) {
             await notificationProducer.publish({
-              idempotencyKey: `vital-${fullVisit.id}-${def.id}-alert`,
+              idempotencyKey: `vital-${fullVisit.id}-${alert.vitalName}-alert`,
               channel: 'whatsapp',
               event: 'VITALS_ALERT',
               recipient: { phone: subscriberPhone },
               variables: {
                 beneficiaryName,
-                vitalType: def.name,
-                reading: displayReading,
+                vitalName: alert.vitalName,
+                value: `${alert.value}${alert.unit ? ' ' + alert.unit : ''}`,
+                normalRange: `${alert.min}-${alert.max}${alert.unit ? ' ' + alert.unit : ''}`,
+                exceededBy: `${alert.diff}${alert.unit ? ' ' + alert.unit : ''}`,
                 ccName,
               },
             });
-            break; // send one summary alert per visit checkout
+          }
+          // Also notify Beneficiary directly (if they have a separate phone)
+          if (beneficiaryPhone && beneficiaryPhone !== subscriberPhone) {
+            await notificationProducer.publish({
+              idempotencyKey: `vital-${fullVisit.id}-${alert.vitalName}-alert-benef`,
+              channel: 'whatsapp',
+              event: 'VITALS_ALERT',
+              recipient: { phone: beneficiaryPhone },
+              variables: {
+                beneficiaryName,
+                vitalName: alert.vitalName,
+                value: `${alert.value}${alert.unit ? ' ' + alert.unit : ''}`,
+                normalRange: `${alert.min}-${alert.max}${alert.unit ? ' ' + alert.unit : ''}`,
+                exceededBy: `${alert.diff}${alert.unit ? ' ' + alert.unit : ''}`,
+                ccName,
+              },
+            });
           }
         }
       }
