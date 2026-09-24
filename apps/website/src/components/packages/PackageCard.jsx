@@ -1,5 +1,30 @@
 import React, { useMemo } from "react";
 
+export function getPackageDisplayPrice(plan, selectedCycle = "3") {
+  if (!plan) return 0;
+  const base = Number(plan.basePrice) || 4999;
+  const durNum = parseInt(selectedCycle, 10) || 3;
+
+  if (durNum === 3) {
+    const disc = plan.discountThreeMonths != null ? Number(plan.discountThreeMonths) : 5;
+    return plan.priceThreeMonths != null && plan.priceThreeMonths !== "" && !isNaN(Number(plan.priceThreeMonths))
+      ? Number(plan.priceThreeMonths)
+      : Math.round(base * 3 * (1 - disc / 100));
+  } else if (durNum === 6) {
+    const disc = plan.discountSixMonths != null ? Number(plan.discountSixMonths) : 10;
+    return plan.priceSixMonths != null && plan.priceSixMonths !== "" && !isNaN(Number(plan.priceSixMonths))
+      ? Number(plan.priceSixMonths)
+      : Math.round(base * 6 * (1 - disc / 100));
+  } else if (durNum === 12) {
+    const disc = plan.discountAnnual != null ? Number(plan.discountAnnual) : 20;
+    return plan.priceTwelveMonths != null && plan.priceTwelveMonths !== "" && !isNaN(Number(plan.priceTwelveMonths))
+      ? Number(plan.priceTwelveMonths)
+      : Math.round(base * 12 * (1 - disc / 100));
+  }
+
+  return base * durNum;
+}
+
 export default function PackageCard({
   plan,
   selectedCycle = "3",
@@ -10,36 +35,24 @@ export default function PackageCard({
 }) {
   const planName = plan.name || "Care Plan";
   const planDesc = plan.description || "Care Mitra visits & family connectivity";
-  const base = plan.basePrice || 4999;
+  const base = Number(plan.basePrice) || 4999;
   const isFeatured = plan.isPopular || plan.tone === "featured";
 
   // Compute price based on selected billing cycle
   const durNum = parseInt(selectedCycle, 10) || 3;
-  let displayPrice = base;
+  const displayPrice = getPackageDisplayPrice(plan, selectedCycle);
   let cycleLabel = "billed monthly";
   let cycleSubtext = `₹${base.toLocaleString("en-IN")}/mo`;
 
   if (durNum === 3) {
-    const disc = plan.discountThreeMonths ?? 5;
-    displayPrice = plan.priceThreeMonths
-      ? plan.priceThreeMonths
-      : Math.round(base * 3 * (1 - disc / 100));
     const monthly = Math.round(displayPrice / 3);
     cycleLabel = "billed for 3 months";
     cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/mo`;
   } else if (durNum === 6) {
-    const disc = plan.discountSixMonths ?? 10;
-    displayPrice = plan.priceSixMonths
-      ? plan.priceSixMonths
-      : Math.round(base * 6 * (1 - disc / 100));
     const monthly = Math.round(displayPrice / 6);
     cycleLabel = "billed for 6 months";
     cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/mo`;
   } else if (durNum === 12) {
-    const disc = plan.discountAnnual ?? 20;
-    displayPrice = plan.priceTwelveMonths
-      ? plan.priceTwelveMonths
-      : Math.round(base * 12 * (1 - disc / 100));
     const monthly = Math.round(displayPrice / 12);
     cycleLabel = "billed annually";
     cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/mo`;
