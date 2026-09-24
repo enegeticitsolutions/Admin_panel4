@@ -111,14 +111,18 @@ export default function StaffEditModal({ userId, role, onClose, onSuccess }: Sta
     care_companion: 'Care Companion',
     field_manager: 'Field Manager',
     operations_manager: 'Operations Manager',
-    customer_service: 'Customer Service Agent'
+    customer_service: 'Customer Service Agent',
+    customer_service_manager: 'Customer Service Manager',
+    saathi_coordinator: 'Saathi Coordinator'
   };
 
   const roleColors: Record<StaffOnboardingRole, string> = {
     care_companion: 'text-[#FF7A00]',
     field_manager: 'text-[#1F8A3E]',
     operations_manager: 'text-[#1D4ED8]',
-    customer_service: 'text-[#7C3AED]'
+    customer_service: 'text-[#7C3AED]',
+    customer_service_manager: 'text-[#9333EA]',
+    saathi_coordinator: 'text-[#0D9488]'
   };
 
   return (

@@ -11,6 +11,8 @@ const { dispatchVisitScheduled } = require('../services/notification.dispatcher'
 const visitEventDispatcher = require('../services/events/visit-event.dispatcher');
 const { rosterEvents } = require('../services/events');
 const { resolveFileUrl } = require('../services/storage/urlResolver');
+const { requirePermission, getVisitFilter } = require('../utils/rbac');
+
 
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
@@ -860,6 +862,10 @@ router.get('/', async (req, res) => {
     if (hasChangeRequest === 'true') {
       where.changeRequestedAt = { not: null };
     }
+    // RBAC: scope by zone (OM) or team (FM)
+    const roleFilter = await getVisitFilter(req.user);
+    Object.assign(where, roleFilter);
+
     if (fmUserId) {
       where.careCompanion = {
         team: { fieldManager: { userId: fmUserId } },
@@ -923,7 +929,7 @@ router.get('/', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/visits/:id - Cancel a scheduled visit
 // ─────────────────────────────────────────────────────────────────────────────
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission('visits.delete'), async (req, res) => {
   const { id } = req.params;
   try {
     const visit = await prisma.visit.findUnique({

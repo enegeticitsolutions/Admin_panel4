@@ -247,7 +247,6 @@ export default function EnrollmentWizardPage() {
         if (data.subscriberPincode) setSubscriberPincode(data.subscriberPincode);
         if (data.subscriberCity) setSubscriberCity(data.subscriberCity);
         if (data.subscriberState) setSubscriberState(data.subscriberState);
-        if (data.subscriberPassword) setSubscriberPassword(data.subscriberPassword);
         if (data.sameAsSubscriber !== undefined) setSameAsSubscriber(data.sameAsSubscriber);
         if (data.beneficiaryPhone) setBeneficiaryPhone(data.beneficiaryPhone);
         if (data.beneficiaryName) setBeneficiaryName(data.beneficiaryName);

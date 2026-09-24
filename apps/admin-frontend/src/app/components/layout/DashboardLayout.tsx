@@ -51,66 +51,249 @@ const navigationSections: NavSection[] = [
     title: 'MAIN',
     items: [
       { path: '/dashboard', label: 'Dashboard', icon: Home, roles: [] },
-      { path: '/emergency-radar', label: 'Emergency Radar', icon: Radio, roles: [] },
+      {
+        path: '/emergency-radar',
+        label: 'Emergency Radar',
+        icon: Radio,
+        // All ops + emergency roles
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'emergency_coordinator', 'command_center'],
+      },
     ]
   },
   {
     title: 'OPERATIONS',
     items: [
-      { path: '/visits', label: 'Visits', icon: Calendar, roles: ['master_admin', 'operations_manager', 'field_manager'] },
-      { path: '/requested-visits', label: 'Requested Visits', icon: Clock, roles: ['master_admin', 'operations_manager', 'field_manager'] },
-      { path: '/field-management', label: 'Field Management', icon: Activity, roles: ['master_admin', 'operations_manager', 'field_manager'] },
-
-      { path: '/regions', label: 'Regions', icon: MapPin, roles: ['master_admin', 'operations_manager'] },
-      { path: '/zones', label: 'Zones', icon: MapPin, roles: ['master_admin', 'operations_manager'] },
-      { path: '/teams', label: 'Teams', icon: Users, roles: ['master_admin', 'operations_manager'] },
-      { path: '/field-managers', label: 'Field Managers List', icon: Calendar, roles: ['master_admin', 'operations_manager'] },
-      { path: '/allocation', label: 'Beneficiary Allocation', icon: Activity, roles: ['master_admin', 'operations_manager'] },
-      { path: '/care-companions', label: 'Care Companions', icon: UserCheck, roles: ['master_admin', 'operations_manager'] },
-      { path: '/volunteers', label: 'Saathi Volunteers', icon: Handshake, roles: ['master_admin', 'operations_manager', 'saathi_coordinator'] },
-      { path: '/volunteer-requests', label: 'Saathi Onboarding', icon: UserPlus, roles: ['master_admin', 'operations_manager', 'saathi_coordinator'] },
-      { path: '/legacy-circle', label: 'Legacy Circle Approval', icon: Crown, roles: ['master_admin', 'operations_manager', 'saathi_coordinator'] },
-      { path: '/staff-onboarding', label: 'Staff Onboarding', icon: UserPlus, roles: ['master_admin', 'operations_manager'] },
-      { path: '/operations-managers', label: 'Operations Managers', icon: Users, roles: ['master_admin'] },
-      { path: '/customer-service-agents', label: 'CSA', icon: HeadphonesIcon, roles: ['master_admin', 'operations_manager', 'customer_service_manager'] },
+      {
+        path: '/visits',
+        label: 'Visits',
+        icon: Calendar,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/requested-visits',
+        label: 'Requested Visits',
+        icon: Clock,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/field-management',
+        label: 'Field Management',
+        icon: Activity,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager'],
+      },
+      {
+        path: '/regions',
+        label: 'Regions',
+        icon: MapPin,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager'],
+      },
+      {
+        path: '/zones',
+        label: 'Zones',
+        icon: MapPin,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager'],
+      },
+      {
+        path: '/teams',
+        label: 'Teams',
+        icon: Users,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager'],
+      },
+      {
+        path: '/field-managers',
+        label: 'Field Managers',
+        icon: Calendar,
+        roles: ['master_admin', 'admin', 'operations_manager'],
+      },
+      {
+        path: '/allocation',
+        label: 'Beneficiary Allocation',
+        icon: Activity,
+        roles: ['master_admin', 'admin', 'operations_manager'],
+      },
+      {
+        path: '/care-companions',
+        label: 'Care Companions',
+        icon: UserCheck,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager'],
+      },
+      {
+        path: '/staff-onboarding',
+        label: 'Staff Onboarding',
+        icon: UserPlus,
+        roles: ['master_admin', 'admin', 'operations_manager'],
+      },
+      {
+        path: '/operations-managers',
+        label: 'Operations Managers',
+        icon: Users,
+        roles: ['master_admin', 'admin'],
+      },
+      {
+        path: '/customer-service-agents',
+        label: 'CSA Management',
+        icon: HeadphonesIcon,
+        roles: ['master_admin', 'admin', 'customer_service_manager'],
+      },
+      {
+        path: '/volunteers',
+        label: 'Saathi Volunteers',
+        icon: Handshake,
+        roles: ['master_admin', 'admin', 'saathi_coordinator'],
+      },
+      {
+        path: '/volunteer-requests',
+        label: 'Saathi Onboarding',
+        icon: UserPlus,
+        roles: ['master_admin', 'admin', 'saathi_coordinator'],
+      },
+      {
+        path: '/legacy-circle',
+        label: 'Legacy Circle',
+        icon: Crown,
+        roles: ['master_admin', 'admin', 'saathi_coordinator'],
+      },
     ]
   },
   {
     title: 'CLIENTS',
     items: [
-      { path: '/subscribers', label: 'Subscribers', icon: UserCircle, roles: ['master_admin', 'operations_manager', 'customer_service_manager'] },
-      { path: '/enroll', label: 'Enroll Subscriber', icon: UserPlus, roles: ['master_admin', 'operations_manager'] },
-      { path: '/renewals', label: 'Renewals Worklist', icon: RefreshCw, roles: ['master_admin', 'operations_manager', 'customer_service', 'customer_service_manager'] },
-      { path: '/beneficiaries', label: 'Beneficiaries', icon: Heart, roles: ['master_admin', 'operations_manager', 'customer_service_manager'] },
-      { path: '/callback-requests', label: 'Callback Requests', icon: PhoneCall, roles: ['master_admin', 'operations_manager', 'customer_service', 'customer_service_manager'] },
+      {
+        path: '/subscribers',
+        label: 'Subscribers',
+        icon: UserCircle,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/enroll',
+        label: 'Enroll Subscriber',
+        icon: UserPlus,
+        roles: ['master_admin', 'admin', 'operations_manager', 'customer_service_manager', 'customer_service'], // ✅ CSA confirmed
+      },
+      {
+        path: '/renewals',
+        label: 'Renewals Worklist',
+        icon: RefreshCw,
+        roles: ['master_admin', 'admin', 'operations_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/beneficiaries',
+        label: 'Beneficiaries',
+        icon: Heart,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/callback-requests',
+        label: 'Callback Requests',
+        icon: PhoneCall,
+        roles: ['master_admin', 'admin', 'operations_manager', 'customer_service_manager', 'customer_service'],
+      },
     ]
   },
   {
     title: 'VITALS',
     items: [
-      { path: '/vitals/definitions', label: 'Vital definitions', icon: Activity, roles: ['master_admin'] },
-      { path: '/vitals/templates', label: 'Config templates', icon: FileText, roles: ['master_admin'] },
-      { path: '/vitals/beneficiary-config', label: 'Beneficiary config', icon: UserCheck, roles: ['master_admin'] },
-      { path: '/vitals/capture-log', label: 'Capture log', icon: Activity, roles: ['master_admin'] },
+      {
+        path: '/vitals/definitions',
+        label: 'Vital definitions',
+        icon: Activity,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager'],
+      },
+      {
+        path: '/vitals/templates',
+        label: 'Config templates',
+        icon: FileText,
+        roles: ['master_admin', 'admin'],
+      },
+      {
+        path: '/vitals/beneficiary-config',
+        label: 'Beneficiary config',
+        icon: UserCheck,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager'],
+      },
+      {
+        path: '/vitals/capture-log',
+        label: 'Capture log',
+        icon: Activity,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager'],
+      },
     ]
   },
   {
     title: 'SYSTEM',
     items: [
-      { path: '/website-content', label: 'Website Content', icon: FileText, roles: ['master_admin'] },
-      { path: '/config', label: 'System Settings', icon: Settings, roles: ['master_admin'] },
-      { path: '/subscriptions', label: 'Subscription Packages', icon: Package, roles: ['master_admin'] },
-      { path: '/benefit-types', label: 'Benefit Types', icon: Settings, roles: ['master_admin'] },
-      { path: '/benefits', label: 'Benefits Library', icon: FileText, roles: ['master_admin'] },
-      { path: '/addons', label: 'Add-ons Management', icon: FileText, roles: ['master_admin'] },
-      { path: '/coupons', label: 'Coupons & Promos', icon: Tag, roles: ['master_admin'] },
-      { path: '/vitals/alert-rules', label: 'Alert rules', icon: Settings, roles: ['master_admin'] },
-      { path: '/admin-users', label: 'Admin Users', icon: Settings, roles: ['master_admin'] },
-      { path: '/guide-management', label: 'Guide Management', icon: FileText, roles: ['master_admin'] },
-      { path: '/activity-logs', label: 'Activity Logs', icon: FileText, roles: ['master_admin'] },
+      {
+        path: '/website-content',
+        label: 'Website Content',
+        icon: FileText,
+        roles: ['master_admin', 'admin'],
+      },
+      {
+        path: '/config',
+        label: 'System Settings',
+        icon: Settings,
+        roles: ['master_admin', 'admin'],
+      },
+      {
+        path: '/subscriptions',
+        label: 'Subscription Packages',
+        icon: Package,
+        roles: ['master_admin', 'admin', 'operations_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/benefit-types',
+        label: 'Benefit Types',
+        icon: Settings,
+        roles: ['master_admin', 'admin', 'operations_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/benefits',
+        label: 'Benefits Library',
+        icon: FileText,
+        roles: ['master_admin', 'admin', 'operations_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/addons',
+        label: 'Add-ons Management',
+        icon: FileText,
+        roles: ['master_admin', 'admin', 'operations_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/coupons',
+        label: 'Coupons & Promos',
+        icon: Tag,
+        roles: ['master_admin', 'admin', 'customer_service_manager'],
+      },
+      {
+        path: '/vitals/alert-rules',
+        label: 'Alert rules',
+        icon: ShieldAlert,
+        roles: ['master_admin', 'admin'],
+      },
+      {
+        path: '/admin-users',
+        label: 'Admin Users',
+        icon: Settings,
+        roles: ['master_admin'],
+      },
+      {
+        path: '/guide-management',
+        label: 'Guide Management',
+        icon: FileText,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'customer_service_manager', 'customer_service'],
+      },
+      {
+        path: '/activity-logs',
+        label: 'Activity Logs',
+        icon: FileText,
+        roles: ['master_admin', 'admin'],
+      },
     ]
   }
 ];
+
+
+
 
 interface NavContentProps {
   user: any;

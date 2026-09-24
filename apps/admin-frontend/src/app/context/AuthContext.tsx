@@ -6,6 +6,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { User, UserRole } from '../../types';
 import { authApi } from '../../services/api';
+import { FRONTEND_PERMISSIONS } from '../utils/permissions';
+
+
 
 interface AuthContextType {
   user: User | null;
@@ -14,7 +17,9 @@ interface AuthContextType {
   biometricLogin: (userId: string) => Promise<void>;
   logout: () => void;
   hasAccess: (requiredRole?: UserRole[]) => boolean;
+  can: (permission: string) => boolean;
 }
+
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -70,18 +75,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * Check if current user has access based on role
-   * Master Admin & Admin Users have access to everything
+   * Check if current user has access based on required roles.
+   * master_admin always has access to everything.
    */
   const hasAccess = (requiredRoles?: UserRole[]): boolean => {
     if (!user) return false;
-    if (user.role === 'master_admin' || (user.name && user.name.toLowerCase().includes('admin'))) return true;
+    if (user.role === 'master_admin') return true;
     if (!requiredRoles || requiredRoles.length === 0) return true;
     return requiredRoles.includes(user.role);
   };
 
+  /**
+   * Check if the current user's role has a given permission key.
+   * Permission keys match the backend rbac.js PERMISSIONS map.
+   * Client-side only — real enforcement is always on the backend.
+   */
+  const can = (permission: string): boolean => {
+    if (!user) return false;
+    if (user.role === 'master_admin') return true;
+    const allowedRoles = FRONTEND_PERMISSIONS[permission];
+    if (!allowedRoles) return false;
+    return allowedRoles.includes(user.role);
+  };
+
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, biometricLogin, logout, hasAccess }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, login, biometricLogin, logout, hasAccess, can }}>
       {children}
     </AuthContext.Provider>
   );

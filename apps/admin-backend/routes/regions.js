@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../lib/prisma');
+const { requirePermission } = require('../utils/rbac');
+
 
 // Haversine formula to calculate distance in km between two lat/lng coordinates
 function haversineDistance(lat1, lon1, lat2, lon2) {
@@ -83,7 +85,7 @@ router.get('/', async (req, res) => {
 });
 
 // ── POST /api/regions ────────────────────────────────────────────────────────
-router.post('/', async (req, res) => {
+router.post('/', requirePermission('regions.create'), async (req, res) => {
   try {
     const { name, city, state, latitude, longitude, radiusKm } = req.body;
 
@@ -124,7 +126,7 @@ router.post('/', async (req, res) => {
 });
 
 // ── PUT /api/regions/:id ─────────────────────────────────────────────────────
-router.put('/:id', async (req, res) => {
+router.put('/:id', requirePermission('regions.update'), async (req, res) => {
   try {
     const { id } = req.params;
     const { name, city, state, latitude, longitude, radiusKm, isActive } = req.body;
@@ -151,7 +153,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // ── DELETE /api/regions/:id ──────────────────────────────────────────────────
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission('regions.delete'), async (req, res) => {
   try {
     const { id } = req.params;
 

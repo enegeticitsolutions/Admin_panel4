@@ -77,48 +77,83 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pincode', require('./routes/pincode'));
 
 // Protected routes (Staff/Admin)
-const STAFF_ROLES = [
+// ─── Role Groups (all using existing DB UserRole enum values only) ─────────────
+const ALL_PORTAL_ROLES = [
   'master_admin',
   'admin',
-  'field_manager',
   'operations_manager',
+  'field_manager',
+  'customer_service_manager',
   'customer_service',
-  'sales',
-  'care_coordinator'
+  'saathi_coordinator',
+  'emergency_coordinator',
+  'command_center',
 ];
-const staffOnly = [verifyToken, authorizeRoles(...STAFF_ROLES)];
-const adminsOnly = [verifyToken, authorizeRoles('admin', 'master_admin')];
-const mastersOnly = [verifyToken, authorizeRoles('master_admin')];
 
+// Every authenticated portal user
+const staffOnly = [verifyToken, authorizeRoles(...ALL_PORTAL_ROLES)];
+// Admins + master: config, admin-users, regions
+const adminsOnly = [verifyToken, authorizeRoles('admin', 'master_admin')];
+// master_admin exclusively
+const mastersOnly = [verifyToken, authorizeRoles('master_admin')];
+// Operations facing roles
+const opsRoles = [verifyToken, authorizeRoles('master_admin', 'admin', 'operations_manager', 'field_manager')];
+// Client-facing roles (CS + ops)
+const clientRoles = [verifyToken, authorizeRoles('master_admin', 'admin', 'operations_manager', 'customer_service_manager', 'customer_service')];
+// Emergency roles
+const emergencyRoles = [verifyToken, authorizeRoles('master_admin', 'admin', 'operations_manager', 'field_manager', 'emergency_coordinator', 'command_center')];
+// Saathi roles
+const saathiRoles = [verifyToken, authorizeRoles('master_admin', 'admin', 'saathi_coordinator')];
+
+// ─── Route Registration ────────────────────────────────────────────────────────
+// Zones — all portal roles can view; create/edit/delete enforced per-handler via requirePermission
 app.use('/api/zones', staffOnly, require('./routes/zones'));
+// Users/Staff — all portal roles; per-action scoping in handler
 app.use('/api/users', staffOnly, require('./routes/users'));
+// Admin user management — master_admin only at gateway
 app.use('/api/admin-users', mastersOnly, require('./routes/admin-users'));
+// File upload — all portal roles
 app.use('/api/upload-document', staffOnly, require('./routes/upload'));
+// Callbacks — client facing + ops (read)
 app.use('/api/callbacks', staffOnly, require('./routes/callbacks'));
-app.use('/api/teams', adminsOnly, require('./routes/teams'));
+// Teams — ops roles + all portal for field-manager to view own team
+app.use('/api/teams', staffOnly, require('./routes/teams'));
+// Subscribers — client facing + ops
 app.use('/api/subscribers', staffOnly, require('./routes/subscribers'));
+// Beneficiaries — all portal roles (scoped per role in handler)
 app.use('/api/beneficiaries', staffOnly, require('./routes/beneficiaries'));
+// Volunteers — saathi + admins
 app.use('/api/volunteers', staffOnly, require('./routes/volunteers'));
+// Emergency — emergency + ops + admins + command_center
 app.use('/api/emergency', staffOnly, require('./routes/emergency'));
 
 // ─── Subscription & Benefits ──────────────────────────────────────────────────
-app.use('/api/benefit-types', adminsOnly, require('./routes/benefitTypes'));
-app.use('/api/benefits', adminsOnly, require('./routes/benefits'));
+// Benefit types & library — per-handler permission; CSA can view
+app.use('/api/benefit-types', staffOnly, require('./routes/benefitTypes'));
+app.use('/api/benefits', staffOnly, require('./routes/benefits'));
 app.use('/api/tax-categories', staffOnly, require('./routes/taxCategories'));
-app.use('/api/packages', adminsOnly, require('./routes/packages'));
+// Packages — per-handler permission; CSA can view
+app.use('/api/packages', staffOnly, require('./routes/packages'));
 app.use('/api/subscriptions', staffOnly, require('./routes/subscriptions'));
 app.use('/api/visits', staffOnly, require('./routes/visits'));
 app.use('/api/vitals', staffOnly, require('./routes/vitals'));
 app.use('/api/hobbies', staffOnly, require('./routes/hobbies'));
-app.use('/api/coupons', adminsOnly, require('./routes/coupons'));
-app.use('/api/field-manager', adminsOnly, require('./routes/field-manager'));
+// Coupons — admins can CRUD; CSM can view (per-handler)
+app.use('/api/coupons', staffOnly, require('./routes/coupons'));
+// Field-manager context — ops + field_manager + admins
+app.use('/api/field-manager', opsRoles, require('./routes/field-manager'));
+// Activity logs — admins only
 app.use('/api/activity-logs', adminsOnly, require('./routes/activity-logs'));
-app.use('/api/location', staffOnly, require('./routes/location'));
-app.use('/api/regions', adminsOnly, require('./routes/regions'));
+// Regions — all can view; create/edit enforced in handler
+app.use('/api/regions', staffOnly, require('./routes/regions'));
+// System config — master_admin only
 app.use('/api/config', mastersOnly, require('./routes/config'));
-app.use('/api/saathi-guide', adminsOnly, require('./routes/saathi-guide'));
+// Saathi guides — all can view; write enforced in handler
+app.use('/api/saathi-guide', staffOnly, require('./routes/saathi-guide'));
+// Website CMS — admins only
 app.use('/api/website-content', adminsOnly, require('./routes/website-content'));
-app.use('/api/legacy-circle', adminsOnly, require('./routes/legacy-circle'));
+// Legacy circle — saathi + admins
+app.use('/api/legacy-circle', staffOnly, require('./routes/legacy-circle'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/invoices', staffOnly, require('./modules/invoices/invoice.routes'));
 

@@ -11,6 +11,8 @@ const { dispatchCareCompanionAssigned } = require('../services/notification.disp
 const { rosterEvents } = require('../services/events');
 const { isSathiBenefit } = require('../utils/systemBenefits');
 const { resolveFileUrl } = require('../services/storage/urlResolver');
+const { getBeneficiaryFilter } = require('../utils/rbac');
+
 
 // ── GET /api/beneficiaries ───────────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -38,13 +40,13 @@ router.get('/', async (req, res) => {
       };
     }
 
-    if (teamId) {
-      filterParams.teamId = teamId;
-    }
+    // RBAC Filtering — zone scoped for OM, team scoped for FM
+    const rbacFilter = await getBeneficiaryFilter(req.user);
+    Object.assign(filterParams, rbacFilter);
 
-    // RBAC Filtering
-    if (req.user && req.user.role === 'field_manager') {
-      filterParams.teamId = { not: null }; // Simplified until we have team resolution here
+    // teamId query param overrides only if admin/OM (FM always scoped to own team)
+    if (teamId && (req.user?.role === 'master_admin' || req.user?.role === 'admin' || req.user?.role === 'operations_manager')) {
+      filterParams.teamId = teamId;
     }
 
     if (filterBy === 'unassigned') {
