@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { X, Check } from "lucide-react";
+import { getPackageDisplayPrice } from "../packages/PackageCard";
 
 // Comprehensive care inclusions matching eldercare standards and user reference design
 const STANDARD_INCLUSIONS = [
@@ -14,7 +15,7 @@ const STANDARD_INCLUSIONS = [
   "Dedicated Care Mitra Oversight",
 ];
 
-export default function PlanDetailsModal({ isOpen, onClose, plan, onSelectPackage }) {
+export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle = "3", onSelectPackage }) {
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -29,18 +30,19 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, onSelectPackag
 
   const planName = plan.name || "Care Package";
   const planDesc = plan.description || "Comprehensive in-home care and family connectivity.";
-  const displayPrice = plan.calculatedPrice ?? plan.basePrice ?? 4999;
-  const durNum = plan.selectedDurationMonths || 3;
+
+  // Always compute price from the live selectedCycle prop (3, 6, or 12)
+  const durNum = parseInt(selectedCycle, 10);
+  const displayPrice = getPackageDisplayPrice(plan, selectedCycle);
 
   let durationText = "3 Months Billing";
   if (durNum === 6) durationText = "6 Months Billing";
   else if (durNum === 12) durationText = "Annual Billing";
-  else if (durNum === 1) durationText = "Monthly Billing";
 
-  const monthlyRate = Math.round(displayPrice / durNum);
+  const monthlyRate = durNum > 0 ? Math.round(displayPrice / durNum) : displayPrice;
   const basePrice = plan.basePrice || displayPrice;
   const fullTermCost = basePrice * durNum;
-  const savings = durNum > 1 ? Math.max(0, fullTermCost - displayPrice) : 0;
+  const savings = Math.max(0, fullTermCost - displayPrice);
 
   // Build the complete feature checklist
   const featuresList = (() => {

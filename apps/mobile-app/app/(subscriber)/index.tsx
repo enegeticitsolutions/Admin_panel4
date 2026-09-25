@@ -71,10 +71,10 @@ export default function SubscriberDashboardScreen() {
         const init = async () => {
             const storedUser = await AsyncStorage.getItem('userData');
             if (storedUser) setUserData(JSON.parse(storedUser));
-            
+
             const storedBenId = await AsyncStorage.getItem('selectedBeneficiaryId');
             if (storedBenId) setSelectedBeneficiaryId(storedBenId);
-            
+
             setIsInitialized(true);
         };
         init();
@@ -107,7 +107,7 @@ export default function SubscriberDashboardScreen() {
             if (selectedBeneficiaryId && cache[selectedBeneficiaryId]) {
                 const cachedData = cache[selectedBeneficiaryId];
                 const ageMs = Date.now() - (cachedData.lastUpdated || 0);
-                
+
                 // If cache is under 30 seconds old, return instantly (prevents rapid tab-switch hammering)
                 if (ageMs < 30 * 1000) {
                     return cachedData.response;
@@ -123,7 +123,7 @@ export default function SubscriberDashboardScreen() {
 
             if (!res.ok) throw new Error("Failed to fetch");
             const data = await res.json();
-            
+
             if (data.success) {
                 // Save to local cache
                 if (selectedBeneficiaryId) {
@@ -249,7 +249,7 @@ export default function SubscriberDashboardScreen() {
                     if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
                     return `${age} years`;
                 }
-            } catch (_) {}
+            } catch (_) { }
         }
         return b.age ? `${b.age} years` : '';
     };
@@ -293,28 +293,28 @@ export default function SubscriberDashboardScreen() {
                             opacity: refreshing
                                 ? 1
                                 : pullAnim.interpolate({
-                                      inputRange: [0, 20, 50],
-                                      outputRange: [0, 0.4, 1],
-                                      extrapolate: 'clamp',
-                                  }),
+                                    inputRange: [0, 20, 50],
+                                    outputRange: [0, 0.4, 1],
+                                    extrapolate: 'clamp',
+                                }),
                             transform: [
                                 {
                                     translateY: refreshing
                                         ? scale(18)
                                         : pullAnim.interpolate({
-                                              inputRange: [0, 50],
-                                              outputRange: [-scale(90), scale(18)],
-                                              extrapolate: 'clamp',
-                                          }),
+                                            inputRange: [0, 50],
+                                            outputRange: [-scale(90), scale(18)],
+                                            extrapolate: 'clamp',
+                                        }),
                                 },
                                 {
                                     scale: refreshing
                                         ? 1
                                         : pullAnim.interpolate({
-                                              inputRange: [0, 25, 50],
-                                              outputRange: [0.5, 0.85, 1],
-                                              extrapolate: 'clamp',
-                                          }),
+                                            inputRange: [0, 25, 50],
+                                            outputRange: [0.5, 0.85, 1],
+                                            extrapolate: 'clamp',
+                                        }),
                                 },
                             ],
                         },
@@ -406,8 +406,8 @@ export default function SubscriberDashboardScreen() {
                     </View>
 
                     {/* Total Care Plans */}
-                    <TouchableOpacity 
-                        activeOpacity={0.85} 
+                    <TouchableOpacity
+                        activeOpacity={0.85}
                         onPress={() => {
                             if (selectedBeneficiaryId) {
                                 router.push({ pathname: '/package-utilization', params: { beneficiaryId: selectedBeneficiaryId } });
@@ -433,191 +433,191 @@ export default function SubscriberDashboardScreen() {
 
                 {/* ── Beneficiaries Section ── */}
                 <Animated.View style={{ transform: [{ scale: benScaleAnim }] }}>
-                <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.sectionTitle}>Your Beneficiaries</Text>
-                    <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/(setup)/subscription-packages')}>
-                        <Text style={styles.addBtnText}>+ Add</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Unlinked Care Plan Attachment Cards */}
-                {unlinkedSubs.map((sub: any) => (
-                    <View key={sub.id} style={styles.unlinkedSubCard}>
-                        <View style={styles.unlinkedInfo}>
-                            <Feather name="user-plus" size={22} color="#FE6700" style={{ marginRight: 10 }} />
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.unlinkedTitle}>Unlinked Care Plan</Text>
-                                <Text style={styles.unlinkedSubtitle}>
-                                    Attach a beneficiary to {sub.package?.name || sub.packageType}
-                                </Text>
-                            </View>
-                        </View>
-                        <TouchableOpacity 
-                            style={[styles.unlinkedBtn, { flexDirection: 'row', alignItems: 'center' }]}
-                            onPress={() => {
-                                if (beneficiaries.length > 0) {
-                                    setSelectedUnlinkedSubId(sub.id);
-                                    setLinkModalVisible(true);
-                                } else {
-                                    router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } });
-                                }
-                            }}
-                        >
-                            <Feather name="user-plus" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                            <Text style={styles.unlinkedBtnText}>Add Beneficiary</Text>
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionTitle}>Your Beneficiaries</Text>
+                        <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/(setup)/subscription-packages')}>
+                            <Text style={styles.addBtnText}>+ Add</Text>
                         </TouchableOpacity>
                     </View>
-                ))}
 
-                {/* Queued Care Plans (Like Jio Plan Queue) */}
-                {queuedSubs.map((qSub: any) => {
-                    const targetBen = beneficiaries.find((b: any) => b.id === qSub.beneficiaryId);
-                    const benName = targetBen?.name || 'Beneficiary';
-                    return (
-                        <View key={qSub.id} style={styles.queuedSubCard}>
-                            <View style={styles.queuedHeaderRow}>
-                                <View style={styles.queuedBadge}>
-                                    <Ionicons name="time-outline" size={scale(13)} color="#D97706" style={{ marginRight: scale(4) }} />
-                                    <Text style={styles.queuedBadgeText}>IN QUEUE</Text>
-                                </View>
-                                <Text style={styles.queuedForText}>For {benName}</Text>
-                            </View>
-
-                            <View style={styles.queuedBodyRow}>
-                                <View style={{ flex: 1, marginRight: scale(10) }}>
-                                    <Text style={styles.queuedTitle}>{qSub.package?.name || qSub.packageType}</Text>
-                                    <Text style={styles.queuedSubtitle}>
-                                        Queued behind active plan. Activates automatically on expiry, or activate now to use both plans together.
+                    {/* Unlinked Care Plan Attachment Cards */}
+                    {unlinkedSubs.map((sub: any) => (
+                        <View key={sub.id} style={styles.unlinkedSubCard}>
+                            <View style={styles.unlinkedInfo}>
+                                <Feather name="user-plus" size={22} color="#FE6700" style={{ marginRight: 10 }} />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.unlinkedTitle}>Unlinked Care Plan</Text>
+                                    <Text style={styles.unlinkedSubtitle}>
+                                        Attach a beneficiary to {sub.package?.name || sub.packageType}
                                     </Text>
                                 </View>
-                                <TouchableOpacity 
-                                    style={styles.activatePlanBtn}
-                                    onPress={() => {
-                                        setSelectedQueuedSub({ ...qSub, beneficiaryName: benName });
-                                        setActivateModalVisible(true);
-                                    }}
-                                >
-                                    <Ionicons name="flash" size={scale(14)} color="#FFFFFF" style={{ marginRight: scale(4) }} />
-                                    <Text style={styles.activatePlanBtnText}>Activate</Text>
-                                </TouchableOpacity>
                             </View>
-                        </View>
-                    );
-                })}
-
-                {beneficiaries.length === 0 ? (
-                    dashboard?.activeSubscriptions && dashboard.activeSubscriptions.length > 0 ? (
-                        <View style={styles.emptyBenCard}>
-                            <Feather name="user-plus" size={40} color="#FE6700" style={{ marginBottom: 12 }} />
-                            <Text style={styles.emptyTitle}>Add Beneficiary to your care plan</Text>
-                            <Text style={styles.emptySubtitle}>({dashboard.activeSubscriptions[0]?.package?.name || dashboard.activeSubscriptions[0]?.packageType || 'Care Plan'})</Text>
-                            <TouchableOpacity 
-                                style={[styles.emptyBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]} 
-                                onPress={() => router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } })}
-                            >
-                                <Feather name="user-plus" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                                <Text style={styles.emptyBtnText}>Add Beneficiary</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <View style={styles.emptyBenCard}>
-                            <Ionicons name="person-add-outline" size={40} color="#FE6700" style={{ marginBottom: 12 }} />
-                            <Text style={styles.emptyTitle}>No Beneficiaries Yet</Text>
-                            <Text style={styles.emptySubtitle}>Subscribe to a care plan to add your first beneficiary</Text>
-                            <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/(setup)/subscription-packages')}>
-                                <Text style={styles.emptyBtnText}>Browse Packages</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )
-                ) : (
-                    beneficiaries.map((b: any, i: number) => {
-                        const isSelected = b.id === selectedBeneficiaryId;
-                        const isExpired = b.packageStatus === 'expired' || b.isExpired;
-                        const isPending = b.verificationStatus === 'pending' || b.packageStatus === 'pending' || b.packageStatus === 'none' || b.isActive === false;
-                        const isSelf = (b.relationship || '').toLowerCase() === 'self' || b.isSelf;
-
-                        return (
                             <TouchableOpacity
-                                key={b.id || i}
-                                style={[
-                                    styles.benCard, 
-                                    isSelected && !isPending && !isExpired && styles.benCardActive,
-                                    isPending && styles.benCardPending,
-                                    isExpired && styles.benCardExpired,
-                                    isSelf && !isPending && styles.benCardSelf
-                                ]}
+                                style={[styles.unlinkedBtn, { flexDirection: 'row', alignItems: 'center' }]}
                                 onPress={() => {
-                                    console.log('[Dashboard] Tapped beneficiary:', b?.id, b?.name, 'isSelected:', isSelected);
-                                    if (isPending) {
-                                        router.push({
-                                            pathname: '/(setup)/beneficiary-info',
-                                            params: { isVerificationFlow: 'true', beneficiaryId: b.id }
-                                        });
-                                    } else if (isExpired) {
-                                        router.push('/(setup)/subscription-packages');
-                                    } else if (isSelected) {
-                                        // Tap on active card → open beneficiary profile details
-                                        console.log('[Dashboard] Navigating to beneficiary-profile with id:', b.id);
-                                        router.push(`/(subscriber)/beneficiary-profile?id=${b.id}`);
+                                    if (beneficiaries.length > 0) {
+                                        setSelectedUnlinkedSubId(sub.id);
+                                        setLinkModalVisible(true);
                                     } else {
-                                        // Select beneficiary and update dashboard view
-                                        setSelectedBeneficiaryId(b.id);
-                                        AsyncStorage.setItem('selectedBeneficiaryId', b.id);
+                                        router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } });
                                     }
                                 }}
                             >
-                                <Image
-                                    source={{ uri: sanitizeImageUri(b.photo, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name || 'Beneficiary')}&background=FFE3D1&color=FE6700&bold=true`) }}
-                                    style={styles.benPhoto}
-                                />
+                                <Feather name="user-plus" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.unlinkedBtnText}>Add Beneficiary</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ))}
 
-                                <View style={styles.benDetails}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                        <Text style={styles.benName}>{b.name}</Text>
-                                        {isSelf && (
-                                            <View style={styles.selfTagBadge}>
-                                                <Text style={styles.selfTagText}>Self</Text>
-                                            </View>
-                                        )}
+                    {/* Queued Care Plans (Like Jio Plan Queue) */}
+                    {queuedSubs.map((qSub: any) => {
+                        const targetBen = beneficiaries.find((b: any) => b.id === qSub.beneficiaryId);
+                        const benName = targetBen?.name || 'Beneficiary';
+                        return (
+                            <View key={qSub.id} style={styles.queuedSubCard}>
+                                <View style={styles.queuedHeaderRow}>
+                                    <View style={styles.queuedBadge}>
+                                        <Ionicons name="time-outline" size={scale(13)} color="#D97706" style={{ marginRight: scale(4) }} />
+                                        <Text style={styles.queuedBadgeText}>IN QUEUE</Text>
                                     </View>
-                                    <Text style={styles.benMeta}>{getDisplayAge(b)}{b.relationship ? ` • ${b.relationship}` : ''}</Text>
-
-                                    {/* ── Status Badges ── */}
-                                    {isPending ? (
-                                        <View style={styles.inactiveBadge}>
-                                            <Ionicons name="alert-circle" size={13} color="#D97706" style={{ marginRight: 4 }} />
-                                            <Text style={styles.inactiveBadgeText}>Inactive - Review detail and set as active</Text>
-                                        </View>
-                                    ) : isExpired ? (
-                                        <View style={styles.expiredBadge}>
-                                            <Ionicons name="time-outline" size={13} color="#DC2626" style={{ marginRight: 4 }} />
-                                            <Text style={styles.expiredBadgeText}>Expired - Tap to renew package</Text>
-                                        </View>
-                                    ) : null}
+                                    <Text style={styles.queuedForText}>For {benName}</Text>
                                 </View>
 
-                                {isSelf && isDualRole && !isPending ? (
+                                <View style={styles.queuedBodyRow}>
+                                    <View style={{ flex: 1, marginRight: scale(10) }}>
+                                        <Text style={styles.queuedTitle}>{qSub.package?.name || qSub.packageType}</Text>
+                                        <Text style={styles.queuedSubtitle}>
+                                            Queued behind active plan. Activates automatically on expiry, or activate now to use both plans together.
+                                        </Text>
+                                    </View>
                                     <TouchableOpacity
-                                        style={styles.switchCareBtn}
-                                        onPress={handleSwitchToBeneficiary}
-                                        disabled={isSwitchingRole}
+                                        style={styles.activatePlanBtn}
+                                        onPress={() => {
+                                            setSelectedQueuedSub({ ...qSub, beneficiaryName: benName });
+                                            setActivateModalVisible(true);
+                                        }}
                                     >
-                                        {isSwitchingRole ? (
-                                            <ActivityIndicator size="small" color="#FFFFFF" />
-                                        ) : (
-                                            <>
-                                                <Ionicons name="swap-horizontal" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
-                                                <Text style={styles.switchCareBtnText}>Switch UI</Text>
-                                            </>
-                                        )}
+                                        <Ionicons name="flash" size={scale(14)} color="#FFFFFF" style={{ marginRight: scale(4) }} />
+                                        <Text style={styles.activatePlanBtnText}>Activate</Text>
                                     </TouchableOpacity>
-                                ) : (
-                                    <Ionicons name="chevron-forward" size={20} color={isPending ? "#D97706" : "#A3A3A3"} />
-                                )}
-                            </TouchableOpacity>
+                                </View>
+                            </View>
                         );
-                    })
-                )}
+                    })}
+
+                    {beneficiaries.length === 0 ? (
+                        dashboard?.activeSubscriptions && dashboard.activeSubscriptions.length > 0 ? (
+                            <View style={styles.emptyBenCard}>
+                                <Feather name="user-plus" size={40} color="#FE6700" style={{ marginBottom: 12 }} />
+                                <Text style={styles.emptyTitle}>Add Beneficiary to your care plan</Text>
+                                <Text style={styles.emptySubtitle}>({dashboard.activeSubscriptions[0]?.package?.name || dashboard.activeSubscriptions[0]?.packageType || 'Care Plan'})</Text>
+                                <TouchableOpacity
+                                    style={[styles.emptyBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+                                    onPress={() => router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } })}
+                                >
+                                    <Feather name="user-plus" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                                    <Text style={styles.emptyBtnText}>Add Beneficiary</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <View style={styles.emptyBenCard}>
+                                <Ionicons name="person-add-outline" size={40} color="#FE6700" style={{ marginBottom: 12 }} />
+                                <Text style={styles.emptyTitle}>No Beneficiaries Yet</Text>
+                                <Text style={styles.emptySubtitle}>Subscribe to a care plan to add your first beneficiary</Text>
+                                <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/(setup)/subscription-packages')}>
+                                    <Text style={styles.emptyBtnText}>Browse Packages</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )
+                    ) : (
+                        beneficiaries.map((b: any, i: number) => {
+                            const isSelected = b.id === selectedBeneficiaryId;
+                            const isExpired = b.packageStatus === 'expired' || b.isExpired;
+                            const isPending = b.verificationStatus === 'pending' || b.packageStatus === 'pending' || b.packageStatus === 'none' || b.isActive === false;
+                            const isSelf = (b.relationship || '').toLowerCase() === 'self' || b.isSelf;
+
+                            return (
+                                <TouchableOpacity
+                                    key={b.id || i}
+                                    style={[
+                                        styles.benCard,
+                                        isSelected && !isPending && !isExpired && styles.benCardActive,
+                                        isPending && styles.benCardPending,
+                                        isExpired && styles.benCardExpired,
+                                        isSelf && !isPending && styles.benCardSelf
+                                    ]}
+                                    onPress={() => {
+                                        console.log('[Dashboard] Tapped beneficiary:', b?.id, b?.name, 'isSelected:', isSelected);
+                                        if (isPending) {
+                                            router.push({
+                                                pathname: '/(setup)/beneficiary-info',
+                                                params: { isVerificationFlow: 'true', beneficiaryId: b.id }
+                                            });
+                                        } else if (isExpired) {
+                                            router.push('/(setup)/subscription-packages');
+                                        } else if (isSelected) {
+                                            // Tap on active card → open beneficiary profile details
+                                            console.log('[Dashboard] Navigating to beneficiary-profile with id:', b.id);
+                                            router.push(`/(subscriber)/beneficiary-profile?id=${b.id}`);
+                                        } else {
+                                            // Select beneficiary and update dashboard view
+                                            setSelectedBeneficiaryId(b.id);
+                                            AsyncStorage.setItem('selectedBeneficiaryId', b.id);
+                                        }
+                                    }}
+                                >
+                                    <Image
+                                        source={{ uri: sanitizeImageUri(b.photo, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name || 'Beneficiary')}&background=FFE3D1&color=FE6700&bold=true`) }}
+                                        style={styles.benPhoto}
+                                    />
+
+                                    <View style={styles.benDetails}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                            <Text style={styles.benName}>{b.name}</Text>
+                                            {isSelf && (
+                                                <View style={styles.selfTagBadge}>
+                                                    <Text style={styles.selfTagText}>Self</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                        <Text style={styles.benMeta}>{getDisplayAge(b)}{b.relationship ? ` • ${b.relationship}` : ''}</Text>
+
+                                        {/* ── Status Badges ── */}
+                                        {isPending ? (
+                                            <View style={styles.inactiveBadge}>
+                                                <Ionicons name="alert-circle" size={13} color="#D97706" style={{ marginRight: 4 }} />
+                                                <Text style={styles.inactiveBadgeText}>Inactive - Review detail and set as active</Text>
+                                            </View>
+                                        ) : isExpired ? (
+                                            <View style={styles.expiredBadge}>
+                                                <Ionicons name="time-outline" size={13} color="#DC2626" style={{ marginRight: 4 }} />
+                                                <Text style={styles.expiredBadgeText}>Tap to renew package</Text>
+                                            </View>
+                                        ) : null}
+                                    </View>
+
+                                    {isSelf && isDualRole && !isPending ? (
+                                        <TouchableOpacity
+                                            style={styles.switchCareBtn}
+                                            onPress={handleSwitchToBeneficiary}
+                                            disabled={isSwitchingRole}
+                                        >
+                                            {isSwitchingRole ? (
+                                                <ActivityIndicator size="small" color="#FFFFFF" />
+                                            ) : (
+                                                <>
+                                                    <Ionicons name="swap-horizontal" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
+                                                    <Text style={styles.switchCareBtnText}>Switch UI</Text>
+                                                </>
+                                            )}
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <Ionicons name="chevron-forward" size={20} color={isPending ? "#D97706" : "#A3A3A3"} />
+                                    )}
+                                </TouchableOpacity>
+                            );
+                        })
+                    )}
                 </Animated.View>
 
                 {/* ── Recent Updates ── */}
@@ -694,11 +694,11 @@ export default function SubscriberDashboardScreen() {
                             </TouchableOpacity>
                         </View>
                         <Text style={styles.modalSubtitle}>Select an existing beneficiary to link to this plan.</Text>
-                        
+
                         <ScrollView style={{ maxHeight: height * 0.4, width: '100%', marginBottom: scale(16) }} showsVerticalScrollIndicator={false}>
                             {beneficiaries.map((b: any) => (
-                                <TouchableOpacity 
-                                    key={b.id} 
+                                <TouchableOpacity
+                                    key={b.id}
                                     style={styles.modalBenCard}
                                     disabled={isLinking}
                                     onPress={async () => {
@@ -740,7 +740,7 @@ export default function SubscriberDashboardScreen() {
                             ))}
                         </ScrollView>
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.modalAddNewBtn}
                             disabled={isLinking}
                             onPress={() => {
@@ -790,7 +790,7 @@ export default function SubscriberDashboardScreen() {
                             </View>
                         </View>
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={[styles.confirmActivateBtn, isActivating && { opacity: 0.7 }]}
                             disabled={isActivating}
                             onPress={async () => {
@@ -1158,7 +1158,7 @@ const styles = StyleSheet.create({
     modalTitle: { fontSize: scale(18), fontWeight: '700', color: '#111827' },
     modalSubtitle: { fontSize: scale(13), color: '#6B7280', marginBottom: scale(20) },
     modalBenCard: {
-        flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', 
+        flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB',
         padding: scale(14), borderRadius: scale(12), marginBottom: scale(10),
         borderWidth: 1, borderColor: '#F3F4F6'
     },

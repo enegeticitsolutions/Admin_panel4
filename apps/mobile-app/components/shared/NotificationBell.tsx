@@ -71,7 +71,7 @@ export default function NotificationBell({ style, iconColor = '#111827' }: Notif
   };
 
   return (
-    <TouchableOpacity style={[styles.container, style]} onPress={handlePress} activeOpacity={0.7}>
+    <TouchableOpacity style={[styles.container, style]} onPress={handlePress} activeOpacity={0.7} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}>
       <Ionicons name="notifications-outline" size={24} color={iconColor} />
       {unreadCount > 0 && (
         <View style={styles.badge}>

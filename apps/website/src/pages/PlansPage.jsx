@@ -532,9 +532,11 @@ export default function PlansPage({
       <PlanDetailsModal
         isOpen={!!modalPlan}
         plan={modalPlan}
+        selectedCycle={selectedCycle}
         onClose={() => setModalPlan(null)}
         onSelectPackage={onSelectPackage}
       />
+
     </main>
   );
 }

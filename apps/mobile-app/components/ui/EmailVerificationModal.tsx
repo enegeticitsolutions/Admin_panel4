@@ -41,7 +41,7 @@ export function EmailVerificationModal({
 
     useEffect(() => {
         if (visible) {
-            setEmailInput(initialEmail === 'Not provided' || initialEmail === 'Not specified' ? '' : initialEmail);
+            setEmailInput(initialEmail === '--' || initialEmail === 'Not provided' || initialEmail === 'Not specified' ? '' : initialEmail);
             setOtpInput('');
             setOtpSent(false);
             setStatus({ message: '', isError: false });

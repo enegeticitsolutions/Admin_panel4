@@ -423,8 +423,8 @@ export default function CheckoutScreen() {
                     beneficiaryData = {
                         name: "Beneficiary",
                         age: 65,
-                        gender: "Not specified",
-                        address: "Not provided",
+                        gender: "--",
+                        address: "--",
                         flatPlot: "",
                         streetArea: "",
                         landmark: "",

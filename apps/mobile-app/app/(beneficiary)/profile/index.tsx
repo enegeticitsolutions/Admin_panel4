@@ -25,7 +25,7 @@ interface ContactInfo {
 
 interface ProfileData {
     name: string;
-    age: number;
+    age: number | string;
     gender: string;
     bloodGroup: string;
     allergiesCount: number;
@@ -49,17 +49,17 @@ export default function ProfileScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [profile, setProfile] = useState<ProfileData>({
-        name: 'Beneficiary',
-        age: 70,
-        gender: 'Not specified',
-        bloodGroup: 'A+',
+        name: '--',
+        age: '--',
+        gender: '--',
+        bloodGroup: '--',
         allergiesCount: 0,
         conditionsCount: 0,
         profilePhoto: null,
         contact: {
-            phone: 'Not provided',
-            email: 'Not provided',
-            address: 'Not provided',
+            phone: '--',
+            email: '--',
+            address: '--',
             isEmailVerified: false,
         }
     });
@@ -124,22 +124,23 @@ export default function ProfileScreen() {
             const result = await response.json();
             if (result.success && result.data) {
                 const b = result.data;
-                const formattedGender = b.gender ? b.gender.charAt(0).toUpperCase() + b.gender.slice(1) : 'Not specified';
+                const formattedGender = b.gender ? b.gender.charAt(0).toUpperCase() + b.gender.slice(1) : '--';
                 const fetchedEmail = b.user?.email || b.email;
-                const isEmailPlaceholder = !fetchedEmail || fetchedEmail.includes('margaret.williams') || fetchedEmail.includes('example.com');
+                const isEmailPlaceholder = !fetchedEmail || fetchedEmail.includes('margaret.williams') || fetchedEmail.includes('example.com') || fetchedEmail === 'Not provided' || fetchedEmail === 'Not specified';
+                const rawPhone = b.user?.phone || b.phone;
 
                 setProfile({
-                    name: b.name || b.user?.name || 'Beneficiary',
-                    age: b.age || 70,
+                    name: b.name || b.user?.name || '--',
+                    age: b.age || '--',
                     gender: formattedGender,
                     bloodGroup: mapFromEnum(b.bloodGroup),
                     allergiesCount: b.allergies ? b.allergies.length : 0,
                     conditionsCount: b.conditions ? b.conditions.length : 0,
                     profilePhoto: b.user?.profilePhoto || b.profilePhoto || null,
                     contact: {
-                        phone: b.user?.phone || b.phone || 'Not provided',
-                        email: isEmailPlaceholder ? 'Not provided' : fetchedEmail,
-                        address: b.address || 'Not provided',
+                        phone: rawPhone || '--',
+                        email: isEmailPlaceholder ? '--' : fetchedEmail,
+                        address: b.address || '--',
                         isEmailVerified: b.user?.isVerified || false,
                     }
                 });
@@ -153,9 +154,9 @@ export default function ProfileScreen() {
 
     const handleOpenEdit = () => {
         setEditName(profile.name);
-        setEditPhone(profile.contact.phone === 'Not provided' ? '' : profile.contact.phone);
-        setEditEmail(profile.contact.email === 'Not provided' ? '' : profile.contact.email);
-        setEditAddress(profile.contact.address === 'Not provided' ? '' : profile.contact.address);
+        setEditPhone(profile.contact.phone === '--' ? '' : profile.contact.phone);
+        setEditEmail(profile.contact.email === '--' ? '' : profile.contact.email);
+        setEditAddress(profile.contact.address === '--' ? '' : profile.contact.address);
         setEditModalVisible(true);
     };
 
@@ -195,8 +196,8 @@ export default function ProfileScreen() {
                 name: editName,
                 contact: {
                     ...prev.contact,
-                    phone: editPhone || 'Not provided',
-                    address: editAddress || 'Not provided'
+                    phone: editPhone || '--',
+                    address: editAddress || '--'
                 }
             }));
             setEditModalVisible(false);
@@ -331,7 +332,7 @@ export default function ProfileScreen() {
                                         )}
                                         <TouchableOpacity onPress={handleOpenEmailVerifyModal} activeOpacity={0.7}>
                                             <Text style={styles.verifyActionText}>
-                                                {profile.contact.email && profile.contact.email !== 'Not provided'
+                                                {profile.contact.email && profile.contact.email !== '--'
                                                     ? 'Change Email'
                                                     : 'Verify Email'}
                                             </Text>

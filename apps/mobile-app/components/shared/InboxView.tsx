@@ -419,7 +419,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
             )}
 
             {/* MESSAGE POPUP MODAL */}
-            <Modal visible={selectedMessage !== null} animationType="fade" transparent={true}>
+            <Modal visible={selectedMessage !== null} animationType="fade" transparent={true} onRequestClose={() => setSelectedMessage(null)}>
                 <View style={styles.modalBackdrop}>
                     <View style={styles.modalCard}>
                         <View style={styles.modalHeader}>

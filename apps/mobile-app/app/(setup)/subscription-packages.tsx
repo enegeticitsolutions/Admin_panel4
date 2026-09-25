@@ -37,7 +37,7 @@ export default function SubscriptionPackagesScreen() {
     const [selectedRegionId, setSelectedRegionId] = useState('');
     const [selectedLat, setSelectedLat] = useState<number | null>(null);
     const [selectedLng, setSelectedLng] = useState<number | null>(null);
-    const [selectedCycle, setSelectedCycle] = useState<string>('1');
+    const [selectedCycle, setSelectedCycle] = useState<string>('3');
 
     const [mapModalVisible, setMapModalVisible] = useState(false);
 
@@ -418,7 +418,6 @@ export default function SubscriptionPackagesScreen() {
                     borderColor: '#E2E8F0',
                 }}>
                     {[
-                        { key: '1', label: '1 Month', badge: '' },
                         { key: '3', label: '3 Months', badge: '5% OFF' },
                         { key: '6', label: '6 Months', badge: '10% OFF' },
                         { key: '12', label: '1 Year', badge: '20% OFF' },
@@ -551,7 +550,8 @@ export default function SubscriptionPackagesScreen() {
                             <View style={styles.cardActions}>
                                 <TouchableOpacity
                                     style={[styles.detailsBtn, isRegional && styles.detailsBtnRegional]}
-                                    onPress={() => router.push(`/(subscriber)/package-details/${pkg.type}`)}
+                                    onPress={() => router.push({ pathname: `/(subscriber)/package-details/${pkg.type}`, params: { cycle: selectedCycle } })}
+
                                 >
                                     <Text style={[styles.detailsBtnText, isRegional && styles.detailsBtnTextRegional]}>View Details</Text>
                                 </TouchableOpacity>
@@ -675,7 +675,7 @@ export default function SubscriptionPackagesScreen() {
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.selectedPkgName}>
-                                            {selectedPackageForAddons.name} ({selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : selectedCycle === '3' ? '3 Months' : '1 Month'})
+                                            {selectedPackageForAddons.name} ({selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : '3 Months'})
                                         </Text>
                                         <Text style={styles.selectedPkgBenefitsCount}>
                                             {selectedPackageForAddons.packageBenefits?.length || 3} Standard Benefits Included · ₹{calculatePackagePrice(selectedPackageForAddons, selectedCycle).toLocaleString('en-IN')}

@@ -301,6 +301,7 @@ export default function BeneficiaryDashboard() {
             style={styles.container}
             bounces={false}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             stickyHeaderIndices={[0]}
         >
             <View style={styles.headerWrapper}>
