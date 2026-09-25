@@ -46,35 +46,7 @@ export interface NotificationMessage {
     rawDate?: Date;
 }
 
-const FALLBACK_MESSAGES: NotificationMessage[] = [
-    {
-        id: 'fallback-1',
-        sender: 'Dr. Sarah Johnson',
-        date: 'Feb 20, 10:30 AM',
-        subject: 'Upcoming Home Visit Scheduled',
-        body: 'Your upcoming home health visit has been confirmed for Feb 26th. Your Care Companion will arrive between 10:00 AM and 11:30 AM.',
-        isRead: false,
-        type: 'visit',
-    },
-    {
-        id: 'fallback-2',
-        sender: 'Care Operations',
-        date: 'Feb 18, 04:15 PM',
-        subject: 'Schedule Request Update',
-        body: 'We have received your schedule change request. Our coordination team has approved the updated visit slot.',
-        isRead: true,
-        type: 'general',
-    },
-    {
-        id: 'fallback-3',
-        sender: 'Medication Tracker',
-        date: 'Feb 15, 08:00 AM',
-        subject: 'Daily Medication Reminder',
-        body: 'Please remember to take your morning dosage of Metformin (500mg) and Lisinopril (10mg) with water.',
-        isRead: true,
-        type: 'medication',
-    },
-];
+
 
 interface InboxViewProps {
     showBackButton?: boolean;
@@ -89,12 +61,14 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
     const [refreshing, setRefreshing] = useState(false);
     const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'visits' | 'meds'>('all');
     const [selectedMessage, setSelectedMessage] = useState<NotificationMessage | null>(null);
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const fetchNotifications = async () => {
         try {
             const token = await AsyncStorage.getItem('userToken');
             if (!token) {
-                setNotifications(FALLBACK_MESSAGES);
+                setNotifications([]);
                 return;
             }
 
@@ -103,41 +77,45 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
             });
 
             const data = await res.json();
-            if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-                const formatted: NotificationMessage[] = data.data.map((item: any) => {
-                    const rawDate = item.sentAt ? new Date(item.sentAt) : item.createdAt ? new Date(item.createdAt) : new Date();
-                    const formattedDate = rawDate.toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
+            if (data.success && Array.isArray(data.data)) {
+                if (data.data.length > 0) {
+                    const formatted: NotificationMessage[] = data.data.map((item: any) => {
+                        const rawDate = item.sentAt ? new Date(item.sentAt) : item.createdAt ? new Date(item.createdAt) : new Date();
+                        const formattedDate = rawDate.toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        });
+
+                        let type: NotificationMessage['type'] = 'general';
+                        const lowerType = (item.type || '').toLowerCase();
+                        if (lowerType.includes('visit')) type = 'visit';
+                        else if (lowerType.includes('med')) type = 'medication';
+                        else if (lowerType.includes('celeb')) type = 'celebration';
+                        else if (lowerType.includes('emerg')) type = 'emergency';
+
+                        return {
+                            id: String(item.id),
+                            sender: (item.sender && item.sender !== item.title) ? item.sender : 'MaiHoonNa Care',
+                            subject: item.title || 'Notification',
+                            body: item.body || '',
+                            date: formattedDate,
+                            isRead: !!item.isRead,
+                            type,
+                            rawDate,
+                        };
                     });
-
-                    let type: NotificationMessage['type'] = 'general';
-                    const lowerType = (item.type || '').toLowerCase();
-                    if (lowerType.includes('visit')) type = 'visit';
-                    else if (lowerType.includes('med')) type = 'medication';
-                    else if (lowerType.includes('celeb')) type = 'celebration';
-                    else if (lowerType.includes('emerg')) type = 'emergency';
-
-                    return {
-                        id: String(item.id),
-                        sender: item.title || 'MaiHoonNa Care',
-                        subject: item.title || 'Notification',
-                        body: item.body || '',
-                        date: formattedDate,
-                        isRead: !!item.isRead,
-                        type,
-                        rawDate,
-                    };
-                });
-                setNotifications(formatted);
+                    setNotifications(formatted);
+                } else {
+                    setNotifications([]);
+                }
             } else {
-                setNotifications(FALLBACK_MESSAGES);
+                setNotifications([]);
             }
         } catch (err) {
             console.error('Error fetching inbox notifications:', err);
-            setNotifications(FALLBACK_MESSAGES);
+            setNotifications([]);
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -202,6 +180,47 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
         }
     };
 
+    const handleDeleteSelected = async () => {
+        const idsToDelete = Array.from(selectedIds);
+        setNotifications(prev => prev.filter(n => !selectedIds.has(n.id)));
+        setIsSelectionMode(false);
+        setSelectedIds(new Set());
+        try {
+            const token = await AsyncStorage.getItem('userToken');
+            if (token) {
+                await Promise.all(idsToDelete.map(id => {
+                    if (!id.startsWith('fallback-')) {
+                        return fetch(`${API_URL}/shared/users/notifications/${id}`, {
+                            method: 'DELETE',
+                            headers: { Authorization: `Bearer ${token}` },
+                        });
+                    }
+                    return Promise.resolve();
+                }));
+                emitGlobalRefresh();
+            }
+        } catch (e) {
+            console.error('Error deleting selected notifications:', e);
+        }
+    };
+
+    const handleDeleteMessage = async (msgId: string) => {
+        setNotifications(prev => prev.filter(n => n.id !== msgId));
+        setSelectedMessage(null);
+        try {
+            const token = await AsyncStorage.getItem('userToken');
+            if (token && !msgId.startsWith('fallback-')) {
+                await fetch(`${API_URL}/shared/users/notifications/${msgId}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                emitGlobalRefresh();
+            }
+        } catch (e) {
+            console.error('Error deleting notification:', e);
+        }
+    };
+
     const filteredNotifications = notifications.filter(item => {
         if (activeFilter === 'unread') return !item.isRead;
         if (activeFilter === 'visits') return item.type === 'visit';
@@ -233,11 +252,45 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
                     )}
                 </View>
 
-                {unreadCount > 0 && (
-                    <TouchableOpacity onPress={handleMarkAllRead} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <Text style={[styles.markAllReadText, { color: accentColor }]}>Mark all as read</Text>
-                    </TouchableOpacity>
-                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    {isSelectionMode ? (
+                        <>
+                            <TouchableOpacity onPress={() => setIsSelectionMode(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Text style={[styles.markAllReadText, { color: '#6B7280', marginRight: scale(16) }]}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                onPress={() => {
+                                    if (selectedIds.size === filteredNotifications.length) {
+                                        setSelectedIds(new Set());
+                                    } else {
+                                        setSelectedIds(new Set(filteredNotifications.map(n => n.id)));
+                                    }
+                                }} 
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                                <Text style={[styles.markAllReadText, { color: accentColor, marginRight: scale(16) }]}>
+                                    {selectedIds.size === filteredNotifications.length ? 'Deselect All' : 'Select All'}
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={handleDeleteSelected} disabled={selectedIds.size === 0} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Feather name="trash-2" size={scale(20)} color={selectedIds.size > 0 ? "#EF4444" : "#FCA5A5"} />
+                            </TouchableOpacity>
+                        </>
+                    ) : (
+                        <>
+                            {unreadCount > 0 && (
+                                <TouchableOpacity onPress={handleMarkAllRead} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                    <Text style={[styles.markAllReadText, { color: accentColor, marginRight: notifications.length > 0 ? scale(16) : 0 }]}>Mark all as read</Text>
+                                </TouchableOpacity>
+                            )}
+                            {notifications.length > 0 && (
+                                <TouchableOpacity onPress={() => setIsSelectionMode(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                    <Feather name="trash-2" size={scale(20)} color="#EF4444" />
+                                </TouchableOpacity>
+                            )}
+                        </>
+                    )}
+                </View>
             </View>
 
             {/* Category Filter Pills */}
@@ -313,17 +366,40 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
                                 key={message.id}
                                 style={[styles.messageCard, !message.isRead && [styles.unreadMessageCard, { borderLeftColor: accentColor }]]}
                                 activeOpacity={0.7}
-                                onPress={() => handleSelectMessage(message)}
+                                onPress={() => {
+                                    if (isSelectionMode) {
+                                        const newSelected = new Set(selectedIds);
+                                        if (newSelected.has(message.id)) {
+                                            newSelected.delete(message.id);
+                                        } else {
+                                            newSelected.add(message.id);
+                                        }
+                                        setSelectedIds(newSelected);
+                                    } else {
+                                        handleSelectMessage(message);
+                                    }
+                                }}
                             >
+                                {isSelectionMode && (
+                                    <View style={{ justifyContent: 'center', marginRight: scale(12) }}>
+                                        <Ionicons 
+                                            name={selectedIds.has(message.id) ? "checkbox" : "square-outline"} 
+                                            size={scale(24)} 
+                                            color={selectedIds.has(message.id) ? accentColor : "#9CA3AF"} 
+                                        />
+                                    </View>
+                                )}
                                 <View style={styles.messageIcon}>
                                     {!message.isRead ? <CustomMailClosedIcon color={accentColor} /> : <CustomMailOpenIcon />}
                                 </View>
 
                                 <View style={styles.messageBody}>
                                     <View style={styles.messageTopRow}>
-                                        <Text style={[styles.sender, !message.isRead && styles.unreadSender]} numberOfLines={1}>
-                                             {message.sender}
-                                        </Text>
+                                        <View style={{ flex: 1, marginRight: scale(8) }}>
+                                            <Text style={[styles.sender, !message.isRead && styles.unreadSender]} numberOfLines={1}>
+                                                {message.sender}
+                                            </Text>
+                                        </View>
                                         <Text style={styles.date}>{message.date}</Text>
                                     </View>
 
@@ -359,10 +435,12 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
                             <View style={styles.modalSenderBlock}>
                                 <View style={styles.modalAvatarPlaceholder}>
                                     <Text style={[styles.modalAvatarText, { color: accentColor }]}>
-                                        {selectedMessage?.sender.charAt(0).toUpperCase()}
+                                        {selectedMessage?.sender ? Array.from(selectedMessage.sender)[0].toUpperCase() : 'M'}
                                     </Text>
                                 </View>
-                                <Text style={styles.modalSender}>{selectedMessage?.sender}</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.modalSender} numberOfLines={1}>{selectedMessage?.sender}</Text>
+                                </View>
                             </View>
                             <Text style={styles.modalDate}>{selectedMessage?.date}</Text>
                         </View>
@@ -373,9 +451,14 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
                             <Text style={styles.modalBodyText}>{selectedMessage?.body}</Text>
                         </ScrollView>
 
-                        <TouchableOpacity style={[styles.closeBtn, { backgroundColor: accentColor }]} onPress={() => setSelectedMessage(null)} activeOpacity={0.8}>
-                            <Text style={styles.closeBtnText}>Close Message</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: scale(8) }}>
+                            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: accentColor, flex: 1, marginRight: scale(10) }]} onPress={() => setSelectedMessage(null)} activeOpacity={0.8}>
+                                <Text style={styles.closeBtnText}>Close Message</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: '#FEE2E2', paddingHorizontal: scale(16) }]} onPress={() => handleDeleteMessage(selectedMessage!.id)} activeOpacity={0.8}>
+                                <Feather name="trash-2" size={scale(20)} color="#EF4444" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -610,6 +693,8 @@ const styles = StyleSheet.create({
     modalSenderBlock: {
         flexDirection: 'row',
         alignItems: 'center',
+        flex: 1,
+        marginRight: scale(8),
     },
     modalAvatarPlaceholder: {
         width: scale(32),
@@ -628,6 +713,7 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins-Medium',
         fontSize: scale(14),
         color: '#374151',
+        flexShrink: 1,
     },
     modalDate: {
         fontFamily: 'Poppins-Regular',

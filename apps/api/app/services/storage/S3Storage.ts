@@ -32,7 +32,27 @@ export class S3Storage extends StorageService {
     super();
     this.bucketName = process.env.STORAGE_BUCKET || 'maihoonna-media-staging';
     this.region = process.env.AWS_REGION || 'ap-south-1';
-    this.s3 = new S3Client({ region: this.region });
+
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
+
+    const clientConfig: ConstructorParameters<typeof S3Client>[0] = { region: this.region };
+
+    if (accessKeyId && secretAccessKey) {
+      clientConfig.credentials = { accessKeyId, secretAccessKey };
+      console.log('[Storage] S3: using explicit AWS_ACCESS_KEY_ID credentials from environment.');
+    } else {
+      // On ECS Fargate with a Task IAM Role this is fine — the SDK resolves creds automatically.
+      // On a plain Ubuntu/VPS server (no IAM instance profile), uploads WILL fail.
+      // Fix: set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in your .env file.
+      console.warn(
+        '[Storage] S3: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY not set in environment. ' +
+        'Relying on IAM instance profile / ECS Task Role / ~/.aws/credentials. ' +
+        'If this is a plain Ubuntu server (not EC2/ECS), set explicit credentials in .env.'
+      );
+    }
+
+    this.s3 = new S3Client(clientConfig);
     console.log('[Storage] Using AWS S3 provider → bucket:', this.bucketName, '| region:', this.region);
   }
 
