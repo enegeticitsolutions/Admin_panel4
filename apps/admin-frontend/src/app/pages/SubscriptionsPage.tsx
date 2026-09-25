@@ -219,6 +219,7 @@ export default function SubscriptionsPage() {
         allowRollover: false,
         maxRolloverUnits: 0,
         isUnlimited: isUnlimitedDefault,
+        showUnit: true,
       };
 
       setBenefitConfigs(prev => ({ ...prev, [benefitId]: initialSetting }));
@@ -238,6 +239,7 @@ export default function SubscriptionsPage() {
         allowRollover: false,
         maxRolloverUnits: 0,
         isUnlimited: false,
+        showUnit: true,
       };
       return { ...c, [benefitId]: { ...existing, quantity: units } };
     });
@@ -253,6 +255,7 @@ export default function SubscriptionsPage() {
         allowRollover: false,
         maxRolloverUnits: 0,
         isUnlimited: false,
+        showUnit: true,
       };
       const updated = { ...current, ...partial };
       if (partial.quantity !== undefined) {
@@ -272,6 +275,7 @@ export default function SubscriptionsPage() {
         allowRollover: false,
         maxRolloverUnits: 0,
         isUnlimited: false,
+        showUnit: true,
       };
       return {
         benefitId,
@@ -381,6 +385,7 @@ export default function SubscriptionsPage() {
         allowRollover: !!b.allowRollover,
         maxRolloverUnits: b.maxRolloverUnits || undefined,
         isUnlimited: !!b.isUnlimited,
+        showUnit: b.showUnit !== undefined ? Boolean(b.showUnit) : true,
       };
     });
     
@@ -1218,6 +1223,11 @@ export default function SubscriptionsPage() {
                                   {cfg.allowRollover && (
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                                       Rollover allowed {cfg.maxRolloverUnits ? `(max ${cfg.maxRolloverUnits})` : ''}
+                                    </span>
+                                  )}
+                                  {cfg.showUnit === false && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                                      Units hidden for users
                                     </span>
                                   )}
                                 </div>

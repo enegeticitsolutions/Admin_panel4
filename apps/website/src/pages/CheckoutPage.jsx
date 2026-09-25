@@ -62,7 +62,10 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
   const { loaded: razorpayLoaded, error: razorpayError } = useRazorpayScript();
   const pkg = selectedPackage || fallbackPackage;
 
-  const [duration, setDuration] = useState(String(selectedPackage?.selectedCycle || "1"));
+  const initialDuration = ["3", "6", "12"].includes(String(selectedPackage?.selectedCycle || selectedPackage?.selectedDurationMonths))
+    ? String(selectedPackage?.selectedCycle || selectedPackage?.selectedDurationMonths)
+    : "3";
+  const [duration, setDuration] = useState(initialDuration);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponError, setCouponError] = useState("");
@@ -376,9 +379,8 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
                   Choose your billing commitment for <strong>{pkg.name}</strong>.
                 </p>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "14px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
                   {[
-                    { key: "1", label: "1 Month", disc: 0 },
                     { key: "3", label: "3 Months", disc: pkg.discountThreeMonths ?? 5 },
                     { key: "6", label: "6 Months", disc: pkg.discountSixMonths ?? 10 },
                     { key: "12", label: "1 Year", disc: pkg.discountAnnual ?? 20 },

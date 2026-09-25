@@ -70,7 +70,8 @@ async function publishPackageVersion(tx, packageId, options = {}) {
           c.minSubscriptionMonths !== p.minSubscriptionMonths ||
           c.allowRollover !== p.allowRollover ||
           c.maxRolloverUnits !== p.maxRolloverUnits ||
-          c.isUnlimited !== p.isUnlimited
+          c.isUnlimited !== p.isUnlimited ||
+          c.showUnit !== p.showUnit
         ) {
           benefitsChanged = true;
           break;

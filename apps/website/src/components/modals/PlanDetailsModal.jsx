@@ -58,7 +58,9 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
         const period = pb.unitsPeriod || "monthly";
 
         let displayText = "";
-        if (pb.isUnlimited) {
+        if (pb.showUnit === false) {
+          displayText = benefitName;
+        } else if (pb.isUnlimited) {
           displayText = `24/7 Unlimited ${benefitName}`;
         } else if (period === "yearly") {
           displayText = `${pb.unitsIncluded} ${rawLabel || "uses"}/year ${benefitName}`;
@@ -140,12 +142,11 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
             </h2>
             <div className="plan-modal-price-subtitle">
               <span className="plan-modal-subtitle-price">
-                ₹{displayPrice.toLocaleString("en-IN")}
+                ₹{monthlyRate.toLocaleString("en-IN")}/month
               </span>
               <span className="plan-modal-subtitle-dot">·</span>
-              <span className="plan-modal-subtitle-cycle">{durationText}</span>
-              <span className="plan-modal-subtitle-rate">
-                (₹{monthlyRate.toLocaleString("en-IN")}/month)
+              <span className="plan-modal-subtitle-cycle">
+                Total ₹{displayPrice.toLocaleString("en-IN")} ({durationText})
               </span>
               {savings > 0 && (
                 <span className="plan-modal-subtitle-savings">

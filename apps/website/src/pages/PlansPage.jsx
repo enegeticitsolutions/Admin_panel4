@@ -393,7 +393,9 @@ export default function PlansPage({
                         const isIncluded = !!matchedPb;
                         let displayVal = "-";
                         if (isIncluded) {
-                          if (matchedPb.isUnlimited) {
+                          if (matchedPb.showUnit === false) {
+                            displayVal = "Included";
+                          } else if (matchedPb.isUnlimited) {
                             displayVal = "Unlimited";
                           } else if (matchedPb.unitsPeriod === "yearly") {
                             displayVal = `${matchedPb.unitsIncluded}/year`;

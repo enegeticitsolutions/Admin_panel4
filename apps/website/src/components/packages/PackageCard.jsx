@@ -41,66 +41,19 @@ export default function PackageCard({
   // Compute price based on selected billing cycle
   const durNum = parseInt(selectedCycle, 10) || 3;
   const displayPrice = getPackageDisplayPrice(plan, selectedCycle);
-  let cycleLabel = "billed monthly";
-  let cycleSubtext = `₹${base.toLocaleString("en-IN")}/month`;
+  const monthlyPrice = durNum > 0 ? Math.round(displayPrice / durNum) : displayPrice;
 
+  let cycleLabel = "billed monthly";
   if (durNum === 3) {
-    const monthly = Math.round(displayPrice / 3);
     cycleLabel = "billed for 3 months";
-    cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/month`;
   } else if (durNum === 6) {
-    const monthly = Math.round(displayPrice / 6);
     cycleLabel = "billed for 6 months";
-    cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/month`;
   } else if (durNum === 12) {
-    const monthly = Math.round(displayPrice / 12);
     cycleLabel = "billed annually";
-    cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/month`;
   }
 
   const fullTermCost = base * durNum;
   const savings = durNum > 1 ? Math.max(0, fullTermCost - displayPrice) : 0;
-
-  // Standardize top units (hours or visits) so every card has a clean, consistent top stat
-  let topHighlightNum = plan.hoursPerMonth || plan.totalHours || plan.hours;
-  let topHighlightUnit = "hours/month";
-
-  if (!topHighlightNum && plan.visitsPerWeek) {
-    topHighlightNum = plan.visitsPerWeek;
-    topHighlightUnit = "visits/wk";
-  }
-
-  if (!topHighlightNum && Array.isArray(plan.packageBenefits) && plan.packageBenefits.length > 0) {
-    const hourBenefit = plan.packageBenefits.find(
-      (pb) =>
-        pb.benefit?.name?.toLowerCase().includes("hour") ||
-        pb.benefit?.unitLabel?.toLowerCase().includes("hour")
-    );
-    if (hourBenefit) {
-      topHighlightNum = hourBenefit.unitsIncluded;
-      topHighlightUnit = "hours/month";
-    } else {
-      const visitBenefit = plan.packageBenefits.find(
-        (pb) =>
-          pb.benefit?.name?.toLowerCase().includes("visit") ||
-          pb.benefit?.unitLabel?.toLowerCase().includes("visit")
-      );
-      if (visitBenefit) {
-        topHighlightNum = visitBenefit.unitsIncluded;
-        topHighlightUnit = "visits/month";
-      } else {
-        const first = plan.packageBenefits[0];
-        topHighlightNum = first?.unitsIncluded || 1;
-        const rawUnit = (first?.benefit?.unitLabel || "visit").replace(/^per\s+/i, "").trim();
-        topHighlightUnit = `${rawUnit}s/month`;
-      }
-    }
-  }
-
-  if (!topHighlightNum) {
-    topHighlightNum = 1;
-    topHighlightUnit = "plan";
-  }
 
   // Extract all formatted benefits: merges backend benefits with standard inclusions
   const formattedBenefits = useMemo(() => {
@@ -152,9 +105,10 @@ export default function PackageCard({
   const planForCheckout = {
     ...plan,
     selectedDurationMonths: durNum,
+    selectedCycle: String(durNum),
     calculatedPrice: displayPrice,
     cycleLabel,
-    cycleSubtext,
+    monthlyRate: monthlyPrice,
     savings,
     allFormattedBenefits: formattedBenefits,
   };
@@ -193,23 +147,29 @@ export default function PackageCard({
         {planDesc}
       </p>
 
-      {/* 4. Standardized Pricing Box (180px fixed height) */}
+      {/* 4. Standardized Pricing Box (175px fixed height) */}
       <div className="plan-hours">
-        <div className="plan-hours__top">
-          <strong>{topHighlightNum}</strong>
-          <span>{topHighlightUnit}</span>
+        <div className="plan-hours__primary-price">
+          <span className="plan-hours__currency">₹</span>
+          <strong className="plan-hours__monthly-rate">
+            {monthlyPrice.toLocaleString("en-IN")}
+          </strong>
+          <span className="plan-hours__period">/month</span>
         </div>
 
-        <div className="plan-hours__price-row">
-          <strong className="plan-hours__amount">
-            ₹{displayPrice.toLocaleString("en-IN")}
-          </strong>
-          {cycleSubtext && (
-            <span className="plan-hours__monthly-sub">({cycleSubtext})</span>
+        <div className="plan-hours__total-billed">
+          {durNum > 1 ? (
+            <>
+              <span className="plan-hours__total-label">Total:</span>
+              <strong className="plan-hours__total-amount">
+                ₹{displayPrice.toLocaleString("en-IN")}
+              </strong>
+              <span className="plan-hours__cycle-tag">({cycleLabel})</span>
+            </>
+          ) : (
+            <span className="plan-hours__cycle-tag">Billed monthly</span>
           )}
         </div>
-
-        <small className="plan-hours__cycle-label">{cycleLabel}</small>
 
         <div className="plan-hours__savings-slot">
           {savings > 0 ? (
