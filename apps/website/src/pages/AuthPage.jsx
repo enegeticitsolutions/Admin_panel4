@@ -2,8 +2,17 @@ import React, { useState, useRef, useEffect } from "react";
 import { sendOtp, verifyOtp, registerWithOtp } from "../services/api";
 import logo from "../assets/logo.svg";
 import { LEGAL_CONFIG } from "../constants/legal";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, ChevronDown } from "lucide-react";
 import TurnstileWidget from "../components/TurnstileWidget";
+import { customList } from 'country-codes-list';
+
+const countryCodes = Object.entries(
+  customList('countryCode', '+{countryCallingCode} {countryNameEn}')
+).map(([iso, label]) => ({
+  iso,
+  label, // e.g. "+91 India"
+  code: label.split(' ')[0].replace('+', '') // e.g. "91"
+})).sort((a, b) => a.label.localeCompare(b.label));
 
 export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN" }) {
   // mode: 'LOGIN' | 'REGISTER'
@@ -15,6 +24,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
   const [registerStep, setRegisterStep] = useState("FORM");
 
   // Registration & Login Form State
+  const [countryCode, setCountryCode] = useState("91");
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -125,8 +135,8 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
 
     setLoading(true);
     try {
-      await sendOtp(cleanPhone, turnstileToken);
-      setInfoMessage(`We've sent a 6-digit verification code to +91 ${cleanPhone}`);
+      await sendOtp(countryCode, cleanPhone, turnstileToken);
+      setInfoMessage(`We've sent a 6-digit verification code to +${countryCode} ${cleanPhone}`);
       setLoginStep("OTP");
       setResendTimer(60);
       setOtp(["", "", "", "", "", ""]);
@@ -152,7 +162,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
     setLoading(true);
     try {
       const cleanPhone = cleanPhoneNumber(phone);
-      const res = await verifyOtp(cleanPhone, enteredOtp);
+      const res = await verifyOtp(countryCode, cleanPhone, enteredOtp);
 
       if (res.isNewUser) {
         // Phone verified but user has no account yet -> switch to Register form
@@ -206,8 +216,8 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
 
     setLoading(true);
     try {
-      await sendOtp(cleanPhone, registerTurnstileToken);
-      setInfoMessage(`We've sent a 6-digit verification code to +91 ${cleanPhone}`);
+      await sendOtp(countryCode, cleanPhone, registerTurnstileToken);
+      setInfoMessage(`We've sent a 6-digit verification code to +${countryCode} ${cleanPhone}`);
       setRegisterStep("OTP");
       setResendTimer(60);
       setOtp(["", "", "", "", "", ""]);
@@ -236,10 +246,11 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
     setLoading(true);
     try {
       // 1. Verify the OTP code first
-      await verifyOtp(cleanPhone, enteredOtp);
+      await verifyOtp(countryCode, cleanPhone, enteredOtp);
 
       // 2. Complete OTP-based registration (stores user without requiring password)
       const regRes = await registerWithOtp({
+        countryCode,
         phoneRaw: cleanPhone,
         name: name.trim(),
         age: ageNum,
@@ -268,9 +279,9 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
 
     setLoading(true);
     try {
-      await sendOtp(cleanPhone);
+      await sendOtp(countryCode, cleanPhone);
       setResendTimer(60);
-      setInfoMessage(`A fresh 6-digit verification code has been sent to +91 ${cleanPhone}`);
+      setInfoMessage(`A fresh 6-digit verification code has been sent to +${countryCode} ${cleanPhone}`);
     } catch (err) {
       setError(err.message || "Failed to resend code.");
     } finally {
@@ -443,16 +454,38 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                 <div style={{ display: "flex", gap: "8px" }}>
                   <div
                     style={{
-                      padding: "12px 14px",
+                      position: "relative",
                       background: "#f1f5f9",
                       border: "1.5px solid #e2e8f0",
                       borderRadius: "10px",
-                      fontWeight: "700",
-                      color: "#0f172a",
-                      fontSize: "0.95rem",
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "0 10px",
                     }}
                   >
-                    +91
+                    <select
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}
+                      style={{
+                        appearance: "none",
+                        background: "transparent",
+                        border: "none",
+                        outline: "none",
+                        fontWeight: "700",
+                        color: "#0f172a",
+                        fontSize: "0.95rem",
+                        paddingRight: "20px",
+                        cursor: "pointer",
+                        zIndex: 1,
+                      }}
+                    >
+                      {countryCodes.map((c, i) => (
+                        <option key={i} value={c.code}>
+                          +{c.code}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} style={{ position: "absolute", right: "8px", pointerEvents: "none", color: "#64748b" }} />
                   </div>
                   <input
                     type="tel"

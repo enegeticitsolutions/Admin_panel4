@@ -1,7 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Dimensions, Image, TouchableWithoutFeedback, Keyboard, Linking } from 'react-native';
 import { useState, useEffect } from "react";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
@@ -11,6 +11,7 @@ import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useAuth } from '@/contexts/AuthContext';
 import { IS_PASSWORD_LOGIN_ENABLED } from '@/constants/authMode';
+import { CountryPickerModal } from '@/components/ui/CountryPickerModal';
 
 const { width, height } = Dimensions.get('window');
 const BASE_WIDTH = 390;
@@ -21,6 +22,8 @@ type BiometricKind = 'face' | 'fingerprint' | 'biometric';
 
 export default function AuthScreen() {
   const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("91");
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [biometricType, setBiometricType] = useState<BiometricKind>('biometric');
   const [hasBiometricsSetup, setHasBiometricsSetup] = useState(false);
@@ -178,8 +181,8 @@ export default function AuthScreen() {
 
   const handleLogin = async () => {
     const cleanedPhone = phone.trim().replace(/\D/g, '');
-    if (cleanedPhone.length !== 10) {
-      Alert.alert("Invalid Phone Number", "Please enter a valid 10-digit mobile number.");
+    if (cleanedPhone.length < 5) {
+      Alert.alert("Invalid Phone Number", "Please enter a valid mobile number.");
       return;
     }
 
@@ -189,7 +192,7 @@ export default function AuthScreen() {
       const response = await fetch(`${API_URL}/auth/send-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: `91${cleanedPhone}` }),
+        body: JSON.stringify({ phone: `${countryCode}${cleanedPhone}` }),
       });
 
       const data = await response.json().catch(() => null);
@@ -197,7 +200,7 @@ export default function AuthScreen() {
       if (response.ok && data?.success) {
         push({
           pathname: "/(auth)/verify-otp",
-          params: { phone: `+91${cleanedPhone}` },
+          params: { phone: `+${countryCode}${cleanedPhone}` },
         });
       } else if (response.status === 429) {
         Alert.alert(
@@ -252,16 +255,21 @@ export default function AuthScreen() {
 
               <Text style={styles.label}>Phone Number</Text>
               <View style={styles.inputRow}>
-                <View style={styles.countryCodeContainer}>
-                  <Text style={styles.countryCode}>+91</Text>
-                </View>
+                <TouchableOpacity 
+                  style={[styles.countryCodeContainer, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+                  onPress={() => setShowCountryPicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.countryCode}>+{countryCode}</Text>
+                  <Ionicons name="chevron-down" size={14} color="#6B7280" style={{ marginLeft: 4 }} />
+                </TouchableOpacity>
 
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter 10-digit number"
+                  placeholder="Enter mobile number"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="numeric"
-                  maxLength={10}
+                  maxLength={15}
                   value={phone}
                   onChangeText={(text) => setPhone(text.replace(/\D/g, ''))}
                   editable={!isLoading}
@@ -326,8 +334,14 @@ export default function AuthScreen() {
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
-
+    </TouchableWithoutFeedback>
+      
+      <CountryPickerModal
+        visible={showCountryPicker}
+        onClose={() => setShowCountryPicker(false)}
+        selectedCode={countryCode}
+        onSelect={setCountryCode}
+      />
     </SafeAreaView>
   );
 }
@@ -397,7 +411,7 @@ const styles = StyleSheet.create({
     marginBottom: scale(14),
   },
   countryCodeContainer: {
-    width: scale(64),
+    width: scale(76),
     height: scale(48),
     borderRadius: scale(10),
     borderWidth: 1,

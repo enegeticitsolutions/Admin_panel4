@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
+    "country-codes-list": "^3.2.0",
     "date-fns": "^4.4.0",
     "lucide-react": "^0.487.0",
     "react": "^19.1.0",
