@@ -12,17 +12,6 @@ export class StplProvider extends OtpProvider {
   async send(phone: string): Promise<OtpResponse> {
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
 
-    // Dynamic OTP Bypass for testing team (configured strictly via .env)
-    if (isBypassPhone(cleanPhone)) {
-      const bypassCode = getBypassOtpCode();
-      await prisma.otp.upsert({
-        where: { phone: cleanPhone },
-        update: { code: bypassCode, attempts: 0, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
-        create: { phone: cleanPhone, code: bypassCode, attempts: 0, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) },
-      });
-      return { success: true, message: 'OTP sent successfully' };
-    }
-
     // 60-second cooldown check to prevent SMS bombing / financial exhaustion
     const existingOtp = await prisma.otp.findUnique({ where: { phone: cleanPhone } });
     if (existingOtp) {
