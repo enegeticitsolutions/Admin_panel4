@@ -16,6 +16,12 @@ export async function sendEmailVerificationOtp(email: string): Promise<{ success
     throw new Error('Please provide a valid email address');
   }
 
+  // Guard: check if email is already linked to a different account
+  const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
+  if (existingUser) {
+    throw new Error('This email address is already linked to another account. Please use a different email.');
+  }
+
   // Generate 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
@@ -85,12 +91,20 @@ export async function verifyEmailOtp(
 
   // Update DB if userId is available
   if (userId) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { email: cleanEmail, isVerified: true },
-    });
-
-
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { email: cleanEmail, isVerified: true },
+      });
+    } catch (error: any) {
+      // Prisma unique constraint violation — email already belongs to another account
+      if (error?.code === 'P2002' || error?.message?.includes('users_email_key')) {
+        throw new Error('This email address is already linked to another account. Please use a different email.');
+      }
+      // Re-throw any other unexpected DB error (will be caught by global error handler)
+      console.error('[Email Verify] Unexpected DB error while saving email:', error);
+      throw new Error('Something went wrong while saving your email. Please try again.');
+    }
   }
 
   return {

@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { config } from './core/config';
 import { ApiError } from './utils/ApiError';
+import { errorHandler } from './middleware/errorHandler';
 import { checkRedisHealth } from '@maihoonna/notifications';
 
 // Auth Routes
@@ -230,16 +231,9 @@ app.use((req, res, next) => {
 });
 
 // ─── Global Error Handler ─────────────────────────────────────────────────────
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal server error';
+// Catches all errors forwarded via next(err) or unhandled async rejections.
+// In production: never leaks DB errors, stack traces, or internal paths to the mobile app.
+// See: app/middleware/errorHandler.ts for full classification logic.
+app.use(errorHandler);
 
-  res.status(statusCode).json({
-    success: false,
-    message,
-    errors: err.errors || [],
-    stack: config.nodeEnv === 'development' ? err.stack : undefined,
-  });
-});
-
-export default app;
+export default app;
