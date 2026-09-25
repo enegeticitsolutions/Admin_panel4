@@ -289,9 +289,6 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
             <button onClick={onGoBack} className="auth-back-btn" style={{ margin: 0 }}>
               ← Back
             </button>
-            <div className="auth-badge" style={{ margin: 0 }}>
-              India's Senior Care Ecosystem
-            </div>
           </div>
 
           <h1 className="auth-hero-title">
@@ -299,7 +296,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
           </h1>
 
           <p className="auth-hero-desc">
-            Seamlessly log in with OTP or register your account to coordinate verified Care Mitras, monitor daily vitals, and ensure complete family peace of mind.
+            Log in instantly with OTP or register to track verified Care Mitras, monitor daily vitals, and give your family complete peace of mind.
           </p>
 
           <div className="auth-features-list">
@@ -318,10 +315,6 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="auth-copyright">
-          © 2026 MaiHoonNa Care Technologies. All rights reserved.
         </div>
       </div>
 
