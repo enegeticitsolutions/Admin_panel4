@@ -5,7 +5,7 @@
  *
  * Usage on EC2:
  *   cd ~/Admin_panel4/apps/api
- *   node migrate_anirudh.js
+ *   node scripts/migrate_anirudh.js
  */
 
 const { Client } = require('pg');
@@ -19,13 +19,20 @@ const PROD_URL = process.env.PROD_DATABASE_URL ||
 const TARGET_PHONE_DIGITS = '8585858585';
 const TARGET_NAME = 'anirudh';
 
+const columnsCache = new Map();
+
 async function getTableColumns(client, tableName) {
+  if (columnsCache.has(tableName)) {
+    return columnsCache.get(tableName);
+  }
   try {
     const res = await client.query(
       `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
       [tableName]
     );
-    return new Set(res.rows.map(r => r.column_name));
+    const set = new Set(res.rows.map(r => r.column_name));
+    columnsCache.set(tableName, set);
+    return set;
   } catch (e) {
     return new Set();
   }
@@ -37,7 +44,7 @@ async function migrateTable(stagingClient, prodClient, tableName, rows, options 
 
   const prodCols = await getTableColumns(prodClient, tableName);
   if (prodCols.size === 0) {
-    console.warn(`  [SKIP] Table "${tableName}" does not exist in production database.`);
+    console.warn(`  [SKIP] Table "${tableName}" not found or empty column set in production database.`);
     return 0;
   }
 
@@ -46,7 +53,6 @@ async function migrateTable(stagingClient, prodClient, tableName, rows, options 
     const row = modifyRow ? await modifyRow(rawRow) : rawRow;
     if (!row) continue;
 
-    // Filter out fields that don't exist in prod table
     const validKeys = Object.keys(row).filter(k => prodCols.has(k));
     if (validKeys.length === 0) continue;
 
@@ -71,11 +77,16 @@ async function migrateTable(stagingClient, prodClient, tableName, rows, options 
       sql = `INSERT INTO "${tableName}" (${cols}) VALUES (${placeholders}) ON CONFLICT DO NOTHING;`;
     }
 
+    // Use SAVEPOINT per row so a foreign key issue on a single log never aborts the overall transaction
+    const spName = `sp_${tableName.substring(0, 10)}_${count}`;
     try {
+      await prodClient.query(`SAVEPOINT ${spName}`);
       await prodClient.query(sql, vals);
+      await prodClient.query(`RELEASE SAVEPOINT ${spName}`);
       count++;
     } catch (err) {
-      console.warn(`  [WARN] ${tableName} row failed: ${err.message}`);
+      await prodClient.query(`ROLLBACK TO SAVEPOINT ${spName}`);
+      console.warn(`  [WARN] ${tableName} row skipped: ${err.message}`);
     }
   }
   return count;
@@ -83,7 +94,7 @@ async function migrateTable(stagingClient, prodClient, tableName, rows, options 
 
 async function run() {
   console.log('='.repeat(70));
-  console.log('  MaiHoonNa Data Migration: Staging -> Production');
+  console.log('  MaiHoonNa Data Migration: Staging -> Production (v2 with Savepoints)');
   console.log('  Target Profile: Anirudh (Phone: 8585858585)');
   console.log('='.repeat(70));
 
@@ -98,6 +109,20 @@ async function run() {
     console.log('[*] Connecting to Production DB...');
     await prod.connect();
     console.log('    ✔ Connected to Production.');
+
+    // Pre-cache all production table column schemas BEFORE transaction starts
+    const allExpectedTables = [
+      'users', 'beneficiaries', 'addresses', 'emergency_contacts', 'schedule_preferences',
+      'beneficiary_conditions', 'medical_records', 'medications', 'medication_adherence',
+      'subscriptions', 'subscription_benefit_balances', 'benefit_periods', 'package_hours_logs',
+      'payments', 'invoices', 'appointments', 'callback_requests', 'service_requests',
+      'beneficiary_vital_configs', 'vital_readings', 'vital_alerts', 'otps',
+      'medical_conditions', 'subscription_packages', 'package_versions', 'benefits', 'benefit_types',
+      'vital_definitions'
+    ];
+    for (const t of allExpectedTables) {
+      await getTableColumns(prod, t);
+    }
 
     // 1. Locate User in Staging
     console.log('\n[1/6] Searching for User in Staging...');
@@ -116,7 +141,7 @@ async function run() {
 
     const userIds = new Set(userRes.rows.map(u => u.id));
 
-    // 2. Find Beneficiaries linked to this subscriber or user
+    // 2. Locate Beneficiaries
     console.log('\n[2/6] Finding Beneficiaries in Staging...');
     const benRes = await staging.query(
       `SELECT * FROM beneficiaries WHERE "subscriberId" = ANY($1::text[]) OR "userId" = ANY($1::text[])`,
@@ -126,7 +151,6 @@ async function run() {
     console.log(`    ✔ Found ${beneficiaries.length} beneficiary record(s):`);
     beneficiaries.forEach(b => console.log(`       - "${b.name}" (ID: ${b.id}, userId: ${b.userId})`));
 
-    // Also collect any beneficiary User accounts (Beneficiary model has 1-1 userId relation)
     const benUserIds = beneficiaries.map(b => b.userId).filter(Boolean);
     if (benUserIds.length > 0) {
       const extraUsersRes = await staging.query(
@@ -273,10 +297,9 @@ async function run() {
     console.log(`       - Vital Configs & Logs:   ${vitalConfigs.length + vitalReadings.length}`);
     console.log(`       - OTPs:                   ${otps.length}`);
 
-    // 4. Resolve Catalog / Reference Dependencies
+    // 4. Resolve Catalog References
     console.log('\n[4/6] Verifying Catalog References in Production...');
 
-    // 4a. Medical Conditions
     if (beneficiaryConditions.length > 0) {
       const condIds = [...new Set(beneficiaryConditions.map(c => c.conditionId))];
       for (const condId of condIds) {
@@ -291,7 +314,6 @@ async function run() {
       }
     }
 
-    // 4b. Subscription Packages & Versions
     if (subscriptions.length > 0) {
       const pkgTypes = [...new Set(subscriptions.map(s => s.packageType).filter(Boolean))];
       for (const pkgType of pkgTypes) {
@@ -318,7 +340,6 @@ async function run() {
       }
     }
 
-    // 4c. Benefits & Benefit Types
     if (benefitBalances.length > 0) {
       const benefitIds = [...new Set(benefitBalances.map(b => b.benefitId).filter(Boolean))];
       for (const bId of benefitIds) {
@@ -340,7 +361,6 @@ async function run() {
       }
     }
 
-    // 4d. Vital Definitions
     if (vitalConfigs.length > 0 || vitalReadings.length > 0) {
       const vDefIds = [
         ...new Set([
@@ -360,7 +380,6 @@ async function run() {
       }
     }
 
-    // Safe fallback sets for CC / Teams / Zones in production
     let prodCompanionIds = new Set();
     let prodTeamIds = new Set();
     let prodZoneIds = new Set();
@@ -376,7 +395,6 @@ async function run() {
         const oldId = u.id;
         const newId = prodExisting.id;
         u.id = newId;
-        // Remap in children
         beneficiaries.forEach(b => {
           if (b.subscriberId === oldId) b.subscriberId = newId;
           if (b.userId === oldId) b.userId = newId;
@@ -391,16 +409,16 @@ async function run() {
       }
     }
 
+    const allUserIdsSet = new Set(allUsers.map(u => u.id));
+
     // 5. Execute Migration in Transaction
     console.log('\n[5/6] Writing data into Production DB (Safe Transaction)...');
     await prod.query('BEGIN');
 
     try {
-      // 5a. Users
       const uCount = await migrateTable(staging, prod, 'users', allUsers, { conflictKey: 'id' });
       console.log(`       ✔ users (${uCount})`);
 
-      // 5b. Beneficiaries (sanitize CC / Team FKs if not present in prod)
       const sanitizedBeneficiaries = beneficiaries.map(b => {
         const copy = { ...b };
         if (copy.primaryCcId && !prodCompanionIds.has(copy.primaryCcId)) copy.primaryCcId = null;
@@ -411,7 +429,6 @@ async function run() {
       const bCount = await migrateTable(staging, prod, 'beneficiaries', sanitizedBeneficiaries, { conflictKey: 'id' });
       console.log(`       ✔ beneficiaries (${bCount})`);
 
-      // 5c. Addresses
       const sanitizedAddresses = addresses.map(a => {
         const copy = { ...a };
         if (copy.zoneId && !prodZoneIds.has(copy.zoneId)) copy.zoneId = null;
@@ -420,73 +437,115 @@ async function run() {
       const aCount = await migrateTable(staging, prod, 'addresses', sanitizedAddresses, { conflictKey: 'id' });
       console.log(`       ✔ addresses (${aCount})`);
 
-      // 5d. Emergency Contacts
       const ecCount = await migrateTable(staging, prod, 'emergency_contacts', emergencyContacts, { conflictKey: 'id' });
       console.log(`       ✔ emergency_contacts (${ecCount})`);
 
-      // 5e. Schedule Preferences
       const spCount = await migrateTable(staging, prod, 'schedule_preferences', schedulePreferences, { conflictKey: 'id' });
       console.log(`       ✔ schedule_preferences (${spCount})`);
 
-      // 5f. Beneficiary Conditions
       const bcCount = await migrateTable(staging, prod, 'beneficiary_conditions', beneficiaryConditions, { conflictKey: 'id' });
       console.log(`       ✔ beneficiary_conditions (${bcCount})`);
 
-      // 5g. Medical Records
-      const mrCount = await migrateTable(staging, prod, 'medical_records', medicalRecords, { conflictKey: 'id' });
+      const mrCount = await migrateTable(staging, prod, 'medical_records', medicalRecords, {
+        conflictKey: 'id',
+        modifyRow: async (row) => {
+          const copy = { ...row };
+          if (copy.uploadedBy && !allUserIdsSet.has(copy.uploadedBy)) copy.uploadedBy = primaryUser.id;
+          return copy;
+        }
+      });
       console.log(`       ✔ medical_records (${mrCount})`);
 
-      // 5h. Medications
       const medCount = await migrateTable(staging, prod, 'medications', medications, { conflictKey: 'id' });
       console.log(`       ✔ medications (${medCount})`);
 
-      // 5i. Medication Adherence
-      const maCount = await migrateTable(staging, prod, 'medication_adherence', medicationAdherence, { conflictKey: 'id' });
+      const maCount = await migrateTable(staging, prod, 'medication_adherence', medicationAdherence, {
+        conflictKey: 'id',
+        modifyRow: async (row) => {
+          const copy = { ...row };
+          if (copy.recordedBy && !allUserIdsSet.has(copy.recordedBy)) copy.recordedBy = primaryUser.id;
+          return copy;
+        }
+      });
       console.log(`       ✔ medication_adherence (${maCount})`);
 
-      // 5j. Subscriptions
       const sCount = await migrateTable(staging, prod, 'subscriptions', subscriptions, { conflictKey: 'id' });
       console.log(`       ✔ subscriptions (${sCount})`);
 
-      // 5k. Benefit Balances
       const bbCount = await migrateTable(staging, prod, 'subscription_benefit_balances', benefitBalances, { conflictKey: 'id' });
       console.log(`       ✔ subscription_benefit_balances (${bbCount})`);
 
-      // 5l. Benefit Periods
       const bpCount = await migrateTable(staging, prod, 'benefit_periods', benefitPeriods, { conflictKey: 'id' });
       console.log(`       ✔ benefit_periods (${bpCount})`);
 
-      // 5m. Package Hours Logs
       const phlCount = await migrateTable(staging, prod, 'package_hours_logs', packageHoursLogs, { conflictKey: 'id' });
       console.log(`       ✔ package_hours_logs (${phlCount})`);
 
-      // 5n. Payments
       const pCount = await migrateTable(staging, prod, 'payments', payments, { conflictKey: 'id' });
       console.log(`       ✔ payments (${pCount})`);
 
-      // 5o. Invoices
       const iCount = await migrateTable(staging, prod, 'invoices', invoices, { conflictKey: 'id' });
       console.log(`       ✔ invoices (${iCount})`);
 
-      // 5p. Appointments
-      const apptCount = await migrateTable(staging, prod, 'appointments', appointments, { conflictKey: 'id' });
+      const apptCount = await migrateTable(staging, prod, 'appointments', appointments, {
+        conflictKey: 'id',
+        modifyRow: async (row) => {
+          const copy = { ...row };
+          if (copy.bookedBy && !allUserIdsSet.has(copy.bookedBy)) copy.bookedBy = primaryUser.id;
+          if (copy.careCompanionId && !prodCompanionIds.has(copy.careCompanionId)) copy.careCompanionId = null;
+          return copy;
+        }
+      });
       console.log(`       ✔ appointments (${apptCount})`);
 
-      // 5q. Callback Requests
-      const cbCount = await migrateTable(staging, prod, 'callback_requests', callbackRequests, { conflictKey: 'id' });
+      const cbCount = await migrateTable(staging, prod, 'callback_requests', callbackRequests, {
+        conflictKey: 'id',
+        modifyRow: async (row) => {
+          const copy = { ...row };
+          if (copy.assignedTo && !allUserIdsSet.has(copy.assignedTo)) copy.assignedTo = null;
+          return copy;
+        }
+      });
       console.log(`       ✔ callback_requests (${cbCount})`);
 
-      // 5r. Service Requests
-      const srCount = await migrateTable(staging, prod, 'service_requests', serviceRequests, { conflictKey: 'id' });
+      const srCount = await migrateTable(staging, prod, 'service_requests', serviceRequests, {
+        conflictKey: 'id',
+        modifyRow: async (row) => {
+          const copy = { ...row };
+          if (copy.requestedBy && !allUserIdsSet.has(copy.requestedBy)) copy.requestedBy = primaryUser.id;
+          return copy;
+        }
+      });
       console.log(`       ✔ service_requests (${srCount})`);
 
-      // 5s. Vital Configs, Readings, Alerts
-      const vcCount = await migrateTable(staging, prod, 'beneficiary_vital_configs', vitalConfigs, { conflictKey: 'id' });
-      const vrCount = await migrateTable(staging, prod, 'vital_readings', vitalReadings, { conflictKey: 'id' });
-      const vaCount = await migrateTable(staging, prod, 'vital_alerts', vitalAlerts, { conflictKey: 'id' });
+      const vcCount = await migrateTable(staging, prod, 'beneficiary_vital_configs', vitalConfigs, {
+        conflictKey: 'id',
+        modifyRow: async (row) => {
+          const copy = { ...row };
+          if (copy.selectedBySubscriberId && !allUserIdsSet.has(copy.selectedBySubscriberId)) {
+            copy.selectedBySubscriberId = primaryUser.id;
+          }
+          return copy;
+        }
+      });
+      const vrCount = await migrateTable(staging, prod, 'vital_readings', vitalReadings, {
+        conflictKey: 'id',
+        modifyRow: async (row) => {
+          const copy = { ...row };
+          if (copy.capturedBy && !allUserIdsSet.has(copy.capturedBy)) copy.capturedBy = primaryUser.id;
+          return copy;
+        }
+      });
+      const vaCount = await migrateTable(staging, prod, 'vital_alerts', vitalAlerts, {
+        conflictKey: 'id',
+        modifyRow: async (row) => {
+          const copy = { ...row };
+          if (copy.acknowledgedBy && !allUserIdsSet.has(copy.acknowledgedBy)) copy.acknowledgedBy = null;
+          return copy;
+        }
+      });
       console.log(`       ✔ vitals: ${vcCount} configs, ${vrCount} readings, ${vaCount} alerts`);
 
-      // 5t. OTPs
       const otpCount = await migrateTable(staging, prod, 'otps', otps, { conflictKey: 'id' });
       console.log(`       ✔ otps (${otpCount})`);
 
