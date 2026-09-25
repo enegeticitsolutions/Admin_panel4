@@ -14,6 +14,7 @@ import { AddressPicker, SelectedAddress } from '@/components/ui/AddressPicker';
 import { getAccurateLocation, getCurrentLocation } from '@/services/location';
 import { serviceabilityService, ServiceabilityResult } from '@/services/serviceability.service';
 import { LegalConsentModal } from '@/components/shared/LegalConsentModal';
+import { CountryPickerModal } from '@/components/ui/CountryPickerModal';
 
 export default function RegisterScreen() {
     const { push, replace } = useNavigationStack();
@@ -47,6 +48,9 @@ export default function RegisterScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const [regions, setRegions] = useState<any[]>([]);
     const [showRegionModal, setShowRegionModal] = useState(false);
+    
+    const [countryCode, setCountryCode] = useState("91");
+    const [showCountryPicker, setShowCountryPicker] = useState(false);
 
     useEffect(() => {
         const fetchRegions = async () => {
@@ -190,7 +194,7 @@ export default function RegisterScreen() {
             const response = await fetch(`${API_URL}/auth/send-otp`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ phone: `+91${cleanPhone}` }),
+                body: JSON.stringify({ phone: `+${countryCode}${cleanPhone}` }),
             });
             const data = await response.json();
             if (data.success) {
@@ -252,7 +256,7 @@ export default function RegisterScreen() {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        phone: `+91${cleanPhone}`,
+                        phone: `+${countryCode}${cleanPhone}`,
                         name: form.name,
                         email: form.email,
                         age: ageNum,
@@ -294,7 +298,7 @@ export default function RegisterScreen() {
                 const response = await fetch(`${API_URL}/auth/send-otp`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ phone: `+91${cleanPhone}` }),
+                    body: JSON.stringify({ phone: `+${countryCode}${cleanPhone}` }),
                 });
 
                 const data = await response.json();
@@ -331,7 +335,7 @@ export default function RegisterScreen() {
             const verifyRes = await fetch(`${API_URL}/auth/verify-otp`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ phone: `+91${cleanPhone}`, otp: enteredOtp }),
+                body: JSON.stringify({ phone: `+${countryCode}${cleanPhone}`, otp: enteredOtp }),
             });
 
             const verifyData = await verifyRes.json();
@@ -347,7 +351,7 @@ export default function RegisterScreen() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    phone: `+91${cleanPhone}`,
+                    phone: `+${countryCode}${cleanPhone}`,
                     name: form.name,
                     email: form.email,
                     age: ageNum,
@@ -452,15 +456,20 @@ export default function RegisterScreen() {
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.label}>Phone Number *</Text>
                                     <View style={styles.phoneRow}>
-                                        <View style={styles.countryCodeBox}>
-                                            <Text style={styles.countryCodeText}>+91</Text>
-                                        </View>
+                                        <TouchableOpacity 
+                                            style={[styles.countryCodeBox, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+                                            onPress={() => setShowCountryPicker(true)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Text style={styles.countryCodeText}>+{countryCode}</Text>
+                                            <Ionicons name="chevron-down" size={14} color="#6B7280" style={{ marginLeft: 4 }} />
+                                        </TouchableOpacity>
                                         <TextInput
                                             style={styles.phoneInput}
-                                            placeholder="Enter 10-digit number"
+                                            placeholder="Enter mobile number"
                                             placeholderTextColor="#9CA3AF"
                                             keyboardType="numeric"
-                                            maxLength={10}
+                                            maxLength={15}
                                             value={form.phone}
                                             onChangeText={(text) => setForm({ ...form, phone: text.replace(/\D/g, '') })}
                                             editable={!isLoading}
@@ -750,7 +759,7 @@ export default function RegisterScreen() {
                                 <Text style={styles.title}>Enter Code</Text>
                                 <Text style={styles.subtitle}>
                                     We have sent a 6-digit verification code to{"\n"}
-                                    <Text style={{ fontWeight: '600', color: '#111827' }}>+91 {form.phone}</Text>
+                                    <Text style={{ fontWeight: '600', color: '#111827' }}>+{countryCode} {form.phone}</Text>
                                 </Text>
                             </View>
 
@@ -825,6 +834,13 @@ export default function RegisterScreen() {
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
+            
+            <CountryPickerModal
+                visible={showCountryPicker}
+                onClose={() => setShowCountryPicker(false)}
+                selectedCode={countryCode}
+                onSelect={setCountryCode}
+            />
 
             {/* ── Address & Map Picker Modal ── */}
             <Modal visible={showAddressPicker} animationType="slide" transparent={false}>
@@ -942,7 +958,7 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     countryCodeBox: {
-        width: 64,
+        width: 76,
         height: 50,
         borderRadius: 8,
         borderWidth: 1,

@@ -32,10 +32,11 @@ export const checkWebsiteRoleAccess = (user) => {
 /**
  * Format 10-digit phone to 91XXXXXXXXXX or +91XXXXXXXXXX
  */
-export const formatPhone = (phoneRaw, prefixPlus = true) => {
-  const clean = String(phoneRaw || '').replace(/\D/g, '').slice(-10);
+export const formatPhone = (countryCode, phoneRaw, prefixPlus = true) => {
+  const clean = String(phoneRaw || '').replace(/\D/g, '');
   if (!clean) return '';
-  return prefixPlus ? `+91${clean}` : `91${clean}`;
+  const prefix = String(countryCode || '91').replace('+', '');
+  return prefixPlus ? `+${prefix}${clean}` : `${prefix}${clean}`;
 };
 
 /**
@@ -89,8 +90,8 @@ const secureFetch = async (url, options = {}) => {
  * 1. Send OTP to user phone
  * Endpoint: POST /api/auth/send-otp
  */
-export const sendOtp = async (phoneRaw, turnstileToken) => {
-  const phone = formatPhone(phoneRaw, false); // "919999999999"
+export const sendOtp = async (countryCode, phoneRaw, turnstileToken) => {
+  const phone = formatPhone(countryCode, phoneRaw, false); // e.g. "919999999999"
   const response = await secureFetch(`${API_BASE}/auth/send-otp`, {
     method: 'POST',
     body: JSON.stringify({ phone, ...(turnstileToken ? { turnstileToken } : {}) }),
@@ -106,8 +107,8 @@ export const sendOtp = async (phoneRaw, turnstileToken) => {
  * 2. Verify OTP entered by user
  * Endpoint: POST /api/auth/verify-otp
  */
-export const verifyOtp = async (phoneRaw, otpCode) => {
-  const phone = formatPhone(phoneRaw, true); // "+919999999999"
+export const verifyOtp = async (countryCode, phoneRaw, otpCode) => {
+  const phone = formatPhone(countryCode, phoneRaw, true); // e.g. "+919999999999"
   const response = await secureFetch(`${API_BASE}/auth/verify-otp`, {
     method: 'POST',
     body: JSON.stringify({ phone, otp: otpCode }),
@@ -127,8 +128,8 @@ export const verifyOtp = async (phoneRaw, otpCode) => {
  * 3. Register user with OTP verification data
  * Endpoint: POST /api/auth/register-otp
  */
-export const registerWithOtp = async ({ phoneRaw, name, age, email, pincode, location, latitude, longitude }) => {
-  const phone = formatPhone(phoneRaw, true); // "+919999999999"
+export const registerWithOtp = async ({ countryCode, phoneRaw, name, age, email, pincode, location, latitude, longitude }) => {
+  const phone = formatPhone(countryCode, phoneRaw, true); // e.g. "+919999999999"
   const response = await secureFetch(`${API_BASE}/auth/register-otp`, {
     method: 'POST',
     body: JSON.stringify({
@@ -159,8 +160,8 @@ export const registerUser = registerWithOtp;
  * 4. Login with phone & password
  * Endpoint: POST /api/auth/login-password
  */
-export const loginWithPassword = async ({ phoneRaw, password, turnstileToken }) => {
-  const phone = formatPhone(phoneRaw, true); // "+919999999999"
+export const loginWithPassword = async ({ countryCode, phoneRaw, password, turnstileToken }) => {
+  const phone = formatPhone(countryCode, phoneRaw, true); // "+919999999999"
   const response = await secureFetch(`${API_BASE}/auth/login-password`, {
     method: 'POST',
     body: JSON.stringify({ phone, password, ...(turnstileToken ? { turnstileToken } : {}) }),
