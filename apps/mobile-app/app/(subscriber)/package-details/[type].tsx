@@ -100,18 +100,18 @@ export default function PackageDetailScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            {/* Transparent Header Over Gradient */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => safeBack()} style={styles.headerBtn}>
-                    <Ionicons name="arrow-back" size={scale(24)} color="#FFFFFF" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Plan Details</Text>
-                <View style={{ width: scale(40) }} />
-            </View>
-
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: scale(100) }}>
                 {/* Top Section with Gradient */}
                 <LinearGradient colors={['#F97316', '#EA580C']} style={styles.heroSection}>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={() => safeBack()} style={styles.headerBtn}>
+                            <Ionicons name="arrow-back" size={scale(24)} color="#FFFFFF" />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>{pkg.name}</Text>
+                        <View style={{ width: scale(40) }} />
+                    </View>
+
                     <View style={styles.heroContent}>
                         <View style={styles.badgeWrapper}>
                             <View style={styles.typeBadge}>
@@ -123,10 +123,10 @@ export default function PackageDetailScreen() {
                         {/* Cycle-aware total price */}
                         <View style={styles.priceRow}>
                             <Text style={styles.currency}>₹</Text>
-                            <Text style={styles.price}>{totalPrice.toLocaleString()}</Text>
+                            <Text style={styles.price}>{monthlyRate.toLocaleString()}<Text style={{ fontSize: scale(24), fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>/mo</Text></Text>
                         </View>
-                        <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: scale(13), marginBottom: scale(6) }}>
-                            ₹{monthlyRate.toLocaleString()}/mo · {cycleLabel}
+                        <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: scale(15), fontWeight: '600', marginBottom: scale(6) }}>
+                            ₹{totalPrice.toLocaleString()} total for {cycleLabel}
                         </Text>
 
                         {/* Savings row */}
@@ -273,14 +273,12 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#FFFFFF' },
     centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: {
-        position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20,
-        left: 0, right: 0, zIndex: 10,
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: scale(20)
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: scale(20), paddingTop: scale(10), paddingBottom: scale(20)
     },
     headerBtn: { width: scale(40), height: scale(40), borderRadius: scale(20), backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: scale(18), fontWeight: '700', color: '#FFFFFF' },
 
-    heroSection: { paddingTop: scale(100), paddingBottom: scale(40), borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+    heroSection: { paddingTop: 0, paddingBottom: scale(40), borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
     heroContent: { alignItems: 'center', paddingHorizontal: scale(30) },
     badgeWrapper: { marginBottom: scale(12) },
     typeBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: scale(16), paddingVertical: scale(6), borderRadius: scale(12) },

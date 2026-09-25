@@ -48,4 +48,18 @@ router.get('/check-pincode', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/public/zones/regions
+router.get('/regions', async (req: Request, res: Response) => {
+  try {
+    const regions = await regionService.getActiveRegions();
+    return res.json({
+      success: true,
+      data: regions,
+    });
+  } catch (error: any) {
+    console.error('Error fetching regions:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch regions.' });
+  }
+});
+
 export default router;
