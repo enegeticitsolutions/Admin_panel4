@@ -166,11 +166,17 @@ export default function AccountPage({ user, token, onLogout, onNavigateToPlans, 
                           {pkgName}
                         </div>
 
-                        {(startDate || endDate) && (
-                          <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "4px" }}>
-                            {startDate && <span>From {startDate}</span>}
-                            {startDate && endDate && <span> · </span>}
-                            {endDate && <span>Expires {endDate}</span>}
+                        {isLinked ? (
+                          (startDate || endDate) && (
+                            <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "4px" }}>
+                              {startDate && <span>From {startDate}</span>}
+                              {startDate && endDate && <span> · </span>}
+                              {endDate && <span>Expires {endDate}</span>}
+                            </div>
+                          )
+                        ) : (
+                          <div style={{ fontSize: "0.82rem", color: "#c2410c", marginTop: "4px", fontWeight: "600" }}>
+                            ⏳ Validity activates once assigned to a beneficiary
                           </div>
                         )}
                       </div>

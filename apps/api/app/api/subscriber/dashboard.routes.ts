@@ -138,24 +138,26 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
     });
 
     // Derive active and queued subscriptions in memory (eliminating redundant DB roundtrip)
+    // NOTE: Unassigned subscriptions (beneficiaryId = null) never expire until assigned to a beneficiary
     const allActiveSubscriptions = allUserSubscriptions.filter((s: any) =>
       s.isActive &&
       !s.isQueued &&
       s.cancellationNote !== 'QUEUED' &&
-      (!s.endDate || new Date(s.endDate) > now)
+      (!s.beneficiaryId || !s.endDate || new Date(s.endDate) > now)
     );
 
     const queuedSubscriptions = allUserSubscriptions.filter((s: any) =>
       (s.isQueued === true || s.cancellationNote === 'QUEUED') && s.beneficiaryId
     );
 
-    // Auto-deactivate any expired subscriptions in the background only if expired active ones are found
-    const hasExpiredActive = allUserSubscriptions.some((s: any) => s.isActive && new Date(s.endDate) <= now);
+    // Auto-deactivate any expired subscriptions in the background only for assigned subscriptions
+    const hasExpiredActive = allUserSubscriptions.some((s: any) => s.isActive && s.beneficiaryId && new Date(s.endDate) <= now);
     if (hasExpiredActive) {
       prisma.subscription.updateMany({
         where: {
           subscriberId: userId,
           isActive: true,
+          beneficiaryId: { not: null },
           endDate: { lte: now }
         },
         data: {

@@ -71,11 +71,15 @@ export default function UserAccountModal({ isOpen, onClose, user, token, onLogou
                   {activeSubscription.status?.toUpperCase() || "ACTIVE"}
                 </span>
               </div>
-              {activeSubscription.expiresAt && (
+              {activeSubscription.beneficiaryId && activeSubscription.expiresAt ? (
                 <div style={{ fontSize: "0.8rem", color: "#6b7280", marginTop: "4px" }}>
                   Valid until: {new Date(activeSubscription.expiresAt).toLocaleDateString("en-IN")}
                 </div>
-              )}
+              ) : !activeSubscription.beneficiaryId ? (
+                <div style={{ fontSize: "0.8rem", color: "#c2410c", marginTop: "4px", fontWeight: "600" }}>
+                  ⏳ Validity activates once assigned to a beneficiary
+                </div>
+              ) : null}
             </div>
           ) : (
             <div style={{ fontSize: "0.85rem", color: "#4b5563" }}>
