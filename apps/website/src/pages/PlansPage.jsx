@@ -210,15 +210,15 @@ export default function PlansPage({
                 <div className="hours-row__header">
                   <strong className="hours-row__name">{name}</strong>
                   <span className="hours-row__ratio">
-                    <strong>{used}</strong> / {total} hrs used
+                    <strong>{used}</strong> / {total} hours used
                   </span>
                 </div>
                 <div className="hours-bar">
                   <span style={{ width: `${(Number(used) / Number(total)) * 100}%`, background: color }} />
                 </div>
                 <div className="hours-row__footer">
-                  <span className="hours-row__used">{used} hrs used</span>
-                  <em className="hours-row__remaining" style={{ color }}>{remaining} hrs remaining</em>
+                  <span className="hours-row__used">{used} hours used</span>
+                  <em className="hours-row__remaining" style={{ color }}>{remaining} hours remaining</em>
                 </div>
               </div>
             ))}
@@ -396,11 +396,11 @@ export default function PlansPage({
                           if (matchedPb.isUnlimited) {
                             displayVal = "Unlimited";
                           } else if (matchedPb.unitsPeriod === "yearly") {
-                            displayVal = `${matchedPb.unitsIncluded}/yr`;
+                            displayVal = `${matchedPb.unitsIncluded}/year`;
                           } else if (matchedPb.unitsPeriod === "one_time") {
                             displayVal = `${matchedPb.unitsIncluded} (Once)`;
                           } else {
-                            displayVal = `${matchedPb.unitsIncluded}/mo`;
+                            displayVal = `${matchedPb.unitsIncluded}/month`;
                           }
                         }
 

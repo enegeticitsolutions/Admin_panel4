@@ -59,11 +59,11 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, onSelectPackag
         if (pb.isUnlimited) {
           displayText = `24/7 Unlimited ${benefitName}`;
         } else if (period === "yearly") {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "uses"}/yr ${benefitName}`;
+          displayText = `${pb.unitsIncluded} ${rawLabel || "uses"}/year ${benefitName}`;
         } else if (period === "one_time") {
           displayText = `${pb.unitsIncluded} ${rawLabel || "session"} ${benefitName}`;
         } else {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "visits"}/mo ${benefitName}`;
+          displayText = `${pb.unitsIncluded} ${rawLabel || "visits"}/month ${benefitName}`;
         }
 
         list.push({
@@ -143,7 +143,7 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, onSelectPackag
               <span className="plan-modal-subtitle-dot">·</span>
               <span className="plan-modal-subtitle-cycle">{durationText}</span>
               <span className="plan-modal-subtitle-rate">
-                (₹{monthlyRate.toLocaleString("en-IN")}/mo)
+                (₹{monthlyRate.toLocaleString("en-IN")}/month)
               </span>
               {savings > 0 && (
                 <span className="plan-modal-subtitle-savings">

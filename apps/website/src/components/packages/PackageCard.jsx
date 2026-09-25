@@ -42,20 +42,20 @@ export default function PackageCard({
   const durNum = parseInt(selectedCycle, 10) || 3;
   const displayPrice = getPackageDisplayPrice(plan, selectedCycle);
   let cycleLabel = "billed monthly";
-  let cycleSubtext = `₹${base.toLocaleString("en-IN")}/mo`;
+  let cycleSubtext = `₹${base.toLocaleString("en-IN")}/month`;
 
   if (durNum === 3) {
     const monthly = Math.round(displayPrice / 3);
     cycleLabel = "billed for 3 months";
-    cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/mo`;
+    cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/month`;
   } else if (durNum === 6) {
     const monthly = Math.round(displayPrice / 6);
     cycleLabel = "billed for 6 months";
-    cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/mo`;
+    cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/month`;
   } else if (durNum === 12) {
     const monthly = Math.round(displayPrice / 12);
     cycleLabel = "billed annually";
-    cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/mo`;
+    cycleSubtext = `₹${monthly.toLocaleString("en-IN")}/month`;
   }
 
   const fullTermCost = base * durNum;
@@ -63,7 +63,7 @@ export default function PackageCard({
 
   // Standardize top units (hours or visits) so every card has a clean, consistent top stat
   let topHighlightNum = plan.hoursPerMonth || plan.totalHours || plan.hours;
-  let topHighlightUnit = "hrs/mo";
+  let topHighlightUnit = "hours/month";
 
   if (!topHighlightNum && plan.visitsPerWeek) {
     topHighlightNum = plan.visitsPerWeek;
@@ -78,7 +78,7 @@ export default function PackageCard({
     );
     if (hourBenefit) {
       topHighlightNum = hourBenefit.unitsIncluded;
-      topHighlightUnit = "hrs/mo";
+      topHighlightUnit = "hours/month";
     } else {
       const visitBenefit = plan.packageBenefits.find(
         (pb) =>
@@ -87,12 +87,12 @@ export default function PackageCard({
       );
       if (visitBenefit) {
         topHighlightNum = visitBenefit.unitsIncluded;
-        topHighlightUnit = "visits/mo";
+        topHighlightUnit = "visits/month";
       } else {
         const first = plan.packageBenefits[0];
         topHighlightNum = first?.unitsIncluded || 1;
         const rawUnit = (first?.benefit?.unitLabel || "visit").replace(/^per\s+/i, "").trim();
-        topHighlightUnit = `${rawUnit}s/mo`;
+        topHighlightUnit = `${rawUnit}s/month`;
       }
     }
   }
@@ -129,11 +129,11 @@ export default function PackageCard({
         if (pb.isUnlimited) {
           displayText = `24/7 Unlimited ${benefitName}`;
         } else if (period === "yearly") {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "uses"}/yr ${benefitName}`;
+          displayText = `${pb.unitsIncluded} ${rawLabel || "uses"}/year ${benefitName}`;
         } else if (period === "one_time") {
           displayText = `${pb.unitsIncluded} ${rawLabel || "session"} ${benefitName}`;
         } else {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "visits"}/mo ${benefitName}`;
+          displayText = `${pb.unitsIncluded} ${rawLabel || "visits"}/month ${benefitName}`;
         }
 
         list.push({

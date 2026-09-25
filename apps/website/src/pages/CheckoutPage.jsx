@@ -439,7 +439,7 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
 
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "0.95rem" }}>
                   <span style={{ color: "#64748b" }}>{pkg.name}</span>
-                  <span style={{ fontWeight: "700", color: "#0f172a" }}>₹{baseMonthlyPrice.toLocaleString("en-IN")}/mo</span>
+                  <span style={{ fontWeight: "700", color: "#0f172a" }}>₹{baseMonthlyPrice.toLocaleString("en-IN")}/month</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", fontSize: "0.9rem" }}>
                   <span style={{ color: "#64748b" }}>Duration</span>
@@ -525,7 +525,7 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
                         {serverPricing.durationDiscount > 0 && (
                           <tr style={{ color: "#16a34a" }}>
                             <td colSpan={4} style={{ padding: "6px 10px", fontWeight: "600" }}>
-                              Tenure Discount ({serverPricing.durationDiscountPct}% off for {serverPricing.durationMonths} mo):
+                              Tenure Discount ({serverPricing.durationDiscountPct}% off for {serverPricing.durationMonths} {serverPricing.durationMonths === 1 ? "month" : "months"}):
                             </td>
                             <td style={{ padding: "6px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>
                               - ₹{serverPricing.durationDiscount?.toLocaleString("en-IN")}
