@@ -79,8 +79,8 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
     const [supportModalVisible, setSupportModalVisible] = useState(false);
 
     return (
-        <Modal 
-            visible={isOpen} 
+        <>
+            <Modal visible={isOpen} 
             transparent 
             animationType="none" 
             onRequestClose={onClose}
@@ -323,13 +323,15 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
                 </View>
             </Animated.View>
 
+            </Modal>
+
             {/* Care Support Modal */}
             <CareSupportModal
                 visible={supportModalVisible}
                 onClose={() => setSupportModalVisible(false)}
                 emailSubject="MaiHoonNa Subscriber Support"
             />
-        </Modal>
+        </>
     );
 };
 

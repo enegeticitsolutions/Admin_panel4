@@ -17,6 +17,8 @@ export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const fetchNotifications = async () => {
     try {
@@ -139,6 +141,27 @@ export default function NotificationsScreen() {
     }
   };
 
+  
+  const handleDeleteSelected = async () => {
+    const idsToDelete = Array.from(selectedIds);
+    setNotifications(prev => prev.filter(n => !selectedIds.has(n.id)));
+    setIsSelectionMode(false);
+    setSelectedIds(new Set());
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        await Promise.all(idsToDelete.map(id => {
+          return fetch(`${API_URL}/notifications/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+        }));
+      }
+    } catch (e) {
+      console.log('Error deleting selected notifications:', e);
+    }
+  };
+
   const confirmClearAll = () => {
     if (notifications.length === 0) return;
     Alert.alert(
@@ -203,16 +226,35 @@ export default function NotificationsScreen() {
         style={[styles.notificationCard, !item.isRead && styles.unreadCard]}
         activeOpacity={0.75}
         onPress={() => {
-          if (!item.isRead) markAsRead(item.id);
-          if (targetScreen) {
-            try {
-              router.push(targetScreen as any);
-            } catch (e) {
-              console.log('Error navigating from notification:', e);
+          if (isSelectionMode) {
+            const newSelected = new Set(selectedIds);
+            if (newSelected.has(item.id)) {
+              newSelected.delete(item.id);
+            } else {
+              newSelected.add(item.id);
+            }
+            setSelectedIds(newSelected);
+          } else {
+            if (!item.isRead) markAsRead(item.id);
+            if (targetScreen) {
+              try {
+                router.push(targetScreen as any);
+              } catch (e) {
+                console.log('Error navigating from notification:', e);
+              }
             }
           }
         }}
       >
+        {isSelectionMode && (
+          <View style={{ justifyContent: 'center', marginRight: 12 }}>
+            <Ionicons 
+              name={selectedIds.has(item.id) ? "checkbox" : "square-outline"} 
+              size={24} 
+              color={selectedIds.has(item.id) ? DEEP_ORANGE : "#9CA3AF"} 
+            />
+          </View>
+        )}
         <View style={[styles.iconContainer, { backgroundColor: iconColor + '18' }]}>
           <Ionicons name={getIconForType(item.type, category) as any} size={22} color={iconColor} />
         </View>
@@ -264,20 +306,43 @@ export default function NotificationsScreen() {
           )}
         </View>
         <View style={styles.headerActions}>
-          {unreadCount > 0 && (
-            <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead} activeOpacity={0.7}>
-              <Text style={styles.markAllText}>Mark all read</Text>
-            </TouchableOpacity>
-          )}
-          {notifications.length > 0 && (
-            <TouchableOpacity 
-              style={styles.clearAllButton} 
-              onPress={confirmClearAll} 
-              activeOpacity={0.7}
-              accessibilityLabel="Clear all notifications"
-            >
-              <Ionicons name="trash-outline" size={17} color="#EF4444" />
-            </TouchableOpacity>
+          {isSelectionMode ? (
+            <>
+              <TouchableOpacity onPress={() => setIsSelectionMode(false)}>
+                <Text style={[styles.markAllText, { color: '#6B7280', marginRight: 12 }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => {
+                if (selectedIds.size === notifications.length) {
+                  setSelectedIds(new Set());
+                } else {
+                  setSelectedIds(new Set(notifications.map(n => n.id)));
+                }
+              }}>
+                <Text style={[styles.markAllText, { marginRight: 12 }]}>
+                  {selectedIds.size === notifications.length ? 'Deselect All' : 'Select All'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleDeleteSelected} disabled={selectedIds.size === 0}>
+                <Ionicons name="trash-outline" size={20} color={selectedIds.size > 0 ? "#EF4444" : "#FCA5A5"} />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {unreadCount > 0 && (
+                <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead} activeOpacity={0.7}>
+                  <Text style={styles.markAllText}>Mark all read</Text>
+                </TouchableOpacity>
+              )}
+              {notifications.length > 0 && (
+                <TouchableOpacity 
+                  style={styles.clearAllButton} 
+                  onPress={() => setIsSelectionMode(true)} 
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="trash-outline" size={17} color="#EF4444" />
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
       </View>
