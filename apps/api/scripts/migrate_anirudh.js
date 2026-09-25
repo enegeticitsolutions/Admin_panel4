@@ -77,15 +77,27 @@ async function migrateTable(stagingClient, prodClient, tableName, rows, options 
       sql = `INSERT INTO "${tableName}" (${cols}) VALUES (${placeholders}) ON CONFLICT DO NOTHING;`;
     }
 
-    // Use SAVEPOINT per row so a foreign key issue on a single log never aborts the overall transaction
-    const spName = `sp_${tableName.substring(0, 10)}_${count}`;
+    const spName = `sp_${tableName.substring(0, 8)}_${count}`;
+    let savepointActive = false;
+    if (prodClient.inTransaction) {
+      try {
+        await prodClient.query(`SAVEPOINT ${spName}`);
+        savepointActive = true;
+      } catch (e) {
+        savepointActive = false;
+      }
+    }
+
     try {
-      await prodClient.query(`SAVEPOINT ${spName}`);
       await prodClient.query(sql, vals);
-      await prodClient.query(`RELEASE SAVEPOINT ${spName}`);
+      if (savepointActive) {
+        try { await prodClient.query(`RELEASE SAVEPOINT ${spName}`); } catch (e) {}
+      }
       count++;
     } catch (err) {
-      await prodClient.query(`ROLLBACK TO SAVEPOINT ${spName}`);
+      if (savepointActive) {
+        try { await prodClient.query(`ROLLBACK TO SAVEPOINT ${spName}`); } catch (e) {}
+      }
       console.warn(`  [WARN] ${tableName} row skipped: ${err.message}`);
     }
   }
@@ -94,12 +106,13 @@ async function migrateTable(stagingClient, prodClient, tableName, rows, options 
 
 async function run() {
   console.log('='.repeat(70));
-  console.log('  MaiHoonNa Data Migration: Staging -> Production (v2 with Savepoints)');
+  console.log('  MaiHoonNa Data Migration: Staging -> Production (v3 Safe)');
   console.log('  Target Profile: Anirudh (Phone: 8585858585)');
   console.log('='.repeat(70));
 
   const staging = new Client({ connectionString: STAGING_URL, connectionTimeoutMillis: 10000 });
   const prod = new Client({ connectionString: PROD_URL, connectionTimeoutMillis: 10000 });
+  prod.inTransaction = false;
 
   try {
     console.log('\n[*] Connecting to Staging DB...');
@@ -297,89 +310,7 @@ async function run() {
     console.log(`       - Vital Configs & Logs:   ${vitalConfigs.length + vitalReadings.length}`);
     console.log(`       - OTPs:                   ${otps.length}`);
 
-    // 4. Resolve Catalog References
-    console.log('\n[4/6] Verifying Catalog References in Production...');
-
-    if (beneficiaryConditions.length > 0) {
-      const condIds = [...new Set(beneficiaryConditions.map(c => c.conditionId))];
-      for (const condId of condIds) {
-        const check = await prod.query(`SELECT id FROM medical_conditions WHERE id = $1`, [condId]);
-        if (check.rows.length === 0) {
-          const condRow = (await staging.query(`SELECT * FROM medical_conditions WHERE id = $1`, [condId])).rows[0];
-          if (condRow) {
-            await migrateTable(staging, prod, 'medical_conditions', [condRow], { conflictKey: 'id' });
-            console.log(`       + Synced missing medical_condition: "${condRow.name}"`);
-          }
-        }
-      }
-    }
-
-    if (subscriptions.length > 0) {
-      const pkgTypes = [...new Set(subscriptions.map(s => s.packageType).filter(Boolean))];
-      for (const pkgType of pkgTypes) {
-        const check = await prod.query(`SELECT type FROM subscription_packages WHERE type = $1`, [pkgType]);
-        if (check.rows.length === 0) {
-          const pkgRow = (await staging.query(`SELECT * FROM subscription_packages WHERE type = $1`, [pkgType])).rows[0];
-          if (pkgRow) {
-            await migrateTable(staging, prod, 'subscription_packages', [pkgRow], { conflictKey: 'type' });
-            console.log(`       + Synced missing subscription_package: "${pkgRow.type}"`);
-          }
-        }
-      }
-
-      const versionIds = [...new Set(subscriptions.map(s => s.packageVersionId).filter(Boolean))];
-      for (const verId of versionIds) {
-        const check = await prod.query(`SELECT id FROM package_versions WHERE id = $1`, [verId]);
-        if (check.rows.length === 0) {
-          const verRow = (await staging.query(`SELECT * FROM package_versions WHERE id = $1`, [verId])).rows[0];
-          if (verRow) {
-            await migrateTable(staging, prod, 'package_versions', [verRow], { conflictKey: 'id' });
-            console.log(`       + Synced missing package_version: "${verRow.id}"`);
-          }
-        }
-      }
-    }
-
-    if (benefitBalances.length > 0) {
-      const benefitIds = [...new Set(benefitBalances.map(b => b.benefitId).filter(Boolean))];
-      for (const bId of benefitIds) {
-        const check = await prod.query(`SELECT id FROM benefits WHERE id = $1`, [bId]);
-        if (check.rows.length === 0) {
-          const bRow = (await staging.query(`SELECT * FROM benefits WHERE id = $1`, [bId])).rows[0];
-          if (bRow) {
-            if (bRow.benefitTypeId) {
-              const typeCheck = await prod.query(`SELECT id FROM benefit_types WHERE id = $1`, [bRow.benefitTypeId]);
-              if (typeCheck.rows.length === 0) {
-                const typeRow = (await staging.query(`SELECT * FROM benefit_types WHERE id = $1`, [bRow.benefitTypeId])).rows[0];
-                if (typeRow) await migrateTable(staging, prod, 'benefit_types', [typeRow], { conflictKey: 'id' });
-              }
-            }
-            await migrateTable(staging, prod, 'benefits', [bRow], { conflictKey: 'id' });
-            console.log(`       + Synced missing benefit: "${bRow.name}"`);
-          }
-        }
-      }
-    }
-
-    if (vitalConfigs.length > 0 || vitalReadings.length > 0) {
-      const vDefIds = [
-        ...new Set([
-          ...vitalConfigs.map(c => c.vitalDefinitionId),
-          ...vitalReadings.map(r => r.vitalDefinitionId)
-        ].filter(Boolean))
-      ];
-      for (const vdId of vDefIds) {
-        const check = await prod.query(`SELECT id FROM vital_definitions WHERE id = $1`, [vdId]);
-        if (check.rows.length === 0) {
-          const vdRow = (await staging.query(`SELECT * FROM vital_definitions WHERE id = $1`, [vdId])).rows[0];
-          if (vdRow) {
-            await migrateTable(staging, prod, 'vital_definitions', [vdRow], { conflictKey: 'id' });
-            console.log(`       + Synced missing vital_definition: "${vdRow.name}"`);
-          }
-        }
-      }
-    }
-
+    // Check CC / Teams / Zones in production
     let prodCompanionIds = new Set();
     let prodTeamIds = new Set();
     let prodZoneIds = new Set();
@@ -411,11 +342,97 @@ async function run() {
 
     const allUserIdsSet = new Set(allUsers.map(u => u.id));
 
-    // 5. Execute Migration in Transaction
-    console.log('\n[5/6] Writing data into Production DB (Safe Transaction)...');
+    // START SINGLE TRANSACTION HERE
     await prod.query('BEGIN');
+    prod.inTransaction = true;
 
     try {
+      // 4. Resolve Catalog References
+      console.log('\n[4/6] Verifying Catalog References in Production...');
+
+      if (beneficiaryConditions.length > 0) {
+        const condIds = [...new Set(beneficiaryConditions.map(c => c.conditionId))];
+        for (const condId of condIds) {
+          const check = await prod.query(`SELECT id FROM medical_conditions WHERE id = $1`, [condId]);
+          if (check.rows.length === 0) {
+            const condRow = (await staging.query(`SELECT * FROM medical_conditions WHERE id = $1`, [condId])).rows[0];
+            if (condRow) {
+              await migrateTable(staging, prod, 'medical_conditions', [condRow], { conflictKey: 'id' });
+              console.log(`       + Synced missing medical_condition: "${condRow.name}"`);
+            }
+          }
+        }
+      }
+
+      if (subscriptions.length > 0) {
+        const pkgTypes = [...new Set(subscriptions.map(s => s.packageType).filter(Boolean))];
+        for (const pkgType of pkgTypes) {
+          const check = await prod.query(`SELECT type FROM subscription_packages WHERE type = $1`, [pkgType]);
+          if (check.rows.length === 0) {
+            const pkgRow = (await staging.query(`SELECT * FROM subscription_packages WHERE type = $1`, [pkgType])).rows[0];
+            if (pkgRow) {
+              await migrateTable(staging, prod, 'subscription_packages', [pkgRow], { conflictKey: 'type' });
+              console.log(`       + Synced missing subscription_package: "${pkgRow.type}"`);
+            }
+          }
+        }
+
+        const versionIds = [...new Set(subscriptions.map(s => s.packageVersionId).filter(Boolean))];
+        for (const verId of versionIds) {
+          const check = await prod.query(`SELECT id FROM package_versions WHERE id = $1`, [verId]);
+          if (check.rows.length === 0) {
+            const verRow = (await staging.query(`SELECT * FROM package_versions WHERE id = $1`, [verId])).rows[0];
+            if (verRow) {
+              await migrateTable(staging, prod, 'package_versions', [verRow], { conflictKey: 'id' });
+              console.log(`       + Synced missing package_version: "${verRow.id}"`);
+            }
+          }
+        }
+      }
+
+      if (benefitBalances.length > 0) {
+        const benefitIds = [...new Set(benefitBalances.map(b => b.benefitId).filter(Boolean))];
+        for (const bId of benefitIds) {
+          const check = await prod.query(`SELECT id FROM benefits WHERE id = $1`, [bId]);
+          if (check.rows.length === 0) {
+            const bRow = (await staging.query(`SELECT * FROM benefits WHERE id = $1`, [bId])).rows[0];
+            if (bRow) {
+              if (bRow.benefitTypeId) {
+                const typeCheck = await prod.query(`SELECT id FROM benefit_types WHERE id = $1`, [bRow.benefitTypeId]);
+                if (typeCheck.rows.length === 0) {
+                  const typeRow = (await staging.query(`SELECT * FROM benefit_types WHERE id = $1`, [bRow.benefitTypeId])).rows[0];
+                  if (typeRow) await migrateTable(staging, prod, 'benefit_types', [typeRow], { conflictKey: 'id' });
+                }
+              }
+              await migrateTable(staging, prod, 'benefits', [bRow], { conflictKey: 'id' });
+              console.log(`       + Synced missing benefit: "${bRow.name}"`);
+            }
+          }
+        }
+      }
+
+      if (vitalConfigs.length > 0 || vitalReadings.length > 0) {
+        const vDefIds = [
+          ...new Set([
+            ...vitalConfigs.map(c => c.vitalDefinitionId),
+            ...vitalReadings.map(r => r.vitalDefinitionId)
+          ].filter(Boolean))
+        ];
+        for (const vdId of vDefIds) {
+          const check = await prod.query(`SELECT id FROM vital_definitions WHERE id = $1`, [vdId]);
+          if (check.rows.length === 0) {
+            const vdRow = (await staging.query(`SELECT * FROM vital_definitions WHERE id = $1`, [vdId])).rows[0];
+            if (vdRow) {
+              await migrateTable(staging, prod, 'vital_definitions', [vdRow], { conflictKey: 'id' });
+              console.log(`       + Synced missing vital_definition: "${vdRow.name}"`);
+            }
+          }
+        }
+      }
+
+      // 5. Execute Migration in Transaction
+      console.log('\n[5/6] Writing data into Production DB (Safe Transaction)...');
+
       const uCount = await migrateTable(staging, prod, 'users', allUsers, { conflictKey: 'id' });
       console.log(`       ✔ users (${uCount})`);
 
@@ -550,9 +567,11 @@ async function run() {
       console.log(`       ✔ otps (${otpCount})`);
 
       await prod.query('COMMIT');
+      prod.inTransaction = false;
       console.log('\n    🎉 [SUCCESS] Transaction committed successfully!');
     } catch (err) {
       await prod.query('ROLLBACK');
+      prod.inTransaction = false;
       console.error('\n    ❌ [ERROR] Transaction failed & rolled back:', err.message);
       throw err;
     }
