@@ -2,7 +2,7 @@
   "expo": {
     "name": "Family Connect",
     "slug": "maihoonna",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "sdkVersion": "54.0.0",
     "orientation": "portrait",
     "updates": {
@@ -13,7 +13,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "12",
+      "buildNumber": "13",
       "config": {
         "googleMapsApiKey": "AIzaSyBF998QC_UD_9qcsL8EYwnhDDD7zF_rgiU"
       },
@@ -72,7 +72,7 @@
     },
     "android": {
       "package": "com.maihoonna.app",
-      "versionCode": 12,
+      "versionCode": 13,
       "allowBackup": false,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
