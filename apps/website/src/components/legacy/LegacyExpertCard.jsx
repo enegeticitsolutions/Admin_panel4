@@ -110,7 +110,7 @@ const LegacyExpertCard = ({
       {/* ── 4. Stats Row (Experience) ── */}
       <div className="mhn-expert-card__stats">
         <div className="mhn-expert-card__stat-item">
-          <div className="mhn-expert-card__stat-value">{experience}yrs</div>
+          <div className="mhn-expert-card__stat-value">{experience} years</div>
           <div className="mhn-expert-card__stat-label">experience</div>
         </div>
       </div>
