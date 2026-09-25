@@ -25,6 +25,7 @@ import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { useAuth } from '@/contexts/AuthContext';
 import { triggerEmergencyAlert, dialEmergencyHelpline, EMERGENCY_HELPLINE_NUMBER } from '@/services/emergencyTrigger';
+import { useCustomAlert } from '@/contexts/CustomAlertContext';
 
 const MOCK_BENEFICIARY_ID = '8340d860-2641-479c-b26a-8b9a71bcec29';
 
@@ -72,6 +73,7 @@ export default function BeneficiaryDashboard() {
     const availableGridWidth = contentWidth - 32; // account for mainContent paddingHorizontal: 16 (16 * 2)
     const actionCardWidth = Math.floor((availableGridWidth - ((numColumns - 1) * 16)) / numColumns);
     useExitOnBack();
+    const { showConfirm, showAlert } = useCustomAlert();
 
     const { availableRoles, switchRole, isSwitchingRole } = useAuth();
     const isDualRole = availableRoles.includes('subscriber') && availableRoles.includes('beneficiary');
@@ -191,9 +193,6 @@ export default function BeneficiaryDashboard() {
             setTriggeringEmergency(true);
             setLocationStatus('locating');
 
-            // Trigger immediate phone call to Emergency Helpline: 01142258823
-            dialEmergencyHelpline().catch(() => {});
-
             try {
                 const result = await triggerEmergencyAlert(
                     'SOS Emergency Support triggered from MaiHoonNa Mobile App',
@@ -204,7 +203,7 @@ export default function BeneficiaryDashboard() {
                 if (result.success) {
                     setEmergencySuccessModal({
                         ticketNumber: result.ticketNumber || 'EMG-ALERT',
-                        message: `Helpline ${result.helplineNumber || '011-42258823'} dialed. Your Subscriber, Care Companions, and Admin Emergency Center have been alerted with your location.`,
+                        message: `Your Subscriber, Care Companions, and Admin Emergency Center have been alerted with your location.`,
                         locationAddress: result.locationAddress,
                         lat: result.lat,
                         lng: result.lng,
@@ -212,12 +211,12 @@ export default function BeneficiaryDashboard() {
                 } else {
                     const errMsg = result.error || 'Failed to dispatch emergency alert.';
                     if (Platform.OS === 'web') window.alert(`Alert: ${errMsg}`);
-                    else Alert.alert('Emergency Alert', errMsg);
+                    else showAlert('Emergency Alert', errMsg, 'error');
                 }
             } catch (err: any) {
                 const errMsg = err.message || 'Network error while triggering emergency alert.';
                 if (Platform.OS === 'web') window.alert(`Notice: ${errMsg}`);
-                else Alert.alert('Notice', errMsg);
+                else showAlert('Notice', errMsg, 'warning');
             } finally {
                 setTriggeringEmergency(false);
                 setLocationStatus('idle');
@@ -225,17 +224,15 @@ export default function BeneficiaryDashboard() {
         };
 
         if (Platform.OS === 'web') {
-            if (window.confirm(`🚨 TRIGGER EMERGENCY SOS ALERT?\n\nThis will immediately call Emergency Helpline (${EMERGENCY_HELPLINE_NUMBER}) and alert your Subscriber, Care Companions, and Emergency Center.`)) {
+            if (window.confirm(`🚨 TRIGGER EMERGENCY SOS ALERT?\n\nThis will immediately alert your Subscriber, Care Companions, and Emergency Center with your live location.`)) {
                 executeEmergency();
             }
         } else {
-            Alert.alert(
+            showConfirm(
                 '🚨 Trigger Emergency Alert?',
-                `This will immediately call our 24/7 Emergency Helpline (${EMERGENCY_HELPLINE_NUMBER}) and broadcast your live GPS location to your care team & emergency response center.`,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'CALL & SEND SOS NOW', style: 'destructive', onPress: executeEmergency },
-                ]
+                `This will broadcast your live GPS location to your care team & emergency response center.`,
+                executeEmergency,
+                'SEND SOS'
             );
         }
     };

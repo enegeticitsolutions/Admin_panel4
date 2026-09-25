@@ -20,6 +20,8 @@ import { NavigationStackProvider, useNavigationStack } from '@/contexts/Navigati
 import { CustomAlertProvider } from '@/contexts/CustomAlertContext';
 import * as Notifications from 'expo-notifications';
 import { triggerEmergencyAlert } from '@/services/emergencyTrigger';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { GlobalApiInterceptor } from '@/components/GlobalApiInterceptor';
 
 import { queryClient } from '@/services/queryClient';
 
@@ -245,18 +247,22 @@ export default function RootLayout() {
 
   return (
     <PersistQueryClientProvider client={queryClient} persistOptions={{ persister: asyncStoragePersister }}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <SafeAreaProvider>
-          <CustomAlertProvider>
-            <AuthProvider>
-              <NavigationStackProvider>
-                <RootNavigator />
-              </NavigationStackProvider>
-            </AuthProvider>
-            <StatusBar style="auto" />
-          </CustomAlertProvider>
-        </SafeAreaProvider>
-      </ThemeProvider>
+      <ErrorBoundary>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <SafeAreaProvider>
+            <CustomAlertProvider>
+              <GlobalApiInterceptor>
+                <AuthProvider>
+                  <NavigationStackProvider>
+                    <RootNavigator />
+                  </NavigationStackProvider>
+                </AuthProvider>
+                <StatusBar style="auto" />
+              </GlobalApiInterceptor>
+            </CustomAlertProvider>
+          </SafeAreaProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
     </PersistQueryClientProvider>
   );
 }

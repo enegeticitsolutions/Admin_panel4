@@ -26,7 +26,7 @@ export default function SubscriptionPackagesScreen() {
     const { push } = useNavigationStack();
     const safeBack = useSafeBack();
     useAndroidBackHandler();
-    const { role } = useAuth();
+    const { role, isLoggedIn } = useAuth();
     const [menuOpen, setMenuOpen] = useState(false);
     const [packages, setPackages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -330,29 +330,32 @@ export default function SubscriptionPackagesScreen() {
                 {/* Dropdown */}
                 {menuOpen && (
                     <View style={styles.menuDropdown}>
-                        <TouchableOpacity
-                            style={styles.menuItem}
-                            onPress={() => { setMenuOpen(false); router.replace('/(subscriber)' as any); }}
-                        >
-                            <Ionicons name="home-outline" size={20} color="#111827" />
-                            <Text style={styles.menuItemText}>Dashboard</Text>
-                        </TouchableOpacity>
-                        <View style={styles.menuDivider} />
-                        <TouchableOpacity
-                            style={styles.menuItem}
-                            onPress={() => { setMenuOpen(false); router.push('/(subscriber)/profile' as any); }}
-                        >
-                            <Ionicons name="person-outline" size={20} color="#111827" />
-                            <Text style={styles.menuItemText}>My Profile</Text>
-                        </TouchableOpacity>
-                        <View style={styles.menuDivider} />
-                        <TouchableOpacity
-                            style={styles.menuItem}
-                            onPress={() => { setMenuOpen(false); router.push('/(subscriber)/explore' as any); }}
-                        >
-                            <Ionicons name="compass-outline" size={20} color="#111827" />
-                            <Text style={styles.menuItemText}>Explore</Text>
-                        </TouchableOpacity>
+                        {isLoggedIn ? (
+                            <>
+                                <TouchableOpacity
+                                    style={styles.menuItem}
+                                    onPress={() => { setMenuOpen(false); router.replace('/(subscriber)' as any); }}
+                                >
+                                    <Ionicons name="home-outline" size={20} color="#111827" />
+                                    <Text style={styles.menuItemText}>Dashboard</Text>
+                                </TouchableOpacity>
+                                <View style={styles.menuDivider} />
+                                <TouchableOpacity
+                                    style={styles.menuItem}
+                                    onPress={() => { setMenuOpen(false); router.push('/(subscriber)/profile' as any); }}
+                                >
+                                    <Ionicons name="person-outline" size={20} color="#111827" />
+                                    <Text style={styles.menuItemText}>My Profile</Text>
+                                </TouchableOpacity>
+                            </>
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.menuItem, { backgroundColor: '#F97316', justifyContent: 'center' }]}
+                                onPress={() => { setMenuOpen(false); router.push('/(auth)' as any); }}
+                            >
+                                <Text style={[styles.menuItemText, { color: '#FFFFFF', fontWeight: 'bold' }]}>Login</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 )}
             </View>

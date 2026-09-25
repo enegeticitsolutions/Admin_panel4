@@ -1,4 +1,4 @@
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Linking, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView, Linking, Modal, FlatList } from 'react-native';
 import { useState, useEffect, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,7 +11,7 @@ import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useAuth } from '@/contexts/AuthContext';
 import { IS_PASSWORD_LOGIN_ENABLED } from '@/constants/authMode';
 import { AddressPicker, SelectedAddress } from '@/components/ui/AddressPicker';
-import { getAccurateLocation } from '@/services/location';
+import { getAccurateLocation, getCurrentLocation } from '@/services/location';
 import { serviceabilityService, ServiceabilityResult } from '@/services/serviceability.service';
 import { LegalConsentModal } from '@/components/shared/LegalConsentModal';
 
@@ -45,6 +45,28 @@ export default function RegisterScreen() {
     const [isCheckingServiceability, setIsCheckingServiceability] = useState(false);
     const [serviceability, setServiceability] = useState<ServiceabilityResult | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [regions, setRegions] = useState<any[]>([]);
+    const [showRegionModal, setShowRegionModal] = useState(false);
+
+    useEffect(() => {
+        const fetchRegions = async () => {
+            try {
+                const url = `${API_URL}/public/zones/regions`;
+                console.log("[Regions] Fetching from:", url);
+                const response = await fetch(url);
+                const json = await response.json();
+                console.log("[Regions] Response:", JSON.stringify(json));
+                if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+                    setRegions(json.data);
+                } else {
+                    console.warn("[Regions] No regions returned or fetch failed:", json);
+                }
+            } catch (error) {
+                console.error("[Regions] Error fetching regions:", error);
+            }
+        };
+        fetchRegions();
+    }, []);
 
     // Resend countdown timer
     useEffect(() => {
@@ -74,23 +96,46 @@ export default function RegisterScreen() {
 
     const handleAutoDetectLocation = async () => {
         setIsDetectingGps(true);
+        setServiceability(null);
         try {
-            const loc = await getAccurateLocation();
-            const resolvedAddress = loc.address || [loc.city, loc.state].filter(Boolean).join(', ') || 'Current Location';
-            setForm((prev) => ({
-                ...prev,
-                address: resolvedAddress,
-                pincode: loc.pincode || prev.pincode,
-                latitude: loc.latitude,
-                longitude: loc.longitude,
-            }));
-            await evaluateServiceability(loc.latitude, loc.longitude, loc.pincode);
+            // Use raw GPS only — no reverse geocoding needed, we match against our regions list
+            const coords = await getCurrentLocation();
+
+            // Haversine: find nearest region
+            let matchedRegion: any = null;
+            let minDist = Infinity;
+            for (const r of regions) {
+                const dLat = (r.latitude - coords.latitude) * (Math.PI / 180);
+                const dLng = (r.longitude - coords.longitude) * (Math.PI / 180);
+                const a =
+                    Math.sin(dLat / 2) ** 2 +
+                    Math.cos(coords.latitude * (Math.PI / 180)) *
+                        Math.cos(r.latitude * (Math.PI / 180)) *
+                        Math.sin(dLng / 2) ** 2;
+                const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                if (dist < minDist) {
+                    minDist = dist;
+                    matchedRegion = r;
+                }
+            }
+
+            if (matchedRegion) {
+                setForm((prev) => ({
+                    ...prev,
+                    address: matchedRegion.name,
+                    pincode: "",
+                    latitude: matchedRegion.latitude,
+                    longitude: matchedRegion.longitude,
+                }));
+                await evaluateServiceability(matchedRegion.latitude, matchedRegion.longitude, undefined);
+            } else {
+                await evaluateServiceability(coords.latitude, coords.longitude, undefined);
+            }
         } catch (err) {
             Alert.alert(
-                "GPS Location",
-                "Could not automatically detect your location. Please select it on the map."
+                "Location Access",
+                "Could not detect your location. Please allow location permission and try again, or select a region manually."
             );
-            setShowAddressPicker(true);
         } finally {
             setIsDetectingGps(false);
         }
@@ -423,59 +468,155 @@ export default function RegisterScreen() {
                                     </View>
                                 </View>
 
-                                {/* ── Swiggy/Zomato-Style Location Selector ── */}
+                                {/* ── Regions Dropdown ── */}
                                 <View style={styles.inputGroup}>
-                                    <View style={styles.labelRow}>
-                                        <Text style={styles.label}>Service Location *</Text>
-                                        {form.address ? (
-                                            <TouchableOpacity onPress={() => setShowAddressPicker(true)}>
-                                                <Text style={styles.changeLocationText}>Change</Text>
-                                            </TouchableOpacity>
-                                        ) : null}
+                                    <View style={styles.regionLabelRow}>
+                                        <Text style={styles.label}>Our serviceable regions *</Text>
+                                        {/* Auto-detect pill */}
+                                        <TouchableOpacity
+                                            style={styles.gpsAutoBtn}
+                                            onPress={handleAutoDetectLocation}
+                                            disabled={isDetectingGps || isLoading}
+                                            activeOpacity={0.75}
+                                        >
+                                            {isDetectingGps ? (
+                                                <ActivityIndicator size={12} color="#FE6700" style={{ marginRight: 5 }} />
+                                            ) : (
+                                                <Ionicons name="navigate" size={13} color="#FE6700" style={{ marginRight: 4 }} />
+                                            )}
+                                            <Text style={styles.gpsAutoBtnText}>
+                                                {isDetectingGps ? "Detecting..." : "Auto-detect"}
+                                            </Text>
+                                        </TouchableOpacity>
                                     </View>
 
-                                    {/* Location Display / Select Box */}
+                                    {/* Custom Dropdown Trigger */}
                                     <TouchableOpacity
                                         style={[
-                                            styles.locationCard,
-                                            serviceability?.isServiceable === true && styles.locationCardSuccess,
-                                            serviceability && !serviceability.isServiceable && styles.locationCardError,
+                                            styles.regionDropdownTrigger,
+                                            form.address ? styles.regionDropdownTriggerActive : null,
                                         ]}
-                                        onPress={() => setShowAddressPicker(true)}
+                                        onPress={() => setShowRegionModal(true)}
                                         activeOpacity={0.8}
+                                        disabled={isLoading}
                                     >
-                                        <View style={styles.locationIconCircle}>
-                                            <Ionicons name="location-sharp" size={20} color="#FE6700" />
-                                        </View>
-                                        <View style={styles.locationTextContainer}>
-                                            <Text style={styles.locationTitle} numberOfLines={1}>
-                                                {form.address ? form.address : "Select Service Area on Map"}
+                                        <View style={styles.regionDropdownLeft}>
+                                            <View style={[styles.regionDropdownIcon, form.address ? styles.regionDropdownIconActive : null]}>
+                                                <Ionicons
+                                                    name="location-sharp"
+                                                    size={16}
+                                                    color={form.address ? "#FE6700" : "#9CA3AF"}
+                                                />
+                                            </View>
+                                            <Text
+                                                style={[
+                                                    styles.regionDropdownText,
+                                                    form.address ? styles.regionDropdownTextSelected : null,
+                                                ]}
+                                                numberOfLines={1}
+                                            >
+                                                {form.address || "Select a region..."}
                                             </Text>
-                                            <Text style={styles.locationSubtitle} numberOfLines={1}>
-                                                {form.pincode
-                                                    ? `Pincode: ${form.pincode} • Tap to view on map`
-                                                    : "Tap to search area or pin exact location"}
-                                            </Text>
                                         </View>
-                                        <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                                        <Ionicons
+                                            name="chevron-down"
+                                            size={18}
+                                            color={form.address ? "#FE6700" : "#9CA3AF"}
+                                        />
                                     </TouchableOpacity>
 
-                                    {/* GPS Quick Detect Button */}
-                                    <TouchableOpacity
-                                        style={styles.gpsDetectBtn}
-                                        onPress={handleAutoDetectLocation}
-                                        disabled={isDetectingGps}
-                                        activeOpacity={0.8}
+                                    {/* Region Picker Modal */}
+                                    <Modal
+                                        visible={showRegionModal}
+                                        transparent
+                                        animationType="slide"
+                                        onRequestClose={() => setShowRegionModal(false)}
                                     >
-                                        {isDetectingGps ? (
-                                            <ActivityIndicator size="small" color="#FE6700" style={{ marginRight: 8 }} />
-                                        ) : (
-                                            <Ionicons name="navigate-outline" size={16} color="#FE6700" style={{ marginRight: 6 }} />
-                                        )}
-                                        <Text style={styles.gpsDetectText}>
-                                            {isDetectingGps ? "Detecting GPS location..." : "Use Current GPS Location"}
-                                        </Text>
-                                    </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.regionModalOverlay}
+                                            activeOpacity={1}
+                                            onPress={() => setShowRegionModal(false)}
+                                        >
+                                            <View style={styles.regionModalSheet}>
+                                                {/* Handle bar */}
+                                                <View style={styles.regionModalHandle} />
+
+                                                {/* Header */}
+                                                <View style={styles.regionModalHeader}>
+                                                    <View style={styles.regionModalHeaderLeft}>
+                                                        <View style={styles.regionModalHeaderIcon}>
+                                                            <Ionicons name="location-sharp" size={20} color="#FE6700" />
+                                                        </View>
+                                                        <View>
+                                                            <Text style={styles.regionModalTitle}>Select Your Region</Text>
+                                                            <Text style={styles.regionModalSubtitle}>{regions.length} regions available</Text>
+                                                        </View>
+                                                    </View>
+                                                    <TouchableOpacity
+                                                        style={styles.regionModalClose}
+                                                        onPress={() => setShowRegionModal(false)}
+                                                    >
+                                                        <Ionicons name="close" size={20} color="#6B7280" />
+                                                    </TouchableOpacity>
+                                                </View>
+
+                                                {/* Divider */}
+                                                <View style={styles.regionModalDivider} />
+
+                                                {/* Region List */}
+                                                <FlatList
+                                                    data={regions}
+                                                    keyExtractor={(item) => item.id}
+                                                    showsVerticalScrollIndicator={false}
+                                                    contentContainerStyle={{ paddingBottom: 24 }}
+                                                    renderItem={({ item }) => {
+                                                        const isSelected = form.address === item.name;
+                                                        return (
+                                                            <TouchableOpacity
+                                                                style={[
+                                                                    styles.regionItem,
+                                                                    isSelected ? styles.regionItemSelected : null,
+                                                                ]}
+                                                                activeOpacity={0.7}
+                                                                onPress={() => {
+                                                                    setForm(prev => ({
+                                                                        ...prev,
+                                                                        address: item.name,
+                                                                        pincode: "",
+                                                                        latitude: item.latitude || undefined,
+                                                                        longitude: item.longitude || undefined,
+                                                                    }));
+                                                                    evaluateServiceability(item.latitude, item.longitude, undefined);
+                                                                    setShowRegionModal(false);
+                                                                }}
+                                                            >
+                                                                <View style={[
+                                                                    styles.regionItemIconWrap,
+                                                                    isSelected ? styles.regionItemIconWrapSelected : null,
+                                                                ]}>
+                                                                    <Ionicons
+                                                                        name={isSelected ? "location-sharp" : "location-outline"}
+                                                                        size={18}
+                                                                        color={isSelected ? "#FE6700" : "#9CA3AF"}
+                                                                    />
+                                                                </View>
+                                                                <View style={{ flex: 1 }}>
+                                                                    <Text style={[
+                                                                        styles.regionItemName,
+                                                                        isSelected ? styles.regionItemNameSelected : null,
+                                                                    ]}>{item.name}</Text>
+                                                                    <Text style={styles.regionItemSub}>{item.city}, {item.state}</Text>
+                                                                </View>
+                                                                {isSelected && (
+                                                                    <Ionicons name="checkmark-circle" size={22} color="#FE6700" />
+                                                                )}
+                                                            </TouchableOpacity>
+                                                        );
+                                                    }}
+                                                />
+                                            </View>
+                                        </TouchableOpacity>
+                                    </Modal>
 
                                     {/* Checking Indicator */}
                                     {isCheckingServiceability && (
@@ -488,23 +629,16 @@ export default function RegisterScreen() {
                                     {/* Serviceable Success Badge */}
                                     {serviceability && serviceability.isServiceable && !isCheckingServiceability && (
                                         <View style={styles.successBox}>
-                                            <View style={styles.successHeader}>
-                                                <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
-                                                <Text style={styles.successMessage}>
-                                                    {serviceability.message || `Great! We serve ${serviceability.region?.name || serviceability.location}`}
-                                                </Text>
-                                            </View>
-                                            <View style={styles.successStatsRow}>
-                                                <Text style={styles.successCheck}>✓</Text>
-                                                <Text style={styles.successStatText}>
-                                                    {serviceability.stats.companions} care companions available
-                                                </Text>
-                                            </View>
-                                            <View style={styles.successStatsRow}>
-                                                <Text style={styles.successCheck}>✓</Text>
-                                                <Text style={styles.successStatText}>
-                                                    {serviceability.stats.centers} active care centers
-                                                </Text>
+                                            <View style={styles.successRow}>
+                                                <View style={styles.successIconWrap}>
+                                                    <Ionicons name="checkmark-circle" size={22} color="#16A34A" />
+                                                </View>
+                                                <View style={styles.successTextWrap}>
+                                                    <Text style={styles.successTitle}>Great news! We're in your area</Text>
+                                                    <Text style={styles.successMessage} numberOfLines={2}>
+                                                        {serviceability.message || `We serve ${serviceability.region?.name || serviceability.location}`}
+                                                    </Text>
+                                                </View>
                                             </View>
                                         </View>
                                     )}
@@ -512,11 +646,13 @@ export default function RegisterScreen() {
                                     {/* Unserviceable Warning Badge */}
                                     {serviceability && !serviceability.isServiceable && !isCheckingServiceability && (
                                         <View style={styles.unavailableBox}>
-                                            <Ionicons name="alert-circle-outline" size={22} color="#D97706" />
-                                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <View style={styles.unavailableIconWrap}>
+                                                <Ionicons name="alert-circle" size={22} color="#D97706" />
+                                            </View>
+                                            <View style={styles.unavailableTextWrap}>
                                                 <Text style={styles.unavailableTitle}>Area Not Yet Serviceable</Text>
                                                 <Text style={styles.unavailableText}>
-                                                    We haven't expanded to this specific area yet. Please select a location in Delhi NCR or active regions.
+                                                    We haven't expanded here yet. Please choose an active region.
                                                 </Text>
                                             </View>
                                         </View>
@@ -834,6 +970,180 @@ const styles = StyleSheet.create({
         color: "#111827",
         fontFamily: "Poppins-Regular",
     },
+    inputWrapper: {
+        height: 50,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: "#D1D5DB",
+        backgroundColor: "#FFFFFF",
+        justifyContent: "center",
+    },
+    // ── Region Dropdown Trigger ──────────────────────────────────────────────
+    // ── Label Row with Auto-detect Pill ────────────────────────────────────
+    regionLabelRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 9,
+    },
+    gpsAutoBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#FFF5EE",
+        borderWidth: 1,
+        borderColor: "#FDBA74",
+        borderRadius: 20,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+    },
+    gpsAutoBtnText: {
+        fontSize: 12,
+        fontFamily: "Poppins-Medium",
+        color: "#FE6700",
+    },
+    regionDropdownTrigger: {
+        height: 54,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: "#D1D5DB",
+        backgroundColor: "#FFFFFF",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingHorizontal: 14,
+    },
+    regionDropdownTriggerActive: {
+        borderColor: "#FE6700",
+        backgroundColor: "#FFF9F5",
+    },
+    regionDropdownLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        flex: 1,
+    },
+    regionDropdownIcon: {
+        width: 30,
+        height: 30,
+        borderRadius: 8,
+        backgroundColor: "#F3F4F6",
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: 10,
+    },
+    regionDropdownIconActive: {
+        backgroundColor: "#FFF0E6",
+    },
+    regionDropdownText: {
+        fontSize: 15,
+        color: "#9CA3AF",
+        fontFamily: "Poppins-Regular",
+        flex: 1,
+    },
+    regionDropdownTextSelected: {
+        color: "#111827",
+        fontFamily: "Poppins-Medium",
+    },
+    // ── Region Modal ─────────────────────────────────────────────────────────
+    regionModalOverlay: {
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.45)",
+        justifyContent: "flex-end",
+    },
+    regionModalSheet: {
+        backgroundColor: "#FFFFFF",
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingTop: 12,
+        maxHeight: "75%",
+    },
+    regionModalHandle: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: "#E5E7EB",
+        alignSelf: "center",
+        marginBottom: 16,
+    },
+    regionModalHeader: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingHorizontal: 20,
+        marginBottom: 12,
+    },
+    regionModalHeaderLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    regionModalHeaderIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: "#FFF0E6",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    regionModalTitle: {
+        fontSize: 16,
+        fontFamily: "Poppins-SemiBold",
+        color: "#111827",
+    },
+    regionModalSubtitle: {
+        fontSize: 12,
+        fontFamily: "Poppins-Regular",
+        color: "#9CA3AF",
+        marginTop: 1,
+    },
+    regionModalClose: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: "#F3F4F6",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    regionModalDivider: {
+        height: 1,
+        backgroundColor: "#F3F4F6",
+        marginBottom: 4,
+    },
+    // ── Region List Items ────────────────────────────────────────────────────
+    regionItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        gap: 14,
+    },
+    regionItemSelected: {
+        backgroundColor: "#FFF5EE",
+    },
+    regionItemIconWrap: {
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        backgroundColor: "#F3F4F6",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    regionItemIconWrapSelected: {
+        backgroundColor: "#FFF0E6",
+    },
+    regionItemName: {
+        fontSize: 14,
+        fontFamily: "Poppins-Medium",
+        color: "#111827",
+    },
+    regionItemNameSelected: {
+        color: "#FE6700",
+    },
+    regionItemSub: {
+        fontSize: 12,
+        fontFamily: "Poppins-Regular",
+        color: "#9CA3AF",
+        marginTop: 1,
+    },
     checkingBox: {
         flexDirection: "row",
         alignItems: "center",
@@ -860,62 +1170,87 @@ const styles = StyleSheet.create({
         fontFamily: "Poppins-Regular",
     },
     successBox: {
-        backgroundColor: "#ECFDF3",
-        borderWidth: 1,
-        borderColor: "#22C55E",
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 15,
-        marginBottom: 4,
+        backgroundColor: "#F0FDF4",
+        borderWidth: 1.5,
+        borderColor: "#86EFAC",
+        borderRadius: 12,
+        padding: 14,
+        marginTop: 10,
+    },
+    successRow: {
+        flexDirection: "row",
+        alignItems: "flex-start",
+    },
+    successIconWrap: {
+        marginRight: 10,
+        marginTop: 1,
+    },
+    successTextWrap: {
+        flex: 1,
+    },
+    successTitle: {
+        fontSize: 13,
+        fontFamily: "Poppins-SemiBold",
+        color: "#15803D",
+        marginBottom: 2,
+    },
+    successMessage: {
+        fontSize: 13,
+        lineHeight: 19,
+        color: "#16A34A",
+        fontFamily: "Poppins-Regular",
+        flexShrink: 1,
     },
     successHeader: {
         flexDirection: "row",
-        alignItems: "center",
-        marginBottom: 8,
-    },
-    successMessage: {
-        fontSize: 15,
-        lineHeight: 22,
-        color: "#16A34A",
-        marginLeft: 10,
-        fontFamily: "Poppins-Regular",
+        alignItems: "flex-start",
     },
     successStatsRow: {
         flexDirection: "row",
         alignItems: "center",
-        marginLeft: 30,
-        marginBottom: 2,
+        marginTop: 4,
     },
     successCheck: {
         fontSize: 14,
-        lineHeight: 20,
         color: "#16A34A",
         marginRight: 6,
         fontFamily: "Poppins-Regular",
     },
     successStatText: {
         fontSize: 13,
-        lineHeight: 20,
         color: "#16A34A",
         fontFamily: "Poppins-Regular",
+        flex: 1,
     },
     unavailableBox: {
         flexDirection: "row",
-        alignItems: "center",
+        alignItems: "flex-start",
         backgroundColor: "#FFFBEB",
-        borderWidth: 1,
-        borderColor: "#FDE68A",
-        borderRadius: 8,
+        borderWidth: 1.5,
+        borderColor: "#FCD34D",
+        borderRadius: 12,
         padding: 14,
-        marginBottom: 4,
+        marginTop: 10,
+    },
+    unavailableIconWrap: {
+        marginRight: 10,
+        marginTop: 1,
+    },
+    unavailableTextWrap: {
+        flex: 1,
+    },
+    unavailableTitle: {
+        fontSize: 13,
+        fontFamily: "Poppins-SemiBold",
+        color: "#92400E",
+        marginBottom: 2,
     },
     unavailableText: {
-        flex: 1,
-        fontSize: 13,
+        fontSize: 12,
         color: "#D97706",
-        marginLeft: 10,
         lineHeight: 18,
         fontFamily: "Poppins-Regular",
+        flexShrink: 1,
     },
     primaryButton: {
         height: 50,
@@ -1113,17 +1448,5 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         paddingHorizontal: 14,
         marginBottom: 12,
-    },
-    gpsDetectText: {
-        fontSize: 13,
-        color: "#FE6700",
-        fontFamily: "Poppins-Medium",
-    },
-    unavailableTitle: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: "#B45309",
-        fontFamily: "Poppins-Medium",
-        marginBottom: 2,
     },
 });
