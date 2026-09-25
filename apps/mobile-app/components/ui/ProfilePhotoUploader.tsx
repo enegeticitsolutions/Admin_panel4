@@ -26,7 +26,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  Alert,
   ActionSheetIOS,
   Platform,
   Modal,
@@ -39,6 +38,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { PresignedUrlService } from '@/utils/PresignedUrlService';
+import CustomAlertModal, { AlertType } from '@/components/shared/CustomAlertModal';
 
 // ─── Types (OOP config contract) ──────────────────────────────────────────────
 
@@ -97,6 +97,17 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
   const [uploading, setUploading] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: AlertType;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
 
   // Sync and resolve presigned URL when currentPhotoUrl or target changes
   useEffect(() => {
@@ -151,7 +162,12 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
   async function pickFromCamera() {
     const granted = await requestPermissions('camera');
     if (!granted) {
-      Alert.alert('Permission required', 'Camera access is needed to take a photo.');
+      setAlertConfig({
+        visible: true,
+        title: 'Permission Required',
+        message: 'Camera access is needed to take a photo.',
+        type: 'warning',
+      });
       return;
     }
     const result = await ImagePicker.launchCameraAsync({
@@ -168,7 +184,12 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
   async function pickFromGallery() {
     const granted = await requestPermissions('gallery');
     if (!granted) {
-      Alert.alert('Permission required', 'Photo library access is needed to pick a photo.');
+      setAlertConfig({
+        visible: true,
+        title: 'Permission Required',
+        message: 'Photo library access is needed to pick a photo.',
+        type: 'warning',
+      });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -288,16 +309,22 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
 
       console.log('[ProfilePhotoUploader] ✅ Upload success, URL:', data.url);
 
-      // ✅ Show success confirmation
-      Alert.alert(
-        '✅ Photo Updated!',
-        data.message || 'Profile photo has been updated successfully.',
-        [{ text: 'OK' }]
-      );
+      // ✅ Show success confirmation via custom modal
+      setAlertConfig({
+        visible: true,
+        title: 'Photo Updated!',
+        message: data.message || 'Profile photo has been updated successfully.',
+        type: 'success',
+      });
     } catch (err: any) {
       const msg = err.message || 'Failed to upload photo';
       console.error('[ProfilePhotoUploader] Upload error:', msg);
-      Alert.alert('Upload Failed', msg);
+      setAlertConfig({
+        visible: true,
+        title: 'Upload Failed',
+        message: msg,
+        type: 'error',
+      });
       onError?.(msg);
     } finally {
       setUploading(false);
@@ -415,6 +442,16 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
           </Pressable>
         </Modal>
       )}
+      {/* Custom Alert Modal for Success / Warning / Error messages */}
+      <CustomAlertModal
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        primaryText="OK"
+        onPrimary={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
+        onClose={() => setAlertConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }
