@@ -87,11 +87,15 @@ export default function PackageDetailScreen() {
         const period = pb.unitsPeriod || 'monthly';
         const label = (pb.benefit?.unitLabel || 'visit').replace(/^per\s+/i, '');
         if (pb.isUnlimited) return 'Unlimited';
-        if (period === 'yearly')   return `${base}/yr`;
-        if (period === 'one_time') return `${base} (once)`;
-        // monthly: multiply by durNum to show total for the plan period
-        const total = base * durNum;
-        return `${total} ${label}`;
+        
+        let periodText = "";
+        if (period === "monthly") periodText = "/month";
+        else if (period === "yearly") periodText = "/year";
+        else if (period === "3_months") periodText = "/quarter";
+        else if (period === "6_months") periodText = "/half-year";
+        else if (period === "one_time") periodText = " (once)";
+        
+        return `${base} ${label}${periodText}`;
     };
 
     return (
@@ -207,8 +211,10 @@ export default function PackageDetailScreen() {
                                             </View>
                                             <View style={{ flex: 1 }}>
                                                 <Text style={styles.benefitText}>
-                                                    <Text style={{ fontWeight: '700' }}>{unitsDisplay}</Text>
-                                                    {' '}• {pb.benefit?.name}
+                                                    {pb.showUnit !== false ? (
+                                                        <><Text style={{ fontWeight: '700' }}>{unitsDisplay}</Text>{' '}• </>
+                                                    ) : null}
+                                                    {pb.benefit?.name}
                                                 </Text>
                                                 {pb.benefit?.description ? (
                                                     <Text style={{ fontSize: scale(13), color: '#6B7280', marginTop: scale(4) }}>

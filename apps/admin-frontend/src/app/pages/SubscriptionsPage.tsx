@@ -21,12 +21,13 @@ import { RegionSelector } from '../components/common/RegionSelector';
 
 export interface BenefitSetting {
   quantity: number;
-  frequency: 'monthly' | 'yearly' | 'one_time' | 'unlimited';
+  frequency: 'monthly' | '3_months' | '6_months' | 'yearly' | 'one_time' | 'unlimited';
   allocationBasis: 'per_billing_cycle' | 'per_subscription_term' | 'min_tenure_required';
   minSubscriptionMonths: number;
   allowRollover: boolean;
   maxRolloverUnits?: number;
   isUnlimited: boolean;
+  showUnit?: boolean;
 }
 
 type WizardStep = 'define' | 'benefits' | 'units' | 'review';
@@ -149,6 +150,10 @@ export default function SubscriptionsPage() {
 
       if (cfg.frequency === 'monthly') {
         monthlySubtotal += unitCost * (cfg.quantity || 0);
+      } else if (cfg.frequency === '3_months') {
+        monthlySubtotal += (unitCost * (cfg.quantity || 0)) / 3;
+      } else if (cfg.frequency === '6_months') {
+        monthlySubtotal += (unitCost * (cfg.quantity || 0)) / 6;
       } else if (cfg.frequency === 'yearly') {
         // Annual benefit amortized across 12 months for baseline monthly calculation
         monthlySubtotal += (unitCost * (cfg.quantity || 0)) / 12;
@@ -270,7 +275,10 @@ export default function SubscriptionsPage() {
       };
       return {
         benefitId,
-        monthlyUnits: cfg.frequency === 'monthly' ? cfg.quantity : Math.round(cfg.quantity / 12),
+        monthlyUnits: cfg.frequency === 'monthly' ? cfg.quantity : 
+                      cfg.frequency === '3_months' ? Math.round(cfg.quantity / 3) :
+                      cfg.frequency === '6_months' ? Math.round(cfg.quantity / 6) :
+                      Math.round(cfg.quantity / 12),
         unitsIncluded: cfg.quantity,
         unitsPeriod: cfg.frequency,
         allocationBasis: cfg.allocationBasis,
@@ -278,6 +286,7 @@ export default function SubscriptionsPage() {
         allowRollover: cfg.allowRollover,
         maxRolloverUnits: cfg.maxRolloverUnits || null,
         isUnlimited: cfg.isUnlimited,
+        showUnit: cfg.showUnit !== undefined ? cfg.showUnit : true,
       };
     });
 
@@ -820,6 +829,8 @@ export default function SubscriptionsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="monthly">Every Month (/month)</SelectItem>
+                                  <SelectItem value="3_months">Every 3 Months (/quarter)</SelectItem>
+                                  <SelectItem value="6_months">Every 6 Months (/half-year)</SelectItem>
                                   <SelectItem value="yearly">Every Year (/year)</SelectItem>
                                   <SelectItem value="one_time">One-Time / Onboarding</SelectItem>
                                   <SelectItem value="unlimited">24/7 Unlimited</SelectItem>
@@ -878,6 +889,18 @@ export default function SubscriptionsPage() {
                               )}
                             </div>
                           )}
+
+                          {/* Show Unit Setting */}
+                          <div className="flex items-center space-x-2 pt-2 border-t text-xs px-1">
+                            <Checkbox
+                              id={`showUnit-${benefitId}`}
+                              checked={cfg.showUnit !== false} // default true
+                              onCheckedChange={(checked) => updateBenefitSetting(benefitId, { showUnit: !!checked })}
+                            />
+                            <Label htmlFor={`showUnit-${benefitId}`} className="text-xs cursor-pointer font-medium text-muted-foreground">
+                              Show quantity/unit to users on mobile app and website (Uncheck to only show benefit name)
+                            </Label>
+                          </div>
                         </div>
                       );
                     })}

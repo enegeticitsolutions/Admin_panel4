@@ -533,14 +533,25 @@ export default function SubscriptionPackagesScreen() {
                                     const rawName = pb.benefit?.name || '';
                                     const formattedName = rawName.replace(/\b\w/g, (char: string) => char.toUpperCase()).replace(/\B\w/g, (char: string) => char.toLowerCase());
 
+                                    const baseUnit = pb.unitsIncluded ?? 0;
+                                    const period = pb.unitsPeriod || 'monthly';
+                                    let periodText = "";
+                                    if (period === "monthly") periodText = "/month";
+                                    else if (period === "yearly") periodText = "/year";
+                                    else if (period === "3_months") periodText = "/quarter";
+                                    else if (period === "6_months") periodText = "/half-year";
+                                    else if (period === "one_time") periodText = " (once)";
+
                                     return (
                                         <View key={fIdx} style={styles.featureRow}>
                                             <Ionicons name="checkmark-circle" size={18} color={isRegional ? "#F97316" : "#0D9488"} />
                                             <Text style={styles.featureText}>
-                                                {formattedName}{' '}
-                                                <Text style={{ fontWeight: '800', color: '#111827' }}>
-                                                    {pb.unitsIncluded}{formattedLabel}
-                                                </Text>
+                                                {pb.showUnit !== false ? (
+                                                    <Text style={{ fontWeight: '800', color: '#111827' }}>
+                                                        {pb.isUnlimited ? 'Unlimited' : `${baseUnit}${formattedLabel}${periodText}`}{' • '}
+                                                    </Text>
+                                                ) : null}
+                                                {formattedName}
                                             </Text>
                                         </View>
                                     );

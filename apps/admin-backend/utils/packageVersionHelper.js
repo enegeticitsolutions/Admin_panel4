@@ -184,6 +184,7 @@ async function publishPackageVersion(tx, packageId, options = {}) {
         allowRollover: pb.allowRollover || false,
         maxRolloverUnits: pb.maxRolloverUnits || null,
         isUnlimited: pb.isUnlimited,
+        showUnit: pb.showUnit !== undefined ? pb.showUnit : true,
         displayOrder: pb.displayOrder,
         notes: pb.notes,
       })),

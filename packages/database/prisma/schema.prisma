@@ -625,6 +625,7 @@ model PackageBenefit {
   minSubscriptionMonths Int?                @default(1) // Required subscription duration (e.g. 12 for annual perks)
   unit                  String?
   isUnlimited           Boolean             @default(false)
+  showUnit              Boolean             @default(true)
   allowRollover         Boolean             @default(false)
   maxRolloverUnits      Int?
   displayOrder          Int                 @default(0)
@@ -713,6 +714,7 @@ model PackageVersionBenefit {
   allocationBasis       String?                      @default("per_billing_cycle")
   minSubscriptionMonths Int?                         @default(1)
   isUnlimited           Boolean                      @default(false)
+  showUnit              Boolean                      @default(true)
   allowRollover         Boolean                      @default(false)
   maxRolloverUnits      Int?
   displayOrder          Int                          @default(0)

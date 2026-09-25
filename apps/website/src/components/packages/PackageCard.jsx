@@ -102,19 +102,6 @@ export default function PackageCard({
     topHighlightUnit = "plan";
   }
 
-  // Standard inclusions matching reference design
-  const STANDARD_INCLUSIONS = [
-    "24/7 Emergency Coordination",
-    "2x Weekly Wellness Check-In Calls",
-    "Home Fall Safety Assessment",
-    "2 Doctor Teleconsults/Year",
-    "Monthly Nurse Home Visit",
-    "Senior Community Events (Online)",
-    "Proactive Health Monitoring",
-    "Family Connect Mobile App Access",
-    "Dedicated Care Mitra Oversight",
-  ];
-
   // Extract all formatted benefits: merges backend benefits with standard inclusions
   const formattedBenefits = useMemo(() => {
     const list = [];
@@ -124,16 +111,22 @@ export default function PackageCard({
         const benefitName = pb.benefit?.name || "Included Benefit";
         const rawLabel = (pb.benefit?.unitLabel || "").replace(/^per\s+/i, "").trim();
         const period = pb.unitsPeriod || "monthly";
-
         let displayText = "";
-        if (pb.isUnlimited) {
-          displayText = `24/7 Unlimited ${benefitName}`;
-        } else if (period === "yearly") {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "uses"}/year ${benefitName}`;
-        } else if (period === "one_time") {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "session"} ${benefitName}`;
+        if (pb.showUnit === false) {
+          displayText = benefitName;
+        } else if (pb.isUnlimited) {
+          displayText = `Unlimited • ${benefitName}`;
         } else {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "visits"}/month ${benefitName}`;
+          const base = pb.unitsIncluded ?? 0;
+          let periodText = "";
+          if (period === "monthly") periodText = "/month";
+          else if (period === "yearly") periodText = "/year";
+          else if (period === "3_months") periodText = "/quarter";
+          else if (period === "6_months") periodText = "/half-year";
+          else if (period === "one_time") periodText = " (once)";
+
+          const unitText = rawLabel ? ` ${rawLabel}` : "";
+          displayText = `${base}${unitText}${periodText} • ${benefitName}`;
         }
 
         list.push({
@@ -151,20 +144,6 @@ export default function PackageCard({
         });
       });
     }
-
-    // Append standard inclusions that aren't duplicate
-    STANDARD_INCLUSIONS.forEach((itemText, idx) => {
-      const alreadyHas = list.some((item) =>
-        item.text.toLowerCase().includes(itemText.toLowerCase().slice(0, 8))
-      );
-      if (!alreadyHas) {
-        list.push({
-          id: `std-${idx}`,
-          text: itemText,
-          rollover: false,
-        });
-      }
-    });
 
     return list;
   }, [plan]);
