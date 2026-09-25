@@ -146,6 +146,8 @@ app.use('/api/field-manager', opsRoles, require('./routes/field-manager'));
 app.use('/api/activity-logs', adminsOnly, require('./routes/activity-logs'));
 // Regions — all can view; create/edit enforced in handler
 app.use('/api/regions', staffOnly, require('./routes/regions'));
+// Location (Google Maps config, geocoding & reverse geocoding)
+app.use('/api/location', staffOnly, require('./routes/location'));
 // System config — master_admin only
 app.use('/api/config', mastersOnly, require('./routes/config'));
 // Saathi guides — all can view; write enforced in handler

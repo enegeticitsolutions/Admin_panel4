@@ -108,7 +108,11 @@ const RegionsPage = () => {
       setMapsLoading(true);
       setMapsError(null);
 
-      const { apiKey } = await locationApi.getConfig();
+      let apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        const config = await locationApi.getConfig();
+        apiKey = config.apiKey;
+      }
       await loadGoogleMapsScript(apiKey);
       setMapsLoaded(true);
 
