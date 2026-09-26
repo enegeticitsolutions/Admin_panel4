@@ -211,8 +211,14 @@ export const purchaseSubscription = async (
     throw new Error(`Package id/type "${packageId}" not found or is inactive.`);
   }
 
-  const months = Math.max(1, Math.floor(Number(durationMonths) || 1));
-  const packageBasePrice = getMultiMonthPackagePrice(subPackage, subPackage.basePrice, months);
+  // ── Trial package guard: always price at 1 month flat, ignore client's durationMonths ──
+  const isTrialPkg = !!(subPackage as any).isFreeTrial;
+  const months = isTrialPkg ? 1 : Math.max(1, Math.floor(Number(durationMonths) || 1));
+  // Trial packages always charge basePrice (1 month) — no multi-month multiplier
+  const packageBasePrice = isTrialPkg
+    ? Number(subPackage.basePrice)
+    : getMultiMonthPackagePrice(subPackage, subPackage.basePrice, months);
+
 
   // 1a. If beneficiaryData is provided, create the beneficiary user
   let newBeneficiaryUser: any = null;
@@ -521,7 +527,13 @@ export const purchaseSubscription = async (
     const isActive = !isQueued;
     const startDate = isQueued ? new Date(existingActiveSub.endDate) : now;
     const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + months);
+
+    // ── Trial package: use trialDurationDays (days), not months ──
+    if ((subPackage as any).isFreeTrial && (subPackage as any).trialDurationDays) {
+      endDate.setDate(endDate.getDate() + Number((subPackage as any).trialDurationDays));
+    } else {
+      endDate.setMonth(endDate.getMonth() + months);
+    }
 
     // Create Subscription record
     const subscription = await tx.subscription.create({

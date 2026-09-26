@@ -261,6 +261,10 @@ export default function SubscriptionPackagesScreen() {
 
         setShowAddonSelectionModal(false);
 
+        // For trial packages, duration is fixed by trialDurationDays on the backend.
+        // Pass durationMonths=1 as a safe default; the API will use days instead.
+        const effectiveDuration = selectedPackageForAddons.isFreeTrial ? '1' : selectedCycle;
+
         push('/(setup)/checkout', { 
             packageId: selectedPackageForAddons.id, 
             serviceRegionId: selectedRegionId,
@@ -269,8 +273,8 @@ export default function SubscriptionPackagesScreen() {
             serviceLat: selectedLat ? String(selectedLat) : '',
             serviceLng: selectedLng ? String(selectedLng) : '',
             selectedAddons: JSON.stringify(selectedAddonsPayload),
-            // Duration: number of months selected on the packages screen
-            durationMonths: selectedCycle,
+            // Duration: number of months selected on the packages screen (1 for trial packages)
+            durationMonths: effectiveDuration,
         });
     };
 
@@ -465,13 +469,18 @@ export default function SubscriptionPackagesScreen() {
                 {packages.map((pkg: any) => {
                     const isPopular = pkg.isPopular;
                     const isRegional = !pkg.isGlobal;
+                    const isTrial = !!pkg.isFreeTrial;
 
                     const base = pkg.basePrice || 0;
                     const durNum = parseInt(selectedCycle, 10);
                     let displayPrice = base;
                     let cycleSubtext = '/ month';
 
-                    if (durNum === 3) {
+                    if (isTrial) {
+                        // Trial packages: show flat price, ignore the cycle selector
+                        displayPrice = base;
+                        cycleSubtext = `/ ${pkg.trialDurationDays ?? 7} days`;
+                    } else if (durNum === 3) {
                         const disc = pkg.discountThreeMonths ?? 5;
                         displayPrice = pkg.priceThreeMonths ? pkg.priceThreeMonths : Math.round(base * 3 * (1 - disc / 100));
                         const monthly = Math.round(displayPrice / 3);
@@ -489,8 +498,24 @@ export default function SubscriptionPackagesScreen() {
                     }
 
                     return (
-                        <View key={pkg.id} style={[styles.card, isPopular && styles.popularCard, isRegional && styles.regionalCard]}>
-                            {isPopular && (
+                        <View key={pkg.id} style={[
+                            styles.card,
+                            isPopular && styles.popularCard,
+                            isRegional && styles.regionalCard,
+                            isTrial && { borderColor: '#A855F7', borderWidth: 1.5 },
+                        ]}>
+                            {isTrial && (
+                                <View style={{
+                                    position: 'absolute', top: 0, left: 0, right: 0,
+                                    backgroundColor: '#7C3AED', borderTopLeftRadius: 12, borderTopRightRadius: 12,
+                                    paddingVertical: 5, alignItems: 'center',
+                                }}>
+                                    <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
+                                        🧪 {pkg.trialDurationDays ?? 7}-DAY TRIAL
+                                    </Text>
+                                </View>
+                            )}
+                            {!isTrial && isPopular && (
                                 <View style={styles.popularBadge}>
                                     <Ionicons name="star" size={12} color="#FFF" style={{ marginRight: 4 }} />
                                     <Text style={styles.popularBadgeText}>Most Popular</Text>
@@ -504,14 +529,14 @@ export default function SubscriptionPackagesScreen() {
                                 </View>
                             )}
 
-                            <View style={styles.cardHeaderRow}>
+                            <View style={[styles.cardHeaderRow, isTrial && { paddingTop: 28 }]}>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.planName}>{pkg.name}</Text>
                                     <View style={styles.priceRow}>
-                                        <Text style={isRegional ? styles.planPriceRegional : (isPopular ? styles.planPriceColor : styles.planPrice)}>
+                                        <Text style={isTrial ? { fontSize: 22, fontWeight: '800', color: '#7C3AED' } : (isRegional ? styles.planPriceRegional : (isPopular ? styles.planPriceColor : styles.planPrice))}>
                                             ₹{displayPrice.toLocaleString('en-IN')}
                                         </Text>
-                                        <Text style={{ fontSize: 11, color: '#6B7280', fontWeight: '600', marginLeft: 4, alignSelf: 'center' }}>
+                                        <Text style={{ fontSize: 11, color: isTrial ? '#7C3AED' : '#6B7280', fontWeight: '600', marginLeft: 4, alignSelf: 'center' }}>
                                             {cycleSubtext}
                                         </Text>
                                     </View>

@@ -93,14 +93,19 @@ async function calculatePricing(
     throw new Error('Package not found or inactive');
   }
 
-  const months = Math.max(1, Math.floor(Number(durationMonths) || 1));
+  // ── Trial package guard: always price at 1 month flat, ignore client's durationMonths ──
+  // This ensures the old published app cannot accidentally multiply the trial price by 3/6/12.
+  const isTrialPkg = !!(pkg as any).isFreeTrial;
+  const months = isTrialPkg ? 1 : Math.max(1, Math.floor(Number(durationMonths) || 1));
   const baseMonthlyRate = Number(pkg.basePrice) || 0;
 
-  // Tenure / duration discount percentage
+  // Tenure / duration discount percentage (0% for trials — flat pricing only)
   let durationDiscountPct = 0;
-  if (months === 3) durationDiscountPct = Number(pkg.discountThreeMonths ?? 5);
-  else if (months === 6) durationDiscountPct = Number(pkg.discountSixMonths ?? 10);
-  else if (months >= 12) durationDiscountPct = Number(pkg.discountAnnual ?? 20);
+  if (!isTrialPkg) {
+    if (months === 3) durationDiscountPct = Number(pkg.discountThreeMonths ?? 5);
+    else if (months === 6) durationDiscountPct = Number(pkg.discountSixMonths ?? 10);
+    else if (months >= 12) durationDiscountPct = Number(pkg.discountAnnual ?? 20);
+  }
 
   // 1. Calculate each benefit's base price and GST using its database GST %
   const packageBenefits = pkg.packageBenefits || [];
@@ -272,7 +277,12 @@ async function calculatePricing(
   const now = new Date();
   const projectedStartDate = now.toISOString().split('T')[0];
   const projectedEnd = new Date(now);
-  projectedEnd.setMonth(projectedEnd.getMonth() + months);
+  // ── Trial package: use trialDurationDays (days) instead of months ──
+  if ((pkg as any).isFreeTrial && (pkg as any).trialDurationDays) {
+    projectedEnd.setDate(projectedEnd.getDate() + Number((pkg as any).trialDurationDays));
+  } else {
+    projectedEnd.setMonth(projectedEnd.getMonth() + months);
+  }
   const projectedEndDate = projectedEnd.toISOString().split('T')[0];
 
   return {

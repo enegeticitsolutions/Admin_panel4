@@ -90,6 +90,9 @@ export default function SubscriptionsPage() {
   const [isGlobal, setIsGlobal] = useState(true);
   const [isPopular, setIsPopular] = useState(false);
   const [isCompared, setIsCompared] = useState(false);
+  // Trial package fields
+  const [isFreeTrial, setIsFreeTrial] = useState(false);
+  const [trialDurationDays, setTrialDurationDays] = useState('7');
 
   // Region targeting states
   const [selectedRegionIds, setSelectedRegionIds] = useState<string[]>([]);
@@ -315,6 +318,8 @@ export default function SubscriptionsPage() {
       isGlobal,
       isPopular,
       isCompared,
+      isFreeTrial,
+      trialDurationDays: isFreeTrial ? (parseInt(trialDurationDays) || 7) : null,
       regionIds: isGlobal ? [] : selectedRegionIds,
     };
 
@@ -364,6 +369,8 @@ export default function SubscriptionsPage() {
     setIsGlobal(pkg.isGlobal ?? true);
     setIsPopular(pkg.isPopular ?? false);
     setIsCompared(pkg.isCompared ?? false);
+    setIsFreeTrial(pkg.isFreeTrial ?? false);
+    setTrialDurationDays(String(pkg.trialDurationDays ?? 7));
     setSelectedRegionIds(pkg.regionIds || []);
     
     const selected = new Set<string>();
@@ -449,6 +456,8 @@ export default function SubscriptionsPage() {
     setIsGlobal(true);
     setIsPopular(false);
     setIsCompared(false);
+    setIsFreeTrial(false);
+    setTrialDurationDays('7');
     setSelectedRegionIds([]);
     setRegionSearch('');
   };
@@ -577,10 +586,43 @@ export default function SubscriptionsPage() {
                       </div>
                     </div>
 
-                    <div className="p-4 border border-orange-200 rounded-lg bg-orange-50/40 space-y-3">
+                    {/* Trial Package Toggle */}
+                    <div className={`p-4 border rounded-lg space-y-3 transition-colors ${isFreeTrial ? 'border-purple-300 bg-purple-50/60' : 'border-dashed border-gray-300 bg-gray-50/40'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Checkbox
+                            id="isFreeTrial"
+                            checked={isFreeTrial}
+                            onCheckedChange={(val) => setIsFreeTrial(!!val)}
+                          />
+                          <div>
+                            <Label htmlFor="isFreeTrial" className="font-bold text-purple-900 cursor-pointer text-sm">🧪 Trial Package</Label>
+                            <p className="text-xs text-purple-700 mt-0.5">Fixed-day access (e.g. 7-day trial). Duration pricing matrix is hidden for trial packages.</p>
+                          </div>
+                        </div>
+                        {isFreeTrial && (
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor="trialDays" className="text-xs font-semibold text-purple-900 whitespace-nowrap">Duration (days):</Label>
+                            <Input
+                              id="trialDays"
+                              type="number"
+                              min="1"
+                              max="365"
+                              value={trialDurationDays}
+                              onChange={(e) => setTrialDurationDays(e.target.value)}
+                              className="w-20 h-9 text-sm bg-white border-purple-300 text-purple-900 font-bold"
+                              placeholder="7"
+                            />
+                            <span className="text-xs text-purple-700 font-semibold">days</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={`p-4 border border-orange-200 rounded-lg bg-orange-50/40 space-y-3 transition-all ${isFreeTrial ? 'opacity-40 pointer-events-none' : ''}`}>
                       <div className="flex justify-between items-center">
                         <Label className="text-sm font-semibold text-orange-950">Duration Discounts & Pricing (3, 6, 12 Months)</Label>
-                        <span className="text-[11px] text-orange-700 font-medium">Saved to DB & accessible across apps</span>
+                        <span className="text-[11px] text-orange-700 font-medium">{isFreeTrial ? 'Disabled for trial packages' : 'Saved to DB & accessible across apps'}</span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="space-y-1">
@@ -1307,8 +1349,11 @@ export default function SubscriptionsPage() {
                     <StatusChip status={pkg.isActive ? 'active' : 'inactive'} />
                   </div>
                   <CardHeader>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <CardTitle className="text-xl">{pkg.name}</CardTitle>
+                      {pkg.isFreeTrial && (
+                        <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-bold border border-purple-200">🧪 {pkg.trialDurationDays ?? 7}-Day Trial</span>
+                      )}
                       {pkg.isGlobal ? (
                         <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 font-medium">Global</span>
                       ) : (
