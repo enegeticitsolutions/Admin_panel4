@@ -66,6 +66,7 @@ export default function PackageDetailScreen() {
         if (!p) return 0;
         const d = parseInt(cyc, 10);
         const base = p.basePrice || 0;
+        if (d === 1)  return p.priceOneMonth     ?? base;
         if (d === 3)  return p.priceThreeMonths  ?? Math.round(base * 3  * (1 - (p.discountThreeMonths ?? 5)  / 100));
         if (d === 6)  return p.priceSixMonths    ?? Math.round(base * 6  * (1 - (p.discountSixMonths  ?? 10) / 100));
         if (d === 12) return p.priceTwelveMonths ?? Math.round(base * 12 * (1 - (p.discountAnnual    ?? 20) / 100));
@@ -79,7 +80,7 @@ export default function PackageDetailScreen() {
     const monthlyRate  = durNum > 0 ? Math.round(totalPrice / durNum) : totalPrice;
     const totalHours   = (pkg.totalHours || pkg.hoursPerMonth || 0) * durNum;
 
-    const cycleLabel = selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : '3 Months';
+    const cycleLabel = selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : selectedCycle === '1' ? '1 Month' : '3 Months';
 
     // Compute display units for a benefit based on its period and selected cycle
     const getBenefitUnits = (pb: any): string => {
@@ -130,23 +131,26 @@ export default function PackageDetailScreen() {
                         </Text>
 
                         {/* Savings row */}
-                        <View style={styles.savingsRow}>
-                            <Text style={styles.mrp}>₹{fullPrice.toLocaleString()}</Text>
-                            <View style={styles.discountBadge}>
-                                <Text style={styles.discountText}>SAVE {discountPct}%</Text>
+                        {discountPct > 0 ? (
+                            <View style={styles.savingsRow}>
+                                <Text style={styles.mrp}>₹{fullPrice.toLocaleString()}</Text>
+                                <View style={styles.discountBadge}>
+                                    <Text style={styles.discountText}>SAVE {discountPct}%</Text>
+                                </View>
+                                {savedAmount > 0 && (
+                                    <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: scale(12), marginLeft: scale(8) }}>
+                                        (₹{savedAmount.toLocaleString()} off)
+                                    </Text>
+                                )}
                             </View>
-                            {savedAmount > 0 && (
-                                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: scale(12), marginLeft: scale(8) }}>
-                                    (₹{savedAmount.toLocaleString()} off)
-                                </Text>
-                            )}
-                        </View>
+                        ) : null}
                     </View>
                 </LinearGradient>
 
                 {/* ── Cycle Selector Toggle ── */}
                 <View style={styles.cycleToggle}>
                     {[
+                        { key: '1',  label: '1 Month',  disc: '' },
                         { key: '3',  label: '3 Months', disc: '5% OFF' },
                         { key: '6',  label: '6 Months', disc: '10% OFF' },
                         { key: '12', label: '1 Year',   disc: '20% OFF' },
@@ -159,7 +163,7 @@ export default function PackageDetailScreen() {
                                 style={[styles.cycleBtn, isActive && styles.cycleBtnActive]}
                             >
                                 <Text style={[styles.cycleBtnLabel, isActive && styles.cycleBtnLabelActive]}>{item.label}</Text>
-                                <Text style={[styles.cycleBtnBadge, isActive && styles.cycleBtnBadgeActive]}>{item.disc}</Text>
+                                <Text style={[styles.cycleBtnBadge, isActive && styles.cycleBtnBadgeActive]}>{item.disc || ' '}</Text>
                             </TouchableOpacity>
                         );
                     })}

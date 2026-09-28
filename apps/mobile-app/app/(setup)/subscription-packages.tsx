@@ -282,7 +282,9 @@ export default function SubscriptionPackagesScreen() {
         if (!pkg) return 0;
         const base = pkg.basePrice || 0;
         const durNum = parseInt(cycleKey, 10);
-        if (durNum === 3) {
+        if (durNum === 1) {
+            return pkg.priceOneMonth ? pkg.priceOneMonth : base;
+        } else if (durNum === 3) {
             const disc = pkg.discountThreeMonths ?? 5;
             return pkg.priceThreeMonths ? pkg.priceThreeMonths : Math.round(base * 3 * (1 - disc / 100));
         } else if (durNum === 6) {
@@ -425,6 +427,7 @@ export default function SubscriptionPackagesScreen() {
                     borderColor: '#E2E8F0',
                 }}>
                     {[
+                        { key: '1', label: '1 Month', badge: '' },
                         { key: '3', label: '3 Months', badge: '5% OFF' },
                         { key: '6', label: '6 Months', badge: '10% OFF' },
                         { key: '12', label: '1 Year', badge: '20% OFF' },
@@ -444,22 +447,20 @@ export default function SubscriptionPackagesScreen() {
                                 }}
                             >
                                 <Text style={{
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     fontWeight: '800',
                                     color: isActive ? '#FFFFFF' : '#1E293B',
                                 }}>
                                     {item.label}
                                 </Text>
-                                {item.badge ? (
-                                    <Text style={{
-                                        fontSize: 9,
-                                        fontWeight: '700',
-                                        color: isActive ? '#FFE4CC' : '#16A34A',
-                                        marginTop: 2,
-                                    }}>
-                                        {item.badge}
-                                    </Text>
-                                ) : null}
+                                <Text style={{
+                                    fontSize: 9,
+                                    fontWeight: '700',
+                                    color: item.badge ? (isActive ? '#FFE4CC' : '#16A34A') : 'transparent',
+                                    marginTop: 2,
+                                }}>
+                                    {item.badge || '—'}
+                                </Text>
                             </TouchableOpacity>
                         );
                     })}
@@ -473,28 +474,39 @@ export default function SubscriptionPackagesScreen() {
 
                     const base = pkg.basePrice || 0;
                     const durNum = parseInt(selectedCycle, 10);
-                    let displayPrice = base;
-                    let cycleSubtext = '/ month';
+                    let displayMonthlyPrice = base;
+                    let mainUnit = '/mo';
+                    let totalCommitmentPrice = base;
+                    let totalSubtext = '';
 
                     if (isTrial) {
                         // Trial packages: show flat price, ignore the cycle selector
-                        displayPrice = base;
-                        cycleSubtext = `/ ${pkg.trialDurationDays ?? 7} days`;
+                        displayMonthlyPrice = base;
+                        mainUnit = `/ ${pkg.trialDurationDays ?? 7} days`;
+                        totalSubtext = '';
+                    } else if (durNum === 1) {
+                        totalCommitmentPrice = pkg.priceOneMonth ? pkg.priceOneMonth : base;
+                        displayMonthlyPrice = totalCommitmentPrice;
+                        mainUnit = '/mo';
+                        totalSubtext = `(₹${totalCommitmentPrice.toLocaleString('en-IN')} for 1 mo)`;
                     } else if (durNum === 3) {
                         const disc = pkg.discountThreeMonths ?? 5;
-                        displayPrice = pkg.priceThreeMonths ? pkg.priceThreeMonths : Math.round(base * 3 * (1 - disc / 100));
-                        const monthly = Math.round(displayPrice / 3);
-                        cycleSubtext = `(₹${monthly.toLocaleString('en-IN')}/mo for 3 mo)`;
+                        totalCommitmentPrice = pkg.priceThreeMonths ? pkg.priceThreeMonths : Math.round(base * 3 * (1 - disc / 100));
+                        displayMonthlyPrice = Math.round(totalCommitmentPrice / 3);
+                        mainUnit = '/mo';
+                        totalSubtext = `(₹${totalCommitmentPrice.toLocaleString('en-IN')} for 3 mo)`;
                     } else if (durNum === 6) {
                         const disc = pkg.discountSixMonths ?? 10;
-                        displayPrice = pkg.priceSixMonths ? pkg.priceSixMonths : Math.round(base * 6 * (1 - disc / 100));
-                        const monthly = Math.round(displayPrice / 6);
-                        cycleSubtext = `(₹${monthly.toLocaleString('en-IN')}/mo for 6 mo)`;
+                        totalCommitmentPrice = pkg.priceSixMonths ? pkg.priceSixMonths : Math.round(base * 6 * (1 - disc / 100));
+                        displayMonthlyPrice = Math.round(totalCommitmentPrice / 6);
+                        mainUnit = '/mo';
+                        totalSubtext = `(₹${totalCommitmentPrice.toLocaleString('en-IN')} for 6 mo)`;
                     } else if (durNum === 12) {
                         const disc = pkg.discountAnnual ?? 20;
-                        displayPrice = pkg.priceTwelveMonths ? pkg.priceTwelveMonths : Math.round(base * 12 * (1 - disc / 100));
-                        const monthly = Math.round(displayPrice / 12);
-                        cycleSubtext = `(₹${monthly.toLocaleString('en-IN')}/mo for 1 yr)`;
+                        totalCommitmentPrice = pkg.priceTwelveMonths ? pkg.priceTwelveMonths : Math.round(base * 12 * (1 - disc / 100));
+                        displayMonthlyPrice = Math.round(totalCommitmentPrice / 12);
+                        mainUnit = '/mo';
+                        totalSubtext = `(₹${totalCommitmentPrice.toLocaleString('en-IN')} for 1 yr)`;
                     }
 
                     const cardBorderColor = pkg.color || (isTrial ? '#A855F7' : (isPopular ? '#0D9488' : (isRegional ? '#F97316' : '#C8C8C8')));
@@ -539,11 +551,16 @@ export default function SubscriptionPackagesScreen() {
                                     <Text style={styles.planName}>{pkg.name}</Text>
                                     <View style={styles.priceRow}>
                                         <Text style={{ fontSize: 22, fontWeight: '800', color: priceTextColor, fontFamily: 'Poppins_700Bold' }}>
-                                            ₹{displayPrice.toLocaleString('en-IN')}
+                                            ₹{displayMonthlyPrice.toLocaleString('en-IN')}
                                         </Text>
-                                        <Text style={{ fontSize: 11, color: isTrial ? trialHeaderColor : '#6B7280', fontWeight: '600', marginLeft: 4, alignSelf: 'center' }}>
-                                            {cycleSubtext}
+                                        <Text style={{ fontSize: 13, color: isTrial ? trialHeaderColor : '#4B5563', fontWeight: '700', marginLeft: 2, alignSelf: 'flex-end', marginBottom: 2 }}>
+                                            {mainUnit}
                                         </Text>
+                                        {totalSubtext ? (
+                                            <Text style={{ fontSize: 11, color: '#6B7280', fontWeight: '600', marginLeft: 6, alignSelf: 'flex-end', marginBottom: 2 }}>
+                                                {totalSubtext}
+                                            </Text>
+                                        ) : null}
                                     </View>
                                 </View>
                                 <Image
@@ -721,7 +738,7 @@ export default function SubscriptionPackagesScreen() {
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.selectedPkgName}>
-                                            {selectedPackageForAddons.name} ({selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : '3 Months'})
+                                            {selectedPackageForAddons.name} ({selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : selectedCycle === '1' ? '1 Month' : '3 Months'})
                                         </Text>
                                         <Text style={styles.selectedPkgBenefitsCount}>
                                             {selectedPackageForAddons.packageBenefits?.length || 3} Standard Benefits Included · ₹{calculatePackagePrice(selectedPackageForAddons, selectedCycle).toLocaleString('en-IN')}
@@ -879,7 +896,7 @@ const styles = StyleSheet.create({
     planName: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 6 },
     planPrice: { fontSize: 28, fontWeight: '800', color: '#0D9488' },
     planPriceColor: { fontSize: 28, fontWeight: '800', color: '#0D9488' },
-    priceRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+    priceRow: { flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap', gap: 4 },
     discountInfo: { marginBottom: 4 },
     mrpText: { fontSize: 14, color: '#9CA3AF', textDecorationLine: 'line-through', marginBottom: 2 },
     discountBadge: { backgroundColor: '#F0FDFA', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
