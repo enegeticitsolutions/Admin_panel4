@@ -4,15 +4,7 @@ import logo from "../assets/logo.svg";
 import { LEGAL_CONFIG } from "../constants/legal";
 import { ShieldCheck, ChevronDown } from "lucide-react";
 import TurnstileWidget from "../components/TurnstileWidget";
-import { customList } from 'country-codes-list';
-
-const countryCodes = Object.entries(
-  customList('countryCode', '+{countryCallingCode} {countryNameEn}')
-).map(([iso, label]) => ({
-  iso,
-  label, // e.g. "+91 India"
-  code: label.split(' ')[0].replace('+', '') // e.g. "91"
-})).sort((a, b) => a.label.localeCompare(b.label));
+import CountryPickerModal, { CountryCodeButton } from "../components/ui/CountryPickerModal";
 
 export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN" }) {
   // mode: 'LOGIN' | 'REGISTER'
@@ -25,6 +17,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
 
   // Registration & Login Form State
   const [countryCode, setCountryCode] = useState("91");
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -64,7 +57,18 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
     return () => clearInterval(interval);
   }, [mode, loginStep, registerStep, resendTimer]);
 
-  const cleanPhoneNumber = (val) => val.replace(/\D/g, "").slice(-10);
+  const cleanPhoneNumber = (val, code = countryCode) => {
+    const digits = val.replace(/\D/g, "");
+    return code === "91" ? digits.slice(-10) : digits;
+  };
+
+  const isPhoneValid = (val, code = countryCode) => {
+    const clean = cleanPhoneNumber(val, code);
+    if (code === "91") {
+      return clean.length === 10;
+    }
+    return clean.length >= 6 && clean.length <= 15;
+  };
 
   // Switch tabs
   const handleTabSwitch = (newMode) => {
@@ -122,9 +126,9 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
     setError("");
     setInfoMessage("");
 
-    const cleanPhone = cleanPhoneNumber(phone);
-    if (cleanPhone.length !== 10) {
-      setError("Please enter a valid 10-digit mobile number.");
+    const cleanPhone = cleanPhoneNumber(phone, countryCode);
+    if (!isPhoneValid(phone, countryCode)) {
+      setError(countryCode === "91" ? "Please enter a valid 10-digit mobile number." : "Please enter a valid mobile number (6-15 digits).");
       return;
     }
 
@@ -161,7 +165,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
 
     setLoading(true);
     try {
-      const cleanPhone = cleanPhoneNumber(phone);
+      const cleanPhone = cleanPhoneNumber(phone, countryCode);
       const res = await verifyOtp(countryCode, cleanPhone, enteredOtp);
 
       if (res.isNewUser) {
@@ -190,13 +194,13 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
     setError("");
     setInfoMessage("");
 
-    const cleanPhone = cleanPhoneNumber(phone);
+    const cleanPhone = cleanPhoneNumber(phone, countryCode);
     if (!name.trim()) {
       setError("Please enter your full name.");
       return;
     }
-    if (cleanPhone.length !== 10) {
-      setError("Please enter a valid 10-digit mobile phone number.");
+    if (!isPhoneValid(phone, countryCode)) {
+      setError(countryCode === "91" ? "Please enter a valid 10-digit mobile phone number." : "Please enter a valid mobile phone number (6-15 digits).");
       return;
     }
     const ageNum = parseInt(age, 10);
@@ -240,7 +244,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
       return;
     }
 
-    const cleanPhone = cleanPhoneNumber(phone);
+    const cleanPhone = cleanPhoneNumber(phone, countryCode);
     const ageNum = parseInt(age, 10) || 30;
 
     setLoading(true);
@@ -274,8 +278,8 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
   // ─── Resend Code Handler ──────────────────────────────────────────────────
   const handleResendOtp = async () => {
     if (resendTimer > 0 || loading) return;
-    const cleanPhone = cleanPhoneNumber(phone);
-    if (cleanPhone.length !== 10) return;
+    const cleanPhone = cleanPhoneNumber(phone, countryCode);
+    if (!isPhoneValid(phone, countryCode)) return;
 
     setLoading(true);
     try {
@@ -452,48 +456,16 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                   Mobile Phone Number *
                 </label>
                 <div style={{ display: "flex", gap: "8px", width: "100%", boxSizing: "border-box" }}>
-                  <div
-                    style={{
-                      position: "relative",
-                      background: "#f1f5f9",
-                      border: "1.5px solid #e2e8f0",
-                      borderRadius: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "0 8px",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <select
-                      value={countryCode}
-                      onChange={(e) => setCountryCode(e.target.value)}
-                      style={{
-                        appearance: "none",
-                        background: "transparent",
-                        border: "none",
-                        outline: "none",
-                        fontWeight: "700",
-                        color: "#0f172a",
-                        fontSize: "0.95rem",
-                        paddingRight: "18px",
-                        cursor: "pointer",
-                        zIndex: 1,
-                      }}
-                    >
-                      {countryCodes.map((c, i) => (
-                        <option key={i} value={c.code}>
-                          +{c.code}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} style={{ position: "absolute", right: "6px", pointerEvents: "none", color: "#64748b" }} />
-                  </div>
+                  <CountryCodeButton
+                    countryCode={countryCode}
+                    onClick={() => setShowCountryPicker(true)}
+                  />
                   <input
                     type="tel"
-                    placeholder="Enter 10-digit mobile number"
+                    placeholder={countryCode === "91" ? "Enter 10-digit mobile number" : "Enter mobile number"}
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    maxLength={10}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, countryCode === "91" ? 10 : 15))}
+                    maxLength={countryCode === "91" ? 10 : 15}
                     required
                     autoFocus
                     style={{
@@ -694,32 +666,23 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
               </div>
 
               {/* Phone + Age Grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "10px", width: "100%", boxSizing: "border-box" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.65fr 1fr", gap: "10px", width: "100%", boxSizing: "border-box" }}>
                 <div style={{ minWidth: 0 }}>
                   <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#334155", display: "block", marginBottom: "4px" }}>
                     Mobile Number *
                   </label>
                   <div style={{ display: "flex", gap: "6px", width: "100%", boxSizing: "border-box" }}>
-                    <div
-                      style={{
-                        padding: "11px 8px",
-                        background: "#f1f5f9",
-                        border: "1.5px solid #e2e8f0",
-                        borderRadius: "10px",
-                        fontWeight: "700",
-                        color: "#0f172a",
-                        fontSize: "0.9rem",
-                        flexShrink: 0,
-                      }}
-                    >
-                      +91
-                    </div>
+                    <CountryCodeButton
+                      countryCode={countryCode}
+                      onClick={() => setShowCountryPicker(true)}
+                      style={{ height: "42px", padding: "0 8px", fontSize: "0.88rem" }}
+                    />
                     <input
                       type="tel"
-                      placeholder="10-digit number"
+                      placeholder={countryCode === "91" ? "10-digit number" : "Mobile number"}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      maxLength={10}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, countryCode === "91" ? 10 : 15))}
+                      maxLength={countryCode === "91" ? 10 : 15}
                       required
                       style={{
                         flex: 1,
@@ -1046,6 +1009,14 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
           </button>
         </div>
       </div>
+
+      {/* Country Code Picker Modal (parity with mobile app) */}
+      <CountryPickerModal
+        visible={showCountryPicker}
+        onClose={() => setShowCountryPicker(false)}
+        selectedCode={countryCode}
+        onSelect={(code) => setCountryCode(code)}
+      />
     </div>
   );
 }
