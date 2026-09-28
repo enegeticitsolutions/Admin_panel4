@@ -30,7 +30,7 @@ const FAQ_ITEMS = [
   {
     question: "How are advisors vetted and credentials verified?",
     answer:
-      "Legacy Circle profiles are self-reported by our members, similar to how professional details work on platforms like LinkedIn. MaiHooNa does not independently verify credentials or conduct background checks on the professional history shared. We encourage members reaching out for a consultation to review a Legacy Circle member's profile and ask questions directly to satisfy themselves of fit before proceeding.",
+      "Legacy Circle profiles are self-reported by our members, similar to how professional details work on platforms like LinkedIn. MaiHoonNa does not independently verify credentials or conduct background checks on the professional history shared. We encourage members reaching out for a consultation to review a Legacy Circle member's profile and ask questions directly to satisfy themselves of fit before proceeding.",
   },
   {
     question: "What are the advisory fees or pricing structure?",

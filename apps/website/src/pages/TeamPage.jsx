@@ -15,7 +15,7 @@ const LEADERSHIP_TEAM = [
     roleColorClass: "team-leader-card__role--orange",
     photo: sumitKumarImg,
     linkedin: "https://www.linkedin.com/in/sumit-kumar-a85166a/",
-    bio: "Sumit brings over 25 years of experience in healthcare technology, having worked with organizations including Highmark, Accenture, Infosys, etc.. Drawing on this deep understanding of how healthcare systems work and where they fall short for India's ageing population. He founded MaiHooNa to bring professional, dependable care and companionship into the homes of seniors across India and starting with NCR. Sumit is hands-on across every part of the business, from building the Care Mitra and Saathi Network programs to shaping MaiHooNa's partner ecosystem, with a singular focus: making sure no senior has to face ageing alone.",
+    bio: "Sumit brings over 25 years of experience in healthcare technology, having worked with organizations including Highmark, Accenture, Infosys, etc.. Drawing on this deep understanding of how healthcare systems work and where they fall short for India's ageing population. He founded MaiHoonNa to bring professional, dependable care and companionship into the homes of seniors across India and starting with NCR. Sumit is hands-on across every part of the business, from building the Care Mitra and Saathi Network programs to shaping MaiHoonNa's partner ecosystem, with a singular focus: making sure no senior has to face ageing alone.",
   },
   {
     id: "rajeev-thukral",
