@@ -898,8 +898,15 @@ router.get('/unlinked-check', authenticate, async (req: AuthRequest, res: Respon
   try {
     const userId = req.userId!;
     const unlinkedSub = await prisma.subscription.findFirst({
-      where: { subscriberId: userId, isActive: true, beneficiaryId: null },
-      include: { package: true }
+      where: {
+        subscriberId: userId,
+        isActive: true,
+        beneficiaryId: null,
+        isQueued: false,
+        cancelledAt: null,
+      },
+      include: { package: true, packageVersion: true },
+      orderBy: { createdAt: 'desc' }
     });
 
     res.json({
@@ -908,7 +915,7 @@ router.get('/unlinked-check', authenticate, async (req: AuthRequest, res: Respon
       subscription: unlinkedSub ? {
         id: unlinkedSub.id,
         packageType: unlinkedSub.packageType,
-        packageName: (unlinkedSub.package as any)?.name || unlinkedSub.packageType,
+        packageName: unlinkedSub.packageVersion?.name || (unlinkedSub.package as any)?.name || unlinkedSub.packageType,
         startDate: unlinkedSub.startDate,
         endDate: unlinkedSub.endDate
       } : null

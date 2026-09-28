@@ -156,7 +156,13 @@ export default function ProfileScreen() {
                 <View style={styles.tabContent}>
                     {activeTab === 'Personal' && <PersonalTab user={profileData.user} onUpdate={fetchProfile} />}
                     {activeTab === 'Security' && <SecurityTab />}
-                    {activeTab === 'Subscription' && <SubscriptionTab plan={profileData.currentPlan} beneficiaries={profileData.beneficiaries} />}
+                    {activeTab === 'Subscription' && (
+                        <SubscriptionTab
+                            plan={profileData.currentPlan}
+                            beneficiaries={profileData.beneficiaries}
+                            hasUnassignedPackage={profileData.hasUnassignedPackage}
+                        />
+                    )}
                 </View>
 
                 {/* Logout Button */}
@@ -178,6 +184,7 @@ export default function ProfileScreen() {
                 visible={showBeneficiariesModal}
                 onClose={() => setShowBeneficiariesModal(false)}
                 beneficiaries={profileData.beneficiaries || []}
+                hasUnassignedPackage={profileData.hasUnassignedPackage}
                 onSelectBeneficiary={(benId) => {
                     fetchProfile();
                 }}

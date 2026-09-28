@@ -944,21 +944,22 @@ export const linkBeneficiaryToSubscription = async (
 ) => {
   // 1. Find the active unlinked subscription for this subscriber
   const unlinkedSubscription = await prisma.subscription.findFirst({
-    where: { subscriberId: userId, isActive: true, beneficiaryId: null },
+    where: {
+      subscriberId: userId,
+      isActive: true,
+      beneficiaryId: null,
+      isQueued: false,
+      cancelledAt: null,
+    },
     orderBy: { createdAt: 'desc' },
     include: { package: true }
   });
 
-  let subIdToLink: string | null = unlinkedSubscription?.id || null;
-  if (!subIdToLink) {
-    const anyActiveSub = await prisma.subscription.findFirst({
-      where: { subscriberId: userId, isActive: true },
-      orderBy: { createdAt: 'desc' }
-    });
-    if (anyActiveSub) {
-      subIdToLink = anyActiveSub.id;
-    }
+  if (!unlinkedSubscription) {
+    throw new Error('No unassigned care package found for your account. Please purchase a package first.');
   }
+
+  const subIdToLink: string = unlinkedSubscription.id;
 
   const beneficiaryName = beneficiaryData.name || (beneficiaryData as any).fullName || 'Beneficiary';
   const dobDate = parseDob(beneficiaryData.dob);

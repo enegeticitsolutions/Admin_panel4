@@ -43,6 +43,7 @@ interface BeneficiariesModalProps {
   beneficiaries: BeneficiaryItemData[];
   onSelectBeneficiary?: (beneficiaryId: string) => void;
   onRefresh?: () => void;
+  hasUnassignedPackage?: boolean;
 }
 
 type FilterTab = 'all' | 'active' | 'inactive';
@@ -53,6 +54,7 @@ export const BeneficiariesModal: React.FC<BeneficiariesModalProps> = ({
   beneficiaries = [],
   onSelectBeneficiary,
   onRefresh,
+  hasUnassignedPackage,
 }) => {
   const router = useRouter();
   const { height } = useWindowDimensions();
@@ -61,6 +63,8 @@ export const BeneficiariesModal: React.FC<BeneficiariesModalProps> = ({
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [itemToDelete, setItemToDelete] = useState<BeneficiaryItemData | null>(null);
+  const [hasUnassigned, setHasUnassigned] = useState<boolean>(Boolean(hasUnassignedPackage));
+  const [isCheckingUnassigned, setIsCheckingUnassigned] = useState(false);
   const [feedback, setFeedback] = useState<{
     title: string;
     message: string;
@@ -70,6 +74,55 @@ export const BeneficiariesModal: React.FC<BeneficiariesModalProps> = ({
   useEffect(() => {
     setLocalBeneficiaries(beneficiaries);
   }, [beneficiaries]);
+
+  useEffect(() => {
+    if (typeof hasUnassignedPackage === 'boolean') {
+      setHasUnassigned(hasUnassignedPackage);
+    }
+  }, [hasUnassignedPackage]);
+
+  useEffect(() => {
+    if (visible) {
+      checkUnassignedStatus();
+    }
+  }, [visible]);
+
+  const checkUnassignedStatus = async () => {
+    try {
+      setIsCheckingUnassigned(true);
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+      const res = await fetch(`${API_URL}/subscriber/subscriptions/unlinked-check`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHasUnassigned(Boolean(data.hasUnlinkedSubscription));
+      }
+    } catch (e) {
+      console.warn('[BeneficiariesModal] Failed to check unlinked subscription:', e);
+    } finally {
+      setIsCheckingUnassigned(false);
+    }
+  };
+
+  const handleAddNewBeneficiary = () => {
+    if (!hasUnassigned) {
+      Alert.alert(
+        'Package Required',
+        'You need an active unassigned care package before you can add a new beneficiary. Please purchase a package first.'
+      );
+      return;
+    }
+    onClose();
+    router.push({
+      pathname: '/(setup)/subscribe-form',
+      params: { isLinkingFlow: 'true' },
+    });
+  };
 
   const isBenActive = (b: BeneficiaryItemData): boolean => {
     // If explicitly deleted or inactive by status field, not active
@@ -411,7 +464,10 @@ export const BeneficiariesModal: React.FC<BeneficiariesModalProps> = ({
             data={filteredBeneficiaries}
             keyExtractor={(item) => item.id}
             renderItem={renderBeneficiaryCard}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              !hasUnassigned && { paddingBottom: Platform.OS === 'ios' ? scale(32) : scale(20) },
+            ]}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.emptyState}>
@@ -428,20 +484,19 @@ export const BeneficiariesModal: React.FC<BeneficiariesModalProps> = ({
             }
           />
 
-          {/* Bottom Add Action */}
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.addBtn}
-              activeOpacity={0.8}
-              onPress={() => {
-                onClose();
-                router.push('/(setup)/beneficiary-info');
-              }}
-            >
-              <Ionicons name="person-add-outline" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(8) }} />
-              <Text style={styles.addBtnText}>Add New Beneficiary</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Bottom Add Action - Only visible and functional if subscriber has an unassigned package */}
+          {hasUnassigned && (
+            <View style={styles.footer}>
+              <TouchableOpacity
+                style={styles.addBtn}
+                activeOpacity={0.8}
+                onPress={handleAddNewBeneficiary}
+              >
+                <Ionicons name="person-add-outline" size={scale(18)} color="#FFFFFF" style={{ marginRight: scale(8) }} />
+                <Text style={styles.addBtnText}>Add New Beneficiary</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Custom Delete Confirmation Modal UI */}
           {itemToDelete && (
