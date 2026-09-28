@@ -1,5 +1,6 @@
 const FileResource = require('../FileResource');
 const { prisma } = require('../../../lib/prisma');
+const { extractStorageKey } = require('../../storage/urlResolver');
 
 /**
  * AdminProfilePhotoResource
@@ -9,8 +10,13 @@ const { prisma } = require('../../../lib/prisma');
  *   Admin role checking is handled by staffOnly middleware on the route.
  *
  * resourceId can be:
- *   - a User.id (profilePhotoKey on User)
- *   - a CareCompanion.id (photo on CareCompanion → resolved to fileKey)
+ *   - a User.id (profilePhoto on User)
+ *   - a CareCompanion.id
+ *   - an OperationsManager.id
+ *   - a FieldManager.id
+ *   - a CustomerServiceAgent.id
+ *   - a Volunteer.id
+ *   - a Beneficiary.id
  *
  * Usage:
  *   GET /api/files/presigned?type=profile_photo&id=<userId>
@@ -20,33 +26,56 @@ class AdminProfilePhotoResource extends FileResource {
   get ttlSeconds()   { return 1800; } // 30 minutes — profile pictures used in list views
 
   async getFileKey(resourceId, userId) {
+    const clean = (val) => (val ? (extractStorageKey(val) || val) : null);
+
     // Try User first
     const user = await prisma.user.findUnique({
       where: { id: resourceId },
       select: { profilePhoto: true },
     });
-    if (user?.profilePhoto) return user.profilePhoto;
+    if (user?.profilePhoto) return clean(user.profilePhoto);
 
-    // Try Volunteer (Sathi)
-    const volunteer = await prisma.volunteer.findUnique({
+    // Try OperationsManager by its ID directly
+    const om = await prisma.operationsManager.findUnique({
       where: { id: resourceId },
-      select: { profilePhoto: true },
+      select: { photo: true },
     });
-    if (volunteer?.profilePhoto) return volunteer.profilePhoto;
+    if (om?.photo) return clean(om.photo);
+
+    // Try FieldManager by its ID directly
+    const fm = await prisma.fieldManager.findUnique({
+      where: { id: resourceId },
+      select: { photo: true },
+    });
+    if (fm?.photo) return clean(fm.photo);
 
     // Try CareCompanion by its ID directly
     const cc = await prisma.careCompanion.findUnique({
       where: { id: resourceId },
       select: { photo: true },
     });
-    if (cc?.photo) return cc.photo;
+    if (cc?.photo) return clean(cc.photo);
+
+    // Try CustomerServiceAgent by its ID directly
+    const csa = await prisma.customerServiceAgent.findUnique({
+      where: { id: resourceId },
+      select: { photo: true },
+    });
+    if (csa?.photo) return clean(csa.photo);
+
+    // Try Volunteer (Sathi)
+    const volunteer = await prisma.volunteer.findUnique({
+      where: { id: resourceId },
+      select: { profilePhoto: true },
+    });
+    if (volunteer?.profilePhoto) return clean(volunteer.profilePhoto);
 
     // Try Beneficiary
     const beneficiary = await prisma.beneficiary.findUnique({
       where: { id: resourceId },
       select: { photo: true },
     });
-    if (beneficiary?.photo) return beneficiary.photo;
+    if (beneficiary?.photo) return clean(beneficiary.photo);
 
     return null;
   }

@@ -145,10 +145,10 @@ export default function StaffEditModal({ userId, role, onClose, onSuccess }: Sta
                   role === 'field_manager' ? '#1F8A3E' : 
                   role === 'customer_service' ? '#7C3AED' :
                   '#1D4ED8',
-                onSuccess: (url) => {
+                onSuccess: (url, storageKey) => {
                   setFormState((prev: any) => ({
                     ...prev,
-                    personal: { ...prev.personal, photoUrl: url },
+                    personal: { ...prev.personal, photoUrl: storageKey || url },
                   }));
                   toast.success('Profile photo updated successfully');
                 },

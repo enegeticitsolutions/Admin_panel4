@@ -1549,7 +1549,7 @@ export const uploadApi = {
     targetType: 'subscriber' | 'care_companion' | 'field_manager' | 'operations_manager' | 'beneficiary',
     targetId: string,
     file: File
-  ): Promise<{ url: string; data: any; entityType: string; targetId: string }> {
+  ): Promise<{ url: string; storageKey?: string; data: any; entityType: string; targetId: string }> {
     const formData = new FormData();
     formData.append('targetType', targetType);
     formData.append('targetId', targetId);
@@ -1569,6 +1569,7 @@ export const uploadApi = {
 
     return {
       url: result.url,
+      storageKey: result.storageKey || result.url,
       data: result.data,
       entityType: result.entityType,
       targetId: result.targetId,

@@ -63,8 +63,8 @@ export interface AdminPhotoUploaderConfig {
   editable?: boolean;
   /** Accent color for hover ring and badge. Default: '#F97316' */
   accentColor?: string;
-  /** Called after a successful upload with the new photo URL */
-  onSuccess?: (newPhotoUrl: string) => void;
+  /** Called after a successful upload with the new photo URL and storage key */
+  onSuccess?: (newPhotoUrl: string, storageKey?: string) => void;
   /** Called when an upload fails */
   onError?: (error: string) => void;
 }
@@ -202,7 +202,7 @@ export function ProfilePhotoUploader({ config, className = '' }: ProfilePhotoUpl
       // result.url is already a presigned URL from the backend
       setPhotoUrl(result.url);
       setImageLoadError(false);
-      onSuccess?.(result.url);
+      onSuccess?.(result.url, result.storageKey);
     } catch (err: any) {
       const msg = err.message || 'Upload failed';
       setError(msg);

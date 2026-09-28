@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const router = express.Router();
 
 const { prisma } = require('../lib/prisma');
-const { resolveFileUrl } = require('../services/storage/urlResolver');
+const { resolveFileUrl, extractStorageKey } = require('../services/storage/urlResolver');
 const { dispatchCMOnboardingCleared } = require('../services/events/account-event.dispatcher');
 
 const SUPPORTED_ONBOARDING_ROLES = new Set([
@@ -408,6 +408,7 @@ async function buildOnboardingMetadata() {
             phone: true,
             email: true,
             isActive: true,
+            profilePhoto: true,
             zonesAsOperationsManager: {
               select: {
                 id: true,
@@ -864,6 +865,9 @@ router.post('/staff/onboard', async (req, res) => {
     const primaryZone = zones.find((zone) => zone.id === primaryZoneId) || null;
 
     const created = await prisma.$transaction(async (tx) => {
+      const rawPhoto = personal.photoUrl;
+      const cleanPhoto = rawPhoto ? (extractStorageKey(rawPhoto) || rawPhoto) : null;
+
       const userData = {
         name: fullName,
         phone: mobileNumber,
@@ -871,7 +875,7 @@ router.post('/staff/onboard', async (req, res) => {
         role,
         isActive: true,
         isVerified: false,
-        profilePhoto: asNullableString(personal.photoUrl),
+        profilePhoto: cleanPhoto,
       };
 
       if (typeof personal?.newPassword === 'string' && personal.newPassword.trim().length >= 6) {
@@ -959,6 +963,7 @@ router.post('/staff/onboard', async (req, res) => {
           where: { userId: user.id },
           update: {
             name: fullName,
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             zone: primaryZone?.name || '',
             experience: asOptionalInt(professional.experience),
@@ -981,6 +986,7 @@ router.post('/staff/onboard', async (req, res) => {
           create: {
             userId: user.id,
             name: fullName,
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             zone: primaryZone?.name || '',
             experience: asOptionalInt(professional.experience),
@@ -1009,6 +1015,7 @@ router.post('/staff/onboard', async (req, res) => {
           where: { userId: user.id },
           update: {
             name: fullName,
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             zone: primaryZone?.name || '',
             phone: mobileNumber,
@@ -1024,6 +1031,7 @@ router.post('/staff/onboard', async (req, res) => {
           create: {
             userId: user.id,
             name: fullName,
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             zone: primaryZone?.name || '',
             phone: mobileNumber,
@@ -1045,6 +1053,7 @@ router.post('/staff/onboard', async (req, res) => {
           where: { userId: user.id },
           update: {
             name: fullName,
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             phone: mobileNumber,
             qualification: asNullableString(professional.qualification),
@@ -1054,6 +1063,7 @@ router.post('/staff/onboard', async (req, res) => {
           create: {
             userId: user.id,
             name: fullName,
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             phone: mobileNumber,
             qualification: asNullableString(professional.qualification),
@@ -1077,6 +1087,7 @@ router.post('/staff/onboard', async (req, res) => {
           where: { userId: user.id },
           update: {
             name: fullName,
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             phone: mobileNumber,
             qualification: asNullableString(professional.qualification),
@@ -1086,6 +1097,7 @@ router.post('/staff/onboard', async (req, res) => {
           create: {
             userId: user.id,
             name: fullName,
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             phone: mobileNumber,
             qualification: asNullableString(professional.qualification),
@@ -1486,11 +1498,19 @@ router.get('/staff/:userId', async (req, res) => {
         .status(404)
         .json({ success: false, message: 'Staff member not found' });
 
+    const staffPhoto =
+      user.profilePhoto ||
+      user.operationsManagerProfile?.photo ||
+      user.careCompanionProfile?.photo ||
+      user.fieldManagerProfile?.photo ||
+      user.customerServiceProfile?.photo ||
+      null;
+
     const responseData = {
       role: user.role,
       personal: {
         fullName: user.name || '',
-        photoUrl: user.profilePhoto ? await resolveFileUrl(user.profilePhoto) : null,
+        photoUrl: staffPhoto ? await resolveFileUrl(staffPhoto) : null,
         preferredName: user.staffProfile?.preferredName || '',
         dateOfBirth: user.staffProfile?.dateOfBirth
           ? user.staffProfile.dateOfBirth.toISOString().split('T')[0]
@@ -1593,11 +1613,14 @@ router.put('/staff/:userId', async (req, res) => {
 
     await prisma.$transaction(async (tx) => {
       // 1. Update Core User Info
+      const rawPhoto = personal.photoUrl;
+      const cleanPhoto = rawPhoto ? (extractStorageKey(rawPhoto) || rawPhoto) : null;
+
       const userDataToUpdate = {
         name: asTrimmedString(personal.fullName),
         phone: asTrimmedString(personal.mobileNumber),
         email: asNullableString(personal.email)?.toLowerCase(),
-        profilePhoto: asNullableString(personal.photoUrl),
+        profilePhoto: cleanPhoto,
       };
 
       if (typeof personal?.newPassword === 'string' && personal.newPassword.trim().length >= 6) {
@@ -1664,6 +1687,7 @@ router.put('/staff/:userId', async (req, res) => {
           where: { userId },
           data: {
             name: asTrimmedString(personal.fullName),
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             zone: primaryZone?.name || '',
             experience: asOptionalInt(professional.experience),
@@ -1695,6 +1719,7 @@ router.put('/staff/:userId', async (req, res) => {
           where: { userId },
           data: {
             name: asTrimmedString(personal.fullName),
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             phone: asTrimmedString(personal.mobileNumber),
             zone: primaryZone?.name || '',
@@ -1712,6 +1737,7 @@ router.put('/staff/:userId', async (req, res) => {
           where: { userId },
           data: {
             name: asTrimmedString(personal.fullName),
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             phone: asTrimmedString(personal.mobileNumber),
             qualification: asNullableString(professional.qualification),
@@ -1742,6 +1768,7 @@ router.put('/staff/:userId', async (req, res) => {
           where: { userId },
           data: {
             name: asTrimmedString(personal.fullName),
+            photo: cleanPhoto,
             bio: asTrimmedString(professional.bio) || '',
             phone: asTrimmedString(personal.mobileNumber),
             qualification: asNullableString(professional.qualification),

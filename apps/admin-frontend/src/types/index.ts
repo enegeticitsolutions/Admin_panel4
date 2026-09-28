@@ -273,6 +273,9 @@ export interface Volunteer {
   previousExperience?: string | null;
   whyJoin?: string | null;
   address?: string | null;
+  flatPlot?: string | null;
+  streetArea?: string | null;
+  landmark?: string | null;
   city?: string | null;
   state?: string | null;
   country?: string | null;

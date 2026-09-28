@@ -22,7 +22,9 @@ const SaathiPage = () => {
     area: '',
     whyJoin: '',
     dob: '',
-    interests: []
+    interests: [],
+    latitude: null,
+    longitude: null
   });
 
   const [agreementChecked, setAgreementChecked] = useState(false);
@@ -55,6 +57,25 @@ const SaathiPage = () => {
 
   useEffect(() => {
     fetchContent();
+
+    // Silently capture geolocation coordinates so coordinator can view form submission location
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (pos && pos.coords) {
+            setFormData(prev => ({
+              ...prev,
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude
+            }));
+          }
+        },
+        () => {
+          // Gracefully fallback if denied or unavailable
+        },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 120000 }
+      );
+    }
   }, []);
 
   // Pincode auto-fetch effect
@@ -159,7 +180,8 @@ const SaathiPage = () => {
         setSubmitMessage({ type: 'success', text: "Thank you! Your application has been submitted successfully." });
         setFormData({
           firstName: '', lastName: '', email: '', phone: '', gender: '',
-          state: '', city: '', pincode: '', area: '', whyJoin: '', dob: '', interests: []
+          state: '', city: '', pincode: '', area: '', whyJoin: '', dob: '', interests: [],
+          latitude: null, longitude: null
         });
         setAgreementChecked(false);
         setTermsChecked(false);
