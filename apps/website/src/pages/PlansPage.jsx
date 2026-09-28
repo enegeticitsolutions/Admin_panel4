@@ -27,7 +27,7 @@ export default function PlansPage({
   isSubmitting = false,
   showSuccess = false,
 }) {
-  const [selectedCycle, setSelectedCycle] = useState("3");
+  const [selectedCycle, setSelectedCycle] = useState("1");
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [modalPlan, setModalPlan] = useState(null);
@@ -270,6 +270,12 @@ export default function PlansPage({
             <div className="pricing-toolbar">
               <strong>All prices on enquiry · GST applicable</strong>
               <div className="billing-toggle" aria-label="Billing cycle">
+                <button
+                  className={selectedCycle === "1" ? "active" : ""}
+                  onClick={() => setSelectedCycle("1")}
+                >
+                  1 Month
+                </button>
                 <button
                   className={selectedCycle === "3" ? "active" : ""}
                   onClick={() => setSelectedCycle("3")}

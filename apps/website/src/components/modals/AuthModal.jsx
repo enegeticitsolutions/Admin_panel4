@@ -232,7 +232,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
               <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#374151", display: "block", marginBottom: "6px" }}>
                 Mobile Phone Number
               </label>
-              <div style={{ display: "flex", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "8px", width: "100%", boxSizing: "border-box" }}>
                 <span
                   style={{
                     padding: "12px 14px",
@@ -241,6 +241,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
                     borderRadius: "8px",
                     fontWeight: "600",
                     color: "#374151",
+                    flexShrink: 0,
                   }}
                 >
                   +91
@@ -256,6 +257,9 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialPhone = "
                   autoFocus
                   style={{
                     flex: 1,
+                    minWidth: 0,
+                    width: "100%",
+                    boxSizing: "border-box",
                     padding: "12px 14px",
                     borderRadius: "8px",
                     border: "1px solid #d1d5db",

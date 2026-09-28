@@ -451,7 +451,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                 <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#334155", display: "block", marginBottom: "6px" }}>
                   Mobile Phone Number *
                 </label>
-                <div style={{ display: "flex", gap: "8px" }}>
+                <div style={{ display: "flex", gap: "8px", width: "100%", boxSizing: "border-box" }}>
                   <div
                     style={{
                       position: "relative",
@@ -460,7 +460,8 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                       borderRadius: "10px",
                       display: "flex",
                       alignItems: "center",
-                      padding: "0 10px",
+                      padding: "0 8px",
+                      flexShrink: 0,
                     }}
                   >
                     <select
@@ -474,7 +475,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                         fontWeight: "700",
                         color: "#0f172a",
                         fontSize: "0.95rem",
-                        paddingRight: "20px",
+                        paddingRight: "18px",
                         cursor: "pointer",
                         zIndex: 1,
                       }}
@@ -485,7 +486,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                         </option>
                       ))}
                     </select>
-                    <ChevronDown size={14} style={{ position: "absolute", right: "8px", pointerEvents: "none", color: "#64748b" }} />
+                    <ChevronDown size={14} style={{ position: "absolute", right: "6px", pointerEvents: "none", color: "#64748b" }} />
                   </div>
                   <input
                     type="tel"
@@ -497,6 +498,9 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                     autoFocus
                     style={{
                       flex: 1,
+                      minWidth: 0,
+                      width: "100%",
+                      boxSizing: "border-box",
                       padding: "12px 14px",
                       borderRadius: "10px",
                       border: "1.5px solid #cbd5e1",
@@ -690,12 +694,12 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
               </div>
 
               {/* Phone + Age Grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "10px" }}>
-                <div>
+              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: "10px", width: "100%", boxSizing: "border-box" }}>
+                <div style={{ minWidth: 0 }}>
                   <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#334155", display: "block", marginBottom: "4px" }}>
                     Mobile Number *
                   </label>
-                  <div style={{ display: "flex", gap: "6px" }}>
+                  <div style={{ display: "flex", gap: "6px", width: "100%", boxSizing: "border-box" }}>
                     <div
                       style={{
                         padding: "11px 8px",
@@ -705,6 +709,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                         fontWeight: "700",
                         color: "#0f172a",
                         fontSize: "0.9rem",
+                        flexShrink: 0,
                       }}
                     >
                       +91
@@ -718,6 +723,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                       required
                       style={{
                         flex: 1,
+                        minWidth: 0,
                         padding: "11px 10px",
                         borderRadius: "10px",
                         border: "1.5px solid #cbd5e1",
@@ -725,12 +731,13 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                         fontWeight: "600",
                         outline: "none",
                         width: "100%",
+                        boxSizing: "border-box",
                       }}
                     />
                   </div>
                 </div>
 
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <label style={{ fontSize: "0.82rem", fontWeight: "600", color: "#334155", display: "block", marginBottom: "4px" }}>
                     Age *
                   </label>
@@ -742,7 +749,7 @@ export default function AuthPage({ onAuthSuccess, onGoBack, initialView = "LOGIN
                     min={18}
                     max={120}
                     required
-                    style={{ width: "100%", padding: "11px 10px", borderRadius: "10px", border: "1.5px solid #cbd5e1", fontSize: "0.92rem" }}
+                    style={{ width: "100%", minWidth: 0, boxSizing: "border-box", padding: "11px 10px", borderRadius: "10px", border: "1.5px solid #cbd5e1", fontSize: "0.92rem" }}
                   />
                 </div>
               </div>
