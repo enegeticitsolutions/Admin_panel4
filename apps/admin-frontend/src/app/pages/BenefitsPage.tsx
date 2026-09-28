@@ -3,7 +3,7 @@
  * Create and manage individual benefits (Morning Nurse Visit, Medicine Delivery, etc.)
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { PageHeader } from '../components/common/PageHeader';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -106,6 +106,23 @@ export default function BenefitsPage() {
   const [filterTypeId, setFilterTypeId] = useState('all');
   const [form, setForm] = useState(BLANK_FORM);
 
+  const formRef = useRef<HTMLDivElement>(null);
+
+  const scrollToForm = () => {
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        const mainEl = document.querySelector('main');
+        if (mainEl) {
+          mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+    }, 60);
+  };
+
   useEffect(() => { load(); }, []);
 
   const load = async () => {
@@ -182,6 +199,7 @@ export default function BenefitsPage() {
       isGstExempt: false,
     });
     setShowForm(true);
+    scrollToForm();
   };
 
   const openEdit = (b: Benefit) => {
@@ -206,6 +224,7 @@ export default function BenefitsPage() {
       isGstExempt: b.isGstExempt || false,
     });
     setShowForm(true);
+    scrollToForm();
   };
 
   const resetForm = () => { setShowForm(false); setEditing(null); setForm(BLANK_FORM); };
@@ -214,7 +233,11 @@ export default function BenefitsPage() {
     if (!form.name.trim() || !form.benefitTypeId) return toast.error('Name and type are required');
     setSaving(true);
     try {
-      const payload = { ...form, unitCost: form.isChargeable ? form.unitCost : undefined, cost: form.isChargeable ? form.cost : undefined };
+      const payload = {
+        ...form,
+        unitCost: form.isChargeable ? (form.unitCost ?? null) : null,
+        cost: form.isChargeable ? (form.cost ?? null) : null,
+      };
       if (editing) {
         await benefitApi.update(editing.id, payload);
         toast.success('Benefit updated');
@@ -258,7 +281,8 @@ export default function BenefitsPage() {
       />
 
       {showForm && (
-        <Card className="mb-6 max-w-lg">
+        <div ref={formRef} id="benefit-form-card" className="scroll-mt-4">
+          <Card className="mb-6 max-w-lg shadow-md border-primary/20">
           <CardContent className="p-5 space-y-4 mt-2">
             <h3 className="font-semibold text-base">{editing ? 'Edit Benefit' : 'New Benefit'}</h3>
             <div className="space-y-1">
@@ -317,7 +341,13 @@ export default function BenefitsPage() {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setForm(f => ({ ...f, isChargeable: !f.isChargeable }))}
+                type="button"
+                onClick={() => setForm(f => ({
+                  ...f,
+                  isChargeable: !f.isChargeable,
+                  unitCost: !f.isChargeable ? f.unitCost : undefined,
+                  cost: !f.isChargeable ? f.cost : undefined,
+                }))}
                 className={`w-10 h-6 rounded-full transition-colors flex items-center ${form.isChargeable ? 'bg-primary justify-end' : 'bg-gray-200 justify-start'}`}
               >
                 <span className="w-5 h-5 bg-white rounded-full shadow mx-0.5" />
@@ -414,6 +444,7 @@ export default function BenefitsPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       )}
 
       {/* Filter */}

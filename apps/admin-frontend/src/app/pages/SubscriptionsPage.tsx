@@ -54,7 +54,19 @@ export default function SubscriptionsPage() {
   const [isManualPriceTwelve, setIsManualPriceTwelve] = useState(false);
   const [miscellaneousCost, setMiscellaneousCost] = useState('0');
   const [benefitSubtotal, setBenefitSubtotal] = useState(0);
+  const [isManualPrice, setIsManualPrice] = useState(false);
+  const [activeFrom, setActiveFrom] = useState('2026-01-01');
+  const [activeTo, setActiveTo] = useState('2026-12-31');
+  const [selectedBenefits, setSelectedBenefits] = useState<Set<string>>(new Set());
+  const [benefitUnits, setBenefitUnits] = useState<Record<string, number>>({});
+  const [benefitConfigs, setBenefitConfigs] = useState<Record<string, BenefitSetting>>({});
+  const [totalCost, setTotalCost] = useState('0');
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
 
+  const calculatedPriceOne = Math.round(
+    (benefitSubtotal * (1 - (parseFloat(discountPercentage) || 0) / 100)) +
+    (parseFloat(miscellaneousCost) || 0)
+  );
   const calculatedPriceThree = Math.round(
     (benefitSubtotal * 3 * (1 - (parseFloat(discountThreeMonths) || 0) / 100)) +
     ((parseFloat(miscellaneousCost) || 0) * 3)
@@ -68,25 +80,22 @@ export default function SubscriptionsPage() {
     ((parseFloat(miscellaneousCost) || 0) * 12)
   );
 
+  const isPriceOneOverridden = Math.round(parseFloat(totalCost) || 0) !== calculatedPriceOne;
+  const isPriceThreeOverridden = Math.round(parseFloat(priceThreeMonths) || 0) !== calculatedPriceThree;
+  const isPriceSixOverridden = Math.round(parseFloat(priceSixMonths) || 0) !== calculatedPriceSix;
+  const isPriceTwelveOverridden = Math.round(parseFloat(priceTwelveMonths) || 0) !== calculatedPriceTwelve;
+
   useEffect(() => {
     if (!isManualPriceThree) setPriceThreeMonths(String(calculatedPriceThree));
-  }, [benefitSubtotal, discountThreeMonths, miscellaneousCost, isManualPriceThree]);
+  }, [benefitSubtotal, discountThreeMonths, miscellaneousCost, isManualPriceThree, calculatedPriceThree]);
 
   useEffect(() => {
     if (!isManualPriceSix) setPriceSixMonths(String(calculatedPriceSix));
-  }, [benefitSubtotal, discountSixMonths, miscellaneousCost, isManualPriceSix]);
+  }, [benefitSubtotal, discountSixMonths, miscellaneousCost, isManualPriceSix, calculatedPriceSix]);
 
   useEffect(() => {
     if (!isManualPriceTwelve) setPriceTwelveMonths(String(calculatedPriceTwelve));
-  }, [benefitSubtotal, discountAnnual, miscellaneousCost, isManualPriceTwelve]);
-  const [isManualPrice, setIsManualPrice] = useState(false);
-  const [activeFrom, setActiveFrom] = useState('2026-01-01');
-  const [activeTo, setActiveTo] = useState('2026-12-31');
-  const [selectedBenefits, setSelectedBenefits] = useState<Set<string>>(new Set());
-  const [benefitUnits, setBenefitUnits] = useState<Record<string, number>>({});
-  const [benefitConfigs, setBenefitConfigs] = useState<Record<string, BenefitSetting>>({});
-  const [totalCost, setTotalCost] = useState('0');
-  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
+  }, [benefitSubtotal, discountAnnual, miscellaneousCost, isManualPriceTwelve, calculatedPriceTwelve]);
   const [isGlobal, setIsGlobal] = useState(true);
   const [isPopular, setIsPopular] = useState(false);
   const [isCompared, setIsCompared] = useState(false);
@@ -145,9 +154,10 @@ export default function SubscriptionsPage() {
         isUnlimited: false,
       };
 
-      const unitCost = benefit.unitCost || 0;
-      if (cfg.isUnlimited) {
-        // Unlimited services have no variable linear cost in monthly subtotal
+      const isChargeable = benefit.isChargeable !== false;
+      const unitCost = isChargeable ? (benefit.unitCost || 0) : 0;
+      if (cfg.isUnlimited || !isChargeable) {
+        // Unlimited or unchargeable services have no variable linear cost in monthly subtotal
         return;
       }
 
@@ -761,7 +771,7 @@ export default function SubscriptionsPage() {
                             </p>
                             <p className="text-xs text-primary mt-2">
                               Default: {benefit.defaultUnits} {benefit.unitLabel}
-                              {benefit.unitCost ? ` • ₹${benefit.unitCost}/${benefit.unitLabel.replace(/s$/, '')}` : ''}
+                              {benefit.isChargeable !== false && benefit.unitCost ? ` • ₹${benefit.unitCost}/${(benefit.unitLabel || '').replace(/s$/, '')}` : ' • Included / Free'}
                             </p>
                           </div>
                         </div>
@@ -793,9 +803,10 @@ export default function SubscriptionsPage() {
                         isUnlimited: false,
                       };
 
-                      const unitCost = benefit.unitCost || 0;
+                      const isChargeable = benefit.isChargeable !== false;
+                      const unitCost = isChargeable ? (benefit.unitCost || 0) : 0;
                       let monthlyImpact = 0;
-                      if (!cfg.isUnlimited) {
+                      if (isChargeable && !cfg.isUnlimited) {
                         if (cfg.frequency === 'monthly') monthlyImpact = unitCost * cfg.quantity;
                         else if (cfg.frequency === 'yearly' || cfg.frequency === 'one_time') monthlyImpact = Math.round((unitCost * cfg.quantity) / 12);
                       }
@@ -814,7 +825,7 @@ export default function SubscriptionsPage() {
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 Unit: <strong className="text-foreground">{benefit.unitLabel || 'visits'}</strong>
-                                {unitCost ? ` • Standalone Unit Cost: ₹${unitCost}` : ''}
+                                {isChargeable && unitCost ? ` • Standalone Unit Cost: ₹${unitCost}` : ' • Included (₹0)'}
                                 {benefit.isGstExempt || benefit.gstRate === 0
                                   ? ' • 0% GST (Exempt)'
                                   : benefit.gstRate !== undefined && benefit.gstRate !== null
@@ -827,9 +838,9 @@ export default function SubscriptionsPage() {
                             <div className="text-right">
                               <span className="text-xs text-muted-foreground block">Monthly Base Cost:</span>
                               <span className="text-sm font-bold text-primary">
-                                {cfg.isUnlimited ? 'Unlimited (₹0)' : `₹${monthlyImpact}/mo`}
+                                {!isChargeable ? 'Included (₹0)' : cfg.isUnlimited ? 'Unlimited (₹0)' : `₹${monthlyImpact}/mo`}
                               </span>
-                              {cfg.frequency === 'yearly' && !cfg.isUnlimited && (
+                              {isChargeable && cfg.frequency === 'yearly' && !cfg.isUnlimited && (
                                 <span className="text-[10px] text-muted-foreground block">
                                   (₹{unitCost * cfg.quantity} amortized over 12m)
                                 </span>
@@ -1052,10 +1063,14 @@ export default function SubscriptionsPage() {
                             <div className="space-y-1 pt-1">
                               <div className="flex justify-between items-center">
                                 <Label className="text-[11px] font-bold text-gray-700">Final Price (₹)</Label>
-                                {isManualPrice && (
+                                {isPriceOneOverridden && (
                                   <button
-                                    onClick={() => setIsManualPrice(false)}
-                                    className="text-[10px] text-orange-600 underline font-semibold"
+                                    type="button"
+                                    onClick={() => {
+                                      setIsManualPrice(false);
+                                      setTotalCost(String(calculatedPriceOne));
+                                    }}
+                                    className="text-[10px] text-orange-600 underline font-semibold cursor-pointer hover:text-orange-700"
                                   >
                                     Reset
                                   </button>
@@ -1068,7 +1083,7 @@ export default function SubscriptionsPage() {
                                   setTotalCost(e.target.value);
                                   setIsManualPrice(true);
                                 }}
-                                className={`h-9 font-bold text-sm ${isManualPrice ? 'bg-orange-50 text-orange-700 border-orange-300' : 'bg-white text-primary'}`}
+                                className={`h-9 font-bold text-sm ${isPriceOneOverridden ? 'bg-orange-50 text-orange-700 border-orange-300' : 'bg-white text-primary'}`}
                               />
                             </div>
                             <div className="text-[10px] text-gray-500 pt-1 border-t flex justify-between">
@@ -1096,13 +1111,14 @@ export default function SubscriptionsPage() {
                             <div className="space-y-1 pt-1">
                               <div className="flex justify-between items-center">
                                 <Label className="text-[11px] font-bold text-gray-700">Final Price (₹)</Label>
-                                {isManualPriceThree && (
+                                {isPriceThreeOverridden && (
                                   <button
+                                    type="button"
                                     onClick={() => {
                                       setIsManualPriceThree(false);
                                       setPriceThreeMonths(String(calculatedPriceThree));
                                     }}
-                                    className="text-[10px] text-orange-600 underline font-semibold"
+                                    className="text-[10px] text-orange-600 underline font-semibold cursor-pointer hover:text-orange-700"
                                   >
                                     Reset
                                   </button>
@@ -1115,7 +1131,7 @@ export default function SubscriptionsPage() {
                                   setPriceThreeMonths(e.target.value);
                                   setIsManualPriceThree(true);
                                 }}
-                                className={`h-9 font-bold text-sm ${isManualPriceThree ? 'bg-orange-100 text-orange-800 border-orange-400' : 'bg-white text-orange-950'}`}
+                                className={`h-9 font-bold text-sm ${isPriceThreeOverridden ? 'bg-orange-100 text-orange-800 border-orange-400' : 'bg-white text-orange-950'}`}
                               />
                             </div>
                             <div className="text-[10px] text-orange-900 pt-1 border-t border-orange-200/60 flex justify-between">
@@ -1145,13 +1161,14 @@ export default function SubscriptionsPage() {
                             <div className="space-y-1 pt-1">
                               <div className="flex justify-between items-center">
                                 <Label className="text-[11px] font-bold text-gray-700">Final Price (₹)</Label>
-                                {isManualPriceSix && (
+                                {isPriceSixOverridden && (
                                   <button
+                                    type="button"
                                     onClick={() => {
                                       setIsManualPriceSix(false);
                                       setPriceSixMonths(String(calculatedPriceSix));
                                     }}
-                                    className="text-[10px] text-orange-600 underline font-semibold"
+                                    className="text-[10px] text-orange-600 underline font-semibold cursor-pointer hover:text-orange-700"
                                   >
                                     Reset
                                   </button>
@@ -1164,7 +1181,7 @@ export default function SubscriptionsPage() {
                                   setPriceSixMonths(e.target.value);
                                   setIsManualPriceSix(true);
                                 }}
-                                className={`h-9 font-bold text-sm ${isManualPriceSix ? 'bg-orange-100 text-orange-800 border-orange-400' : 'bg-white text-orange-950'}`}
+                                className={`h-9 font-bold text-sm ${isPriceSixOverridden ? 'bg-orange-100 text-orange-800 border-orange-400' : 'bg-white text-orange-950'}`}
                               />
                             </div>
                             <div className="text-[10px] text-orange-900 pt-1 border-t border-orange-200/60 flex justify-between">
@@ -1194,13 +1211,14 @@ export default function SubscriptionsPage() {
                             <div className="space-y-1 pt-1">
                               <div className="flex justify-between items-center">
                                 <Label className="text-[11px] font-bold text-gray-700">Final Price (₹)</Label>
-                                {isManualPriceTwelve && (
+                                {isPriceTwelveOverridden && (
                                   <button
+                                    type="button"
                                     onClick={() => {
                                       setIsManualPriceTwelve(false);
                                       setPriceTwelveMonths(String(calculatedPriceTwelve));
                                     }}
-                                    className="text-[10px] text-orange-600 underline font-semibold"
+                                    className="text-[10px] text-orange-600 underline font-semibold cursor-pointer hover:text-orange-700"
                                   >
                                     Reset
                                   </button>
@@ -1213,7 +1231,7 @@ export default function SubscriptionsPage() {
                                   setPriceTwelveMonths(e.target.value);
                                   setIsManualPriceTwelve(true);
                                 }}
-                                className={`h-9 font-bold text-sm ${isManualPriceTwelve ? 'bg-orange-100 text-orange-800 border-orange-400' : 'bg-white text-orange-950'}`}
+                                className={`h-9 font-bold text-sm ${isPriceTwelveOverridden ? 'bg-orange-100 text-orange-800 border-orange-400' : 'bg-white text-orange-950'}`}
                               />
                             </div>
                             <div className="text-[10px] text-orange-900 pt-1 border-t border-orange-200/60 flex justify-between">

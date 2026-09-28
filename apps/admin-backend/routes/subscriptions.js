@@ -139,7 +139,8 @@ router.post('/calculate-price', async (req, res) => {
     const packageBenefits = pkg.packageBenefits || [];
     let catalogTotal = 0;
     packageBenefits.forEach((pb) => {
-      const uCost = Number(pb.benefit?.unitCost) || 0;
+      const isChargeable = pb.benefit?.isChargeable !== false;
+      const uCost = isChargeable ? (Number(pb.benefit?.unitCost) || 0) : 0;
       const uCount = pb.unitsIncluded || 1;
       catalogTotal += uCost * uCount;
     });
@@ -153,7 +154,8 @@ router.post('/calculate-price', async (req, res) => {
         const b = pb.benefit;
         if (!b) return;
 
-        const uCost = Number(b.unitCost) || 0;
+        const isChargeable = b.isChargeable !== false;
+        const uCost = isChargeable ? (Number(b.unitCost) || 0) : 0;
         const uCount = pb.unitsIncluded || 1;
         const lineCatalog = uCost * uCount;
 

@@ -97,8 +97,8 @@ router.post('/', async (req, res) => {
           name,
           description,
           isChargeable: isChargeable ?? false,
-          unitCost: unitCost ?? null,
-          cost: cost ?? null,
+          unitCost: isChargeable ? (unitCost ?? null) : null,
+          cost: isChargeable ? (cost ?? null) : null,
           unitLabel,
           defaultUnits: defaultUnits ?? 1,
           displayOrder: displayOrder ?? 0,
@@ -177,9 +177,15 @@ router.patch('/:id', async (req, res) => {
     if (code !== undefined) dataToUpdate.code = code ? code.trim().toUpperCase() : null;
     if (name !== undefined) dataToUpdate.name = name;
     if (description !== undefined) dataToUpdate.description = description;
-    if (isChargeable !== undefined) dataToUpdate.isChargeable = isChargeable;
-    if (unitCost !== undefined) dataToUpdate.unitCost = unitCost;
-    if (cost !== undefined) dataToUpdate.cost = cost;
+    if (isChargeable !== undefined) {
+      dataToUpdate.isChargeable = isChargeable;
+      if (!isChargeable) {
+        dataToUpdate.unitCost = null;
+        dataToUpdate.cost = null;
+      }
+    }
+    if (unitCost !== undefined) dataToUpdate.unitCost = isChargeable === false ? null : unitCost;
+    if (cost !== undefined) dataToUpdate.cost = isChargeable === false ? null : cost;
     if (unitLabel !== undefined) dataToUpdate.unitLabel = unitLabel;
     if (defaultUnits !== undefined) dataToUpdate.defaultUnits = defaultUnits;
     if (displayOrder !== undefined) dataToUpdate.displayOrder = displayOrder;
