@@ -84,7 +84,8 @@ export default function CheckoutScreen() {
     }>({
         packageName: 'Loading...',
         basePrice: 0,
-        discountApplied: 0,
+        durationDiscount: 0,
+        couponDiscount: 0,
         saathiDiscountApplied: 0,
         tax: 0,
         total: 0,
@@ -353,10 +354,13 @@ export default function CheckoutScreen() {
                 setPricing({
                     packageName: pkgName,
                     basePrice: pkgPrice,
-                    discountApplied: 0,
+                    durationDiscount: 0,
+                    couponDiscount: 0,
+                    saathiDiscountApplied: 0,
                     tax: 0,
                     total: 0, // No payment in verification flow
                     couponValid: false,
+                    saathiCouponValid: false,
                 });
             } catch (err) {
                 console.error('Error pre-filling pricing in checkout:', err);
@@ -387,7 +391,7 @@ export default function CheckoutScreen() {
             const result = await fetchCheckoutPreview(promoCode.trim().toUpperCase(), appliedSaathiCouponCode);
             if (result.couponValid) {
                 setAppliedCouponCode(promoCode.trim().toUpperCase());
-                Alert.alert('✅ Coupon Applied!', `You saved ₹${result.discountApplied.toFixed(2)} on this order.`);
+                Alert.alert('✅ Coupon Applied!', `You saved ₹${((result.couponDiscount || 0)).toFixed(2)} on this order.`);
             } else {
                 setCouponError(result.couponMessage || 'Invalid or expired coupon code');
                 setAppliedCouponCode('');
@@ -1047,7 +1051,7 @@ export default function CheckoutScreen() {
                                                         <Ionicons name="checkmark-circle" size={24} color="#10B981" />
                                                         <View style={{ marginLeft: 10 }}>
                                                             <Text style={styles.couponAppliedCode}>{appliedCouponCode}</Text>
-                                                            <Text style={styles.couponAppliedSaving}>You saved ₹{(pricing.discountApplied || 0).toFixed(2)}!</Text>
+                                                            <Text style={styles.couponAppliedSaving}>You saved ₹{(pricing.couponDiscount || 0).toFixed(2)}!</Text>
                                                         </View>
                                                     </View>
                                                     <TouchableOpacity onPress={handleRemoveCoupon} style={styles.removeBtn}>

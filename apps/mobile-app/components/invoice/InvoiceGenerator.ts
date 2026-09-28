@@ -249,7 +249,24 @@ const itemsHtml = data.items.map((item, index) => `
             <td>Total Amount</td>
             <td>₹${(data.baseAmount + (data.cgstAmount || 0) + (data.sgstAmount || 0) + (data.igstAmount || 0)).toFixed(2)}</td>
           </tr>
-          ${(data.discountAmount + (data.saathiDiscountAmount || 0)) > 0 ? `
+          ${data.discountAmount > 0 ? `
+          <tr>
+            <td>Discount</td>
+            <td>-₹${data.discountAmount.toFixed(2)}</td>
+          </tr>
+          ` : ''}
+          ${(data.saathiDiscountAmount || 0) > 0 ? `
+          <tr>
+            <td>Saathi Discount</td>
+            <td>-₹${(data.saathiDiscountAmount || 0).toFixed(2)}</td>
+          </tr>
+          ` : ''}
+          ${(data.discountAmount > 0 && (data.saathiDiscountAmount || 0) > 0) ? `
+          <tr>
+            <td style="font-weight: 600;">Total Discount</td>
+            <td style="font-weight: 600;">-₹${(data.discountAmount + (data.saathiDiscountAmount || 0)).toFixed(2)}</td>
+          </tr>
+          ` : (data.discountAmount > 0 || (data.saathiDiscountAmount || 0) > 0) ? `
           <tr>
             <td>Total Discount</td>
             <td>-₹${(data.discountAmount + (data.saathiDiscountAmount || 0)).toFixed(2)}</td>

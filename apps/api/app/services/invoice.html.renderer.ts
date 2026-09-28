@@ -335,10 +335,27 @@ export class InvoiceHtmlRenderer {
         <td>Total Amount</td>
         <td>₹${totalBeforeDiscount.toFixed(2)}</td>
       </tr>
-      ${totalDiscountDisplay > 0 ? `
+      ${Number(invoice.discountAmount || 0) > 0 ? `
+      <tr>
+        <td>Discount</td>
+        <td>-₹${Number(invoice.discountAmount).toFixed(2)}</td>
+      </tr>
+      ` : ''}
+      ${Number(invoice.saathiDiscountAmount || 0) > 0 ? `
+      <tr>
+        <td>Saathi Discount</td>
+        <td>-₹${Number(invoice.saathiDiscountAmount).toFixed(2)}</td>
+      </tr>
+      ` : ''}
+      ${(Number(invoice.discountAmount || 0) > 0 && Number(invoice.saathiDiscountAmount || 0) > 0) ? `
+      <tr>
+        <td style="font-weight: 600;">Total Discount</td>
+        <td style="font-weight: 600;">-₹${(Number(invoice.discountAmount) + Number(invoice.saathiDiscountAmount)).toFixed(2)}</td>
+      </tr>
+      ` : (Number(invoice.discountAmount || 0) > 0 || Number(invoice.saathiDiscountAmount || 0) > 0) ? `
       <tr>
         <td>Total Discount</td>
-        <td>-₹${totalDiscountDisplay.toFixed(2)}</td>
+        <td>-₹${(Number(invoice.discountAmount || 0) + Number(invoice.saathiDiscountAmount || 0)).toFixed(2)}</td>
       </tr>
       ` : ''}
       <tr class="bold">

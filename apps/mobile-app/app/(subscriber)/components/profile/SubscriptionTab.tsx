@@ -18,9 +18,10 @@ interface SubscriptionTabProps {
         isActive: boolean;
     } | null;
     beneficiaries: any[];
+    hasUnassignedPackage?: boolean;
 }
 
-const SubscriptionTab = ({ plan, beneficiaries }: SubscriptionTabProps) => {
+const SubscriptionTab = ({ plan, beneficiaries, hasUnassignedPackage }: SubscriptionTabProps) => {
     const router = useRouter();
     const { push, replace, pop } = useNavigationStack();
     useAndroidBackHandler();
@@ -112,14 +113,16 @@ const SubscriptionTab = ({ plan, beneficiaries }: SubscriptionTabProps) => {
             <View style={styles.section}>
                 <View style={styles.sectionHeaderRow}>
                     <Text style={styles.sectionTitle}>Your Beneficiaries</Text>
-                    <TouchableOpacity
-                        style={styles.addBtn}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        onPress={() => push('/(setup)/beneficiary-info')}
-                    >
-                        <Text style={styles.addBtnText}>+ Add</Text>
-                    </TouchableOpacity>
+                    {hasUnassignedPackage && (
+                        <TouchableOpacity
+                            style={styles.addBtn}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            onPress={() => push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } })}
+                        >
+                            <Text style={styles.addBtnText}>+ Add</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {beneficiaries?.length > 0 ? (

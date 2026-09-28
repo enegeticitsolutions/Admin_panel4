@@ -144,6 +144,11 @@ export const getSubscriberProfile = async (subscriberId: string, beneficiaryId?:
     }))
   );
 
+  const unassignedSubscriptions = activeSubscriptions.filter(
+    (s: any) => !s.beneficiaryId && !s.isQueued && s.cancellationNote !== 'QUEUED' && !s.cancelledAt
+  );
+  const hasUnassignedPackage = unassignedSubscriptions.length > 0;
+
   return {
     user: userWithFallbackAddress,
     stats: {
@@ -152,7 +157,16 @@ export const getSubscriberProfile = async (subscriberId: string, beneficiaryId?:
       availableHours: Math.max(0, totalHours - usedHours)
     },
     currentPlan,
-    beneficiaries: resolvedBeneficiaries
+    beneficiaries: resolvedBeneficiaries,
+    hasUnassignedPackage,
+    unassignedSubscriptionsCount: unassignedSubscriptions.length,
+    unassignedSubscriptions: unassignedSubscriptions.map(s => ({
+      id: s.id,
+      packageType: s.packageType,
+      name: s.packageVersion?.name || s.package?.name || s.packageType,
+      startDate: s.startDate,
+      endDate: s.endDate
+    }))
   };
 };
 
