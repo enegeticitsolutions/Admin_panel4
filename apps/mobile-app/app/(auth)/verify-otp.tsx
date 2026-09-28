@@ -13,7 +13,7 @@ import { IS_PASSWORD_LOGIN_ENABLED } from '@/constants/authMode';
 export default function VerifyOtpScreen() {
     const { width: screenWidth } = useWindowDimensions();
     const router = useRouter();
-    const { push, replace, pop } = useNavigationStack();
+    const { push, replace, pop, resetStack } = useNavigationStack();
     useAndroidBackHandler();
     const { login } = useAuth();
     const { phone } = useLocalSearchParams<{ phone: string }>();
@@ -128,6 +128,7 @@ export default function VerifyOtpScreen() {
                 } else if (result.user) {
                     // PERSIST SESSION via AuthContext
                     await login(result.token, result.user);
+                    resetStack();
 
                     const role = result.user.role;
                     if (role === "care_companion") {

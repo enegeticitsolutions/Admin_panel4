@@ -15,6 +15,7 @@ import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import HeaderSpacer from '@/components/HeaderSpacer';
 import { AddMedicineModal } from '@/components/ui/AddMedicineModal';
+import NotificationBell from '@/components/shared/NotificationBell';
 
 type Medication = {
     name: string;
@@ -37,6 +38,7 @@ export default function MedicalInfoScreen() {
 
     const [drawerOpen, setDrawerOpen] = useState(false);
     const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
+    const scrollViewRef = useRef<ScrollView>(null);
     const [userData, setUserData] = useState<any>(null);
 
     useEffect(() => {
@@ -58,8 +60,10 @@ export default function MedicalInfoScreen() {
     const [medications, setMedications] = useState<Medication[]>([]);
     const [physicianName, setPhysicianName] = useState('');
     const [physicianPhone, setPhysicianPhone] = useState('');
+    const [physicianPhoneError, setPhysicianPhoneError] = useState<string | null>(null);
     const [hobbiesText, setHobbiesText] = useState(''); // comma separated for now
     const [customHobbyText, setCustomHobbyText] = useState('');
+    const [customHobbyError, setCustomHobbyError] = useState<string | null>(null);
     const [vitals, setVitals] = useState<Record<string, boolean>>({});
     
     // Config States
@@ -245,11 +249,34 @@ export default function MedicalInfoScreen() {
     }, [isVerificationFlow, pendingDetailsRaw]);
 
     const handleNext = () => {
+        let hasError = false;
+
+        const isOtherHobbySelected = hobbiesText.split(', ').includes('Other');
+        if (isOtherHobbySelected && !customHobbyText.trim()) {
+            setCustomHobbyError("Please specify other hobbies");
+            hasError = true;
+        } else {
+            setCustomHobbyError(null);
+        }
+
+        const cleanedPhysicianPhone = physicianPhone.replace(/\D/g, '');
+        if (cleanedPhysicianPhone && cleanedPhysicianPhone.length !== 10) {
+            setPhysicianPhoneError("Physician phone number must be 10 digits");
+            hasError = true;
+        } else {
+            setPhysicianPhoneError(null);
+        }
+
+        if (hasError) {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            return;
+        }
+
         const medicalDataPayload = {
             conditions,
             medications,
             physicianName,
-            physicianPhone,
+            physicianPhone: cleanedPhysicianPhone,
             hobbies: hobbiesText.split(',').map(s => s.trim()).filter(Boolean),
             vitals
         };
@@ -397,10 +424,7 @@ export default function MedicalInfoScreen() {
                             <Text style={styles.headerSubtitle}>Step 3 of 5</Text>
                         </View>
                         <View style={styles.headerRightIcons}>
-                            <View>
-                                <Ionicons name="notifications-outline" size={26} color="#111827" />
-                                <View style={styles.badge}><Text style={styles.badgeText}>2</Text></View>
-                            </View>
+                            <NotificationBell />
                             <TouchableOpacity onPress={openDrawer}>
                                 <Ionicons name="menu-outline" size={28} color="#111827" style={{ marginLeft: 16 }} />
                             </TouchableOpacity>
@@ -411,7 +435,7 @@ export default function MedicalInfoScreen() {
                     </View>
                 </View>
 
-                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                     {/* Medical Information Panel */}
                     <View style={styles.card}>
@@ -512,14 +536,22 @@ export default function MedicalInfoScreen() {
 
                         <Text style={styles.inputLabel}>Physician Phone Number</Text>
                         <TextInput
-                            style={styles.input}
+                            style={[styles.input, physicianPhoneError ? { borderColor: '#EF4444' } : null]}
                             placeholder="Contact number"
                             placeholderTextColor="#9CA3AF"
                             keyboardType="numeric"
                             maxLength={10}
                             value={physicianPhone}
-                            onChangeText={(t) => setPhysicianPhone(t.replace(/[^0-9]/g, '').slice(0, 10))}
+                            onChangeText={(t) => {
+                                setPhysicianPhone(t.replace(/[^0-9]/g, '').slice(0, 10));
+                                if (physicianPhoneError) setPhysicianPhoneError(null);
+                            }}
                         />
+                        {physicianPhoneError && (
+                            <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginHorizontal: 8 }}>
+                                {physicianPhoneError}
+                            </Text>
+                        )}
 
                         <View style={{ marginTop: 16 }} />
 
@@ -542,13 +574,14 @@ export default function MedicalInfoScreen() {
                             <View style={{ marginTop: 16 }}>
                                 <Text style={styles.inputLabel}>Specify Other Hobbies *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, customHobbyError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="e.g. Swimming, Bird Watching"
                                     placeholderTextColor="#9CA3AF"
                                     maxLength={50}
                                     value={customHobbyText}
                                     onChangeText={(t) => {
                                         setCustomHobbyText(t);
+                                        if (customHobbyError) setCustomHobbyError(null);
                                         const baseHobbies = hobbiesText.split(', ').filter(h => h !== 'Other' && !h.startsWith('('));
                                         const trimmed = t.slice(0, 50).trim();
                                         if (trimmed) {
@@ -558,6 +591,11 @@ export default function MedicalInfoScreen() {
                                         }
                                     }}
                                 />
+                                {customHobbyError && (
+                                    <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, marginHorizontal: 8 }}>
+                                        {customHobbyError}
+                                    </Text>
+                                )}
                             </View>
                         )}
                         <Text style={styles.hintText}>This helps us create meaningful social connections</Text>

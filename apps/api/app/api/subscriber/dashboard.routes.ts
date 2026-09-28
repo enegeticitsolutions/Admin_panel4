@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authenticate, AuthRequest } from '../shared/deps';
 import prisma from '../../core/database';
+import { resolveFileUrl } from '../../services/storage/urlResolver';
 
 const router = Router();
 
@@ -209,7 +210,7 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
     }
 
     // Map beneficiaries with dynamic subscription health, expiration status, and queued plans
-    const mappedBeneficiaries = beneficiaries.map((b: any) => {
+    const mappedBeneficiaries = await Promise.all(beneficiaries.map(async (b: any) => {
       const benSubs = allUserSubscriptions.filter((s: any) => s.beneficiaryId === b.id);
       const activeSubs = benSubs.filter((s: any) => s.isActive && new Date(s.endDate) > now && !s.isQueued && s.cancellationNote !== 'QUEUED');
       const activeSub = activeSubs[0] || null;
@@ -226,8 +227,11 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
         packageStatus = 'expired';
       }
 
+      const resolvedPhoto = b.photo ? await resolveFileUrl(b.photo, 1800) : null;
+
       return {
         ...b,
+        photo: resolvedPhoto,
         packageStatus,
         isExpired: packageStatus === 'expired',
         subscriptionEndDate: activeSub?.endDate || expiredSub?.endDate || null,
@@ -242,7 +246,7 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
         // Only map default Prisma seed score (8.0) → null; real scores pass through as-is
         emotionalScore: b.emotionalScore === 8.0 ? null : (b.emotionalScore ?? null)
       };
-    });
+    }));
 
     // Average Happiness (Scoped)
     const scopedBeneficiaries = mappedBeneficiaries.filter((b: any) => benIds.includes(b.id));

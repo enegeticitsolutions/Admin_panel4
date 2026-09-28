@@ -17,7 +17,7 @@ import { LegalConsentModal } from '@/components/shared/LegalConsentModal';
 import { CountryPickerModal } from '@/components/ui/CountryPickerModal';
 
 export default function RegisterScreen() {
-    const { push, replace } = useNavigationStack();
+    const { push, replace, resetStack } = useNavigationStack();
     useAndroidBackHandler();
     const safeBack = useSafeBack();
     const { login } = useAuth();
@@ -273,6 +273,7 @@ export default function RegisterScreen() {
                 if (data.success) {
                     const result = data.data;
                     await login(result.token, result.user);
+                    resetStack();
                     if (result.user.role === 'care_companion') {
                         replace("/(care-companion)");
                     } else if (result.user.role === 'beneficiary') {
@@ -367,6 +368,7 @@ export default function RegisterScreen() {
             if (registerData.success) {
                 const result = registerData.data;
                 await login(result.token, result.user);
+                resetStack();
                 if (result.user.role === 'care_companion') {
                     replace("/(care-companion)");
                 } else if (result.user.role === 'beneficiary') {

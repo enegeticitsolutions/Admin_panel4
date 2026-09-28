@@ -67,10 +67,23 @@ export class BenefitPeriodManager {
     const totalPeriods = Math.max(1, Math.floor(durationMonths || 1));
     const rolloverMultiplier = await this.getSystemRolloverMultiplier(client);
 
-    // Clean up any existing un-activated periods if resetting
-    await client.benefitPeriod.deleteMany({
-      where: { subscriptionId }
+    // Clean up any existing un-activated periods and their balances/usages if resetting
+    const existingPeriods = await client.benefitPeriod.findMany({
+      where: { subscriptionId },
+      select: { id: true }
     });
+    if (existingPeriods.length > 0) {
+      const pIds = existingPeriods.map(p => p.id);
+      await client.benefitPeriodBalance.deleteMany({
+        where: { periodId: { in: pIds } }
+      });
+      await client.benefitUsage.deleteMany({
+        where: { periodId: { in: pIds } }
+      });
+      await client.benefitPeriod.deleteMany({
+        where: { id: { in: pIds } }
+      });
+    }
 
     let currentPeriodStart = new Date(startDate);
 

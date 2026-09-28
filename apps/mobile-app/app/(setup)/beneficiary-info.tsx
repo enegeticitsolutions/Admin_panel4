@@ -20,6 +20,7 @@ import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import HeaderSpacer from '@/components/HeaderSpacer';
 import { API_URL } from '@/constants/api';
+import NotificationBell from '@/components/shared/NotificationBell';
 
 
 export default function BeneficiaryInfoScreen() {
@@ -36,6 +37,7 @@ export default function BeneficiaryInfoScreen() {
 
     const [drawerOpen, setDrawerOpen] = useState(false);
     const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
+    const scrollViewRef = useRef<ScrollView>(null);
     const [userData, setUserData] = useState<any>(null);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
     const [pendingData, setPendingData] = useState<any>(null);
@@ -247,6 +249,16 @@ export default function BeneficiaryInfoScreen() {
 
             if (phoneError) setPhoneError(null);
             if (dobError) setDobError(null);
+            setNameError(null);
+            setGenderError(null);
+            setMaritalStatusError(null);
+            setRelationshipError(null);
+            setCustomRelationshipError(null);
+            setFlatPlotError(null);
+            setStreetAreaError(null);
+            setCityError(null);
+            setStateError(null);
+            setPincodeError(null);
         } else {
             setBeneficiaryForm({
                 fullName: '',
@@ -266,6 +278,16 @@ export default function BeneficiaryInfoScreen() {
                 longitude: 0,
             });
             setPickedPhotoUri(null);
+            setNameError(null);
+            setGenderError(null);
+            setMaritalStatusError(null);
+            setRelationshipError(null);
+            setCustomRelationshipError(null);
+            setFlatPlotError(null);
+            setStreetAreaError(null);
+            setCityError(null);
+            setStateError(null);
+            setPincodeError(null);
         }
     };
 
@@ -348,6 +370,16 @@ export default function BeneficiaryInfoScreen() {
     };
 
     const [phoneError, setPhoneError] = useState<string | null>(null);
+    const [nameError, setNameError] = useState<string | null>(null);
+    const [genderError, setGenderError] = useState<string | null>(null);
+    const [maritalStatusError, setMaritalStatusError] = useState<string | null>(null);
+    const [relationshipError, setRelationshipError] = useState<string | null>(null);
+    const [customRelationshipError, setCustomRelationshipError] = useState<string | null>(null);
+    const [flatPlotError, setFlatPlotError] = useState<string | null>(null);
+    const [streetAreaError, setStreetAreaError] = useState<string | null>(null);
+    const [cityError, setCityError] = useState<string | null>(null);
+    const [stateError, setStateError] = useState<string | null>(null);
+    const [pincodeError, setPincodeError] = useState<string | null>(null);
 
     const validatePhone = async (phoneStr: string) => {
         if (!phoneStr || phoneStr.length < 10) {
@@ -385,12 +417,19 @@ export default function BeneficiaryInfoScreen() {
     };
 
     const handleNext = async () => {
-        if (!beneficiaryForm.dob) {
-            setDobError("Date of Birth is required");
-            return;
+        let hasError = false;
+
+        if (!beneficiaryForm.fullName.trim()) {
+            setNameError("Beneficiary name is required");
+            hasError = true;
+        } else {
+            setNameError(null);
         }
 
-        if (beneficiaryForm.dob.length === 10) {
+        if (!beneficiaryForm.dob) {
+            setDobError("Date of Birth is required");
+            hasError = true;
+        } else if (beneficiaryForm.dob.length === 10) {
             const parts = beneficiaryForm.dob.split('/');
             const day = parseInt(parts[0], 10);
             const month = parseInt(parts[1], 10);
@@ -399,30 +438,115 @@ export default function BeneficiaryInfoScreen() {
             const currentYear = new Date().getFullYear();
             if (year > currentYear || year < currentYear - 120) {
                 setDobError(`Year must be between ${currentYear - 120} and ${currentYear}`);
-                return;
-            }
-
-            const dateObj = new Date(year, month - 1, day);
-            if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) {
-                setDobError("Invalid date format (e.g. 31st of Feb)");
-                return;
+                hasError = true;
+            } else {
+                const dateObj = new Date(year, month - 1, day);
+                if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) {
+                    setDobError("Invalid date format (e.g. 31st of Feb)");
+                    hasError = true;
+                } else {
+                    setDobError(null);
+                }
             }
         } else {
             setDobError("Date must be in DD/MM/YYYY format");
-            return;
+            hasError = true;
+        }
+
+        if (!beneficiaryForm.gender) {
+            setGenderError("Gender is required");
+            hasError = true;
+        } else {
+            setGenderError(null);
+        }
+
+        if (!beneficiaryForm.maritalStatus) {
+            setMaritalStatusError("Marital status is required");
+            hasError = true;
+        } else {
+            setMaritalStatusError(null);
+        }
+
+        const rel = (beneficiaryForm.relationship || '').trim();
+        if (!rel || rel.toLowerCase() === 'please select') {
+            setRelationshipError("Relationship to subscriber is required");
+            hasError = true;
+        } else if (rel.toLowerCase() === 'other') {
+            setCustomRelationshipError("Please specify relationship");
+            hasError = true;
+        } else {
+            setRelationshipError(null);
+            setCustomRelationshipError(null);
         }
 
         // Phone is required
         if (!beneficiaryForm.phone || beneficiaryForm.phone.trim().length === 0) {
             setPhoneError("Phone number is required.");
-            return;
-        }
-        if (beneficiaryForm.phone.length !== 10) {
+            hasError = true;
+        } else if (beneficiaryForm.phone.length !== 10) {
             setPhoneError("Phone number must be exactly 10 digits");
+            hasError = true;
+        } else {
+            const isPhoneValid = await validatePhone(beneficiaryForm.phone);
+            if (!isPhoneValid) {
+                hasError = true;
+            }
+        }
+
+        if (!beneficiaryForm.flatPlot.trim()) {
+            setFlatPlotError("Flat / Plot / Building is required");
+            hasError = true;
+        } else {
+            setFlatPlotError(null);
+        }
+
+        if (!beneficiaryForm.streetArea.trim()) {
+            setStreetAreaError("Street / Area is required");
+            hasError = true;
+        } else {
+            setStreetAreaError(null);
+        }
+
+        if (!beneficiaryForm.city.trim()) {
+            setCityError("City is required");
+            hasError = true;
+        } else {
+            setCityError(null);
+        }
+
+        const cleanedPincode = beneficiaryForm.pincode.replace(/\D/g, '');
+        if (!cleanedPincode) {
+            setPincodeError("Pincode is required");
+            hasError = true;
+        } else if (cleanedPincode.length !== 6) {
+            setPincodeError("Pincode must be exactly 6 digits");
+            hasError = true;
+        } else {
+            setPincodeError(null);
+        }
+
+        if (!beneficiaryForm.state.trim()) {
+            setStateError("State is required");
+            hasError = true;
+        } else {
+            setStateError(null);
+        }
+
+        if (hasError) {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
             return;
         }
-        const isPhoneValid = await validatePhone(beneficiaryForm.phone);
-        if (!isPhoneValid) return;
+
+        const constructedAddress = [
+            beneficiaryForm.flatPlot.trim(),
+            beneficiaryForm.streetArea.trim(),
+            beneficiaryForm.landmark.trim(),
+            beneficiaryForm.city.trim(),
+            beneficiaryForm.state.trim(),
+            cleanedPincode
+        ].filter(Boolean).join(', ');
+
+        const finalAddress = beneficiaryForm.address.trim() || constructedAddress;
 
         const packageIdToPass = params.packageId || (pendingData?.subscriptions?.[0]?.packageType || '');
         push('/(setup)/medical-info', {
@@ -430,7 +554,11 @@ export default function BeneficiaryInfoScreen() {
             subscriberData: params.subscriberData,
             isVerificationFlow: params.isVerificationFlow,
             beneficiaryId: params.beneficiaryId,
-            beneficiaryData: JSON.stringify({ ...beneficiaryForm, photoUri: pickedPhotoUri }),
+            beneficiaryData: JSON.stringify({
+                ...beneficiaryForm,
+                address: finalAddress,
+                photoUri: pickedPhotoUri
+            }),
             pendingDetails: pendingData ? JSON.stringify(pendingData) : undefined,
             isLinkingFlow: params.isLinkingFlow || 'false'
         });
@@ -440,9 +568,13 @@ export default function BeneficiaryInfoScreen() {
         safeBack();
     };
 
-    const SegmentedButton = ({ label, active, onPress }: { label: string, active: boolean, onPress: () => void }) => (
+    const SegmentedButton = ({ label, active, hasError, onPress }: { label: string, active: boolean, hasError?: boolean, onPress: () => void }) => (
         <TouchableOpacity
-            style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+            style={[
+                styles.segmentBtn,
+                active && styles.segmentBtnActive,
+                hasError && !active && { borderColor: '#EF4444', borderWidth: 1 }
+            ]}
             onPress={onPress}
         >
             <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
@@ -475,10 +607,7 @@ export default function BeneficiaryInfoScreen() {
                             <Text style={styles.headerSubtitle}>Step 2 of 5</Text>
                         </View>
                         <View style={styles.headerIcons}>
-                            <View>
-                                <Ionicons name="notifications-outline" size={26} color="#111827" />
-                                <View style={styles.notifBadge}><Text style={styles.notifText}>2</Text></View>
-                            </View>
+                            <NotificationBell />
                             <TouchableOpacity onPress={openDrawer}>
                                 <Ionicons name="menu-outline" size={30} color="#111827" style={{ marginLeft: 15 }} />
                             </TouchableOpacity>
@@ -490,7 +619,7 @@ export default function BeneficiaryInfoScreen() {
                     </View>
                 </View>
 
-                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                     <View style={styles.formCard}>
                         <Text style={styles.sectionTitle}>Beneficiary Information</Text>
@@ -547,13 +676,21 @@ export default function BeneficiaryInfoScreen() {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Beneficiary Name *</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, nameError ? { borderColor: '#EF4444' } : null]}
                                 placeholder="Enter beneficiary's full name"
                                 placeholderTextColor="#9CA3AF"
                                 value={beneficiaryForm.fullName}
                                 maxLength={50}
-                                onChangeText={(t) => setBeneficiaryForm({ ...beneficiaryForm, fullName: t })}
+                                onChangeText={(t) => {
+                                    setBeneficiaryForm({ ...beneficiaryForm, fullName: t });
+                                    if (nameError) setNameError(null);
+                                }}
                             />
+                            {nameError && (
+                                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Poppins_400Regular' }}>
+                                    {nameError}
+                                </Text>
+                            )}
                         </View>
 
                         {/* Date of Birth */}
@@ -592,14 +729,27 @@ export default function BeneficiaryInfoScreen() {
                                 <SegmentedButton
                                     label="Male"
                                     active={beneficiaryForm.gender === 'Male'}
-                                    onPress={() => setBeneficiaryForm({ ...beneficiaryForm, gender: 'Male' })}
+                                    hasError={!!genderError}
+                                    onPress={() => {
+                                        setBeneficiaryForm({ ...beneficiaryForm, gender: 'Male' });
+                                        if (genderError) setGenderError(null);
+                                    }}
                                 />
                                 <SegmentedButton
                                     label="Female"
                                     active={beneficiaryForm.gender === 'Female'}
-                                    onPress={() => setBeneficiaryForm({ ...beneficiaryForm, gender: 'Female' })}
+                                    hasError={!!genderError}
+                                    onPress={() => {
+                                        setBeneficiaryForm({ ...beneficiaryForm, gender: 'Female' });
+                                        if (genderError) setGenderError(null);
+                                    }}
                                 />
                             </View>
+                            {genderError && (
+                                <Text style={styles.errorText}>
+                                    {genderError}
+                                </Text>
+                            )}
                         </View>
 
                         {/* Marital Status Segmented Selection */}
@@ -611,24 +761,38 @@ export default function BeneficiaryInfoScreen() {
                                         key={status}
                                         label={status}
                                         active={beneficiaryForm.maritalStatus === status}
-                                        onPress={() => setBeneficiaryForm({ ...beneficiaryForm, maritalStatus: status })}
+                                        hasError={!!maritalStatusError}
+                                        onPress={() => {
+                                            setBeneficiaryForm({ ...beneficiaryForm, maritalStatus: status });
+                                            if (maritalStatusError) setMaritalStatusError(null);
+                                        }}
                                     />
                                 ))}
                             </ScrollView>
+                            {maritalStatusError && (
+                                <Text style={styles.errorText}>
+                                    {maritalStatusError}
+                                </Text>
+                            )}
                         </View>
 
                         {/* Relationship Dropdown */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Relationship to Subscriber *</Text>
                             <TouchableOpacity
-                                style={styles.inputWithIcon}
+                                style={[styles.inputWithIcon, relationshipError ? { borderColor: '#EF4444' } : null]}
                                 onPress={() => setShowRelationshipModal(true)}
                             >
-                                <Text style={[styles.flexInput, !beneficiaryForm.relationship && { color: '#9CA3AF' }]}>
+                                <Text style={[styles.flexInput, (!beneficiaryForm.relationship || beneficiaryForm.relationship === 'Please Select') && { color: '#9CA3AF' }]}>
                                     {beneficiaryForm.relationship || 'Please Select'}
                                 </Text>
-                                <Ionicons name="chevron-down" size={20} color="#9CA3AF" />
+                                <Ionicons name="chevron-down" size={20} color={relationshipError ? '#EF4444' : '#9CA3AF'} />
                             </TouchableOpacity>
+                            {relationshipError && (
+                                <Text style={styles.errorText}>
+                                    {relationshipError}
+                                </Text>
+                            )}
                         </View>
 
                         {/* Custom Relationship Input for 'Other' */}
@@ -636,14 +800,23 @@ export default function BeneficiaryInfoScreen() {
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>Please Specify Relationship *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, customRelationshipError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="e.g. Grandfather, Aunt, etc."
                                     placeholderTextColor="#9CA3AF"
                                     value={beneficiaryForm.relationship === 'Other' ? '' : beneficiaryForm.relationship}
                                     maxLength={50}
-                                    onChangeText={(t) => setBeneficiaryForm({ ...beneficiaryForm, relationship: t })}
+                                    onChangeText={(t) => {
+                                        setBeneficiaryForm({ ...beneficiaryForm, relationship: t });
+                                        if (customRelationshipError) setCustomRelationshipError(null);
+                                        if (relationshipError) setRelationshipError(null);
+                                    }}
                                     autoFocus
                                 />
+                                {customRelationshipError && (
+                                    <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Poppins_400Regular' }}>
+                                        {customRelationshipError}
+                                    </Text>
+                                )}
                             </View>
                         )}
 
@@ -697,26 +870,42 @@ export default function BeneficiaryInfoScreen() {
 
                         <View style={styles.row}>
                             <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                                <Text style={[styles.label, styles.rowLabel]}>Flat / Plot / Building</Text>
+                                <Text style={[styles.label, styles.rowLabel]}>Flat / Plot / Building *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, flatPlotError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="e.g. 402, Sunshine"
                                     placeholderTextColor="#9CA3AF"
                                     value={beneficiaryForm.flatPlot}
                                     maxLength={50}
-                                    onChangeText={(t) => setBeneficiaryForm({ ...beneficiaryForm, flatPlot: t })}
+                                    onChangeText={(t) => {
+                                        setBeneficiaryForm({ ...beneficiaryForm, flatPlot: t });
+                                        if (flatPlotError) setFlatPlotError(null);
+                                    }}
                                 />
+                                {flatPlotError && (
+                                    <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Poppins_400Regular' }}>
+                                        {flatPlotError}
+                                    </Text>
+                                )}
                             </View>
                             <View style={[styles.inputGroup, { flex: 1.5 }]}>
                                 <Text style={[styles.label, styles.rowLabel]}>Street / Area *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, streetAreaError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="e.g. Sector 15"
                                     placeholderTextColor="#9CA3AF"
                                     value={beneficiaryForm.streetArea}
                                     maxLength={80}
-                                    onChangeText={(t) => setBeneficiaryForm({ ...beneficiaryForm, streetArea: t })}
+                                    onChangeText={(t) => {
+                                        setBeneficiaryForm({ ...beneficiaryForm, streetArea: t });
+                                        if (streetAreaError) setStreetAreaError(null);
+                                    }}
                                 />
+                                {streetAreaError && (
+                                    <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Poppins_400Regular' }}>
+                                        {streetAreaError}
+                                    </Text>
+                                )}
                             </View>
                         </View>
 
@@ -736,38 +925,62 @@ export default function BeneficiaryInfoScreen() {
                             <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
                                 <Text style={styles.label}>City *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, cityError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="City"
                                     placeholderTextColor="#9CA3AF"
                                     value={beneficiaryForm.city}
                                     maxLength={50}
-                                    onChangeText={(t) => setBeneficiaryForm({ ...beneficiaryForm, city: t })}
+                                    onChangeText={(t) => {
+                                        setBeneficiaryForm({ ...beneficiaryForm, city: t });
+                                        if (cityError) setCityError(null);
+                                    }}
                                 />
+                                {cityError && (
+                                    <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Poppins_400Regular' }}>
+                                        {cityError}
+                                    </Text>
+                                )}
                             </View>
                             <View style={[styles.inputGroup, { flex: 1 }]}>
                                 <Text style={styles.label}>Pincode *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, pincodeError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="Pincode"
                                     placeholderTextColor="#9CA3AF"
                                     keyboardType="numeric"
                                     maxLength={6}
                                     value={beneficiaryForm.pincode}
-                                    onChangeText={(t) => setBeneficiaryForm({ ...beneficiaryForm, pincode: t.replace(/[^0-9]/g, '').slice(0, 6) })}
+                                    onChangeText={(t) => {
+                                        setBeneficiaryForm({ ...beneficiaryForm, pincode: t.replace(/[^0-9]/g, '').slice(0, 6) });
+                                        if (pincodeError) setPincodeError(null);
+                                    }}
                                 />
+                                {pincodeError && (
+                                    <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Poppins_400Regular' }}>
+                                        {pincodeError}
+                                    </Text>
+                                )}
                             </View>
                         </View>
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>State *</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, stateError ? { borderColor: '#EF4444' } : null]}
                                 placeholder="State"
                                 placeholderTextColor="#9CA3AF"
                                 value={beneficiaryForm.state}
                                 maxLength={50}
-                                onChangeText={(t) => setBeneficiaryForm({ ...beneficiaryForm, state: t })}
+                                onChangeText={(t) => {
+                                    setBeneficiaryForm({ ...beneficiaryForm, state: t });
+                                    if (stateError) setStateError(null);
+                                }}
                             />
+                            {stateError && (
+                                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Poppins_400Regular' }}>
+                                    {stateError}
+                                </Text>
+                            )}
                         </View>
                         {beneficiaryForm.latitude !== 0 && (
                             <View style={[styles.coordsBadge, { marginBottom: 20 }]}>
@@ -810,6 +1023,7 @@ export default function BeneficiaryInfoScreen() {
                                         ]}
                                         onPress={() => {
                                             setBeneficiaryForm({ ...beneficiaryForm, relationship: rel });
+                                            if (relationshipError) setRelationshipError(null);
                                             setShowRelationshipModal(false);
                                         }}
                                     >
@@ -987,4 +1201,5 @@ const styles = StyleSheet.create({
     optionTextActive: { color: '#F97316', fontWeight: '600', fontFamily: 'Poppins_600SemiBold' },
     coordsBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
     coordsText: { fontFamily: 'Poppins_500Medium', fontSize: 12, color: '#10B981', fontWeight: '500' },
+    errorText: { color: '#EF4444', fontSize: 12, marginTop: 4, fontFamily: 'Poppins_400Regular' },
 });

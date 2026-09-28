@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { API_URL } from '@/constants/api';
 import { CallbackButton } from '@/components/CallbackButton';
 import { ProfilePhotoUploader } from '@/components/ui/ProfilePhotoUploader';
+import { queryClient } from '@/services/queryClient';
 import { TimelineTab } from './components/beneficiary/TimelineTab';
 import { VitalsTab } from './components/beneficiary/VitalsTab';
 import { MedicalTab } from './components/beneficiary/MedicalTab';
@@ -215,7 +216,11 @@ export default function BeneficiaryProfileScreen() {
                                 editable: true,
                                 initials: (beneficiary.name || 'B').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2),
                                 accentColor: '#F97316',
-                                onSuccess: (url) => refetch(), // Instead of modifying local state, trigger refetch to update cache
+                                onSuccess: (url) => {
+                                    refetch();
+                                    AsyncStorage.removeItem('beneficiaryDashboardCache').catch(() => {});
+                                    queryClient.invalidateQueries({ queryKey: ['subscriberDashboard'] });
+                                },
                             }}
                             style={{ marginBottom: scale(12) }}
                         />
