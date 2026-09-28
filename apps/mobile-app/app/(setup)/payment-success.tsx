@@ -117,6 +117,7 @@ export default function PaymentSuccessScreen() {
                 })),
                 baseAmount: invoice.baseAmount,
                 discountAmount: invoice.discountAmount,
+                saathiDiscountAmount: invoice.saathiDiscountAmount,
                 cgstAmount: invoice.cgstAmount,
                 sgstAmount: invoice.sgstAmount,
                 igstAmount: invoice.igstAmount,

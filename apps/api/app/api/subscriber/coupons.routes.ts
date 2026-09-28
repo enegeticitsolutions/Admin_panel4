@@ -77,4 +77,50 @@ router.post('/validate', authenticate, async (req: AuthRequest, res: Response) =
   }
 });
 
+// GET /subscriber/coupons/applicable
+// Query: ?packageId=pkg_123
+router.get('/applicable', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { packageId } = req.query;
+    
+    // Resolve package type
+    let pkg: any = null;
+    if (packageId) {
+      pkg = await prisma.subscriptionPackage.findFirst({
+        where: { OR: [{ id: String(packageId) }, { type: String(packageId) }] }
+      });
+    }
+
+    const now = new Date();
+    
+    // Fetch all active and visible coupons
+    const coupons = await prisma.coupon.findMany({
+      where: {
+        isActive: true,
+        isVisible: true,
+        startDate: { lte: now },
+        endDate: { gte: now }
+      }
+    });
+
+    // Filter coupons that apply to this specific package
+    const applicableCoupons = coupons.filter(coupon => {
+      if (coupon.allowedPackages && coupon.allowedPackages.length > 0) {
+        return pkg && coupon.allowedPackages.includes(pkg.type);
+      }
+      return true; // If empty, applies to all
+    });
+
+    // We can also filter out coupons where global usage limits are already met
+    const availableCoupons = applicableCoupons.filter(c => 
+      c.usageLimit === null || c.usedCount < c.usageLimit
+    );
+
+    res.json({ success: true, data: availableCoupons });
+  } catch (error) {
+    console.error('[Coupon Applicable Error]:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 export default router;

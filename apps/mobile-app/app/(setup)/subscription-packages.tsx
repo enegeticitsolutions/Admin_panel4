@@ -497,17 +497,22 @@ export default function SubscriptionPackagesScreen() {
                         cycleSubtext = `(₹${monthly.toLocaleString('en-IN')}/mo for 1 yr)`;
                     }
 
+                    const cardBorderColor = pkg.color || (isTrial ? '#A855F7' : (isPopular ? '#0D9488' : (isRegional ? '#F97316' : '#C8C8C8')));
+                    const cardBorderWidth = isTrial || isRegional ? 1.5 : (isPopular ? 2 : 1);
+                    const trialHeaderColor = pkg.color || '#7C3AED';
+                    const priceTextColor = pkg.color || (isTrial ? '#7C3AED' : (isRegional ? '#F97316' : (isPopular ? '#0D9488' : '#111827')));
+
                     return (
                         <View key={pkg.id} style={[
                             styles.card,
                             isPopular && styles.popularCard,
                             isRegional && styles.regionalCard,
-                            isTrial && { borderColor: '#A855F7', borderWidth: 1.5 },
+                            { borderColor: cardBorderColor, borderWidth: cardBorderWidth },
                         ]}>
                             {isTrial && (
                                 <View style={{
                                     position: 'absolute', top: 0, left: 0, right: 0,
-                                    backgroundColor: '#7C3AED', borderTopLeftRadius: 12, borderTopRightRadius: 12,
+                                    backgroundColor: trialHeaderColor, borderTopLeftRadius: 12, borderTopRightRadius: 12,
                                     paddingVertical: 5, alignItems: 'center',
                                 }}>
                                     <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
@@ -533,10 +538,10 @@ export default function SubscriptionPackagesScreen() {
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.planName}>{pkg.name}</Text>
                                     <View style={styles.priceRow}>
-                                        <Text style={isTrial ? { fontSize: 22, fontWeight: '800', color: '#7C3AED' } : (isRegional ? styles.planPriceRegional : (isPopular ? styles.planPriceColor : styles.planPrice))}>
+                                        <Text style={{ fontSize: 22, fontWeight: '800', color: priceTextColor, fontFamily: 'Poppins_700Bold' }}>
                                             ₹{displayPrice.toLocaleString('en-IN')}
                                         </Text>
-                                        <Text style={{ fontSize: 11, color: isTrial ? '#7C3AED' : '#6B7280', fontWeight: '600', marginLeft: 4, alignSelf: 'center' }}>
+                                        <Text style={{ fontSize: 11, color: isTrial ? trialHeaderColor : '#6B7280', fontWeight: '600', marginLeft: 4, alignSelf: 'center' }}>
                                             {cycleSubtext}
                                         </Text>
                                     </View>
@@ -572,7 +577,7 @@ export default function SubscriptionPackagesScreen() {
 
                                     return (
                                         <View key={fIdx} style={styles.featureRow}>
-                                            <Ionicons name="checkmark-circle" size={18} color={isRegional ? "#F97316" : "#0D9488"} />
+                                            <Ionicons name="checkmark-circle" size={18} color={isRegional ? "#F97316" : (pkg.color || "#0D9488")} />
                                             <Text style={styles.featureText}>
                                                 {pb.showUnit !== false ? (
                                                     <Text style={{ fontWeight: '800', color: '#111827' }}>
@@ -596,7 +601,12 @@ export default function SubscriptionPackagesScreen() {
                                 </TouchableOpacity>
 
                                 <TouchableOpacity
-                                    style={[isPopular ? styles.selectBtnSolid : styles.selectBtnOutline, isRegional && (isPopular ? styles.selectBtnSolidRegional : styles.selectBtnOutlineRegional)]}
+                                    style={[
+                                        isPopular ? styles.selectBtnSolid : styles.selectBtnOutline,
+                                        isRegional && (isPopular ? styles.selectBtnSolidRegional : styles.selectBtnOutlineRegional),
+                                        pkg.color && isPopular && { backgroundColor: pkg.color, borderColor: pkg.color },
+                                        pkg.color && !isPopular && { borderColor: pkg.color }
+                                    ]}
                                     onPress={() => handleSelectPackage(pkg.type)}
                                 >
                                     <Text style={isPopular ? styles.selectBtnSolidText : (isRegional ? styles.selectBtnOutlineTextRegional : styles.selectBtnOutlineText)}>

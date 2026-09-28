@@ -72,7 +72,8 @@ async function calculatePricing(
   couponCode: string | undefined, 
   userId: string,
   selectedAddons?: Array<{ benefitId: string; quantity: number }>,
-  durationMonths: number = 1
+  durationMonths: number = 1,
+  saathiCouponCode?: string
 ) {
   const pkg: any = await prisma.subscriptionPackage.findFirst({
     where: {
@@ -271,9 +272,31 @@ async function calculatePricing(
     }
   }
 
+  // 4. Saathi Coupon validation
+  let saathiDiscountApplied = 0;
+  let saathiCouponValid = false;
+  let saathiCouponMessage: string | undefined;
+
+  if (saathiCouponCode && saathiCouponCode.trim()) {
+    const code = saathiCouponCode.trim().toUpperCase();
+    const saathiCoupon = await prisma.volunteerRewardCoupon.findUnique({
+      where: { code }
+    });
+
+    if (!saathiCoupon) {
+      saathiCouponMessage = 'Invalid Saathi coupon code';
+    } else if (saathiCoupon.status !== 'ACTIVE') {
+      saathiCouponMessage = `Coupon is ${saathiCoupon.status.toLowerCase()}`;
+    } else {
+      saathiCouponValid = true;
+      saathiDiscountApplied = Math.min(saathiCoupon.valueRs, subtotalPayable);
+      subtotalPayable -= saathiDiscountApplied;
+    }
+  }
+
   const totalTaxAmount = Math.round((totalPackageTax + addonsTax) * 100) / 100;
   const tax = totalTaxAmount;
-  const total = Math.round(subtotalPayable * 100) / 100;
+  const total = Math.max(0, Math.round(subtotalPayable * 100) / 100);
 
   // Dates
   const now = new Date();
@@ -306,6 +329,9 @@ async function calculatePricing(
     couponValid,
     couponId,
     couponMessage,
+    saathiDiscountApplied,
+    saathiCouponValid,
+    saathiCouponMessage,
     total,
     projectedStartDate,
     projectedEndDate,
@@ -315,19 +341,19 @@ async function calculatePricing(
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /subscriber/subscriptions/checkout/preview
 // Server-side benefit-by-benefit pricing & GST calculation
-// Body: { packageId, couponCode?, selectedAddons?, durationMonths? }
+// Body: { packageId, couponCode?, selectedAddons?, durationMonths?, saathiCouponCode? }
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/checkout/preview', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId || 'guest';
-    const { packageId, couponCode, selectedAddons, durationMonths } = req.body;
+    const { packageId, couponCode, selectedAddons, durationMonths, saathiCouponCode } = req.body;
 
     if (!packageId) {
       return res.status(400).json({ success: false, message: 'packageId is required' });
     }
 
     const months = Math.max(1, Math.floor(Number(durationMonths) || 1));
-    const pricing = await calculatePricing(packageId, couponCode, userId, selectedAddons, months);
+    const pricing = await calculatePricing(packageId, couponCode, userId, selectedAddons, months, saathiCouponCode);
 
     return res.json({
       success: true,
@@ -351,6 +377,9 @@ router.post('/checkout/preview', optionalAuthenticate, async (req: AuthRequest, 
         couponValid: pricing.couponValid,
         couponId: pricing.couponId,
         couponMessage: pricing.couponMessage,
+        saathiDiscountApplied: pricing.saathiDiscountApplied,
+        saathiCouponValid: pricing.saathiCouponValid,
+        saathiCouponMessage: pricing.saathiCouponMessage,
         total: pricing.total,
         projectedStartDate: pricing.projectedStartDate,
         projectedEndDate: pricing.projectedEndDate,
@@ -365,19 +394,19 @@ router.post('/checkout/preview', optionalAuthenticate, async (req: AuthRequest, 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /subscriber/subscriptions/create-order
 // Server-side calculation -> create razorpay order
-// Body: { packageId, couponCode?, selectedAddons?, durationMonths? }
+// Body: { packageId, couponCode?, selectedAddons?, durationMonths?, saathiCouponCode? }
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/create-order', paymentLimiter as unknown as RequestHandler, authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { packageId, couponCode, selectedAddons, durationMonths } = req.body;
+    const { packageId, couponCode, selectedAddons, durationMonths, saathiCouponCode } = req.body;
 
     if (!packageId) {
       return res.status(400).json({ success: false, message: 'packageId is required' });
     }
 
     const months = Math.max(1, Math.floor(Number(durationMonths) || 1));
-    const pricing = await calculatePricing(packageId, couponCode, userId, selectedAddons, months);
+    const pricing = await calculatePricing(packageId, couponCode, userId, selectedAddons, months, saathiCouponCode);
     
     // Receipt ID must be max 40 chars. 
     // Format: rcpt_ + first 8 chars of userId + _ + timestamp (total ~27 chars)
@@ -688,6 +717,7 @@ router.post('/purchase', paymentLimiter as unknown as RequestHandler, authentica
       medicalData, 
       emergencyContacts, 
       couponCode,
+      saathiCouponCode,
       selectedAddons,
       durationMonths,
       razorpay_payment_id,
@@ -747,7 +777,8 @@ router.post('/purchase', paymentLimiter as unknown as RequestHandler, authentica
         razorpay_payment_id,
         razorpay_order_id,
         razorpay_signature
-      }
+      },
+      saathiCouponCode
     );
 
     // Generate new token containing the updated subscriber role

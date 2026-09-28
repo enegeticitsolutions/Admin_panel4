@@ -845,6 +845,8 @@ model Payment {
   baseAmount           Float
   discountAmount       Float           @default(0.0)
   couponCode           String?
+  saathiCouponCode     String?
+  saathiDiscountAmount Float           @default(0.0)
   taxAmount            Float           @default(0.0)
   amountPaid           Float
   currency             String          @default("INR")
@@ -2348,8 +2350,10 @@ model Invoice {
   appointmentId  String? @unique
 
   // GST & Amounts
-  baseAmount     Float
-  discountAmount Float @default(0.0)
+  baseAmount           Float
+  discountAmount       Float @default(0.0)
+  saathiCouponCode     String?
+  saathiDiscountAmount Float @default(0.0)
   taxAmount      Float @default(0.0)
   totalAmount    Float
 

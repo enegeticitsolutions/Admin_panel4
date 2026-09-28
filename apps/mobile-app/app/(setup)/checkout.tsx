@@ -69,11 +69,15 @@ export default function CheckoutScreen() {
     const [pricing, setPricing] = useState<{
         packageName: string;
         basePrice: number;
-        discountApplied: number;
+        durationDiscount: number;
+        couponDiscount: number;
+        saathiDiscountApplied?: number;
         tax: number;
         total: number;
         couponValid: boolean;
         couponMessage?: string;
+        saathiCouponValid?: boolean;
+        saathiCouponMessage?: string;
         durationMonths?: number;
         projectedStartDate?: string;
         projectedEndDate?: string;
@@ -81,15 +85,26 @@ export default function CheckoutScreen() {
         packageName: 'Loading...',
         basePrice: 0,
         discountApplied: 0,
+        saathiDiscountApplied: 0,
         tax: 0,
         total: 0,
         couponValid: false,
+        saathiCouponValid: false,
     });
     const [pricingLoading, setPricingLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
     const [couponError, setCouponError] = useState('');
     const [appliedCouponCode, setAppliedCouponCode] = useState('');
+    const [applicableCoupons, setApplicableCoupons] = useState<any[]>([]);
+    const [showCouponsModal, setShowCouponsModal] = useState(false);
+    const [loadingCoupons, setLoadingCoupons] = useState(false);
+
+    const [saathiPromoCode, setSaathiPromoCode] = useState('');
+    const [isApplyingSaathiCoupon, setIsApplyingSaathiCoupon] = useState(false);
+    const [saathiCouponError, setSaathiCouponError] = useState('');
+    const [appliedSaathiCouponCode, setAppliedSaathiCouponCode] = useState('');
+    const [showSaathiCouponField, setShowSaathiCouponField] = useState(false);
 
     const [agreed, setAgreed] = useState(false);
     const [packageBenefits, setPackageBenefits] = useState<string[]>([]);
@@ -241,7 +256,7 @@ export default function CheckoutScreen() {
 
     // ── Single function: calls /checkout/preview with optional couponCode ──────
     // All arithmetic lives on the server. Frontend just renders what it receives.
-    const fetchCheckoutPreview = async (couponCode?: string) => {
+    const fetchCheckoutPreview = async (couponCode?: string, saathiCouponCode?: string) => {
         try {
             const storedToken = await AsyncStorage.getItem('userToken');
             const response = await fetch(`${API_URL}/subscriber/subscriptions/checkout/preview`, {
@@ -253,6 +268,7 @@ export default function CheckoutScreen() {
                 body: JSON.stringify({
                     packageId,
                     couponCode: couponCode || undefined,
+                    saathiCouponCode: saathiCouponCode || undefined,
                     selectedAddons: selectedAddons.map((a: any) => ({ benefitId: a.benefitId, quantity: a.quantity })),
                     durationMonths,
                 })
@@ -263,11 +279,15 @@ export default function CheckoutScreen() {
                 setPricing({
                     packageName: result.data.packageName,
                     basePrice: result.data.basePrice,
-                    discountApplied: result.data.couponDiscount || result.data.durationDiscount || 0,
+                    durationDiscount: result.data.durationDiscount || 0,
+                    couponDiscount: result.data.couponDiscount || 0,
+                    saathiDiscountApplied: result.data.saathiDiscountApplied || 0,
                     tax: result.data.totalTaxAmount || 0,
                     total: result.data.total,
                     couponValid: result.data.couponValid,
                     couponMessage: result.data.couponMessage,
+                    saathiCouponValid: result.data.saathiCouponValid,
+                    saathiCouponMessage: result.data.saathiCouponMessage,
                     durationMonths: result.data.durationMonths,
                     projectedStartDate: result.data.projectedStartDate,
                     projectedEndDate: result.data.projectedEndDate,
@@ -346,7 +366,7 @@ export default function CheckoutScreen() {
         } else {
             if (packageId) {
                 setPricingLoading(true);
-                fetchCheckoutPreview()
+                fetchCheckoutPreview(appliedCouponCode, appliedSaathiCouponCode)
                     .catch(() => Alert.alert('Error', 'Could not load package pricing.'))
                     .finally(() => setPricingLoading(false));
             }
@@ -364,7 +384,7 @@ export default function CheckoutScreen() {
         setCouponError('');
 
         try {
-            const result = await fetchCheckoutPreview(promoCode.trim().toUpperCase());
+            const result = await fetchCheckoutPreview(promoCode.trim().toUpperCase(), appliedSaathiCouponCode);
             if (result.couponValid) {
                 setAppliedCouponCode(promoCode.trim().toUpperCase());
                 Alert.alert('✅ Coupon Applied!', `You saved ₹${result.discountApplied.toFixed(2)} on this order.`);
@@ -385,8 +405,58 @@ export default function CheckoutScreen() {
         setAppliedCouponCode('');
         setPromoCode('');
         setCouponError('');
-        await fetchCheckoutPreview(); // No couponCode → clean pricing from server
+        await fetchCheckoutPreview(undefined, appliedSaathiCouponCode); 
     };
+
+    const handleApplySaathiCoupon = async () => {
+        if (!saathiPromoCode.trim()) return;
+        setIsApplyingSaathiCoupon(true);
+        setSaathiCouponError('');
+
+        try {
+            const result = await fetchCheckoutPreview(appliedCouponCode, saathiPromoCode.trim().toUpperCase());
+            if (result.saathiCouponValid) {
+                setAppliedSaathiCouponCode(saathiPromoCode.trim().toUpperCase());
+                Alert.alert('✅ Saathi Coupon Applied!', `You saved ₹${result.saathiDiscountApplied.toFixed(2)} on this order.`);
+            } else {
+                setSaathiCouponError(result.saathiCouponMessage || 'Invalid or expired Saathi coupon code');
+                setAppliedSaathiCouponCode('');
+            }
+        } catch (err) {
+            setSaathiCouponError('Failed to validate Saathi coupon. Please try again.');
+        } finally {
+            setIsApplyingSaathiCoupon(false);
+        }
+    };
+
+    const handleRemoveSaathiCoupon = async () => {
+        setAppliedSaathiCouponCode('');
+        setSaathiPromoCode('');
+        setSaathiCouponError('');
+        await fetchCheckoutPreview(appliedCouponCode, undefined); 
+    };
+
+    const fetchCoupons = async () => {
+        setLoadingCoupons(true);
+        try {
+            const storedToken = await AsyncStorage.getItem('userToken');
+            const res = await fetch(`${API_URL}/subscriber/coupons/applicable?packageId=${packageId}`, {
+                headers: { 'Authorization': `Bearer ${storedToken}` }
+            });
+            const json = await res.json();
+            if (json.success) setApplicableCoupons(json.data || []);
+        } catch (e) {
+            console.error('Failed to fetch applicable coupons', e);
+        } finally {
+            setLoadingCoupons(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!isVerificationFlow && packageId) {
+            fetchCoupons();
+        }
+    }, [packageId, isVerificationFlow]);
 
     const handlePay = async () => {
         if (!isPackageAvailable) {
@@ -550,6 +620,7 @@ export default function CheckoutScreen() {
                     body: JSON.stringify({
                         packageId,
                         couponCode: appliedCouponCode || undefined,
+                        saathiCouponCode: appliedSaathiCouponCode || undefined,
                         selectedAddons: selectedAddons.map((a: any) => ({ benefitId: a.benefitId, quantity: a.quantity })),
                         durationMonths,
                     })
@@ -663,6 +734,7 @@ export default function CheckoutScreen() {
                 emergencyContacts,
                 preferencesData,
                 couponCode: appliedCouponCode || undefined,
+                saathiCouponCode: appliedSaathiCouponCode || undefined,
                 selectedAddons: selectedAddons.map((a: any) => ({ benefitId: a.benefitId, quantity: a.quantity })),
                 durationMonths,
                 ...paymentDetails
@@ -745,6 +817,8 @@ export default function CheckoutScreen() {
             setIsProcessing(false);
         }
     };
+
+    const isSaathiCouponVisible = showSaathiCouponField || Boolean(pricing.saathiCouponValid) || Boolean(appliedSaathiCouponCode);
 
     if (!fontsLoaded) {
         return (
@@ -887,25 +961,175 @@ export default function CheckoutScreen() {
                                                         <Ionicons name="close-circle" size={16} color="#EF4444" />
                                                         <Text style={styles.couponErrorText}>{couponError}</Text>
                                                     </View>
+                                                ) : null}
+
+                                                {/* Have a Saathi Coupon orange hyperlink replacing hint text */}
+                                                {!isSaathiCouponVisible ? (
+                                                    <TouchableOpacity
+                                                        onPress={() => setShowSaathiCouponField(true)}
+                                                        style={styles.saathiCouponLinkRow}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <Text style={styles.saathiCouponOrangeLink}>Have a Saathi Coupon?</Text>
+                                                    </TouchableOpacity>
                                                 ) : (
-                                                    <Text style={styles.couponHint}>Enter a valid coupon code to get a discount on this order.</Text>
+                                                    <View style={styles.saathiFieldContainer}>
+                                                        <View style={styles.saathiFieldHeader}>
+                                                            <Text style={styles.saathiFieldLabel}>Saathi Coupon</Text>
+                                                            {!pricing.saathiCouponValid && (
+                                                                <TouchableOpacity
+                                                                    onPress={() => { setShowSaathiCouponField(false); setSaathiCouponError(''); }}
+                                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                                >
+                                                                    <Ionicons name="close" size={18} color="#9CA3AF" />
+                                                                </TouchableOpacity>
+                                                            )}
+                                                        </View>
+
+                                                        {!pricing.saathiCouponValid ? (
+                                                            <>
+                                                                <View style={styles.promoInputRow}>
+                                                                    <TextInput
+                                                                        style={styles.promoInput}
+                                                                        placeholder="Enter Saathi coupon code"
+                                                                        placeholderTextColor="#9CA3AF"
+                                                                        value={saathiPromoCode}
+                                                                        onChangeText={(text) => { setSaathiPromoCode(text.toUpperCase()); setSaathiCouponError(''); }}
+                                                                        autoCapitalize="characters"
+                                                                        autoCorrect={false}
+                                                                    />
+                                                                    <TouchableOpacity
+                                                                        style={[styles.applyBtnOutline, (!saathiPromoCode || isApplyingSaathiCoupon) && { opacity: 0.5 }]}
+                                                                        onPress={handleApplySaathiCoupon}
+                                                                        disabled={!saathiPromoCode || isApplyingSaathiCoupon}
+                                                                    >
+                                                                        {isApplyingSaathiCoupon ? (
+                                                                            <ActivityIndicator size="small" color="#FE6700" />
+                                                                        ) : (
+                                                                            <Text style={styles.applyBtnText}>Apply</Text>
+                                                                        )}
+                                                                    </TouchableOpacity>
+                                                                </View>
+
+                                                                {saathiCouponError ? (
+                                                                    <View style={[styles.couponErrorRow, { marginBottom: 6 }]}>
+                                                                        <Ionicons name="close-circle" size={16} color="#EF4444" />
+                                                                        <Text style={styles.couponErrorText}>{saathiCouponError}</Text>
+                                                                    </View>
+                                                                ) : null}
+                                                            </>
+                                                        ) : (
+                                                            <View style={[styles.couponAppliedBox, { backgroundColor: '#FFF5ED', borderColor: '#FDBA74', marginBottom: 10 }]}>
+                                                                <View style={styles.couponAppliedLeft}>
+                                                                    <Ionicons name="checkmark-circle" size={24} color="#FE6700" />
+                                                                    <View style={{ marginLeft: 10 }}>
+                                                                        <Text style={[styles.couponAppliedCode, { color: '#C2410C' }]}>{appliedSaathiCouponCode}</Text>
+                                                                        <Text style={[styles.couponAppliedSaving, { color: '#EA580C' }]}>You saved ₹{(pricing.saathiDiscountApplied || 0).toFixed(2)}!</Text>
+                                                                    </View>
+                                                                </View>
+                                                                <TouchableOpacity onPress={handleRemoveSaathiCoupon} style={styles.removeBtn}>
+                                                                    <Text style={[styles.removeBtnText, { color: '#EF4444' }]}>Remove</Text>
+                                                                </TouchableOpacity>
+                                                            </View>
+                                                        )}
+                                                    </View>
                                                 )}
+
+                                                <TouchableOpacity onPress={() => setShowCouponsModal(true)} style={styles.viewCouponsBtn}>
+                                                    <Ionicons name="pricetags-outline" size={18} color="#FE6700" />
+                                                    <Text style={styles.viewCouponsBtnText}>View Available Coupons</Text>
+                                                </TouchableOpacity>
                                             </>
                                         ) : (
-                                            <View style={styles.couponAppliedBox}>
-                                                <View style={styles.couponAppliedLeft}>
-                                                    <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-                                                    <View style={{ marginLeft: 10 }}>
-                                                        <Text style={styles.couponAppliedCode}>{appliedCouponCode}</Text>
-                                                        <Text style={styles.couponAppliedSaving}>You saved ₹{(pricing.discountApplied || 0).toFixed(2)}!</Text>
+                                            <View>
+                                                <View style={styles.couponAppliedBox}>
+                                                    <View style={styles.couponAppliedLeft}>
+                                                        <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+                                                        <View style={{ marginLeft: 10 }}>
+                                                            <Text style={styles.couponAppliedCode}>{appliedCouponCode}</Text>
+                                                            <Text style={styles.couponAppliedSaving}>You saved ₹{(pricing.discountApplied || 0).toFixed(2)}!</Text>
+                                                        </View>
                                                     </View>
+                                                    <TouchableOpacity onPress={handleRemoveCoupon} style={styles.removeBtn}>
+                                                        <Text style={styles.removeBtnText}>Remove</Text>
+                                                    </TouchableOpacity>
                                                 </View>
-                                                <TouchableOpacity onPress={handleRemoveCoupon} style={styles.removeBtn}>
-                                                    <Text style={styles.removeBtnText}>Remove</Text>
-                                                </TouchableOpacity>
+
+                                                {!isSaathiCouponVisible ? (
+                                                    <TouchableOpacity
+                                                        onPress={() => setShowSaathiCouponField(true)}
+                                                        style={[styles.saathiCouponLinkRow, { marginTop: 12 }]}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <Text style={styles.saathiCouponOrangeLink}>Have a Saathi Coupon?</Text>
+                                                    </TouchableOpacity>
+                                                ) : (
+                                                    <View style={[styles.saathiFieldContainer, { marginTop: 12 }]}>
+                                                        <View style={styles.saathiFieldHeader}>
+                                                            <Text style={styles.saathiFieldLabel}>Saathi Coupon</Text>
+                                                            {!pricing.saathiCouponValid && (
+                                                                <TouchableOpacity
+                                                                    onPress={() => { setShowSaathiCouponField(false); setSaathiCouponError(''); }}
+                                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                                >
+                                                                    <Ionicons name="close" size={18} color="#9CA3AF" />
+                                                                </TouchableOpacity>
+                                                            )}
+                                                        </View>
+
+                                                        {!pricing.saathiCouponValid ? (
+                                                            <>
+                                                                <View style={styles.promoInputRow}>
+                                                                    <TextInput
+                                                                        style={styles.promoInput}
+                                                                        placeholder="Enter Saathi coupon code"
+                                                                        placeholderTextColor="#9CA3AF"
+                                                                        value={saathiPromoCode}
+                                                                        onChangeText={(text) => { setSaathiPromoCode(text.toUpperCase()); setSaathiCouponError(''); }}
+                                                                        autoCapitalize="characters"
+                                                                        autoCorrect={false}
+                                                                    />
+                                                                    <TouchableOpacity
+                                                                        style={[styles.applyBtnOutline, (!saathiPromoCode || isApplyingSaathiCoupon) && { opacity: 0.5 }]}
+                                                                        onPress={handleApplySaathiCoupon}
+                                                                        disabled={!saathiPromoCode || isApplyingSaathiCoupon}
+                                                                    >
+                                                                        {isApplyingSaathiCoupon ? (
+                                                                            <ActivityIndicator size="small" color="#FE6700" />
+                                                                        ) : (
+                                                                            <Text style={styles.applyBtnText}>Apply</Text>
+                                                                        )}
+                                                                    </TouchableOpacity>
+                                                                </View>
+
+                                                                {saathiCouponError ? (
+                                                                    <View style={[styles.couponErrorRow, { marginBottom: 6 }]}>
+                                                                        <Ionicons name="close-circle" size={16} color="#EF4444" />
+                                                                        <Text style={styles.couponErrorText}>{saathiCouponError}</Text>
+                                                                    </View>
+                                                                ) : null}
+                                                            </>
+                                                        ) : (
+                                                            <View style={[styles.couponAppliedBox, { backgroundColor: '#FFF5ED', borderColor: '#FDBA74' }]}>
+                                                                <View style={styles.couponAppliedLeft}>
+                                                                    <Ionicons name="checkmark-circle" size={24} color="#FE6700" />
+                                                                    <View style={{ marginLeft: 10 }}>
+                                                                        <Text style={[styles.couponAppliedCode, { color: '#C2410C' }]}>{appliedSaathiCouponCode}</Text>
+                                                                        <Text style={[styles.couponAppliedSaving, { color: '#EA580C' }]}>You saved ₹{(pricing.saathiDiscountApplied || 0).toFixed(2)}!</Text>
+                                                                    </View>
+                                                                </View>
+                                                                <TouchableOpacity onPress={handleRemoveSaathiCoupon} style={styles.removeBtn}>
+                                                                    <Text style={[styles.removeBtnText, { color: '#EF4444' }]}>Remove</Text>
+                                                                </TouchableOpacity>
+                                                            </View>
+                                                        )}
+                                                    </View>
+                                                )}
                                             </View>
                                         )}
                                     </View>
+
+
 
                                     <View style={styles.divider} />
 
@@ -1018,16 +1242,22 @@ export default function CheckoutScreen() {
                                                 <Text style={styles.priceLabel}>Subtotal</Text>
                                                 <Text style={styles.priceValue}>₹{(pricing.basePrice || 0).toFixed(2)}</Text>
                                             </View>
-                                            {durationMonths > 1 && pricing.discountApplied > 0 && (
+                                            {durationMonths > 1 && pricing.durationDiscount > 0 && (
                                                 <View style={styles.priceRow}>
                                                     <Text style={[styles.priceLabel, { color: '#059669' }]}>{durationLabel} Discount</Text>
-                                                    <Text style={[styles.priceValue, { color: '#059669' }]}>-₹{(pricing.discountApplied || 0).toFixed(2)}</Text>
+                                                    <Text style={[styles.priceValue, { color: '#059669' }]}>-₹{(pricing.durationDiscount || 0).toFixed(2)}</Text>
                                                 </View>
                                             )}
-                                            {pricing.couponValid && (
+                                            {pricing.couponValid && pricing.couponDiscount > 0 && (
                                                 <View style={styles.priceRow}>
                                                     <Text style={[styles.priceLabel, { color: '#059669' }]}>Coupon ({appliedCouponCode})</Text>
-                                                    <Text style={[styles.priceValue, { color: '#059669' }]}>-₹{(pricing.discountApplied || 0).toFixed(2)}</Text>
+                                                    <Text style={[styles.priceValue, { color: '#059669' }]}>-₹{(pricing.couponDiscount || 0).toFixed(2)}</Text>
+                                                </View>
+                                            )}
+                                            {pricing.saathiCouponValid && (
+                                                <View style={styles.priceRow}>
+                                                    <Text style={[styles.priceLabel, { color: '#FE6700' }]}>Saathi Discount</Text>
+                                                    <Text style={[styles.priceValue, { color: '#FE6700' }]}>-₹{(pricing.saathiDiscountApplied || 0).toFixed(2)}</Text>
                                                 </View>
                                             )}
                                             <View style={styles.priceRow}>
@@ -1048,6 +1278,59 @@ export default function CheckoutScreen() {
                     </ScrollView>
                 )}
             </KeyboardAvoidingView>
+
+            {/* COUPONS MODAL */}
+            {showCouponsModal && (
+                <View style={StyleSheet.absoluteFill}>
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>Available Coupons</Text>
+                                <TouchableOpacity onPress={() => setShowCouponsModal(false)} style={styles.modalCloseBtn}>
+                                    <Ionicons name="close" size={24} color="#6B6B6B" />
+                                </TouchableOpacity>
+                            </View>
+                            
+                            {loadingCoupons ? (
+                                <ActivityIndicator size="large" color="#FE6700" style={{ marginVertical: 30 }} />
+                            ) : applicableCoupons.length === 0 ? (
+                                <View style={styles.emptyCouponsBox}>
+                                    <Ionicons name="pricetag-outline" size={40} color="#D1D5DB" />
+                                    <Text style={styles.emptyCouponsText}>No coupons available for this package.</Text>
+                                </View>
+                            ) : (
+                                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                                    {applicableCoupons.map((coupon, idx) => (
+                                        <View key={coupon.id || idx} style={styles.couponItem}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.couponItemCode}>{coupon.code}</Text>
+                                                {coupon.description && (
+                                                    <Text style={styles.couponItemDesc}>{coupon.description}</Text>
+                                                )}
+                                                {coupon.minOrderAmount && coupon.minOrderAmount > 0 && (
+                                                    <Text style={styles.couponItemMinOrder}>
+                                                        Valid on orders above ₹{coupon.minOrderAmount}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                            <TouchableOpacity 
+                                                style={styles.couponItemApplyBtn}
+                                                onPress={() => {
+                                                    setPromoCode(coupon.code);
+                                                    setShowCouponsModal(false);
+                                                }}
+                                            >
+                                                <Text style={styles.couponItemApplyBtnText}>USE</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </ScrollView>
+                            )}
+                        </View>
+                    </View>
+                </View>
+            )}
+
         </View>
     );
 }
@@ -1062,7 +1345,7 @@ const styles = StyleSheet.create({
     headerTitles: { flex: 1, alignItems: 'center' },
     headerTitle: { fontFamily: 'Poppins_400Regular', fontSize: fs(28), lineHeight: fs(36), color: '#000000', textAlign: 'center' },
     headerSubtitle: { fontFamily: 'Poppins_400Regular', fontSize: fs(22), lineHeight: fs(30), color: '#6B6B6B', marginTop: 1, textAlign: 'center' },
-    scrollContent: { width: '100%', maxWidth: 716, alignSelf: 'center', paddingHorizontal: fs(36), paddingTop: fs(51), paddingBottom: fs(48) },
+    scrollContent: { width: '100%', maxWidth: 716, alignSelf: 'center', paddingHorizontal: fs(36), paddingTop: fs(51), paddingBottom: fs(150) },
     sectionTitle: { fontFamily: 'Poppins_400Regular', fontSize: fs(38), lineHeight: fs(50), color: '#000000' },
     sectionSubtitle: { fontFamily: 'Poppins_400Regular', fontSize: fs(26), lineHeight: fs(36), color: '#000000', marginTop: fs(6), marginBottom: fs(29) },
     securityBadge: { flexDirection: 'row', backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#0BB85F', borderRadius: fs(13), paddingHorizontal: fs(29), paddingVertical: fs(27), marginBottom: fs(41), alignItems: 'center' },
@@ -1160,7 +1443,7 @@ const styles = StyleSheet.create({
     couponHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: fs(18), gap: fs(8) },
     couponHeaderText: { fontSize: fs(26), lineHeight: fs(36), fontWeight: '400', fontFamily: 'Poppins_400Regular', color: '#000000' },
     couponHint: { fontSize: fs(16), lineHeight: fs(22), color: '#9CA3AF', fontFamily: 'Poppins_400Regular' },
-    couponErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: -16 },
+    couponErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
     couponErrorText: { fontSize: 13, color: '#EF4444', flex: 1, fontFamily: 'Poppins_400Regular' },
     couponAppliedBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ECFDF5', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#34D399' },
     couponAppliedLeft: { flexDirection: 'row', alignItems: 'center' },
@@ -1271,5 +1554,129 @@ const styles = StyleSheet.create({
         flex: 1,
         lineHeight: fs(30),
         fontFamily: 'Poppins_400Regular'
+    },
+    viewCouponsBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 12,
+        paddingVertical: 10,
+        backgroundColor: '#FFF5ED',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#FDE6D5',
+    },
+    viewCouponsBtnText: {
+        marginLeft: 8,
+        color: '#FE6700',
+        fontWeight: '600',
+        fontSize: 14,
+        fontFamily: 'Poppins_600SemiBold',
+    },
+    saathiCouponLinkRow: {
+        marginTop: 6,
+        marginBottom: 6,
+        alignSelf: 'flex-start',
+        paddingVertical: 4,
+    },
+    saathiCouponOrangeLink: {
+        fontSize: 13,
+        color: '#FE6700',
+        fontWeight: '500',
+        fontFamily: 'Poppins_500Medium',
+        textDecorationLine: 'underline',
+    },
+    saathiFieldContainer: {
+        marginTop: 10,
+        marginBottom: 6,
+    },
+    saathiFieldHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    saathiFieldLabel: {
+        fontSize: 13,
+        color: '#FE6700',
+        fontWeight: '600',
+        fontFamily: 'Poppins_600SemiBold',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: '#FFF',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 24,
+        maxHeight: Dimensions.get('window').height * 0.8,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#111827',
+        fontFamily: 'Poppins_700Bold',
+    },
+    modalCloseBtn: {
+        padding: 4,
+    },
+    emptyCouponsBox: {
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    emptyCouponsText: {
+        marginTop: 12,
+        fontSize: 15,
+        color: '#6B7280',
+        fontFamily: 'Poppins_400Regular',
+    },
+    couponItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 12,
+    },
+    couponItemCode: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#FE6700',
+        fontFamily: 'Poppins_700Bold',
+        marginBottom: 4,
+    },
+    couponItemDesc: {
+        fontSize: 13,
+        color: '#4B5563',
+        fontFamily: 'Poppins_400Regular',
+        marginBottom: 4,
+    },
+    couponItemMinOrder: {
+        fontSize: 11,
+        color: '#9CA3AF',
+        fontFamily: 'Poppins_400Regular',
+    },
+    couponItemApplyBtn: {
+        backgroundColor: '#FE6700',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+        marginLeft: 12,
+    },
+    couponItemApplyBtnText: {
+        color: '#FFF',
+        fontWeight: '600',
+        fontSize: 13,
+        fontFamily: 'Poppins_600SemiBold',
     },
 });

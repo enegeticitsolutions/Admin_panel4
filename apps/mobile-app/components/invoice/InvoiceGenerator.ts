@@ -50,6 +50,7 @@ export interface InvoiceData {
   items: InvoiceItem[];
   baseAmount: number;
   discountAmount: number;
+  saathiDiscountAmount?: number;
   cgstAmount: number;
   sgstAmount: number;
   igstAmount: number;
@@ -248,10 +249,10 @@ const itemsHtml = data.items.map((item, index) => `
             <td>Total Amount</td>
             <td>₹${(data.baseAmount + (data.cgstAmount || 0) + (data.sgstAmount || 0) + (data.igstAmount || 0)).toFixed(2)}</td>
           </tr>
-          ${data.discountAmount > 0 ? `
+          ${(data.discountAmount + (data.saathiDiscountAmount || 0)) > 0 ? `
           <tr>
-            <td>Discount</td>
-            <td>-₹${data.discountAmount.toFixed(2)}</td>
+            <td>Total Discount</td>
+            <td>-₹${(data.discountAmount + (data.saathiDiscountAmount || 0)).toFixed(2)}</td>
           </tr>
           ` : ''}
           <tr class="bold">
