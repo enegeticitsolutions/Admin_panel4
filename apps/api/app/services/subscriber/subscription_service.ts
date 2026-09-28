@@ -189,7 +189,8 @@ export const purchaseSubscription = async (
     razorpay_payment_id?: string;
     razorpay_order_id?: string;
     razorpay_signature?: string;
-  }
+  },
+  saathiCouponCode?: string
 ) => {
   // Look up the package directly by UUID (id) or by type slug — this works for
   // both global and regional packages, unlike getSubscriptionPackages() which
@@ -295,6 +296,18 @@ export const purchaseSubscription = async (
     finalAmountPaid = validation.finalAmount;
     discountAmount += validation.discountApplied;
     appliedCouponId = validation.couponId || null;
+  }
+
+  let saathiDiscountAmount = 0;
+  if (saathiCouponCode) {
+    const code = saathiCouponCode.trim().toUpperCase();
+    const saathiCoupon = await prisma.volunteerRewardCoupon.findUnique({
+      where: { code }
+    });
+    if (saathiCoupon && saathiCoupon.status === 'ACTIVE') {
+      saathiDiscountAmount = Math.min(saathiCoupon.valueRs, finalAmountPaid);
+      finalAmountPaid -= saathiDiscountAmount;
+    }
   }
 
   // --- Start Medical Data Parsing ---
@@ -679,12 +692,14 @@ export const purchaseSubscription = async (
     const customerState = beneficiaryData?.state || 'Haryana';
     
     // Prepare items for tax engine
+    // Use the un-discounted total base price for the package so that the duration discount
+    // (which is passed in discountAmount) correctly reduces the taxable value instead of double discounting.
     const taxItems: BenefitTaxItem[] = [
       {
         benefitId: undefined,
         name: `${subPackage.name}${durationMonths > 1 ? ` (${durationMonths} Months)` : ''}`,
         quantity: 1,
-        unitPrice: packageBasePrice,
+        unitPrice: Number(subPackage.basePrice) * months,
         gstRate: subPackage.gstRate ?? 18,
         hsnSacCode: subPackage.hsnSacCode || '998399',
         isGstExempt: subPackage.isGstExempt || false,
@@ -718,11 +733,30 @@ export const purchaseSubscription = async (
     // the invoice engine will handle it via discount logic or we could just trust the sum of unit prices.
     // To ensure exact matching with packageBasePrice + addons, we can adjust the total discount to enforce finalAmountPaid.
     
-    const rawTotalBase = taxItems.reduce((acc, curr) => acc + (curr.unitPrice * curr.quantity), 0);
-    // Determine how much discount to apply so that (rawTotalBase - actualDiscount) matches the expected base amount?
-    // Actually, discountAmount is provided as an argument. Let's just pass it to the engine.
+    // Frontend applies discounts post-tax to the gross package price, so we calculate the raw invoice at 0 discount first
+    const invoiceCalc = calculateItemizedInvoice(taxItems, 0, customerState, 'Haryana');
     
-    const invoiceCalc = calculateItemizedInvoice(taxItems, discountAmount, customerState, 'Haryana');
+    // Calculate the post-tax package total (gross)
+    const packageItems = invoiceCalc.items.filter(i => !i.description.startsWith('Add-on:'));
+    const packageGrossPrice = packageItems.reduce((acc, curr) => acc + curr.amount + curr.tax, 0);
+    
+    let durationDiscountPct = 0;
+    if (!(subPackage as any).isFreeTrial) {
+      if (months === 3) durationDiscountPct = Number(subPackage.discountThreeMonths ?? 5);
+      else if (months === 6) durationDiscountPct = Number(subPackage.discountSixMonths ?? 10);
+      else if (months >= 12) durationDiscountPct = Number(subPackage.discountAnnual ?? 20);
+    }
+    
+    // Exact match for frontend duration discount
+    const durationDiscount = Math.round((packageGrossPrice * durationDiscountPct) / 100 * 100) / 100;
+    
+    // We already calculated the coupon discount earlier in purchaseSubscription (stored in discountAmount alongside the pre-tax duration discount).
+    // We can extract it here without needing to re-validate the coupon.
+    const preTaxDuration = Math.max(0, (subPackage.basePrice * months) - packageBasePrice);
+    const couponDiscount = Math.max(0, discountAmount - preTaxDuration);
+    
+    // The final total discount recorded in the invoice (combines duration + coupon)
+    const finalDiscountAmount = durationDiscount + couponDiscount;
 
     const invoice = await tx.invoice.create({
       data: {
@@ -734,9 +768,11 @@ export const purchaseSubscription = async (
         beneficiaryId: beneficiary ? beneficiary.id : null,
         subscriptionId: subscription.id,
         baseAmount: invoiceCalc.baseAmount,
-        discountAmount: invoiceCalc.discountAmount,
+        discountAmount: finalDiscountAmount,
+        saathiCouponCode: saathiCouponCode ? saathiCouponCode.trim().toUpperCase() : null,
+        saathiDiscountAmount: saathiDiscountAmount,
         taxAmount: invoiceCalc.taxAmount,
-        totalAmount: invoiceCalc.totalAmount,
+        totalAmount: Math.max(0, invoiceCalc.totalAmount - finalDiscountAmount - saathiDiscountAmount),
         placeOfSupply: customerState,
         cgstAmount: invoiceCalc.cgstAmount,
         sgstAmount: invoiceCalc.sgstAmount,
@@ -780,6 +816,8 @@ export const purchaseSubscription = async (
         baseAmount: packageBasePrice,
         discountAmount: discountAmount,
         couponCode: couponCode || null,
+        saathiCouponCode: saathiCouponCode ? saathiCouponCode.trim().toUpperCase() : null,
+        saathiDiscountAmount: saathiDiscountAmount,
         amountPaid: finalAmountPaid,
         currency: 'INR',
         paymentMethod: paymentDetails?.razorpay_payment_id ? 'Razorpay' : 'UPI',
@@ -837,6 +875,18 @@ export const purchaseSubscription = async (
           });
         }
       }
+    }
+
+    if (saathiCouponCode && saathiDiscountAmount > 0) {
+      const code = saathiCouponCode.trim().toUpperCase();
+      await tx.volunteerRewardCoupon.update({
+        where: { code },
+        data: {
+          status: 'CLAIMED',
+          claimedByUserId: userId,
+          claimedAt: new Date()
+        }
+      });
     }
 
     return {

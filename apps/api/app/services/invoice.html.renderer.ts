@@ -131,7 +131,9 @@ export class InvoiceHtmlRenderer {
     const igstAmount = Number(invoice.igstAmount || 0);
     const totalTax = Number(invoice.taxAmount || (cgstAmount + sgstAmount + igstAmount) || 0);
     const discountAmount = Number(invoice.discountAmount || 0);
-    const totalAmount = Number(invoice.totalAmount || (baseAmount + totalTax - discountAmount));
+    const saathiDiscountAmount = Number(invoice.saathiDiscountAmount || 0);
+    const totalDiscountDisplay = discountAmount + saathiDiscountAmount;
+    const totalAmount = Number(invoice.totalAmount || (baseAmount + totalTax - discountAmount - saathiDiscountAmount));
 
     const totalBeforeDiscount = baseAmount + (cgstAmount || 0) + (sgstAmount || 0) + (igstAmount || totalTax);
     const amountInWords = numberToWords(Math.round(totalAmount));
@@ -333,10 +335,10 @@ export class InvoiceHtmlRenderer {
         <td>Total Amount</td>
         <td>₹${totalBeforeDiscount.toFixed(2)}</td>
       </tr>
-      ${discountAmount > 0 ? `
+      ${totalDiscountDisplay > 0 ? `
       <tr>
-        <td>Discount</td>
-        <td>-₹${discountAmount.toFixed(2)}</td>
+        <td>Total Discount</td>
+        <td>-₹${totalDiscountDisplay.toFixed(2)}</td>
       </tr>
       ` : ''}
       <tr class="bold">
