@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { API_URL } from '@/constants/api';
 import { useLogoutWithConfirm } from '@/utils/logout';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Components
 import { ProfileHero } from './components/profile/ProfileHero';
@@ -25,6 +26,7 @@ type TabType = 'Personal' | 'Security' | 'Subscription';
 export default function ProfileScreen() {
     const router = useRouter();
     const { push, replace, pop } = useNavigationStack();
+    const { updateUser } = useAuth();
     useAndroidBackHandler();
     const logoutWithConfirm = useLogoutWithConfirm();
     const [loading, setLoading] = useState(true);
@@ -67,8 +69,26 @@ export default function ProfileScreen() {
                 }
             });
             const data = await res.json();
-            if (data.success) {
+            if (data.success && data.data) {
                 setProfileData(data.data);
+                if (data.data.user) {
+                    try {
+                        const storedUser = await AsyncStorage.getItem('userData');
+                        const parsed = storedUser ? JSON.parse(storedUser) : {};
+                        const updatedUser = {
+                            ...parsed,
+                            ...data.data.user,
+                            photo: data.data.user.profilePhoto || parsed.photo,
+                            profilePhoto: data.data.user.profilePhoto || parsed.profilePhoto,
+                        };
+                        await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+                        if (updateUser) {
+                            await updateUser(token, updatedUser);
+                        }
+                    } catch (e) {
+                        // non-critical
+                    }
+                }
             }
         } catch (e) {
             console.error('Profile fetch error:', e);
