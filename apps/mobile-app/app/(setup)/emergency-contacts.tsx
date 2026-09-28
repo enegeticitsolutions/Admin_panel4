@@ -13,6 +13,7 @@ import { useSafeBack } from '@/hooks/useSafeBack';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import NotificationBell from '@/components/shared/NotificationBell';
 
 export default function EmergencyContactsScreen() {
     const router = useRouter();
@@ -27,6 +28,7 @@ export default function EmergencyContactsScreen() {
 
     const [drawerOpen, setDrawerOpen] = useState(false);
     const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
+    const scrollViewRef = useRef<ScrollView>(null);
     const [userData, setUserData] = useState<any>(null);
 
     const isVerificationFlow = params.isVerificationFlow === 'true';
@@ -77,18 +79,48 @@ export default function EmergencyContactsScreen() {
         secondaryPhone: '',
         secondaryEmail: ''
     });
+    const [primaryNameError, setPrimaryNameError] = useState('');
+    const [primaryPhoneError, setPrimaryPhoneError] = useState('');
     const [primaryEmailError, setPrimaryEmailError] = useState('');
+    const [secondaryPhoneError, setSecondaryPhoneError] = useState('');
     const [secondaryEmailError, setSecondaryEmailError] = useState('');
 
     const handleNext = () => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         let hasError = false;
 
+        // Mandatory Primary Emergency Contact validation
+        if (!form.primaryName.trim()) {
+            setPrimaryNameError('Primary contact name is required');
+            hasError = true;
+        } else {
+            setPrimaryNameError('');
+        }
+
+        const cleanedPhone = form.primaryPhone.replace(/\D/g, '');
+        if (!cleanedPhone) {
+            setPrimaryPhoneError('Primary contact phone number is required');
+            hasError = true;
+        } else if (cleanedPhone.length !== 10) {
+            setPrimaryPhoneError('Phone number must be exactly 10 digits');
+            hasError = true;
+        } else {
+            setPrimaryPhoneError('');
+        }
+
         if (form.primaryEmail && !emailRegex.test(form.primaryEmail)) {
             setPrimaryEmailError('Please enter a valid email address');
             hasError = true;
         } else {
             setPrimaryEmailError('');
+        }
+
+        const cleanedSecondaryPhone = form.secondaryPhone.replace(/\D/g, '');
+        if (cleanedSecondaryPhone && cleanedSecondaryPhone.length !== 10) {
+            setSecondaryPhoneError('Phone number must be exactly 10 digits');
+            hasError = true;
+        } else {
+            setSecondaryPhoneError('');
         }
 
         if (form.secondaryEmail && !emailRegex.test(form.secondaryEmail)) {
@@ -99,6 +131,7 @@ export default function EmergencyContactsScreen() {
         }
 
         if (hasError) {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
             return;
         }
 
@@ -144,10 +177,7 @@ export default function EmergencyContactsScreen() {
                             <Text style={styles.headerSubtitle}>Step 4 of 5</Text>
                         </View>
                         <View style={styles.headerIcons}>
-                            <View>
-                                <Ionicons name="notifications-outline" size={26} color="#111827" />
-                                <View style={styles.notifBadge}><Text style={styles.notifText}>2</Text></View>
-                            </View>
+                            <NotificationBell />
                             <TouchableOpacity onPress={openDrawer}>
                                 <Ionicons name="menu-outline" size={30} color="#111827" style={{ marginLeft: 15 }} />
                             </TouchableOpacity>
@@ -158,7 +188,7 @@ export default function EmergencyContactsScreen() {
                     </View>
                 </View>
 
-                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                     <View style={styles.formCard}>
                         <Text style={styles.sectionTitle}>Emergency Contacts</Text>
@@ -167,24 +197,36 @@ export default function EmergencyContactsScreen() {
                         <Text style={styles.subtextLabel}>Primary Emergency Contact *</Text>
                         
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Name</Text>
+                            <Text style={styles.label}>Name *</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, primaryNameError ? styles.inputError : null]}
                                 value={form.primaryName}
                                 maxLength={50}
-                                onChangeText={(t) => setForm({ ...form, primaryName: t })}
+                                onChangeText={(t) => {
+                                    setForm({ ...form, primaryName: t });
+                                    if (primaryNameError) setPrimaryNameError('');
+                                }}
                             />
+                            {primaryNameError ? (
+                                <Text style={styles.errorText}>{primaryNameError}</Text>
+                            ) : null}
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Phone</Text>
+                            <Text style={styles.label}>Phone *</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, primaryPhoneError ? styles.inputError : null]}
                                 keyboardType="numeric"
                                 value={form.primaryPhone}
                                 maxLength={10}
-                                onChangeText={(t) => setForm({ ...form, primaryPhone: t.replace(/[^0-9]/g, '').slice(0, 10) })}
+                                onChangeText={(t) => {
+                                    setForm({ ...form, primaryPhone: t.replace(/[^0-9]/g, '').slice(0, 10) });
+                                    if (primaryPhoneError) setPrimaryPhoneError('');
+                                }}
                             />
+                            {primaryPhoneError ? (
+                                <Text style={styles.errorText}>{primaryPhoneError}</Text>
+                            ) : null}
                         </View>
 
                         <View style={styles.inputGroup}>
@@ -221,12 +263,18 @@ export default function EmergencyContactsScreen() {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Phone</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, secondaryPhoneError ? styles.inputError : null]}
                                 keyboardType="numeric"
                                 value={form.secondaryPhone}
                                 maxLength={10}
-                                onChangeText={(t) => setForm({ ...form, secondaryPhone: t.replace(/[^0-9]/g, '').slice(0, 10) })}
+                                onChangeText={(t) => {
+                                    setForm({ ...form, secondaryPhone: t.replace(/[^0-9]/g, '').slice(0, 10) });
+                                    if (secondaryPhoneError) setSecondaryPhoneError('');
+                                }}
                             />
+                            {secondaryPhoneError ? (
+                                <Text style={styles.errorText}>{secondaryPhoneError}</Text>
+                            ) : null}
                         </View>
 
                         <View style={styles.inputGroup}>
@@ -315,5 +363,6 @@ const styles = StyleSheet.create({
     prevBtnText: { color: '#FF5C00', fontSize: 18, lineHeight: 25, fontWeight: '600', fontFamily: 'Poppins_600SemiBold' },
     nextBtn: { flex: 0.48, height: 53, backgroundColor: '#FF5C00', borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
     nextBtnText: { color: '#FFFFFF', fontSize: 18, lineHeight: 25, fontWeight: '600', fontFamily: 'Poppins_600SemiBold' },
+    inputError: { borderColor: '#EF4444' },
     errorText: { color: '#EF4444', fontSize: 12, fontFamily: 'Poppins_400Regular', marginTop: 4, marginLeft: 4 }
 });

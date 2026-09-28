@@ -948,7 +948,7 @@ export const linkBeneficiaryToSubscription = async (
       subscriberId: userId,
       isActive: true,
       beneficiaryId: null,
-      isQueued: false,
+      isQueued: { not: true },
       cancelledAt: null,
     },
     orderBy: { createdAt: 'desc' },
@@ -1115,6 +1115,29 @@ export const linkBeneficiaryToSubscription = async (
           medicationList: mappedMedications.length > 0 ? { create: mappedMedications } : undefined
         }
       });
+    } else {
+      beneficiary = await tx.beneficiary.update({
+        where: { id: beneficiary.id },
+        data: {
+          name: beneficiaryName,
+          age: calculateAge(dobDate, beneficiaryData.age),
+          dateOfBirth: dobDate,
+          gender: (String(beneficiaryData.gender).toLowerCase().includes('male') && !String(beneficiaryData.gender).toLowerCase().includes('female')) ? 'male' : String(beneficiaryData.gender).toLowerCase().includes('female') ? 'female' : 'prefer_not_to_say',
+          address: beneficiaryData.address || beneficiary.address,
+          flatPlot: beneficiaryData.flatPlot || beneficiary.flatPlot,
+          streetArea: beneficiaryData.streetArea || beneficiary.streetArea,
+          landmark: beneficiaryData.landmark || beneficiary.landmark,
+          city: beneficiaryData.city || beneficiary.city,
+          state: beneficiaryData.state || beneficiary.state,
+          pincode: beneficiaryData.pincode || beneficiary.pincode,
+          latitude: beneficiaryData.latitude ?? beneficiary.latitude,
+          longitude: beneficiaryData.longitude ?? beneficiary.longitude,
+          relationship: beneficiaryData.relationship || beneficiary.relationship,
+          primaryPhysicianName: medicalData?.physicianName || beneficiary.primaryPhysicianName,
+          primaryPhysicianPhone: medicalData?.physicianPhone || beneficiary.primaryPhysicianPhone,
+          hobbiesInterests: medicalData?.hobbies || beneficiary.hobbiesInterests,
+        }
+      });
     }
 
     // 5b. Link subscription and payments to the new beneficiary
@@ -1165,10 +1188,19 @@ export const linkBeneficiaryToSubscription = async (
       const endDate = new Date(startDate);
       endDate.setMonth(endDate.getMonth() + months);
 
+      let pVersion = existingSub?.packageVersion;
+      if (!pVersion && existingSub?.packageType) {
+        pVersion = await tx.packageVersion.findFirst({
+          where: { packageCode: existingSub.packageType, isLatest: true },
+          include: { versionBenefits: true }
+        });
+      }
+
       await tx.subscription.update({
         where: { id: subIdToLink },
         data: { 
           beneficiaryId: beneficiary.id,
+          packageVersionId: pVersion?.id || existingSub?.packageVersionId || null,
           startDate: startDate,
           endDate: endDate,
           isActive: isActive,
@@ -1186,15 +1218,17 @@ export const linkBeneficiaryToSubscription = async (
         }
       });
 
-      if (existingSub?.packageVersion?.versionBenefits && existingSub.packageVersion.versionBenefits.length > 0) {
-        const periodBenefits = existingSub.packageVersion.versionBenefits.map((vb: any) => ({
+      const versionBenefitsToUse = pVersion?.versionBenefits || existingSub?.packageVersion?.versionBenefits;
+      if (versionBenefitsToUse && versionBenefitsToUse.length > 0) {
+        const periodBenefits = versionBenefitsToUse.map((vb: any) => ({
           benefitId: vb.benefitId,
           name: vb.snapshotName || 'Benefit',
           unitLabel: vb.snapshotUnitLabel || null,
           monthlyUnits: vb.unitsIncluded || 1,
           allowRollover: vb.allowRollover ?? false,
           maxRolloverUnits: vb.maxRolloverUnits ?? null,
-        }));        await benefitPeriodManager.generatePeriodsForSubscription(
+        }));
+        await benefitPeriodManager.generatePeriodsForSubscription(
           subIdToLink,
           months,
           startDate,

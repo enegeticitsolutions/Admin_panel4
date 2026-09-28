@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import CareSupportModal from '@/components/shared/CareSupportModal';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal, Dimensions, ScrollView, Platform, Image, Linking, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal, Dimensions, ScrollView, Platform, Image, Linking, Alert, ActivityIndicator, BackHandler } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, usePathname } from 'expo-router';
@@ -8,7 +8,6 @@ import { useLogoutWithConfirm } from '@/utils/logout';
 import { useDeleteAccountWithConfirm } from '@/utils/deleteAccount';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
-import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { LEGAL_CONFIG } from '@/constants/legal';
@@ -27,7 +26,14 @@ interface GlobalDrawerProps {
 const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: GlobalDrawerProps) => {
     const router = useRouter();
     const { push } = useNavigationStack();
-    useAndroidBackHandler();
+    useEffect(() => {
+        if (!isOpen || Platform.OS !== 'android') return;
+        const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+            onClose();
+            return true;
+        });
+        return () => sub.remove();
+    }, [isOpen, onClose]);
     const pathname = usePathname();
     const logoutWithConfirm = useLogoutWithConfirm();
     const insets = useSafeAreaInsets();

@@ -660,7 +660,7 @@ export default function SubscriptionPackagesScreen() {
                         </View>
                         <View style={{ flex: 1, marginLeft: 15 }}>
                             <Text style={styles.assistanceTitle}>Need assistance?</Text>
-                            <Text style={styles.assistanceSub}>Our experts are here to help you choose the right plan via Phone or WhatsApp.</Text>
+                            <Text style={styles.assistanceSub}>Our experts are here to help you choose the right plan via Phone.</Text>
                         </View>
                     </View>
 
@@ -670,9 +670,6 @@ export default function SubscriptionPackagesScreen() {
                             textStyle={styles.callbackText}
                             notes="Requested assistance from Subscription Packages page"
                         />
-                        <TouchableOpacity style={styles.whatsappBtn}>
-                            <Ionicons name="chatbox-ellipses-outline" size={28} color="#F97316" />
-                        </TouchableOpacity>
                     </View>
                 </View>
             </ScrollView>
@@ -935,9 +932,8 @@ const styles = StyleSheet.create({
     assistanceTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 4 },
     assistanceSub: { fontSize: 16, color: '#4B5563', lineHeight: 18 },
     assistanceActions: { flexDirection: 'row', alignItems: 'center' },
-    callbackBtn: { flex: 1, flexDirection: 'row', borderWidth: 1, borderColor: '#F97316', borderRadius: 12, height: 50, alignItems: 'center', justifyContent: 'center', marginRight: 15 },
+    callbackBtn: { flex: 1, flexDirection: 'row', borderWidth: 1, borderColor: '#F97316', borderRadius: 12, height: 50, alignItems: 'center', justifyContent: 'center' },
     callbackText: { color: '#F97316', fontWeight: '600', fontSize: 15 },
-    whatsappBtn: { width: 50, height: 50, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
 
     // Location picker styles
     locationContainer: {

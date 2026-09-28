@@ -15,6 +15,7 @@ import { useSafeBack } from '@/hooks/useSafeBack';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import NotificationBell from '@/components/shared/NotificationBell';
 
 type PackageDetails = {
     id: string;
@@ -33,6 +34,7 @@ export default function SubscribeFormScreen() {
 
     const [drawerOpen, setDrawerOpen] = useState(false);
     const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
+    const scrollViewRef = useRef<ScrollView>(null);
     const [userData, setUserData] = useState<any>(null);
 
     useEffect(() => {
@@ -72,7 +74,14 @@ export default function SubscribeFormScreen() {
         latitude: 0,
         longitude: 0,
     });
+    const [nameError, setNameError] = useState('');
+    const [phoneError, setPhoneError] = useState('');
     const [emailError, setEmailError] = useState('');
+    const [flatPlotError, setFlatPlotError] = useState('');
+    const [streetAreaError, setStreetAreaError] = useState('');
+    const [cityError, setCityError] = useState('');
+    const [pincodeError, setPincodeError] = useState('');
+    const [stateError, setStateError] = useState('');
 
     useEffect(() => {
         const checkAuthAndFetchPackage = async () => {
@@ -144,19 +153,100 @@ export default function SubscribeFormScreen() {
     }, [params.packageId]);
 
     const handleNext = () => {
+        let hasError = false;
+
+        if (!subscriberForm.fullName.trim()) {
+            setNameError('Full name is required');
+            hasError = true;
+        } else {
+            setNameError('');
+        }
+
+        const cleanedPhone = subscriberForm.phone.replace(/\D/g, '');
+        if (!cleanedPhone) {
+            setPhoneError('Phone number is required');
+            hasError = true;
+        } else if (cleanedPhone.length !== 10) {
+            setPhoneError('Phone number must be exactly 10 digits');
+            hasError = true;
+        } else {
+            setPhoneError('');
+        }
+
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!subscriberForm.email) {
+        if (!subscriberForm.email.trim()) {
             setEmailError('Email is required');
-            return;
-        } else if (!emailRegex.test(subscriberForm.email)) {
+            hasError = true;
+        } else if (!emailRegex.test(subscriberForm.email.trim())) {
             setEmailError('Please enter a valid email address');
+            hasError = true;
+        } else {
+            setEmailError('');
+        }
+
+        if (!subscriberForm.flatPlot.trim()) {
+            setFlatPlotError('Flat / Plot / Building is required');
+            hasError = true;
+        } else {
+            setFlatPlotError('');
+        }
+
+        if (!subscriberForm.streetArea.trim()) {
+            setStreetAreaError('Street / Area is required');
+            hasError = true;
+        } else {
+            setStreetAreaError('');
+        }
+
+        if (!subscriberForm.city.trim()) {
+            setCityError('City is required');
+            hasError = true;
+        } else {
+            setCityError('');
+        }
+
+        const cleanedPincode = subscriberForm.pincode.replace(/\D/g, '');
+        if (!cleanedPincode) {
+            setPincodeError('Pincode is required');
+            hasError = true;
+        } else if (cleanedPincode.length !== 6) {
+            setPincodeError('Pincode must be exactly 6 digits');
+            hasError = true;
+        } else {
+            setPincodeError('');
+        }
+
+        if (!subscriberForm.state.trim()) {
+            setStateError('State is required');
+            hasError = true;
+        } else {
+            setStateError('');
+        }
+
+        if (hasError) {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
             return;
         }
-        setEmailError('');
+
+        const constructedAddress = [
+            subscriberForm.flatPlot.trim(),
+            subscriberForm.streetArea.trim(),
+            subscriberForm.landmark.trim(),
+            subscriberForm.city.trim(),
+            subscriberForm.state.trim(),
+            cleanedPincode
+        ].filter(Boolean).join(', ');
+
+        const finalAddress = subscriberForm.address.trim() || constructedAddress;
 
         push('/(setup)/beneficiary-info', {
             packageId: params.packageId || 'silver',
-            subscriberData: JSON.stringify(subscriberForm),
+            subscriberData: JSON.stringify({
+                ...subscriberForm,
+                address: finalAddress,
+                phone: cleanedPhone,
+                pincode: cleanedPincode
+            }),
             isLinkingFlow: params.isLinkingFlow || 'false'
         });
     };
@@ -191,10 +281,7 @@ export default function SubscribeFormScreen() {
                             <Text style={styles.headerSubtitle}>Step 1 of 5</Text>
                         </View>
                         <View style={styles.headerIcons}>
-                            <View>
-                                <Ionicons name="notifications-outline" size={26} color="#111827" />
-                                <View style={styles.notifBadge}><Text style={styles.notifText}>2</Text></View>
-                            </View>
+                            <NotificationBell />
                             <TouchableOpacity onPress={openDrawer}>
                                 <Ionicons name="menu-outline" size={30} color="#111827" style={{ marginLeft: 15 }} />
                             </TouchableOpacity>
@@ -206,7 +293,7 @@ export default function SubscribeFormScreen() {
                     </View>
                 </View>
 
-                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                     {/* Sticky Package Banner */}
                     <View style={styles.packageBanner}>
@@ -227,37 +314,49 @@ export default function SubscribeFormScreen() {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Full Name *</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, nameError ? { borderColor: '#EF4444' } : null]}
                                 placeholder="Enter your full name"
                                 placeholderTextColor="#9CA3AF"
                                 value={subscriberForm.fullName}
                                 maxLength={50}
-                                onChangeText={(text) => setSubscriberForm({ ...subscriberForm, fullName: text })}
+                                onChangeText={(text) => {
+                                    setSubscriberForm({ ...subscriberForm, fullName: text });
+                                    if (nameError) setNameError('');
+                                }}
                             />
+                            {nameError ? (
+                                <Text style={styles.errorText}>{nameError}</Text>
+                            ) : null}
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Phone Number</Text>
+                            <Text style={styles.label}>Phone Number *</Text>
                             <View style={styles.phoneInputContainer}>
-                                <View style={styles.countryCodeBox}>
+                                <View style={[styles.countryCodeBox, phoneError ? { borderColor: '#EF4444' } : null]}>
                                     <Text style={styles.countryCodeText}>+91</Text>
                                 </View>
                                 <TextInput
-                                    style={styles.phoneInput}
+                                    style={[styles.phoneInput, phoneError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="90000 90000"
                                     placeholderTextColor="#9CA3AF"
                                     keyboardType="numeric"
                                     maxLength={10}
                                     value={subscriberForm.phone}
-                                    onChangeText={(text) => setSubscriberForm({ ...subscriberForm, phone: text.replace(/[^0-9]/g, '').slice(0, 10) })}
+                                    onChangeText={(text) => {
+                                        setSubscriberForm({ ...subscriberForm, phone: text.replace(/[^0-9]/g, '').slice(0, 10) });
+                                        if (phoneError) setPhoneError('');
+                                    }}
                                 />
                             </View>
+                            {phoneError ? (
+                                <Text style={styles.errorText}>{phoneError}</Text>
+                            ) : null}
                         </View>
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Email Address *</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, emailError ? { borderColor: '#EF4444' } : null]}
                                 placeholder="your@email.com"
                                 placeholderTextColor="#9CA3AF"
                                 keyboardType="email-address"
@@ -278,40 +377,58 @@ export default function SubscribeFormScreen() {
                             label=""
                             value={subscriberForm.address}
                             onChangeText={(text) => setSubscriberForm(prev => ({ ...prev, address: text }))}
-                            onLocationFetched={(details) => setSubscriberForm(prev => ({
-                                ...prev,
-                                address: details.address || prev.address,
-                                streetArea: details.address?.split(',')[0] || prev.streetArea,
-                                city: details.city || prev.city,
-                                state: details.state || prev.state,
-                                pincode: details.pincode || prev.pincode,
-                                latitude: details.latitude || 0,
-                                longitude: details.longitude || 0,
-                            }))}
+                            onLocationFetched={(details) => {
+                                setSubscriberForm(prev => ({
+                                    ...prev,
+                                    address: details.address || prev.address,
+                                    streetArea: details.address?.split(',')[0] || prev.streetArea,
+                                    city: details.city || prev.city,
+                                    state: details.state || prev.state,
+                                    pincode: details.pincode || prev.pincode,
+                                    latitude: details.latitude || 0,
+                                    longitude: details.longitude || 0,
+                                }));
+                                if (details.address) setStreetAreaError('');
+                                if (details.city) setCityError('');
+                                if (details.state) setStateError('');
+                                if (details.pincode) setPincodeError('');
+                            }}
                         />
 
                         <View style={styles.row}>
                             <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
-                                <Text style={styles.label}>Flat / Plot / Building</Text>
+                                <Text style={styles.label}>Flat / Plot / Building *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, flatPlotError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="e.g. 402, Sunshine"
                                     placeholderTextColor="#9CA3AF"
                                     value={subscriberForm.flatPlot}
                                     maxLength={50}
-                                    onChangeText={(t) => setSubscriberForm({ ...subscriberForm, flatPlot: t })}
+                                    onChangeText={(t) => {
+                                        setSubscriberForm({ ...subscriberForm, flatPlot: t });
+                                        if (flatPlotError) setFlatPlotError('');
+                                    }}
                                 />
+                                {flatPlotError ? (
+                                    <Text style={styles.errorText}>{flatPlotError}</Text>
+                                ) : null}
                             </View>
                             <View style={[styles.inputGroup, { flex: 1.5 }]}>
                                 <Text style={styles.label}>Street / Area *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, streetAreaError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="e.g. Sector 15"
                                     placeholderTextColor="#9CA3AF"
                                     value={subscriberForm.streetArea}
                                     maxLength={80}
-                                    onChangeText={(t) => setSubscriberForm({ ...subscriberForm, streetArea: t })}
+                                    onChangeText={(t) => {
+                                        setSubscriberForm({ ...subscriberForm, streetArea: t });
+                                        if (streetAreaError) setStreetAreaError('');
+                                    }}
                                 />
+                                {streetAreaError ? (
+                                    <Text style={styles.errorText}>{streetAreaError}</Text>
+                                ) : null}
                             </View>
                         </View>
 
@@ -331,38 +448,56 @@ export default function SubscribeFormScreen() {
                             <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
                                 <Text style={styles.label}>City *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, cityError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="City"
                                     placeholderTextColor="#9CA3AF"
                                     value={subscriberForm.city}
                                     maxLength={50}
-                                    onChangeText={(t) => setSubscriberForm({ ...subscriberForm, city: t })}
+                                    onChangeText={(t) => {
+                                        setSubscriberForm({ ...subscriberForm, city: t });
+                                        if (cityError) setCityError('');
+                                    }}
                                 />
+                                {cityError ? (
+                                    <Text style={styles.errorText}>{cityError}</Text>
+                                ) : null}
                             </View>
                             <View style={[styles.inputGroup, { flex: 1 }]}>
                                 <Text style={styles.label}>Pincode *</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, pincodeError ? { borderColor: '#EF4444' } : null]}
                                     placeholder="Pincode"
                                     placeholderTextColor="#9CA3AF"
                                     keyboardType="numeric"
                                     maxLength={6}
                                     value={subscriberForm.pincode}
-                                    onChangeText={(t) => setSubscriberForm({ ...subscriberForm, pincode: t.replace(/[^0-9]/g, '').slice(0, 6) })}
+                                    onChangeText={(t) => {
+                                        setSubscriberForm({ ...subscriberForm, pincode: t.replace(/[^0-9]/g, '').slice(0, 6) });
+                                        if (pincodeError) setPincodeError('');
+                                    }}
                                 />
+                                {pincodeError ? (
+                                    <Text style={styles.errorText}>{pincodeError}</Text>
+                                ) : null}
                             </View>
                         </View>
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>State *</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, stateError ? { borderColor: '#EF4444' } : null]}
                                 placeholder="State"
                                 placeholderTextColor="#9CA3AF"
                                 value={subscriberForm.state}
                                 maxLength={50}
-                                onChangeText={(t) => setSubscriberForm({ ...subscriberForm, state: t })}
+                                onChangeText={(t) => {
+                                    setSubscriberForm({ ...subscriberForm, state: t });
+                                    if (stateError) setStateError('');
+                                }}
                             />
+                            {stateError ? (
+                                <Text style={styles.errorText}>{stateError}</Text>
+                            ) : null}
                         </View>
                     </View>
                 </ScrollView>

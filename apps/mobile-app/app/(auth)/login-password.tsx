@@ -15,7 +15,7 @@ export default function LoginPasswordScreen() {
     });
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
-    const { push, replace, pop } = useNavigationStack();
+    const { push, replace, pop, resetStack } = useNavigationStack();
     useAndroidBackHandler();
     const { login } = useAuth();
 
@@ -47,6 +47,7 @@ export default function LoginPasswordScreen() {
                 const result = data.data;
                 // Save session via AuthContext
                 await login(result.token, result.user);
+                resetStack();
                 
                 // Route explicitly to the correct dashboard to avoid layout flicker
                 const role = result.user.role;

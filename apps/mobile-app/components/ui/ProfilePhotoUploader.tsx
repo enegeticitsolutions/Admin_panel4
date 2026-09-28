@@ -39,6 +39,7 @@ import { API_URL } from '@/constants/api';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { PresignedUrlService } from '@/utils/PresignedUrlService';
 import CustomAlertModal, { AlertType } from '@/components/shared/CustomAlertModal';
+import { queryClient } from '@/services/queryClient';
 
 // ─── Types (OOP config contract) ──────────────────────────────────────────────
 
@@ -301,6 +302,12 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
       const resType = targetType === 'beneficiary' ? 'beneficiary_photo' : 'profile_photo';
       const resId = targetType === 'beneficiary' && targetId ? targetId : 'me';
       PresignedUrlService.invalidate(resType, resId);
+
+      if (targetType === 'beneficiary') {
+        AsyncStorage.removeItem('beneficiaryDashboardCache').catch(() => {});
+        queryClient.invalidateQueries({ queryKey: ['subscriberDashboard'] });
+        queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
+      }
 
       // Update local state immediately (optimistic UI)
       setPhotoUrl(data.url);

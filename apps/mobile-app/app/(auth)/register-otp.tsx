@@ -25,7 +25,7 @@ import { useSafeBack } from '@/hooks/useSafeBack';
 export default function RegisterOtpScreen() {
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const { login } = useAuth();
-  const { push, replace } = useNavigationStack();
+  const { push, replace, resetStack } = useNavigationStack();
   useAndroidBackHandler();
   const safeBack = useSafeBack();
 
@@ -64,6 +64,7 @@ export default function RegisterOtpScreen() {
       if (data.success) {
         const result = data.data;
         await login(result.token, result.user);
+        resetStack();
 
         const role = result.user.role;
         if (role === 'care_companion') {

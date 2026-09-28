@@ -17,6 +17,8 @@ import HeaderSpacer from '../../components/HeaderSpacer';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { LEGAL_CONFIG } from '@/constants/legal';
+import NotificationBell from '@/components/shared/NotificationBell';
+import { queryClient } from '@/services/queryClient';
 
 export default function SchedulePreferencesScreen() {
     const router = useRouter();
@@ -32,6 +34,7 @@ export default function SchedulePreferencesScreen() {
 
     const [drawerOpen, setDrawerOpen] = useState(false);
     const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
+    const scrollViewRef = useRef<ScrollView>(null);
     const [userData, setUserData] = useState<any>(null);
 
     const isVerificationFlow = params.isVerificationFlow === 'true';
@@ -69,11 +72,29 @@ export default function SchedulePreferencesScreen() {
     };
 
     const [visitTiming, setVisitTiming] = useState('');
+    const [visitTimingError, setVisitTimingError] = useState<string | null>(null);
     const [agreed, setAgreed] = useState(false);
+    const [agreedError, setAgreedError] = useState<string | null>(null);
 
     const handleEnrollment = async () => {
+        let hasError = false;
+
+        if (!visitTiming) {
+            setVisitTimingError('Please select a preferred visit timing');
+            hasError = true;
+        } else {
+            setVisitTimingError(null);
+        }
+
         if (!agreed) {
-            alert('Please agree to the Terms of Service and Privacy Policy');
+            setAgreedError('Please agree to the Terms of Service and Privacy Policy');
+            hasError = true;
+        } else {
+            setAgreedError(null);
+        }
+
+        if (hasError) {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
             return;
         }
 
@@ -105,6 +126,45 @@ export default function SchedulePreferencesScreen() {
                 const result = await response.json();
 
                 if (result.success) {
+                    const linkedBeneficiaryId = result.beneficiaryId || params.beneficiaryId;
+                    if (beneficiaryData.photoUri && linkedBeneficiaryId) {
+                        try {
+                            const uri = beneficiaryData.photoUri;
+                            const ext = uri.split('.').pop() || 'jpg';
+                            const fileName = `photo_${Date.now()}.${ext}`;
+                            const mimeType = `image/${ext === 'png' ? 'png' : 'jpeg'}`;
+
+                            const formData = new FormData();
+                            if (Platform.OS === 'web') {
+                                const blobResponse = await fetch(uri);
+                                const blob = await blobResponse.blob();
+                                formData.append('file', blob, fileName);
+                            } else {
+                                formData.append('file', {
+                                    uri,
+                                    name: fileName,
+                                    type: mimeType,
+                                } as any);
+                            }
+                            formData.append('targetType', 'beneficiary');
+                            formData.append('targetId', linkedBeneficiaryId);
+
+                            await fetch(`${API_URL}/profile-photo/upload`, {
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': token ? `Bearer ${token}` : ''
+                                },
+                                body: formData
+                            });
+                        } catch (uploadErr) {
+                            console.error('Failed to upload beneficiary photo during link enrollment:', uploadErr);
+                        }
+                    }
+
+                    await AsyncStorage.removeItem('beneficiaryDashboardCache');
+                    queryClient.invalidateQueries({ queryKey: ['subscriberDashboard'] });
+                    queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
+
                     if (result.token && result.user) {
                         await updateUser(result.token, result.user);
                     }
@@ -182,10 +242,7 @@ export default function SchedulePreferencesScreen() {
                             <Text style={styles.headerSubtitle}>Step 5 of 5</Text>
                         </View>
                         <View style={styles.headerIcons}>
-                            <View>
-                                <Ionicons name="notifications-outline" size={26} color="#111827" />
-                                <View style={styles.notifBadge}><Text style={styles.notifText}>2</Text></View>
-                            </View>
+                            <NotificationBell />
                             <TouchableOpacity onPress={openDrawer}>
                                 <Ionicons name="menu-outline" size={30} color="#111827" style={{ marginLeft: 15 }} />
                             </TouchableOpacity>
@@ -196,7 +253,7 @@ export default function SchedulePreferencesScreen() {
                     </View>
                 </View>
 
-                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                     <View style={styles.formCard}>
                         <Text style={styles.sectionTitle}>Schedule Preferences</Text>
@@ -206,29 +263,47 @@ export default function SchedulePreferencesScreen() {
                             <TimingPill
                                 label="Morning (8AM - 12 PM)"
                                 active={visitTiming === 'Morning'}
-                                onPress={() => setVisitTiming('Morning')}
+                                onPress={() => {
+                                    setVisitTiming('Morning');
+                                    if (visitTimingError) setVisitTimingError(null);
+                                }}
                             />
                             <TimingPill
                                 label="Afternoon (12PM - 4 PM)"
                                 active={visitTiming === 'Afternoon'}
-                                onPress={() => setVisitTiming('Afternoon')}
+                                onPress={() => {
+                                    setVisitTiming('Afternoon');
+                                    if (visitTimingError) setVisitTimingError(null);
+                                }}
                             />
                             <TimingPill
                                 label="Evening (4PM - 8 PM)"
                                 active={visitTiming === 'Evening'}
-                                onPress={() => setVisitTiming('Evening')}
+                                onPress={() => {
+                                    setVisitTiming('Evening');
+                                    if (visitTimingError) setVisitTimingError(null);
+                                }}
                             />
                         </View>
+                        {visitTimingError && (
+                            <Text style={{ color: '#EF4444', fontSize: 12, marginTop: -20, marginBottom: 20, fontFamily: 'Poppins_400Regular' }}>
+                                {visitTimingError}
+                            </Text>
+                        )}
 
                         <View style={styles.agreementBox}>
                             <TouchableOpacity
                                 style={styles.checkbox}
-                                onPress={() => setAgreed(!agreed)}
+                                onPress={() => {
+                                    const next = !agreed;
+                                    setAgreed(next);
+                                    if (next && agreedError) setAgreedError(null);
+                                }}
                             >
                                 <Ionicons
                                     name={agreed ? "checkbox" : "square-outline"}
                                     size={20}
-                                    color={agreed ? "#FE6700" : "#000000"}
+                                    color={agreed ? "#FE6700" : (agreedError ? "#EF4444" : "#000000")}
                                 />
                             </TouchableOpacity>
                             <Text style={styles.agreementText}>
@@ -249,6 +324,11 @@ export default function SchedulePreferencesScreen() {
                                 . I understand that this is a demo application and no actual data will be stored.
                             </Text>
                         </View>
+                        {agreedError && (
+                            <Text style={{ color: '#EF4444', fontSize: 12, marginTop: -25, marginBottom: 20, fontFamily: 'Poppins_400Regular' }}>
+                                {agreedError}
+                            </Text>
+                        )}
 
                         <View style={styles.divider} />
 
