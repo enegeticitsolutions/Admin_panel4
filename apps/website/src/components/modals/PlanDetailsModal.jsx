@@ -31,19 +31,24 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
   const planName = plan.name || "Care Package";
   const planDesc = plan.description || "Comprehensive in-home care and family connectivity.";
 
+  const isTrial = !!plan.isFreeTrial;
+  const isRegional = !plan.isGlobal;
+  const trialDays = plan.trialDurationDays || 7;
+
   // Always compute price from the live selectedCycle prop (1, 3, 6, or 12)
-  const durNum = parseInt(selectedCycle, 10);
+  const durNum = isTrial ? 1 : parseInt(selectedCycle, 10);
   const displayPrice = getPackageDisplayPrice(plan, selectedCycle);
 
   let durationText = "1 Month Billing";
-  if (durNum === 3) durationText = "3 Months Billing";
+  if (isTrial) durationText = `${trialDays} Days Trial`;
+  else if (durNum === 3) durationText = "3 Months Billing";
   else if (durNum === 6) durationText = "6 Months Billing";
   else if (durNum === 12) durationText = "Annual Billing";
 
-  const monthlyRate = durNum > 0 ? Math.round(displayPrice / durNum) : displayPrice;
+  const monthlyRate = isTrial ? displayPrice : (durNum > 0 ? Math.round(displayPrice / durNum) : displayPrice);
   const basePrice = plan.basePrice || displayPrice;
   const fullTermCost = basePrice * durNum;
-  const savings = durNum > 1 ? Math.max(0, fullTermCost - displayPrice) : 0;
+  const savings = isTrial ? 0 : (durNum > 1 ? Math.max(0, fullTermCost - displayPrice) : 0);
 
   // Build the complete feature checklist
   const featuresList = (() => {
@@ -138,16 +143,33 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
         {/* Modal Top Header */}
         <div className="plan-modal-header">
           <div className="plan-modal-header-info">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+              {isTrial ? (
+                <span style={{
+                  background: "#7C3AED", color: "#FFF", fontSize: "11px", fontWeight: "800",
+                  padding: "4px 10px", borderRadius: "999px", letterSpacing: "0.5px"
+                }}>
+                  🧪 {trialDays}-DAY TRIAL
+                </span>
+              ) : isRegional ? (
+                <span style={{
+                  background: "#FE6700", color: "#FFF", fontSize: "11px", fontWeight: "800",
+                  padding: "4px 10px", borderRadius: "999px", letterSpacing: "0.5px"
+                }}>
+                  📍 LOCAL PLAN {plan.selectedRegionName ? `(${plan.selectedRegionName})` : ""}
+                </span>
+              ) : null}
+            </div>
             <h2 id="plan-modal-title" className="plan-modal-title">
               {planName}
             </h2>
             <div className="plan-modal-price-subtitle">
               <span className="plan-modal-subtitle-price">
-                ₹{monthlyRate.toLocaleString("en-IN")}/month
+                ₹{monthlyRate.toLocaleString("en-IN")}{isTrial ? ` / ${trialDays} days` : "/month"}
               </span>
               <span className="plan-modal-subtitle-dot">·</span>
               <span className="plan-modal-subtitle-cycle">
-                Total ₹{displayPrice.toLocaleString("en-IN")} ({durationText})
+                {isTrial ? `Fixed one-time price` : `Total ₹${displayPrice.toLocaleString("en-IN")} (${durationText})`}
               </span>
               {savings > 0 && (
                 <span className="plan-modal-subtitle-savings">
@@ -201,10 +223,11 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
         <div className="plan-modal-footer">
           <button
             type="button"
-            className="plan-modal-btn-primary"
+            className={`plan-modal-btn-primary ${isTrial ? "plan-modal-btn-primary--trial" : ""}`}
             onClick={handleSelect}
+            style={isTrial ? { background: "linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)", boxShadow: "0 6px 20px rgba(124, 58, 237, 0.35)" } : {}}
           >
-            <span>Get Started with {planName}</span>
+            <span>{isTrial ? `Start ${trialDays}-Day Trial` : isRegional ? `Select Local Plan` : `Get Started with ${planName}`}</span>
             <span className="plan-modal-arrow">→</span>
           </button>
         </div>

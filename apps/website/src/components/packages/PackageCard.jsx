@@ -3,6 +3,12 @@ import React, { useMemo } from "react";
 export function getPackageDisplayPrice(plan, selectedCycle = "3") {
   if (!plan) return 0;
   const base = Number(plan.basePrice) || 4999;
+  
+  // Trial packages have a flat price regardless of billing cycle
+  if (plan.isFreeTrial) {
+    return base;
+  }
+
   const durNum = parseInt(selectedCycle, 10) || 3;
 
   if (durNum === 3) {
@@ -37,14 +43,19 @@ export default function PackageCard({
   const planDesc = plan.description || "Care Mitra visits & family connectivity";
   const base = Number(plan.basePrice) || 4999;
   const isFeatured = plan.isPopular || plan.tone === "featured";
+  const isTrial = !!plan.isFreeTrial;
+  const isRegional = !plan.isGlobal;
+  const trialDays = plan.trialDurationDays || 7;
 
-  // Compute price based on selected billing cycle
-  const durNum = parseInt(selectedCycle, 10) || 3;
+  // Compute price based on selected billing cycle (trial packages always flat)
+  const durNum = isTrial ? 1 : (parseInt(selectedCycle, 10) || 3);
   const displayPrice = getPackageDisplayPrice(plan, selectedCycle);
-  const monthlyPrice = durNum > 0 ? Math.round(displayPrice / durNum) : displayPrice;
+  const monthlyPrice = isTrial ? displayPrice : (durNum > 0 ? Math.round(displayPrice / durNum) : displayPrice);
 
   let cycleLabel = "billed monthly";
-  if (durNum === 3) {
+  if (isTrial) {
+    cycleLabel = `${trialDays} days trial access`;
+  } else if (durNum === 3) {
     cycleLabel = "billed for 3 months";
   } else if (durNum === 6) {
     cycleLabel = "billed for 6 months";
@@ -53,7 +64,7 @@ export default function PackageCard({
   }
 
   const fullTermCost = base * durNum;
-  const savings = durNum > 1 ? Math.max(0, fullTermCost - displayPrice) : 0;
+  const savings = isTrial ? 0 : (durNum > 1 ? Math.max(0, fullTermCost - displayPrice) : 0);
 
   // Extract all formatted benefits: merges backend benefits with standard inclusions
   const formattedBenefits = useMemo(() => {
@@ -70,16 +81,24 @@ export default function PackageCard({
         } else if (pb.isUnlimited) {
           displayText = `Unlimited • ${benefitName}`;
         } else {
-          const base = pb.unitsIncluded ?? 0;
+          const baseUnits = pb.unitsIncluded ?? 0;
           let periodText = "";
-          if (period === "monthly") periodText = "/month";
-          else if (period === "yearly") periodText = "/year";
-          else if (period === "3_months") periodText = "/quarter";
-          else if (period === "6_months") periodText = "/half-year";
-          else if (period === "one_time") periodText = " (once)";
+          if (isTrial) {
+            periodText = ` (trial)`;
+          } else if (period === "monthly") {
+            periodText = "/month";
+          } else if (period === "yearly") {
+            periodText = "/year";
+          } else if (period === "3_months") {
+            periodText = "/quarter";
+          } else if (period === "6_months") {
+            periodText = "/half-year";
+          } else if (period === "one_time") {
+            periodText = " (once)";
+          }
 
           const unitText = rawLabel ? ` ${rawLabel}` : "";
-          displayText = `${base}${unitText}${periodText} • ${benefitName}`;
+          displayText = `${baseUnits}${unitText}${periodText} • ${benefitName}`;
         }
 
         list.push({
@@ -99,13 +118,18 @@ export default function PackageCard({
     }
 
     return list;
-  }, [plan]);
+  }, [plan, isTrial]);
 
   // The enriched plan object to pass to checkout and details modal
   const planForCheckout = {
     ...plan,
+    isFreeTrial: isTrial,
+    trialDurationDays: trialDays,
+    isGlobal: plan.isGlobal ?? true,
+    isRegional,
+    selectedRegionName: plan.selectedRegionName || plan.regions?.[0]?.name || null,
     selectedDurationMonths: durNum,
-    selectedCycle: String(durNum),
+    selectedCycle: isTrial ? "1" : String(durNum),
     calculatedPrice: displayPrice,
     cycleLabel,
     monthlyRate: monthlyPrice,
@@ -115,18 +139,34 @@ export default function PackageCard({
 
   // Display top 5 benefits in card preview, rest visible in popup modal via Read More
   const previewBenefits = formattedBenefits.slice(0, 5);
-  const remainingCount = Math.max(0, formattedBenefits.length - 5);
+
+  const regionName = plan.regions?.[0]?.name || plan.selectedRegionName || "";
 
   return (
     <article
-      className={`plan-card ${isSelected ? "plan-card--selected selected" : ""} ${isFeatured ? "featured plan-card--featured" : ""}`}
+      className={`plan-card ${isSelected ? "plan-card--selected selected" : ""} ${isFeatured ? "featured plan-card--featured" : ""} ${isTrial ? "plan-card--trial" : ""} ${isRegional ? "plan-card--regional" : ""}`}
       onClick={() => onCardClick && onCardClick(plan)}
     >
-      {/* 1. Standardized Badge Slot - identical 26px height across all cards */}
+      {/* 0. Trial Top Ribbon */}
+      {isTrial && (
+        <div className="plan-card__trial-ribbon">
+          <span className="plan-card__trial-ribbon-text"> {trialDays}-DAY TRIAL</span>
+        </div>
+      )}
+
+      {/* 1. Standardized Badge Slot - identical height across cards */}
       <div className="plan-card__badge-slot">
         {isSelected ? (
           <span className="plan-card__badge plan-card__badge--active">
             ✓ Selected Plan
+          </span>
+        ) : isTrial ? (
+          <span className="plan-card__badge plan-card__badge--trial">
+             {trialDays}-Day Trial
+          </span>
+        ) : isRegional ? (
+          <span className="plan-card__badge plan-card__badge--regional">
+            📍 Local Plan
           </span>
         ) : isFeatured ? (
           <span className="plan-card__badge">
@@ -142,23 +182,41 @@ export default function PackageCard({
         {planName}
       </h2>
 
+      {/* 2b. Regional Serving Tag */}
+      {isRegional && regionName && (
+        <div className="plan-card__regional-tag">
+          <span className="plan-card__regional-dot" />
+          <span>Serving {regionName}</span>
+        </div>
+      )}
+
       {/* 3. Standardized Description */}
       <p className="plan-card__desc" title={planDesc}>
         {planDesc}
       </p>
 
-      {/* 4. Standardized Pricing Box (175px fixed height) */}
+      {/* 4. Standardized Pricing Box */}
       <div className="plan-hours">
         <div className="plan-hours__primary-price">
           <span className="plan-hours__currency">₹</span>
           <strong className="plan-hours__monthly-rate">
             {monthlyPrice.toLocaleString("en-IN")}
           </strong>
-          <span className="plan-hours__period">/month</span>
+          <span className="plan-hours__period">
+            {isTrial ? `/${trialDays} days` : "/month"}
+          </span>
         </div>
 
         <div className="plan-hours__total-billed">
-          {durNum > 1 ? (
+          {isTrial ? (
+            <>
+              <span className="plan-hours__total-label">Fixed:</span>
+              <strong className="plan-hours__total-amount">
+                ₹{displayPrice.toLocaleString("en-IN")}
+              </strong>
+              <span className="plan-hours__cycle-tag">(One-time trial)</span>
+            </>
+          ) : durNum > 1 ? (
             <>
               <span className="plan-hours__total-label">Total:</span>
               <strong className="plan-hours__total-amount">
@@ -172,13 +230,17 @@ export default function PackageCard({
         </div>
 
         <div className="plan-hours__savings-slot">
-          {savings > 0 ? (
+          {isTrial ? (
+            <span className="plan-hours__savings-pill plan-hours__savings-pill--trial">
+              ✨ Full Access Experience
+            </span>
+          ) : savings > 0 ? (
             <span className="plan-hours__savings-pill">
               Save ₹{savings.toLocaleString("en-IN")}
             </span>
           ) : (
             <span className="plan-hours__savings-pill plan-hours__savings-pill--standard">
-              Standard Plan Rate
+              {isRegional ? "📍 Local Direct Rate" : "Standard Plan Rate"}
             </span>
           )}
         </div>
@@ -188,7 +250,9 @@ export default function PackageCard({
       <ul className="plan-card__features-list">
         {previewBenefits.map((b) => (
           <li key={b.id} className="plan-card__feature-item">
-            <span className="plan-card__check">✓</span>
+            <span className={`plan-card__check ${isTrial ? "plan-card__check--trial" : isRegional ? "plan-card__check--regional" : ""}`}>
+              ✓
+            </span>
             <span className="plan-card__feature-text" title={b.text}>
               {b.text}
             </span>
@@ -199,7 +263,7 @@ export default function PackageCard({
         ))}
       </ul>
 
-      {/* 6. Read More Link (matching reference design) */}
+      {/* 6. Read More Link */}
       <button
         type="button"
         className="plan-card__read-more-link"
@@ -215,14 +279,14 @@ export default function PackageCard({
       {/* 7. Bottom Fixed Get Started Button */}
       <button
         type="button"
-        className="plan-card__cta-btn"
+        className={`plan-card__cta-btn ${isTrial ? "plan-card__cta-btn--trial" : isRegional ? "plan-card__cta-btn--regional" : ""}`}
         onClick={(e) => {
           e.stopPropagation();
           onCardClick && onCardClick(plan);
           onSelectPackage && onSelectPackage(planForCheckout);
         }}
       >
-        Get Started <span>→</span>
+        {isTrial ? "Start Trial" : isRegional ? "Select Local Plan" : "Get Started"} <span>→</span>
       </button>
     </article>
   );

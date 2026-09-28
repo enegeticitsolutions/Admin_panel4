@@ -61,10 +61,15 @@ function useRazorpayScript() {
 export default function CheckoutPage({ selectedPackage, token, user, onSuccess, onGoBack }) {
   const { loaded: razorpayLoaded, error: razorpayError } = useRazorpayScript();
   const pkg = selectedPackage || fallbackPackage;
+  const isTrial = !!pkg.isFreeTrial;
+  const isRegional = !pkg.isGlobal;
+  const trialDays = pkg.trialDurationDays || 7;
 
-  const initialDuration = ["1", "3", "6", "12"].includes(String(selectedPackage?.selectedCycle || selectedPackage?.selectedDurationMonths))
-    ? String(selectedPackage?.selectedCycle || selectedPackage?.selectedDurationMonths)
-    : "1";
+  const initialDuration = isTrial
+    ? "1"
+    : ["1", "3", "6", "12"].includes(String(selectedPackage?.selectedCycle || selectedPackage?.selectedDurationMonths))
+      ? String(selectedPackage?.selectedCycle || selectedPackage?.selectedDurationMonths)
+      : "1";
   const [duration, setDuration] = useState(initialDuration);
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -87,6 +92,9 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
   const baseMonthlyPrice = pkg.basePrice || pkg.price || 4999;
 
   const calcDurationPricing = () => {
+    if (isTrial) {
+      return { total: baseMonthlyPrice, discountPct: 0, durationMonths: 1 };
+    }
     const durNum = parseInt(duration, 10);
     let rawTotal = baseMonthlyPrice * durNum;
     let discPct = 0;
@@ -199,14 +207,14 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
       amount: orderData ? orderData.amount : Math.round(finalTotal * 100),
       currency: orderData ? orderData.currency : "INR",
       name: "MaiHoonNa Care Technologies",
-      description: `${pkg.name} — ${pricing.durationMonths} Month${pricing.durationMonths > 1 ? "s" : ""}`,
+      description: isTrial ? `${pkg.name} — ${trialDays}-Day Trial` : `${pkg.name} — ${pricing.durationMonths} Month${pricing.durationMonths > 1 ? "s" : ""}`,
       image: window.location.origin + "/logo.svg",
       prefill: {
         name: user?.name || "",
         contact: user?.phone ? String(user.phone).replace(/\D/g, "").slice(-10) : "",
         email: user?.email || "",
       },
-      theme: { color: "#fe6700" },
+      theme: { color: isTrial ? "#7c3aed" : "#fe6700" },
       handler: async function (response) {
         // Payment was successful in Razorpay modal
         setPaymentStage("verifying");
@@ -374,42 +382,71 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
             {/* Left: Duration selector */}
             <div>
               <div style={{ background: "#ffffff", borderRadius: "20px", padding: "32px", border: "1px solid #e2e8f0" }}>
-                <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginBottom: "8px" }}>Select Duration</h2>
+                <h2 style={{ fontSize: "1.25rem", fontWeight: "800", color: "#0f172a", marginBottom: "8px" }}>
+                  {isTrial ? "Trial Package Duration" : "Select Duration"}
+                </h2>
                 <p style={{ fontSize: "0.88rem", color: "#64748b", margin: "0 0 20px" }}>
-                  Choose your billing commitment for <strong>{pkg.name}</strong>.
+                  {isTrial
+                    ? `Experience comprehensive care for ${trialDays} days with ${pkg.name}.`
+                    : `Choose your billing commitment for ${pkg.name}.`}
                 </p>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "14px" }}>
-                  {[
-                    { key: "1", label: "1 Month", disc: 0 },
-                    { key: "3", label: "3 Months", disc: pkg.discountThreeMonths ?? 5 },
-                    { key: "6", label: "6 Months", disc: pkg.discountSixMonths ?? 10 },
-                    { key: "12", label: "1 Year", disc: pkg.discountAnnual ?? 20 },
-                  ].map((item) => (
-                    <button 
-                      key={item.key} 
-                      type="button" 
-                      onClick={() => !isPaymentBusy && setDuration(item.key)}
-                      disabled={isPaymentBusy}
-                      style={{
-                        padding: "20px 14px", borderRadius: "16px",
-                        border: duration === item.key ? "2.5px solid #fe6700" : "1.5px solid #e2e8f0",
-                        background: duration === item.key ? "#fff8f3" : "#ffffff",
-                        textAlign: "left", 
-                        cursor: isPaymentBusy ? "not-allowed" : "pointer",
-                        opacity: isPaymentBusy ? 0.7 : 1,
-                        display: "flex", flexDirection: "column", justifyContent: "space-between",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <div style={{ fontSize: "1.05rem", fontWeight: "800", color: "#0f172a" }}>{item.label}</div>
-                      {item.disc > 0
-                        ? <div style={{ fontSize: "0.82rem", color: "#16a34a", fontWeight: "700", marginTop: "6px" }}>Save {item.disc}% Extra</div>
-                        : <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "6px" }}>Standard Plan</div>
-                      }
-                    </button>
-                  ))}
-                </div>
+                {isTrial ? (
+                  <div style={{
+                    background: "linear-gradient(135deg, #fdf4ff 0%, #faf5ff 100%)",
+                    border: "2px solid #a855f7",
+                    borderRadius: "16px",
+                    padding: "24px 20px",
+                    boxShadow: "0 4px 14px rgba(168, 85, 247, 0.12)"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                      <span style={{ fontSize: "1.15rem", fontWeight: "800", color: "#6b21a8" }}>
+                        🧪 {trialDays}-Day Full Care Trial
+                      </span>
+                      <span style={{
+                        background: "#7e22ce", color: "#ffffff", fontSize: "0.75rem",
+                        fontWeight: "800", padding: "4px 10px", borderRadius: "999px"
+                      }}>
+                        Trial Period
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.88rem", color: "#7e22ce", lineHeight: "1.5" }}>
+                      Full senior care benefits, dedicated Care Mitra visits, and 24/7 care coordination for {trialDays} days. No recurring commitment.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "14px" }}>
+                    {[
+                      { key: "1", label: "1 Month", disc: 0 },
+                      { key: "3", label: "3 Months", disc: pkg.discountThreeMonths ?? 5 },
+                      { key: "6", label: "6 Months", disc: pkg.discountSixMonths ?? 10 },
+                      { key: "12", label: "1 Year", disc: pkg.discountAnnual ?? 20 },
+                    ].map((item) => (
+                      <button 
+                        key={item.key} 
+                        type="button" 
+                        onClick={() => !isPaymentBusy && setDuration(item.key)}
+                        disabled={isPaymentBusy}
+                        style={{
+                          padding: "20px 14px", borderRadius: "16px",
+                          border: duration === item.key ? "2.5px solid #fe6700" : "1.5px solid #e2e8f0",
+                          background: duration === item.key ? "#fff8f3" : "#ffffff",
+                          textAlign: "left", 
+                          cursor: isPaymentBusy ? "not-allowed" : "pointer",
+                          opacity: isPaymentBusy ? 0.7 : 1,
+                          display: "flex", flexDirection: "column", justifyContent: "space-between",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <div style={{ fontSize: "1.05rem", fontWeight: "800", color: "#0f172a" }}>{item.label}</div>
+                        {item.disc > 0
+                          ? <div style={{ fontSize: "0.82rem", color: "#16a34a", fontWeight: "700", marginTop: "6px" }}>Save {item.disc}% Extra</div>
+                          : <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "6px" }}>Standard Plan</div>
+                        }
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 <div style={{ marginTop: "28px", padding: "16px", background: "#f8fafc", borderRadius: "14px", border: "1px solid #e2e8f0" }}>
                   <div style={{ fontWeight: "700", color: "#0f172a", fontSize: "0.9rem", marginBottom: "4px" }}>📱 About Beneficiary Setup</div>
@@ -440,13 +477,35 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
                   )}
                 </div>
 
+                {isRegional && (
+                  <div style={{
+                    background: "#fff7ed",
+                    border: "1px solid #fdba74",
+                    borderRadius: "10px",
+                    padding: "8px 12px",
+                    marginBottom: "14px",
+                    fontSize: "0.84rem",
+                    color: "#c2410c",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px"
+                  }}>
+                    <span>📍</span>
+                    <span>Local Regional Plan: <strong>{pkg.selectedRegionName || pkg.regions?.[0]?.name || "Local Zone"}</strong></span>
+                  </div>
+                )}
+
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", fontSize: "0.95rem" }}>
                   <span style={{ color: "#64748b" }}>{pkg.name}</span>
-                  <span style={{ fontWeight: "700", color: "#0f172a" }}>₹{baseMonthlyPrice.toLocaleString("en-IN")}/month</span>
+                  <span style={{ fontWeight: "700", color: "#0f172a" }}>
+                    ₹{baseMonthlyPrice.toLocaleString("en-IN")}{isTrial ? ` / ${trialDays} days` : "/month"}
+                  </span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px", fontSize: "0.9rem" }}>
                   <span style={{ color: "#64748b" }}>Duration</span>
-                  <span style={{ fontWeight: "600", color: "#0f172a" }}>{pricing.durationMonths} Month{pricing.durationMonths > 1 ? "s" : ""}</span>
+                  <span style={{ fontWeight: "600", color: "#0f172a" }}>
+                    {isTrial ? `${trialDays} Days Trial` : `${pricing.durationMonths} Month${pricing.durationMonths > 1 ? "s" : ""}`}
+                  </span>
                 </div>
 
                 {/* ── Benefit-by-Benefit Price & GST Breakdown (Excel Spreadsheet Model) ── */}

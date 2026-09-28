@@ -178,16 +178,55 @@ export const loginWithPassword = async ({ countryCode, phoneRaw, password, turns
 };
 
 /**
- * 5. Fetch subscription packages
- * Endpoint: GET /api/subscriber/subscriptions/packages
+ * 5. Fetch subscription packages (supports optional regionId for regional plans)
+ * Endpoint: GET /api/subscriber/subscriptions/packages?regionId=...
  */
-export const fetchSubscriptionPackages = async () => {
-  const response = await secureFetch(`${API_BASE}/subscriber/subscriptions/packages`);
+export const fetchSubscriptionPackages = async (regionId) => {
+  const query = regionId ? `?regionId=${encodeURIComponent(regionId)}` : '';
+  const response = await secureFetch(`${API_BASE}/subscriber/subscriptions/packages${query}`);
   const data = await response.json();
   if (!response.ok || !data.success) {
     throw new Error(data.message || 'Failed to load subscription packages.');
   }
   return data.data || [];
+};
+
+/**
+ * 5a. Fetch active service regions
+ * Endpoint: GET /api/public/zones/regions
+ */
+export const fetchActiveRegions = async () => {
+  const response = await secureFetch(`${API_BASE}/public/zones/regions`);
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.message || 'Failed to load active regions.');
+  }
+  return data.data || [];
+};
+
+/**
+ * 5b. Check location serviceability by GPS coordinates or pincode
+ * Endpoint: GET /api/public/zones/check-serviceability
+ */
+export const checkLocationServiceability = async ({ lat, lng, pincode } = {}) => {
+  const params = new URLSearchParams();
+  if (lat != null && !isNaN(lat)) params.append('lat', String(lat));
+  if (lng != null && !isNaN(lng)) params.append('lng', String(lng));
+  if (pincode && String(pincode).trim()) params.append('pincode', String(pincode).trim());
+
+  const response = await secureFetch(`${API_BASE}/public/zones/check-serviceability?${params.toString()}`);
+  const data = await response.json();
+  return data;
+};
+
+/**
+ * 5c. Check pincode serviceability
+ * Endpoint: GET /api/public/zones/check-pincode
+ */
+export const checkPincodeServiceability = async (pincode) => {
+  const response = await secureFetch(`${API_BASE}/public/zones/check-pincode?pincode=${encodeURIComponent(String(pincode).trim())}`);
+  const data = await response.json();
+  return data;
 };
 
 /**

@@ -33,7 +33,7 @@ const LEADERSHIP_TEAM = [
     roleColorClass: "team-leader-card__role--teal",
     photo: drSubramanianImg,
     linkedin: "https://www.linkedin.com/in/narasimhan-subramanian-63326a73/",
-    bio: "Dr. Narasimhan Subramanian is a highly experienced senior Urologist and Robotic Surgeon at Indraprastha Apollo Hospitals, Delhi, with over 34 years of experience specializing in uro-oncology, kidney stones, endourology, and minimally invasive procedures. He is well-regarded for his work in robotic prostatectomies and is a member of esteemed organizations like the Urological Society of India",
+    bio: "Dr. Narasimhan Subramanian is a highly experienced senior Urologist and Robotic Surgeon at Indraprastha Apollo Hospitals, Delhi, with over 34 years of experience specializing in uro-oncology, kidney stones, endourology, and minimally invasive procedures. He is well-regarded for his work in robotic prostatectomies and is a member of esteemed organizations like the Urological Society of India.",
   },
 ];
 
