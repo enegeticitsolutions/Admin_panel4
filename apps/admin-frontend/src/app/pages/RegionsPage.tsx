@@ -153,6 +153,19 @@ const RegionsPage = () => {
         strokeOpacity: 0.8,
         strokeWeight: 2,
         clickable: false,
+        editable: true,
+      });
+
+      // Update form when user resizes circle directly on the map
+      circleInstance.addListener('radius_changed', () => {
+        const newRadiusMeters = circleInstance.getRadius();
+        if (newRadiusMeters > 0) {
+          const newKm = (newRadiusMeters / 1000).toFixed(1);
+          setForm((prev) => ({
+            ...prev,
+            radiusKm: parseFloat(newKm).toString(),
+          }));
+        }
       });
 
       // Drag Listener
@@ -234,16 +247,27 @@ const RegionsPage = () => {
   // Update Circle when Radius Input changes
   useEffect(() => {
     if (circle && map) {
-      const radiusMeters = (parseFloat(form.radiusKm) || 30.0) * 1000;
-      circle.setRadius(radiusMeters);
-      
-      // Auto adjust zoom depending on radius
-      if (radiusMeters > 35000) {
-        map.setZoom(9);
-      } else if (radiusMeters < 15000) {
-        map.setZoom(11);
-      } else {
-        map.setZoom(10);
+      const radiusKmNum = parseFloat(form.radiusKm);
+      if (!isNaN(radiusKmNum) && radiusKmNum > 0) {
+        const radiusMeters = radiusKmNum * 1000;
+        if (Math.abs(circle.getRadius() - radiusMeters) > 30) {
+          circle.setRadius(radiusMeters);
+        }
+        
+        // Auto adjust zoom depending on radius
+        if (radiusMeters > 60000) {
+          map.setZoom(8);
+        } else if (radiusMeters > 30000) {
+          map.setZoom(9);
+        } else if (radiusMeters > 15000) {
+          map.setZoom(10);
+        } else if (radiusMeters > 7000) {
+          map.setZoom(11);
+        } else if (radiusMeters > 3000) {
+          map.setZoom(12);
+        } else {
+          map.setZoom(13);
+        }
       }
     }
   }, [form.radiusKm, circle, map]);
@@ -331,6 +355,12 @@ const RegionsPage = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const parsedRadius = parseFloat(form.radiusKm);
+      if (isNaN(parsedRadius) || parsedRadius <= 0) {
+        alert('Please enter a valid coverage radius in km (greater than 0)');
+        return;
+      }
+
       setSaving(true);
       const payload = {
         name: form.name,
@@ -338,7 +368,7 @@ const RegionsPage = () => {
         state: form.state,
         latitude: parseFloat(form.latitude),
         longitude: parseFloat(form.longitude),
-        radiusKm: parseFloat(form.radiusKm),
+        radiusKm: parsedRadius,
       };
 
       if (editingRegion) {
@@ -630,27 +660,60 @@ const RegionsPage = () => {
                     </div>
                   </div>
 
-                  {/* Radius Slider */}
-                  <div className="space-y-2 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                  {/* Coverage Radius: Manual Input, Slider & Presets */}
+                  <div className="space-y-3 bg-gray-50 p-4 rounded-2xl border border-gray-100">
                     <div className="flex justify-between items-center">
                       <label className="text-xs font-black uppercase text-gray-500 flex items-center gap-1.5">
                         <Sliders size={14} className="text-[#FF7A00]" />
                         Coverage Radius
                       </label>
-                      <span className="text-sm font-black text-[#FF7A00]">{form.radiusKm} km</span>
+                      <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-2.5 py-1 focus-within:border-[#FF7A00] focus-within:ring-2 focus-within:ring-orange-100 transition shadow-sm">
+                        <input
+                          type="number"
+                          min="0.5"
+                          max="500"
+                          step="any"
+                          required
+                          value={form.radiusKm}
+                          onChange={(e) => setForm({ ...form, radiusKm: e.target.value })}
+                          className="w-16 font-black text-sm text-[#FF7A00] outline-none bg-transparent text-right"
+                          placeholder="e.g. 5, 10"
+                        />
+                        <span className="text-xs font-black text-gray-500">km</span>
+                      </div>
                     </div>
+
                     <input
                       type="range"
-                      min="20"
-                      max="40"
+                      min="1"
+                      max="100"
                       step="0.5"
-                      value={form.radiusKm}
+                      value={Math.min(Math.max(parseFloat(form.radiusKm) || 1, 1), 100)}
                       onChange={(e) => setForm({ ...form, radiusKm: e.target.value })}
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#FF7A00]"
                     />
                     <div className="flex justify-between text-[10px] text-gray-400 font-bold px-0.5">
-                      <span>Min: 20 km</span>
-                      <span>Max: 40 km</span>
+                      <span>Min: 1 km</span>
+                      <span>Max: 100 km</span>
+                    </div>
+
+                    {/* Quick Preset Buttons */}
+                    <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+                      <span className="text-[10px] text-gray-400 font-bold uppercase mr-0.5">Presets:</span>
+                      {[5, 10, 15, 20, 30, 40, 50].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setForm({ ...form, radiusKm: preset.toString() })}
+                          className={`px-2 py-0.5 rounded-lg text-[11px] font-black transition ${
+                            parseFloat(form.radiusKm) === preset
+                              ? 'bg-[#FF7A00] text-white shadow-sm'
+                              : 'bg-white border border-gray-200 text-gray-600 hover:border-[#FF7A00] hover:text-[#FF7A00]'
+                          }`}
+                        >
+                          {preset} km
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
