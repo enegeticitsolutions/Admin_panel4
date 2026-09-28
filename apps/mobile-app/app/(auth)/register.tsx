@@ -188,7 +188,7 @@ export default function RegisterScreen() {
 
     const handleResendOtp = async () => {
         if (resendTimer > 0 || isLoading) return;
-        const cleanPhone = form.phone.replace(/\D/g, '').slice(-10);
+        const cleanPhone = countryCode === '91' ? form.phone.replace(/\D/g, '').slice(0, 10) : form.phone.replace(/\D/g, '');
         setIsLoading(true);
         try {
             const response = await fetch(`${API_URL}/auth/send-otp`, {
@@ -211,14 +211,21 @@ export default function RegisterScreen() {
     };
 
     const handleRegister = async () => {
-        const cleanPhone = form.phone.replace(/\D/g, '').slice(-10);
+        const cleanPhone = countryCode === '91' ? form.phone.replace(/\D/g, '').slice(0, 10) : form.phone.replace(/\D/g, '');
         if (!form.name.trim()) {
             Alert.alert("Missing Name", "Please enter your full name.");
             return;
         }
-        if (cleanPhone.length !== 10) {
-            Alert.alert("Invalid Phone", "Please enter a valid 10-digit phone number.");
-            return;
+        if (countryCode === '91') {
+            if (cleanPhone.length !== 10) {
+                Alert.alert("Invalid Phone", "Please enter a valid 10-digit phone number.");
+                return;
+            }
+        } else {
+            if (cleanPhone.length < 6 || cleanPhone.length > 15) {
+                Alert.alert("Invalid Phone", "Please enter a valid mobile number.");
+                return;
+            }
         }
         if (!form.address && !form.pincode) {
             Alert.alert("Location Required", "Please select your service location on the map.");
@@ -320,7 +327,7 @@ export default function RegisterScreen() {
     };
 
     const handleVerifyAndRegister = async () => {
-        const cleanPhone = form.phone.replace(/\D/g, '').slice(-10);
+        const cleanPhone = countryCode === '91' ? form.phone.replace(/\D/g, '').slice(0, 10) : form.phone.replace(/\D/g, '');
         const enteredOtp = otp.join("");
         if (enteredOtp.length !== 6) {
             Alert.alert("Invalid Code", "Please fill in all 6 digits of the verification code.");
@@ -466,12 +473,16 @@ export default function RegisterScreen() {
                                         </TouchableOpacity>
                                         <TextInput
                                             style={styles.phoneInput}
-                                            placeholder="Enter mobile number"
+                                            placeholder={countryCode === '91' ? "10-digit mobile number" : "Enter mobile number"}
                                             placeholderTextColor="#9CA3AF"
                                             keyboardType="numeric"
-                                            maxLength={15}
+                                            maxLength={countryCode === '91' ? 10 : 15}
                                             value={form.phone}
-                                            onChangeText={(text) => setForm({ ...form, phone: text.replace(/\D/g, '') })}
+                                            onChangeText={(text) => {
+                                                const cleaned = text.replace(/\D/g, '');
+                                                const limited = countryCode === '91' ? cleaned.slice(0, 10) : cleaned.slice(0, 15);
+                                                setForm({ ...form, phone: limited });
+                                            }}
                                             editable={!isLoading}
                                         />
                                     </View>
@@ -839,7 +850,13 @@ export default function RegisterScreen() {
                 visible={showCountryPicker}
                 onClose={() => setShowCountryPicker(false)}
                 selectedCode={countryCode}
-                onSelect={setCountryCode}
+                onSelect={(code) => {
+                    const normalized = code.replace(/\D/g, '');
+                    setCountryCode(normalized);
+                    if (normalized === '91' && form.phone.length > 10) {
+                        setForm((prev) => ({ ...prev, phone: prev.phone.slice(0, 10) }));
+                    }
+                }}
             />
 
             {/* ── Address & Map Picker Modal ── */}
