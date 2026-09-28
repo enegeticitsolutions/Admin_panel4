@@ -307,6 +307,18 @@ export function ProfilePhotoUploader({ config, style }: ProfilePhotoUploaderProp
         AsyncStorage.removeItem('beneficiaryDashboardCache').catch(() => {});
         queryClient.invalidateQueries({ queryKey: ['subscriberDashboard'] });
         queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
+      } else if (targetType === 'self' && data.url) {
+        try {
+          const rawUserData = await AsyncStorage.getItem('userData');
+          if (rawUserData) {
+            const parsed = JSON.parse(rawUserData);
+            parsed.profilePhoto = data.url;
+            parsed.photo = data.url;
+            await AsyncStorage.setItem('userData', JSON.stringify(parsed));
+          }
+        } catch (e) {
+          console.warn('[ProfilePhotoUploader] Failed to update cached userData:', e);
+        }
       }
 
       // Update local state immediately (optimistic UI)

@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal, Dimensions, 
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, usePathname } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLogoutWithConfirm } from '@/utils/logout';
 import { useDeleteAccountWithConfirm } from '@/utils/deleteAccount';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { LEGAL_CONFIG } from '@/constants/legal';
+import { API_URL } from '@/constants/api';
 import { scale } from '@/utils/responsive';
 
 const { width } = Dimensions.get('window');
@@ -38,7 +40,7 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
     const logoutWithConfirm = useLogoutWithConfirm();
     const insets = useSafeAreaInsets();
     const { user: authUser, isLoggedIn, availableRoles, isSwitchingRole, switchRole } = useAuth();
-    const userData = authUser || _userDataProp;
+    const userData = { ..._userDataProp, ...authUser, ...(_userDataProp?.profilePhoto ? { profilePhoto: _userDataProp.profilePhoto } : {}) };
     const userName = isLoggedIn ? (userData?.name || 'User') : 'Welcome Guest';
     const userPhone = isLoggedIn ? (userData?.phone || userData?.email || '') : 'Sign in to manage your care';
     const userRole = (userData?.role || '').toUpperCase();
@@ -50,6 +52,66 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
         (availableRoles.includes('subscriber') && availableRoles.includes('beneficiary')) ||
         hasSelfBeneficiary
     );
+
+    // Dynamic photo resolution for drawer avatar
+    const [photoUri, setPhotoUri] = useState<string | null>(null);
+    const [imageError, setImageError] = useState(false);
+
+    const candidatePhoto =
+        _userDataProp?.profilePhoto ||
+        _userDataProp?.photo ||
+        authUser?.profilePhoto ||
+        authUser?.photo ||
+        userData?.profilePhoto ||
+        userData?.photo;
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        setImageError(false);
+
+        // If candidate photo is an absolute HTTP(S) URL or data URI, use it directly
+        if (
+            candidatePhoto &&
+            (candidatePhoto.startsWith('http://') ||
+             candidatePhoto.startsWith('https://') ||
+             candidatePhoto.startsWith('data:image/'))
+        ) {
+            setPhotoUri(candidatePhoto);
+            return;
+        }
+
+        // Fetch fresh presigned URL for current user if missing or raw S3 path
+        let isMounted = true;
+        async function fetchFreshPhoto() {
+            try {
+                const token = (await AsyncStorage.getItem('userToken')) || (await AsyncStorage.getItem('token'));
+                if (!token) return;
+
+                const res = await fetch(`${API_URL}/profile-photo/me`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                const json = await res.json();
+                if (isMounted && json.success && json.data?.profilePhoto) {
+                    setPhotoUri(json.data.profilePhoto);
+                    setImageError(false);
+                }
+            } catch (err) {
+                if (isMounted && candidatePhoto) {
+                    setPhotoUri(candidatePhoto);
+                }
+            }
+        }
+
+        fetchFreshPhoto();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [isOpen, candidatePhoto]);
+
+    const displayPhoto = photoUri || candidatePhoto;
+    const canShowPhoto = Boolean(displayPhoto && !imageError);
     
     // Get user initials for avatar fallback
     const initials = userName
@@ -107,10 +169,13 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
                             </TouchableOpacity>
 
                             <View style={styles.headerProfileRow}>
-                                {userData?.photo ? (
-                                    <Image source={{ uri: sanitizeImageUri(userData.photo) }} style={styles.avatarImage} />
+                                {canShowPhoto ? (
+                                    <Image
+                                        source={{ uri: sanitizeImageUri(displayPhoto!) }}
+                                        style={styles.avatarImage}
+                                        onError={() => setImageError(true)}
+                                    />
                                 ) : (
-
                                     <LinearGradient colors={['#F97316', '#FB923C']} style={styles.avatarBadge}>
                                         <Text style={styles.avatarText}>{initials}</Text>
                                     </LinearGradient>
