@@ -532,7 +532,15 @@ export class AuthService {
     const phone = this.normalizePhone(rawPhone);
     const user = await prisma.user.findUnique({
       where: { phone },
-      include: { beneficiaryProfile: true },
+      include: {
+        subscriberBeneficiaries: {
+          select: { id: true, relationship: true, userId: true, isActive: true },
+          take: 10,
+        },
+        beneficiaryProfile: {
+          select: { id: true, isActive: true, verificationStatus: true, relationship: true },
+        },
+      },
     });
 
     if (!user || !user.password) throw new Error('Invalid phone number or password.');
@@ -553,17 +561,7 @@ export class AuthService {
     await this.touchLastLogin(user.id);
     await this.logActivity(user.id, 'LOGGED_IN', { method: 'password', role: user.role });
 
-    // Enrich dual-role data (requires separate query for full includes)
-    const fullUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        subscriberBeneficiaries: { take: 1 },
-        beneficiaryProfile: {
-          select: { id: true, isActive: true, verificationStatus: true, relationship: true },
-        },
-      },
-    });
-    const { availableRoles, selfBeneficiaryId } = this.getUserAvailableRoles(fullUser ?? user);
+    const { availableRoles, selfBeneficiaryId } = this.getUserAvailableRoles(user);
 
     return {
       success: true,
@@ -589,8 +587,12 @@ export class AuthService {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        subscriberBeneficiaries: true,
-        beneficiaryProfile: true,
+        subscriberBeneficiaries: {
+          select: { id: true, relationship: true, userId: true, isActive: true },
+        },
+        beneficiaryProfile: {
+          select: { id: true, isActive: true, verificationStatus: true, relationship: true },
+        },
       },
     });
 

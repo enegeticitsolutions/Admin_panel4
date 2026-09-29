@@ -7,8 +7,7 @@ sync-app.ps1
 .claude
 scratch/
 
-
-
+setup_hosts_maihoonna.bat
 # Backend seed/scratch files
 apps/admin-backend/prisma/seed-beneficiary-subscriber.js
 apps/admin-backend/prisma/seed.js

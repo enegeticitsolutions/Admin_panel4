@@ -72,7 +72,11 @@ for (const p of policies) {
   }`);
 }
 
-const childSafetyStr = existing.match(/\{\s*slug:\s*'child-safety'[\s\S]*?\},\n\];/)[0].replace(/,\n\];/, '');
+const childSafetyMatch = existing.match(/(\{\s*slug:\s*'child-safety'[\s\S]*?\n\s*\})\r?\n\];/);
+if (!childSafetyMatch) {
+  throw new Error("Could not find child-safety policy in existing seed file.");
+}
+const childSafetyStr = childSafetyMatch[1];
 newPolicies.push(childSafetyStr);
 
 const fullFile = `import prisma from './app/core/database';
