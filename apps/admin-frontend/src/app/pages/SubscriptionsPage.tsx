@@ -1333,11 +1333,11 @@ export default function SubscriptionsPage() {
                       const cfg = benefitConfigs[benefitId];
                       return {
                         benefit: { name: benefit?.name || '', unitLabel: benefit?.unitLabel || '' },
-                        showUnit: true,
+                        showUnit: cfg?.showUnit !== undefined ? cfg.showUnit : true,
                         isUnlimited: cfg?.isUnlimited || false,
                         unitsIncluded: cfg?.quantity || 0,
                         unitsPeriod: cfg?.frequency || 'monthly',
-                        allowRollover: false
+                        allowRollover: cfg?.allowRollover || false
                       };
                     })}
                   />
