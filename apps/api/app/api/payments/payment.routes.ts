@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import http from 'http';
 
 const router = Router();
 
@@ -7,53 +8,75 @@ const ADMIN_BACKEND_URL = (
   process.env.ADMIN_BACKEND_URL || 'http://127.0.0.1:3001'
 ).replace(/\/+$/, '');
 
+const parsedUrl = new URL(ADMIN_BACKEND_URL);
+const targetHost = parsedUrl.hostname || '127.0.0.1';
+const targetPort = parseInt(parsedUrl.port, 10) || 3001;
+
 /**
- * Proxy all incoming /api/payments/* requests to the Admin Backend payment service.
- * This preserves the raw request body buffer and cryptographic headers (e.g. x-razorpay-signature)
- * for HMAC-SHA256 verification.
- * Note: Express 5 syntax uses router.use for wildcard routing to avoid path-to-regexp PathError.
+ * Foolproof App-Level Proxy to Admin Backend payment service.
+ * Uses native Node.js core 'http.request' (instead of WHATWG fetch) to:
+ * 1. Safely stream raw body buffers preserving cryptographic HMAC signatures.
+ * 2. Avoid all fetch-level forbidden header restrictions (connection, upgrade, etc.).
+ * 3. Guarantee zero-latency forwarding across loopback (127.0.0.1).
  */
-router.use(async (req: Request, res: Response) => {
-  const targetUrl = `${ADMIN_BACKEND_URL}/api/payments${req.path}`;
+router.use((req: Request, res: Response) => {
+  const targetPath = `/api/payments${req.path}`;
 
-  try {
-    const headers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(req.headers)) {
-      const lower = key.toLowerCase();
-      // Exclude host and content-length to let fetch compute correct length and avoid mismatches
-      if (lower !== 'host' && lower !== 'content-length' && typeof value === 'string') {
-        headers[key] = value;
-      }
-    }
+  // Copy incoming headers but clean out hop-by-hop headers that shouldn't cross proxies
+  const headers = { ...req.headers };
+  delete headers.host;
+  delete headers.connection;
+  delete headers.upgrade;
 
-    // Use rawBody buffer if available to ensure exact byte-for-byte HMAC match
-    const rawBody: Buffer | string | undefined =
-      (req as any).rawBody ||
-      (req.body ? (typeof req.body === 'string' ? Buffer.from(req.body) : Buffer.from(JSON.stringify(req.body))) : undefined);
+  const rawBody: Buffer | undefined =
+    (req as any).rawBody ||
+    (req.body
+      ? Buffer.isBuffer(req.body)
+        ? req.body
+        : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body))
+      : undefined);
 
-    const backendRes = await fetch(targetUrl, {
-      method: req.method,
-      headers,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? (rawBody as any) : undefined,
-    });
-
-    const responseData = await backendRes.text();
-    const contentType = backendRes.headers.get('content-type');
-    if (contentType) {
-      res.setHeader('Content-Type', contentType);
-    }
-
-    res.status(backendRes.status).send(responseData);
-  } catch (err: any) {
-    const errorDetails = err.cause ? `${err.message} (${err.cause.message || err.cause})` : err.message;
-    console.error(`[Payments Proxy Error] Failed forwarding to ${targetUrl}:`, errorDetails);
-    res.status(502).json({
-      success: false,
-      message: 'Admin payment service unreachable',
-      targetUrl,
-      error: errorDetails,
-    });
+  if (rawBody && rawBody.length > 0) {
+    headers['content-length'] = String(rawBody.length);
+  } else {
+    delete headers['content-length'];
   }
+
+  const proxyReq = http.request(
+    {
+      hostname: targetHost,
+      port: targetPort,
+      path: targetPath,
+      method: req.method,
+      headers: headers,
+    },
+    (proxyRes) => {
+      res.status(proxyRes.statusCode || 200);
+      for (const [key, value] of Object.entries(proxyRes.headers)) {
+        if (value) {
+          res.setHeader(key, value);
+        }
+      }
+      proxyRes.pipe(res);
+    }
+  );
+
+  proxyReq.on('error', (err: any) => {
+    console.error(`[Payments Proxy Error] Failed forwarding to ${targetHost}:${targetPort}${targetPath}:`, err.message);
+    if (!res.headersSent) {
+      res.status(502).json({
+        success: false,
+        message: 'Admin payment service unreachable',
+        target: `${targetHost}:${targetPort}${targetPath}`,
+        error: err.message,
+      });
+    }
+  });
+
+  if (rawBody && rawBody.length > 0) {
+    proxyReq.write(rawBody);
+  }
+  proxyReq.end();
 });
 
 export default router;
