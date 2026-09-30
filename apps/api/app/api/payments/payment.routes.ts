@@ -19,8 +19,9 @@ router.use(async (req: Request, res: Response) => {
   try {
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(req.headers)) {
-      // Exclude host header to avoid localhost/virtual host mismatches
-      if (key.toLowerCase() !== 'host' && typeof value === 'string') {
+      const lower = key.toLowerCase();
+      // Exclude host and content-length to let fetch compute correct length and avoid mismatches
+      if (lower !== 'host' && lower !== 'content-length' && typeof value === 'string') {
         headers[key] = value;
       }
     }
@@ -44,11 +45,13 @@ router.use(async (req: Request, res: Response) => {
 
     res.status(backendRes.status).send(responseData);
   } catch (err: any) {
-    console.error(`[Payments Proxy Error] Failed forwarding to ${targetUrl}:`, err.message);
+    const errorDetails = err.cause ? `${err.message} (${err.cause.message || err.cause})` : err.message;
+    console.error(`[Payments Proxy Error] Failed forwarding to ${targetUrl}:`, errorDetails);
     res.status(502).json({
       success: false,
       message: 'Admin payment service unreachable',
-      error: err.message,
+      targetUrl,
+      error: errorDetails,
     });
   }
 });
