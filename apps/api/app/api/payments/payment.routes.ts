@@ -2,19 +2,18 @@ import { Router, Request, Response } from 'express';
 
 const router = Router();
 
-// In production, apps/admin-backend runs on port 5000 (managed by PM2).
-// In local dev, it runs on port 3001 or 5000.
+// apps/admin-backend listens on port 3001
 const ADMIN_BACKEND_URL = (
-  process.env.ADMIN_BACKEND_URL ||
-  (process.env.NODE_ENV === 'production' ? 'http://127.0.0.1:5000' : 'http://127.0.0.1:3001')
+  process.env.ADMIN_BACKEND_URL || 'http://127.0.0.1:3001'
 ).replace(/\/+$/, '');
 
 /**
  * Proxy all incoming /api/payments/* requests to the Admin Backend payment service.
  * This preserves the raw request body buffer and cryptographic headers (e.g. x-razorpay-signature)
  * for HMAC-SHA256 verification.
+ * Note: Express 5 syntax uses router.use for wildcard routing to avoid path-to-regexp PathError.
  */
-router.all('/*', async (req: Request, res: Response) => {
+router.use(async (req: Request, res: Response) => {
   const targetUrl = `${ADMIN_BACKEND_URL}/api/payments${req.path}`;
 
   try {
