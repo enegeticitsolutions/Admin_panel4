@@ -73,6 +73,9 @@ import sathiRouter from './api/sathi/sathi.routes';
 // Website-specific Internal Routes
 import websiteRouter from './routes/website/websiteRoutes';
 
+// Payments & Webhook Router (Proxies to admin-backend payments service)
+import paymentsRouter from './api/payments/payment.routes';
+
 const app = express();
 
 // Trust proxy is required if the API is behind a load balancer (Nginx, AWS, Cloudflare, etc.)
@@ -129,8 +132,23 @@ app.use(
   })
 );
 app.use(morgan('dev'));
-app.use(express.json({ limit: config.jsonLimit }));
-app.use(express.urlencoded({ extended: true, limit: config.jsonLimit }));
+app.use(
+  express.json({
+    limit: config.jsonLimit,
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: config.jsonLimit,
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 const API = '/api';
@@ -224,6 +242,9 @@ app.use(`${API}/sathi`, sathiRouter);
 
 // Website-specific Internal endpoints
 app.use(`${API}/website`, websiteRouter);
+
+// Payments & Razorpay Webhook endpoints (app-level proxy to admin-backend)
+app.use(`${API}/payments`, paymentsRouter);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {

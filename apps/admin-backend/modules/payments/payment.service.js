@@ -131,7 +131,21 @@ async function processWebhook(signature, bodyBuffer, bodyPayload) {
   console.log(`[Payment Service Webhook] Event: ${normalized.event}, Status: ${normalized.status}, LinkId: ${normalized.linkId}`);
 
   if (normalized.status === 'PAID') {
-    const payment = await paymentRepository.findPaymentByOrderId(normalized.linkId);
+    let payment = await paymentRepository.findPaymentByOrderId(normalized.linkId);
+    
+    // Auto-heal for mobile app webhooks: create dummy record if missing
+    if (!payment && normalized.rawEntity?.notes?.subscriberId) {
+      const notes = normalized.rawEntity.notes;
+      payment = await paymentRepository.createPendingPaymentRecord({
+        subscriberId: notes.subscriberId,
+        packageType: notes.packageType || notes.packageId || 'silver',
+        amount: (normalized.rawEntity.amount || 0) / 100,
+        gatewayOrderId: normalized.linkId,
+        transactionId: normalized.gatewayPaymentId || normalized.linkId,
+        gatewayResponse: normalized.rawEntity
+      });
+    }
+
     if (payment) {
       await paymentRepository.markPaymentSuccessfulTransaction(
         payment.id,

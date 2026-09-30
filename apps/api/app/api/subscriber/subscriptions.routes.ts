@@ -413,8 +413,15 @@ router.post('/create-order', paymentLimiter as unknown as RequestHandler, authen
     const shortUserId = userId.substring(0, 8);
     const receiptId = `rcpt_${shortUserId}_${Date.now()}`.substring(0, 40);
     
+    const notes = {
+      subscriberId: userId,
+      packageType: pricing.pkg.type || packageId,
+      packageId: packageId,
+      durationMonths: String(months)
+    };
+    
     // Create the Razorpay Order
-    const order = await createOrder(pricing.total, receiptId);
+    const order = await createOrder(pricing.total, receiptId, notes);
     
     res.json({
       success: true,
@@ -737,13 +744,29 @@ router.post('/purchase', paymentLimiter as unknown as RequestHandler, authentica
             { gatewayPaymentId: razorpay_payment_id },
             { transactionId: razorpay_payment_id }
           ]
-        }
+        },
+        include: { subscription: true }
       });
       if (existingPayment) {
-        return res.status(409).json({
-          success: false,
-          message: 'This payment transaction has already been processed and claimed.'
-        });
+        if (existingPayment.beneficiaryId === null && existingPayment.subscription && existingPayment.subscription.beneficiaryId === null) {
+          // Webhook created dummy subscription. Delete it to let the mobile flow create the real one with full details.
+          await prisma.subscriptionBenefitBalance.deleteMany({ where: { subscriptionId: existingPayment.subscriptionId! } });
+          await prisma.benefitPeriod.deleteMany({ where: { subscriptionId: existingPayment.subscriptionId! } });
+          
+          // ActivityLog might use a different field in schema or be missing entityId.
+          // Since it's a dynamic relation, we skip deleting it or delete via raw if needed. 
+          // (It's harmless to leave the log that payment was received).
+          // await prisma.activityLog.deleteMany({ where: { entityId: existingPayment.id } as any });
+          
+          await prisma.payment.delete({ where: { id: existingPayment.id } });
+          await prisma.subscription.delete({ where: { id: existingPayment.subscriptionId! } });
+        } else {
+          return res.status(200).json({
+            success: true,
+            message: 'This payment transaction has already been processed and claimed.',
+            beneficiaryId: existingPayment.beneficiaryId
+          });
+        }
       }
     }
 

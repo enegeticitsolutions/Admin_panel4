@@ -69,7 +69,7 @@ export const getRazorpayInstance = (): Razorpay => {
  * @param receiptId A unique identifier for the receipt (e.g. user ID or timestamp)
  * @returns The Razorpay Order object containing the `id` and the active public `key_id`
  */
-export const createOrder = async (amountInRupees: number, receiptId: string) => {
+export const createOrder = async (amountInRupees: number, receiptId: string, notes: any = {}) => {
   const rzp = getRazorpayInstance();
   const { key_id, isTestMode } = getRazorpayCredentials();
   
@@ -80,6 +80,7 @@ export const createOrder = async (amountInRupees: number, receiptId: string) => 
     amount: amountInPaise,
     currency: "INR",
     receipt: receiptId,
+    notes: notes,
   };
 
   try {

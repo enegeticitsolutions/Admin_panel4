@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { packageApi, benefitApi, regionApi } from '../../services/api';
 import type { SubscriptionPackage, Benefit, PackageBenefit } from '../../types';
 import { Plus, Check, ArrowRight, ArrowLeft, Package, Edit, Trash2, Calendar, Clock, ShieldCheck, Sparkles } from 'lucide-react';
+import { PackageCardPreview } from '../components/packages/PackageCardPreview';
 import { toast } from 'sonner';
 import { StatusChip } from '../components/common/StatusChip';
 import { RegionSelector } from '../components/common/RegionSelector';
@@ -968,11 +969,18 @@ export default function SubscriptionsPage() {
 
               {currentStep === 'review' && (
                 <div className="space-y-6">
-                  <div>
-                    <h2 className="text-xl font-semibold mb-1">Review Package</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Review and publish your package
-                    </p>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h2 className="text-xl font-semibold mb-1">Review Package</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Review and publish your package
+                      </p>
+                    </div>
+                    {/* Live Preview Button or Section */}
+                    <div className="bg-orange-50 px-4 py-2 rounded-lg border border-orange-200">
+                      <p className="text-xs font-bold text-orange-800 uppercase tracking-wider mb-1">Live Website Preview</p>
+                      <p className="text-xs text-orange-700">Scroll down to see exactly how this card looks on the website!</p>
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-3 mb-6">
@@ -1309,7 +1317,30 @@ export default function SubscriptionsPage() {
                           );
                         })}
                       </div>
-                    </div>
+                  </div>
+
+                  {/* Live Website Card Preview */}
+                  <PackageCardPreview
+                    packageName={packageName}
+                    description={description}
+                    finalBasePrice={isManualPrice ? parseFloat(totalCost) || 0 : calculatedPriceOne}
+                    isFreeTrial={isFreeTrial}
+                    trialDurationDays={trialDurationDays}
+                    isGlobal={isGlobal}
+                    isPopular={isPopular}
+                    packageBenefits={Array.from(selectedBenefits).map(benefitId => {
+                      const benefit = benefits.find(b => b.id === benefitId);
+                      const cfg = benefitConfigs[benefitId];
+                      return {
+                        benefit: { name: benefit?.name || '', unitLabel: benefit?.unitLabel || '' },
+                        showUnit: true,
+                        isUnlimited: cfg?.isUnlimited || false,
+                        unitsIncluded: cfg?.quantity || 0,
+                        unitsPeriod: cfg?.frequency || 'monthly',
+                        allowRollover: false
+                      };
+                    })}
+                  />
                   </div>
                 </div>
               )}
