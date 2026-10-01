@@ -351,9 +351,9 @@ export default function PlansPage({
     return packagesToDisplay[0]?.id || packagesToDisplay[0]?.name || null;
   }, [selectedPlanId, packagesToDisplay]);
 
-  // ── Dynamic Comparison Table Logic ──
-  // 1. Pick 3 packages to compare: prefer packages marked isCompared, or top 3 active
+  // 1. Pick up to 3 packages to compare, ONLY if explicitly marked `isCompared` in DB.
   const comparedPackages = useMemo(() => {
+    if (!Array.isArray(packagesToDisplay)) return [];
     const pkgs = packagesToDisplay;
     const flagged = pkgs.filter((p) => p.isCompared);
     if (flagged.length > 0) {
@@ -365,7 +365,7 @@ export default function PlansPage({
         })
         .slice(0, 3);
     }
-    return pkgs.slice(0, 3);
+    return []; // Don't auto-compare if not flagged
   }, [packagesToDisplay, selectedCycle]);
 
   // 2. Extract all unique Benefits from live packages (or all packages)
@@ -668,20 +668,7 @@ export default function PlansPage({
                       </div>
                       {selectedRegion?.id === 'ALL' && <span className="custom-region-dropdown__check">✓</span>}
                     </button>
-                    
-                    {/* All Regions (Global Plans) Option */}
-                    <button
-                      type="button"
-                      className={`custom-region-dropdown__item ${!selectedRegion ? "custom-region-dropdown__item--selected" : ""}`}
-                      onClick={() => handleRegionSelect("GLOBAL")}
-                    >
-                      <div className="custom-region-dropdown__item-icon">🌐</div>
-                      <div className="custom-region-dropdown__item-info">
-                        <span className="custom-region-dropdown__item-name">All Regions (Global Plans)</span>
-                        <span className="custom-region-dropdown__item-sub">Showing national standard packages</span>
-                      </div>
-                      {!selectedRegion && <span className="custom-region-dropdown__check">✓</span>}
-                    </button>
+
 
                     <div className="custom-region-dropdown__divider" />
 
@@ -930,66 +917,68 @@ export default function PlansPage({
             </p>
 
             {/* ── Dynamic Feature Comparison Table ── */}
-            <div className="comparison">
-              <div className="comparison__heading">
-                <h2>Full feature comparison</h2>
-                <p>Everything side by side, so you can choose with clarity.</p>
-              </div>
-              <div className="comparison-table" role="table" aria-label="Full feature comparison">
-                <div className="comparison-row comparison-row--head" role="row">
-                  <span>Feature</span>
-                  {comparedPackages.map((pkg) => (
-                    <strong key={pkg.id || pkg.name}>{pkg.name}</strong>
-                  ))}
+            {comparedPackages && comparedPackages.length > 0 && (
+              <div className="comparison">
+                <div className="comparison__heading">
+                  <h2>Full feature comparison</h2>
+                  <p>Everything side by side, so you can choose with clarity.</p>
                 </div>
-
-                {comparisonBenefits && comparisonBenefits.length > 0 ? (
-                  comparisonBenefits.map((benefit) => (
-                    <div className="comparison-row" role="row" key={benefit.id}>
-                      <span>{benefit.name}</span>
-                      {comparedPackages.map((pkg) => {
-                        const matchedPb = Array.isArray(pkg.packageBenefits)
-                          ? pkg.packageBenefits.find(
-                            (pb) =>
-                              pb.benefitId === benefit.id ||
-                              pb.benefit?.id === benefit.id
-                          )
-                          : null;
-                        const isIncluded = !!matchedPb;
-                        let displayVal = "-";
-                        if (isIncluded) {
-                          if (matchedPb.showUnit === false) {
-                            displayVal = "Included";
-                          } else if (matchedPb.isUnlimited) {
-                            displayVal = "Unlimited";
-                          } else if (matchedPb.unitsPeriod === "yearly") {
-                            displayVal = `${matchedPb.unitsIncluded}/year`;
-                          } else if (matchedPb.unitsPeriod === "one_time") {
-                            displayVal = `${matchedPb.unitsIncluded} (Once)`;
-                          } else {
-                            displayVal = `${matchedPb.unitsIncluded}/month`;
-                          }
-                        }
-
-                        return (
-                          <strong
-                            className={isIncluded ? "included" : "not-included"}
-                            key={`${benefit.id}-${pkg.id || pkg.name}`}
-                            style={isIncluded ? { fontSize: "0.85rem", fontWeight: 700 } : {}}
-                          >
-                            {displayVal}
-                          </strong>
-                        );
-                      })}
-                    </div>
-                  ))
-                ) : (
-                  <div style={{ padding: "24px", textAlign: "center", color: "#64748b" }}>
-                    No active package benefits available for comparison.
+                <div className="comparison-table" role="table" aria-label="Full feature comparison">
+                  <div className="comparison-row comparison-row--head" role="row">
+                    <span>Feature</span>
+                    {comparedPackages.map((pkg) => (
+                      <strong key={pkg.id || pkg.name}>{pkg.name}</strong>
+                    ))}
                   </div>
-                )}
+
+                  {comparisonBenefits && comparisonBenefits.length > 0 ? (
+                    comparisonBenefits.map((benefit) => (
+                      <div className="comparison-row" role="row" key={benefit.id}>
+                        <span>{benefit.name}</span>
+                        {comparedPackages.map((pkg) => {
+                          const matchedPb = Array.isArray(pkg.packageBenefits)
+                            ? pkg.packageBenefits.find(
+                              (pb) =>
+                                pb.benefitId === benefit.id ||
+                                pb.benefit?.id === benefit.id
+                            )
+                            : null;
+                          const isIncluded = !!matchedPb;
+                          let displayVal = "-";
+                          if (isIncluded) {
+                            if (matchedPb.showUnit === false) {
+                              displayVal = "Included";
+                            } else if (matchedPb.isUnlimited) {
+                              displayVal = "Unlimited";
+                            } else if (matchedPb.unitsPeriod === "yearly") {
+                              displayVal = `${matchedPb.unitsIncluded}/year`;
+                            } else if (matchedPb.unitsPeriod === "one_time") {
+                              displayVal = `${matchedPb.unitsIncluded} (Once)`;
+                            } else {
+                              displayVal = `${matchedPb.unitsIncluded}/month`;
+                            }
+                          }
+
+                          return (
+                            <strong
+                              className={isIncluded ? "included" : "not-included"}
+                              key={`${benefit.id}-${pkg.id || pkg.name}`}
+                              style={isIncluded ? { fontSize: "0.85rem", fontWeight: 700 } : {}}
+                            >
+                              {displayVal}
+                            </strong>
+                          );
+                        })}
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ padding: "24px", textAlign: "center", color: "#64748b" }}>
+                      No active package benefits available for comparison.
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
 
