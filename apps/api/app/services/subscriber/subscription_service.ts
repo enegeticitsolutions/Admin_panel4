@@ -1797,28 +1797,20 @@ export const activateSubscription = async (
 };
 
 export const getSubscriptionPackages = async (regionId?: string) => {
-  let orQuery: any[] = [];
-  
-  if (regionId === 'ALL') {
-    // Return all global and regional packages
-    orQuery = [{ isGlobal: true }, { isGlobal: false }];
-  } else {
-    // Default logic: return global, plus regional if regionId is provided
-    orQuery = [
-      { isGlobal: true },
-      regionId ? {
-        isGlobal: false,
-        packageRegions: {
-          some: { regionId }
-        }
-      } : null
-    ].filter(Boolean);
-  }
-
   let packages = await prisma.subscriptionPackage.findMany({
     where: {
       isActive: true,
-      OR: orQuery as any
+      ...(regionId && regionId !== 'ALL' ? {
+        OR: [
+          { isGlobal: true },
+          {
+            isGlobal: false,
+            packageRegions: {
+              some: { regionId }
+            }
+          }
+        ]
+      } : {})
     },
     include: {
       packageRegions: {
