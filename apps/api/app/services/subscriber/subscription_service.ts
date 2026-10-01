@@ -1800,17 +1800,15 @@ export const getSubscriptionPackages = async (regionId?: string) => {
   let packages = await prisma.subscriptionPackage.findMany({
     where: {
       isActive: true,
-      ...(regionId && regionId !== 'ALL' ? {
-        OR: [
-          { isGlobal: true },
-          {
-            isGlobal: false,
-            packageRegions: {
-              some: { regionId }
-            }
+      OR: [
+        { isGlobal: true },
+        {
+          isGlobal: false,
+          packageRegions: {
+            some: regionId && regionId !== 'ALL' ? { regionId } : {}
           }
-        ]
-      } : {})
+        }
+      ]
     },
     include: {
       packageRegions: {
