@@ -186,7 +186,7 @@ const App = () => {
 
   useEffect(() => {
     setIsLoadingPackages(true);
-    fetchSubscriptionPackages()
+    fetchSubscriptionPackages('ALL')
       .then((pkgs) => {
         if (Array.isArray(pkgs) && pkgs.length > 0) {
           setLivePackages(pkgs);

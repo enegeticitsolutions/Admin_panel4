@@ -40,8 +40,8 @@ export default function PlansPage({
   // Regional & Location states
   const [packages, setPackages] = useState(livePackages);
   const [activeRegions, setActiveRegions] = useState([]);
-  const [selectedRegion, setSelectedRegion] = useState(null);
-  const [selectedAddress, setSelectedAddress] = useState("");
+  const [selectedRegion, setSelectedRegion] = useState({ id: "ALL", name: "All Regions", city: "Global & Regional" });
+  const [selectedAddress, setSelectedAddress] = useState("All Plans (Global & Regional)");
   const [pincodeInput, setPincodeInput] = useState("");
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
   const [serviceMessage, setServiceMessage] = useState("");
@@ -99,19 +99,45 @@ export default function PlansPage({
 
   // Sync packages with livePackages prop when no custom region is selected
   useEffect(() => {
-    if (!selectedRegion && Array.isArray(livePackages)) {
+    if ((!selectedRegion || selectedRegion.id === 'ALL') && Array.isArray(livePackages)) {
       setPackages(livePackages);
     }
   }, [livePackages, selectedRegion]);
 
-  // Handler: Select Region from dropdown
   const handleRegionSelect = async (regionId) => {
     setIsRegionDropdownOpen(false);
     setRegionSearchQuery("");
-    if (!regionId) {
+    if (!regionId || regionId === "GLOBAL") {
       await handleClearLocation();
       return;
     }
+
+    if (regionId === "ALL") {
+      setSelectedRegion({ id: "ALL", name: "All Regions", city: "Global & Regional" });
+      setSelectedAddress("All Plans (Global & Regional)");
+      setPincodeInput("");
+      setIsCheckingLocation(true);
+      setServiceMessage("");
+      setIsServiceable(true);
+
+      try {
+        const pkgs = await fetchSubscriptionPackages("ALL");
+        setPackages(pkgs);
+        const regionalCount = pkgs.filter((p) => !p.isGlobal).length;
+        const globalCount = pkgs.filter((p) => p.isGlobal).length;
+        setServiceMessage(
+          `Showing all available packages: ${globalCount} Global package${globalCount !== 1 ? "s" : ""} + ${regionalCount} Local plan${regionalCount !== 1 ? "s" : ""}.`
+        );
+      } catch (err) {
+        console.error("Failed to load all packages:", err);
+        setServiceMessage("Showing all packages.");
+      } finally {
+        setIsCheckingLocation(false);
+        setCurrentSlide(0);
+      }
+      return;
+    }
+
     const region = activeRegions.find((r) => r.id === regionId);
     if (!region) return;
 
@@ -279,11 +305,12 @@ export default function PlansPage({
 
   // Enrich selected plan with region metadata before passing to buy handler
   const handleSelectPlan = (plan) => {
+    const isAllMode = selectedRegion?.id === 'ALL';
     const enrichedPlan = {
       ...plan,
-      serviceRegionId: selectedRegion?.id || (Array.isArray(plan.regions) && plan.regions[0]?.id) || null,
-      selectedRegionName: selectedRegion?.name || (Array.isArray(plan.regions) && plan.regions[0]?.name) || null,
-      serviceAddress: selectedAddress || (selectedRegion ? `${selectedRegion.name} (${selectedRegion.city})` : null),
+      serviceRegionId: (isAllMode ? null : selectedRegion?.id) || (Array.isArray(plan.regions) && plan.regions[0]?.id) || null,
+      selectedRegionName: (isAllMode ? null : selectedRegion?.name) || (Array.isArray(plan.regions) && plan.regions[0]?.name) || null,
+      serviceAddress: selectedAddress || ((selectedRegion && !isAllMode) ? `${selectedRegion.name} (${selectedRegion.city})` : null),
     };
     if (onSelectPackage) {
       onSelectPackage(enrichedPlan);
@@ -581,7 +608,7 @@ export default function PlansPage({
                   </svg>
                   <span className="custom-region-dropdown__trigger-label">
                     {selectedRegion
-                      ? `${selectedRegion.name} — ${selectedRegion.city}`
+                      ? (selectedRegion.id === 'ALL' ? "All (Global + Regional Plans)" : `${selectedRegion.name} — ${selectedRegion.city}`)
                       : (isRegionalOnlyMode ? "Select your city..." : "All Regions (Global Plans)")}
                   </span>
                 </div>
@@ -628,11 +655,25 @@ export default function PlansPage({
                   </div>
 
                   <div className="custom-region-dropdown__list">
+                    {/* All Plans Option (Global + Regional) */}
+                    <button
+                      type="button"
+                      className={`custom-region-dropdown__item ${selectedRegion?.id === 'ALL' ? "custom-region-dropdown__item--selected" : ""}`}
+                      onClick={() => handleRegionSelect("ALL")}
+                    >
+                      <div className="custom-region-dropdown__item-icon">🌎</div>
+                      <div className="custom-region-dropdown__item-info">
+                        <span className="custom-region-dropdown__item-name">All (Global + Regional Plans)</span>
+                        <span className="custom-region-dropdown__item-sub">Showing all available packages</span>
+                      </div>
+                      {selectedRegion?.id === 'ALL' && <span className="custom-region-dropdown__check">✓</span>}
+                    </button>
+                    
                     {/* All Regions (Global Plans) Option */}
                     <button
                       type="button"
                       className={`custom-region-dropdown__item ${!selectedRegion ? "custom-region-dropdown__item--selected" : ""}`}
-                      onClick={() => handleRegionSelect("")}
+                      onClick={() => handleRegionSelect("GLOBAL")}
                     >
                       <div className="custom-region-dropdown__item-icon">🌐</div>
                       <div className="custom-region-dropdown__item-info">
@@ -673,32 +714,6 @@ export default function PlansPage({
               )}
             </div>
 
-            {/* Pincode Input Form */}
-            <form className="plans-pincode-form" onSubmit={handleCheckPincode}>
-              <div className="plans-pincode-form__input-wrap">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                  <polyline points="22,6 12,13 2,6" />
-                </svg>
-                <input
-                  type="text"
-                  maxLength="6"
-                  className="plans-pincode-form__input"
-                  placeholder="Enter 6-digit Pincode"
-                  value={pincodeInput}
-                  onChange={(e) => setPincodeInput(e.target.value.replace(/\D/g, ""))}
-                  disabled={isCheckingLocation}
-                  aria-label="Enter 6-digit pincode"
-                />
-              </div>
-              <button
-                type="submit"
-                className="plans-pincode-form__submit"
-                disabled={isCheckingLocation || pincodeInput.trim().length !== 6}
-              >
-                {isCheckingLocation ? "..." : "Check"}
-              </button>
-            </form>
 
             {/* Detect GPS Button */}
             <button
