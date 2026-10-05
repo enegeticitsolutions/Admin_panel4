@@ -453,6 +453,31 @@ const SEO_CONFIG = {
     ]
   },
 
+  partners: {
+    title: "Partner With Us | MaiHoonNa Healthcare & Senior Care Ecosystem",
+    description:
+      "Join the MaiHoonNa healthcare partner network. Partner with us for emergency ambulances, pharmacies, diagnostic labs, doctor consultations, and elderly care services in Gurugram & NCR.",
+    keywords:
+      "partner with MaiHoonNa, eldercare healthcare partners, ambulance emergency Gurugram, diagnostics lab partnership, pharmacy senior care network",
+    robots: "index, follow",
+    ogType: "website",
+    ogImage: "https://maihoonna.com/og-image.jpg",
+    schemas: [
+      {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "Partner With Us - MaiHoonNa Eldercare Ecosystem",
+        "description":
+          "We partner with leading healthcare providers, diagnostic labs, pharmacies, emergency services, and wellness centers across India.",
+        "publisher": {
+          "@type": "Organization",
+          "name": "MaiHoonNa Eldercare Private Limited",
+          "url": "https://maihoonna.com"
+        }
+      }
+    ]
+  },
+
   terms: {
     title: "Terms of Service | MaiHoonNa Eldercare Platform",
     description:
