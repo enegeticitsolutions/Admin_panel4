@@ -16,6 +16,7 @@ import sathiRouter from './sathi.routes';
 import contentRouter from './content.routes';
 
 import careerRouter from './career.routes';
+import partnerRouter from './partner.routes';
 
 const router = Router();
 
@@ -27,6 +28,9 @@ router.use('/', sathiRouter);
 
 // Career / Express Interest
 router.use('/', careerRouter);
+
+// Partner applications
+router.use('/', partnerRouter);
 
 // Health check & CMS content
 router.use('/', contentRouter);
