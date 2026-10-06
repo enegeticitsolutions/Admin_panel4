@@ -82,7 +82,11 @@ export default function PackageCard({
 
     if (Array.isArray(plan.packageBenefits) && plan.packageBenefits.length > 0) {
       plan.packageBenefits.forEach((pb: any, idx: number) => {
-        const benefitName = pb.benefit?.name || "Included Benefit";
+        // Skip inactive or orphaned benefits
+        if (!pb.benefit || !pb.benefit.name || pb.benefit.isActive === false) return;
+        const benefitName = pb.benefit.name.trim();
+        if (!benefitName || benefitName.toLowerCase() === "included benefit") return;
+
         const rawLabel = (pb.benefit?.unitLabel || "").replace(/^per\s+/i, "").trim();
         const period = pb.unitsPeriod || "monthly";
         let displayText = "";
@@ -119,6 +123,7 @@ export default function PackageCard({
       });
     } else if (Array.isArray(plan.features) && plan.features.length > 0) {
       plan.features.forEach((feat: string, i: number) => {
+        if (!feat || feat.toLowerCase().trim() === "included benefit") return;
         list.push({
           id: `feat-${i}`,
           text: feat,

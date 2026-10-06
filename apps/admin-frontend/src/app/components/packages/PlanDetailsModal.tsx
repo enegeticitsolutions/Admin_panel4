@@ -73,7 +73,10 @@ export default function PlanDetailsModal({
     const list: any[] = [];
     if (Array.isArray(plan.packageBenefits) && plan.packageBenefits.length > 0) {
       plan.packageBenefits.forEach((pb: any, idx: number) => {
-        const benefitName = pb.benefit?.name || "Included Benefit";
+        if (!pb.benefit || !pb.benefit.name || pb.benefit.isActive === false) return;
+        const benefitName = pb.benefit.name.trim();
+        if (!benefitName || benefitName.toLowerCase() === "included benefit") return;
+
         const rawLabel = (pb.benefit?.unitLabel || "").replace(/^per\s+/i, "").trim();
         const period = pb.unitsPeriod || "monthly";
 
@@ -98,6 +101,7 @@ export default function PlanDetailsModal({
       });
     } else if (Array.isArray(plan.features) && plan.features.length > 0) {
       plan.features.forEach((feat: string, idx: number) => {
+        if (!feat || feat.toLowerCase().trim() === "included benefit") return;
         list.push({
           id: `feat-${idx}`,
           text: feat,
@@ -105,20 +109,6 @@ export default function PlanDetailsModal({
         });
       });
     }
-
-    // Append standard inclusions that aren't already represented
-    STANDARD_INCLUSIONS.forEach((itemText, idx) => {
-      const exists = list.some((existing) =>
-        existing.text.toLowerCase().includes(itemText.toLowerCase().slice(0, 8))
-      );
-      if (!exists) {
-        list.push({
-          id: `std-${idx}`,
-          text: itemText,
-          rollover: false,
-        });
-      }
-    });
 
     return list;
   })();
