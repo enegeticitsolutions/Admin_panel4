@@ -77,6 +77,16 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
         >
           Legacy Circle
         </a>
+        <a
+          href="/partners"
+          className={activePage === "partners" ? "active" : ""}
+          onClick={(e) => {
+            e.preventDefault();
+            handleNavClick("partners");
+          }}
+        >
+          Partners
+        </a>
       </nav>
 
       <div className="topbar__actions">
@@ -178,6 +188,16 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             }}
           >
             🌟 Legacy Circle
+          </a>
+          <a
+            href="/partners"
+            className={activePage === "partners" ? "active" : ""}
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick("partners");
+            }}
+          >
+            🤝 Partners
           </a>
           <a
             href="/plans"

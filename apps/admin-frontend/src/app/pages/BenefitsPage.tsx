@@ -12,7 +12,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { benefitApi, benefitTypeApi, taxCategoryApi } from '../../services/api';
-import { Plus, Pencil, ToggleLeft, ToggleRight, Loader2, BookOpen, DollarSign, Check, Percent } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, ToggleRight, Loader2, BookOpen, DollarSign, Check, Percent, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface BenefitType { id: string; name: string; iconCode?: string; isActive?: boolean; }
@@ -103,7 +103,13 @@ export default function BenefitsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Benefit | null>(null);
   const [saving, setSaving] = useState(false);
+  
+  // Filters
   const [filterTypeId, setFilterTypeId] = useState('all');
+  const [benefitSearch, setBenefitSearch] = useState('');
+  const [benefitChargeableFilter, setBenefitChargeableFilter] = useState<'all' | 'chargeable' | 'included'>('all');
+  const [benefitStatusFilter, setBenefitStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
+  
   const [form, setForm] = useState(BLANK_FORM);
 
   const formRef = useRef<HTMLDivElement>(null);
@@ -259,7 +265,25 @@ export default function BenefitsPage() {
     } catch { toast.error('Failed to update'); }
   };
 
-  const filtered = filterTypeId === 'all' ? benefits : benefits.filter(b => b.benefitTypeId === filterTypeId);
+  const filtered = benefits.filter(b => {
+    if (benefitStatusFilter === 'active' && !b.isActive) return false;
+    if (benefitStatusFilter === 'inactive' && b.isActive) return false;
+    if (filterTypeId !== 'all' && b.benefitTypeId !== filterTypeId) return false;
+    if (benefitChargeableFilter === 'chargeable' && b.isChargeable === false) return false;
+    if (benefitChargeableFilter === 'included' && b.isChargeable !== false) return false;
+    if (benefitSearch.trim()) {
+      const q = benefitSearch.toLowerCase().trim();
+      const matchName = (b.name || '').toLowerCase().includes(q);
+      const matchDesc = (b.description || '').toLowerCase().includes(q);
+      const matchCode = (b.code || '').toLowerCase().includes(q);
+      const matchUnit = (b.unitLabel || '').toLowerCase().includes(q);
+      if (!matchName && !matchDesc && !matchCode && !matchUnit) {
+        return false;
+      }
+    }
+    return true;
+  });
+
   const grouped = filtered.reduce<Record<string, Benefit[]>>((acc, b) => {
     const key = b.benefitType?.name ?? 'Other';
     acc[key] = [...(acc[key] ?? []), b];
@@ -447,23 +471,48 @@ export default function BenefitsPage() {
         </div>
       )}
 
-      {/* Filter */}
-      <div className="flex gap-2 mb-5 flex-wrap">
-        <button
-          onClick={() => setFilterTypeId('all')}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${filterTypeId === 'all' ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/50'}`}
-        >
-          All
-        </button>
-        {benefitTypes.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setFilterTypeId(t.id)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${filterTypeId === t.id ? 'bg-primary text-white border-primary' : 'border-border hover:border-primary/50'}`}
-          >
-            {t.iconCode} {t.name}
-          </button>
-        ))}
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search benefits by name, code, description..."
+            value={benefitSearch}
+            onChange={(e) => setBenefitSearch(e.target.value)}
+            className="pl-9 bg-card"
+          />
+        </div>
+        <Select value={benefitStatusFilter} onValueChange={(val: any) => setBenefitStatusFilter(val)}>
+          <SelectTrigger className="w-[180px] bg-card">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="all">All Status</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterTypeId} onValueChange={setFilterTypeId}>
+          <SelectTrigger className="w-[200px] bg-card">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {benefitTypes.map(t => (
+              <SelectItem key={t.id} value={t.id}>{t.iconCode} {t.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={benefitChargeableFilter} onValueChange={(val: any) => setBenefitChargeableFilter(val)}>
+          <SelectTrigger className="w-[180px] bg-card">
+            <SelectValue placeholder="Pricing" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Pricing</SelectItem>
+            <SelectItem value="chargeable">Chargeable</SelectItem>
+            <SelectItem value="included">Free / Included</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
