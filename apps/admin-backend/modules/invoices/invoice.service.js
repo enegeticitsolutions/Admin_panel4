@@ -33,27 +33,42 @@ class InvoiceService {
 
     // 1. Resolve tax for each benefit in the package version (live DB records = source of truth)
     if (packageVersion && Array.isArray(packageVersion.versionBenefits) && packageVersion.versionBenefits.length > 0) {
+      let totalNominalCost = 0;
+      const loadedBenefits = [];
+
       for (const vb of packageVersion.versionBenefits) {
-        // Always load the live benefit for unit cost and tax resolution
         const benefit = vb.benefit || (await tx.benefit.findUnique({ where: { id: vb.benefitId } }));
+        const qty = (vb.unitsIncluded || 1) * months;
+        const nominalCost = benefit?.unitCost || benefit?.cost || 100; // Use cost as a relative weight
+        totalNominalCost += (nominalCost * qty);
+        loadedBenefits.push({ vb, benefit, qty, nominalCost });
+      }
+
+      let remainingPackagePrice = packageVersion.basePrice;
+      let itemsProcessed = 0;
+
+      for (const item of loadedBenefits) {
+        itemsProcessed++;
+        const { vb, benefit, qty, nominalCost } = item;
         const taxMeta = await this.taxResolver.resolveBenefitTax(benefit || vb.benefitId, tx);
 
-        // Unit cost: prefer benefit.unitCost → benefit.cost → proportional split of package price
-        const unitCost =
-          benefit?.unitCost ||
-          benefit?.cost ||
-          Math.round((packageVersion.basePrice / packageVersion.versionBenefits.length) * 100) / 100;
+        // Proportionately allocate the package's base price
+        let lineTotalPrice = 0;
+        if (itemsProcessed === loadedBenefits.length) {
+          lineTotalPrice = remainingPackagePrice; // Last item gets the exact remainder to prevent rounding leaks
+        } else {
+          lineTotalPrice = Math.round(((nominalCost * qty) / totalNominalCost) * packageVersion.basePrice * 100) / 100;
+          remainingPackagePrice -= lineTotalPrice;
+        }
 
-        // Use snapshotName (frozen at subscription time) for legal accuracy;
-        // fall back to live benefit name only as last resort
+        const unitPrice = Math.round((lineTotalPrice / qty) * 100) / 100;
         const benefitLabel = vb.snapshotName || benefit?.name || 'Included Benefit';
 
         taxItems.push({
           benefitId: vb.benefitId,
-          // Description carries package + version + benefit — all from DB, never hardcoded
           name: `${packageLabel}${versionLabel} — ${benefitLabel}${durationLabel}`,
-          quantity: (vb.unitsIncluded || 1) * months,
-          unitPrice: Math.round(unitCost * 100) / 100,
+          quantity: qty,
+          unitPrice: unitPrice,
           gstRate: taxMeta.gstRate,
           hsnSacCode: taxMeta.hsnSacCode,
           isExempt: taxMeta.isExempt,
