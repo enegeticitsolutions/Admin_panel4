@@ -189,6 +189,116 @@ async function markPaymentSuccessfulTransaction(paymentId, gatewayPaymentId, pai
 
     console.log(`[Payment Repository Transaction OK] Payment ${paymentId} & Subscription ${existing.subscriptionId} ACTIVATED!`);
 
+    // If this payment was for an add-on, automatically credit units to SubscriptionBenefitBalance
+    const rawNotes = fullResponse?.notes || existing.gatewayResponse?.notes || {};
+    const isAddon =
+      existing.packageType === 'addon' ||
+      rawNotes.packageType === 'addon' ||
+      (rawNotes.packageName && String(rawNotes.packageName).startsWith('Add-on'));
+
+    if (isAddon && existing.subscriptionId) {
+      try {
+        let itemsToCredit = [];
+
+        // 1. Check if structured multi-item JSON array exists in notes
+        if (rawNotes.addonItems) {
+          try {
+            const parsed = typeof rawNotes.addonItems === 'string' ? JSON.parse(rawNotes.addonItems) : rawNotes.addonItems;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              itemsToCredit = parsed;
+            }
+          } catch (e) {
+            console.warn('[Payment Webhook] Could not parse addonItems JSON:', e.message);
+          }
+        }
+
+        // 2. Single item fallback via benefitId or packageName
+        if (itemsToCredit.length === 0) {
+          let benefit = null;
+          if (rawNotes.benefitId) {
+            benefit = await prisma.benefit.findUnique({ where: { id: rawNotes.benefitId } });
+          }
+          if (!benefit) {
+            const targetName = rawNotes.packageName || existing.snapshotPackageName || existing.failureReason || '';
+            const cleanedName = targetName.replace(/^Add-on(s)?:\s*/i, '').trim();
+            if (cleanedName) {
+              benefit = await prisma.benefit.findFirst({
+                where: { name: { contains: cleanedName, mode: 'insensitive' } },
+              });
+            }
+          }
+
+          if (benefit) {
+            let units = parseInt(rawNotes.units, 10);
+            if (!units || isNaN(units) || units <= 0) {
+              const unitPrice = benefit.addonDiscountPrice || benefit.addonPrice || 0;
+              if (unitPrice > 0 && existing.amountPaid > 0) {
+                units = Math.max(1, Math.round(existing.amountPaid / unitPrice));
+              } else {
+                units = benefit.addonIncludedUnits || 1;
+              }
+            }
+            itemsToCredit.push({
+              benefitId: benefit.id,
+              name: benefit.name,
+              units,
+              unitLabel: benefit.unitLabel || 'visits',
+            });
+          } else {
+            console.warn(`[Payment Webhook Alert] No matching benefit found for add-on payment ${paymentId}. Logged for manual review.`);
+            await prisma.activityLog.create({
+              data: {
+                action: 'PAYMENT_ADDON_ALLOCATION_NEEDED',
+                entityType: 'PAYMENT',
+                entityId: paymentId,
+                details: JSON.stringify({
+                  paymentId,
+                  amount: existing.amountPaid,
+                  notes: rawNotes,
+                  message: 'Add-on payment received but benefit could not be resolved automatically.',
+                }),
+              },
+            }).catch(() => {});
+          }
+        }
+
+        // 3. Atomically credit units for each item
+        for (const item of itemsToCredit) {
+          const benefit = await prisma.benefit.findUnique({ where: { id: item.benefitId } });
+          if (!benefit) continue;
+
+          const unitsToAdd = Number(item.units) || 1;
+          const unitLabel = benefit.unitLabel || item.unitLabel || 'visits';
+
+          await prisma.subscriptionBenefitBalance.upsert({
+            where: {
+              subscriptionId_benefitId: {
+                subscriptionId: existing.subscriptionId,
+                benefitId: benefit.id,
+              },
+            },
+            create: {
+              subscriptionId: existing.subscriptionId,
+              benefitId: benefit.id,
+              snapshotBenefitName: benefit.name,
+              snapshotUnitLabel: unitLabel,
+              totalUnits: unitsToAdd,
+              usedUnits: 0,
+              availableUnits: unitsToAdd,
+              unit: unitLabel,
+            },
+            update: {
+              totalUnits: { increment: unitsToAdd },
+              availableUnits: { increment: unitsToAdd },
+            },
+          });
+          console.log(`[Payment Webhook OK] Credited ${unitsToAdd} units of ${benefit.name} to subscription ${existing.subscriptionId}`);
+        }
+      } catch (addonBalErr) {
+        console.warn('[Payment Webhook Addon Balance Warning]:', addonBalErr.message);
+      }
+    }
+
     // Ensure statutory GST invoice is generated and attached to this payment
     try {
       await invoiceService.ensurePaymentInvoice(prisma, {

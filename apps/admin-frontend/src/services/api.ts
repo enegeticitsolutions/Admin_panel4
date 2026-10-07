@@ -1673,6 +1673,9 @@ export const paymentApi = {
     subscriberEmail?: string;
     subscriberName?: string;
     duration?: string;
+    benefitId?: string;
+    units?: number;
+    addonItems?: string;
   }): Promise<any> {
     return apiJson<any>('/payments/generate-link', {
       method: 'POST',
