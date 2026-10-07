@@ -153,8 +153,15 @@ const navigationSections: NavSection[] = [
         icon: Crown,
         roles: ['master_admin', 'admin', 'saathi_coordinator'],
       },
+      {
+        path: '/partners',
+        label: 'Partners & Ecosystem',
+        icon: Handshake,
+        roles: ['master_admin', 'admin', 'operations_manager'],
+      },
     ]
   },
+
   {
     title: 'CLIENTS',
     items: [

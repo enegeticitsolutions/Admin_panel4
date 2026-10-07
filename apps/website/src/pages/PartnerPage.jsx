@@ -8,6 +8,7 @@ import consultationImg from "../assets/partners/consultation.jpg";
 import drRajeshImg from "../assets/partners/dr-rajesh-sharma.jpg";
 import shapesBgVideo from "../assets/partners/0_Shapes_Loopable_1920x1080.mp4";
 import shapesBgImg from "../assets/partners/0_Shapes_Loopable_1920x1080.png";
+import partnerIconImg from "../assets/partners/partner_icon.png";
 import ZohoPartnerForm from "../components/forms/ZohoPartnerForm";
 import PartnerService from "../services/PartnerService";
 import {
@@ -211,64 +212,104 @@ const PROCESS_STEPS = [
   },
 ];
 
-const SHOWCASE_PARTNERS = [
-  {
-    img: ambulanceImg,
-    category: "Emergency Response",
-    badgeClass: "partner-showcase-category-pill--red",
-    name: "FastAid Response",
-    location: "Gurugram-wide",
-    desc: "24/7 emergency dispatch for medical crises. Average response time under 12 minutes across Sectors 50–58.",
-  },
-  {
-    img: pharmacyImg,
-    category: "Pharmacy Partner",
-    badgeClass: "partner-showcase-category-pill--purple",
-    name: "MedBridge Pharmacy",
-    location: "Sector 56, Gurugram",
-    desc: "Home delivery of prescriptions, OTC medicines, and medical supplies. Prescription management and refill reminders included.",
-  },
-  {
-    img: diagnosticsImg,
-    category: "Diagnostic Lab",
-    badgeClass: "partner-showcase-category-pill--blue",
-    name: "LabQuick Diagnostics",
-    location: "Sector 54–57, Gurugram",
-    desc: "Home blood and urine sample collection, with digital reports shared directly to Family Connect within 24 hours.",
-  },
-  {
-    img: physioImg,
-    category: "Care Provider",
-    badgeClass: "partner-showcase-category-pill--green",
-    name: "ActivLife Physio & Wellness",
-    location: "Sector 55, Gurugram",
-    desc: "Physiotherapy, mobility training, and post-hospitalisation rehabilitation — at home, scheduled through Care Mitras.",
-  },
-  {
-    img: hospitalImg,
-    category: "Hospital & Clinic",
-    badgeClass: "partner-showcase-category-pill--orange",
-    name: "Horizons Senior Clinic",
-    location: "Sector 53, Gurugram",
-    desc: "Preferred outpatient facility for planned visits and specialist referrals. Priority slots reserved for MaiHoonNa beneficiaries.",
-  },
-  {
-    img: consultationImg,
-    category: "Tele-medicine",
-    badgeClass: "partner-showcase-category-pill--teal",
-    name: "TeleHeal",
-    location: "Pan-NCR · Remote",
-    desc: "On-demand virtual consultations with GPs and specialists, scheduled and managed by Care Mitras within the app.",
-  },
-];
+const getCategoryImage = (categoryName) => {
+  const name = (categoryName || '').toLowerCase();
+  if (name.includes('ambulance') || name.includes('emergency')) return ambulanceImg;
+  if (name.includes('pharmacy') || name.includes('medicine')) return pharmacyImg;
+  if (name.includes('diagnostic') || name.includes('lab')) return diagnosticsImg;
+  if (name.includes('physio') || name.includes('care provider')) return physioImg;
+  if (name.includes('hospital') || name.includes('clinic')) return hospitalImg;
+  if (name.includes('tele') || name.includes('doctor') || name.includes('consultation')) return consultationImg;
+  return consultationImg;
+};
+
+const getCategoryBadgeClass = (categoryName) => {
+  const name = (categoryName || '').toLowerCase();
+  if (name.includes('ambulance') || name.includes('emergency')) return "partner-showcase-category-pill--red";
+  if (name.includes('pharmacy')) return "partner-showcase-category-pill--purple";
+  if (name.includes('diagnostic') || name.includes('lab')) return "partner-showcase-category-pill--blue";
+  if (name.includes('care') || name.includes('physio')) return "partner-showcase-category-pill--green";
+  if (name.includes('hospital') || name.includes('clinic')) return "partner-showcase-category-pill--orange";
+  if (name.includes('tele')) return "partner-showcase-category-pill--teal";
+  return "partner-showcase-category-pill--teal";
+};
 
 export default function PartnerPage() {
+  const [dbPartners, setDbPartners] = useState([]);
+  const [dbCategories, setDbCategories] = useState([]);
+  const [selectedFilterCategory, setSelectedFilterCategory] = useState("ALL");
+  const [loadingPartners, setLoadingPartners] = useState(true);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchPartners = async () => {
+      try {
+        const data = await PartnerService.getPublishedPartners();
+        if (isMounted && data) {
+          if (Array.isArray(data.partners)) {
+            setDbPartners(data.partners);
+          }
+          if (Array.isArray(data.categories)) {
+            setDbCategories(data.categories);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load website partners:", err);
+      } finally {
+        if (isMounted) setLoadingPartners(false);
+      }
+    };
+    fetchPartners();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const scrollTo = (id) => {
     const el = document.getElementById(id);
     if (el) {
       el.scrollIntoView({ behavior: "smooth" });
     }
   };
+
+  // ONLY live dynamic partners from the database / admin panel (No static mocks)
+  const allFormattedPartners = React.useMemo(() => {
+    return dbPartners.map((p) => {
+      const catName = p.category?.name || p.type || "Healthcare Partner";
+      return {
+        id: p.id,
+        img: p.bannerImageUrl || (Array.isArray(p.photos) && p.photos.length > 0 ? p.photos[0] : null) || p.logoUrl || getCategoryImage(catName),
+        photos: p.photos || [],
+        category: catName,
+        badgeClass: getCategoryBadgeClass(catName),
+        name: p.organizationName || p.name,
+        location: [p.city, p.state, p.address].filter(Boolean).join(", ") || "Gurugram, NCR",
+        desc: p.description,
+        badgeText: p.customBadgeText || "Verified partner",
+        websiteUrl: p.websiteUrl,
+        highlights: p.serviceHighlights || [],
+        isDynamic: true,
+      };
+    });
+  }, [dbPartners]);
+
+  // Unique list of categories from live partners
+  const availableCategories = React.useMemo(() => {
+    return Array.from(new Set(allFormattedPartners.map((p) => p.category.trim())));
+  }, [allFormattedPartners]);
+
+  // Filtered partners based on selected category
+  const displayPartners = React.useMemo(() => {
+    if (selectedFilterCategory === "ALL") {
+      return allFormattedPartners;
+    }
+    return allFormattedPartners.filter(
+      (p) => p.category.trim().toLowerCase() === selectedFilterCategory.trim().toLowerCase()
+    );
+  }, [allFormattedPartners, selectedFilterCategory]);
+
+
+
 
   return (
     <div className="partner-page">
@@ -292,23 +333,13 @@ export default function PartnerPage() {
           <div className="partner-hero__left">
             <div className="partner-hero__badge">
               <span className="partner-hero__badge-icon">
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#FE6700"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.3-4.3a1 1 0 0 0 0-1.4l-3-3" />
-                  <path d="m3 11 3-3a1 1 0 0 1 1.4 0l4.3 4.3a1 1 0 0 1 0 1.4l-2 2" />
-                  <path d="M18 12a3 3 0 0 0-3-3l-2.5 2.5" />
-                  <path d="m6 12 3 3" />
-                </svg>
+                <img
+                  src={partnerIconImg}
+                  alt="Partners & Suppliers Icon"
+                  style={{ width: "14px", height: "14px", objectFit: "contain", display: "block" }}
+                />
               </span>
-              <span className="partner-hero__badge-text">PARTNERS & SUPPLIERS</span>
+              <span className="partner-hero__badge-text">PARTNERS &amp; SUPPLIERS</span>
             </div>
 
             <h1 className="partner-hero__title">
@@ -560,49 +591,172 @@ export default function PartnerPage() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────────────────────
-         6. "TRUSTED PARTNERS IN GURUGRAM" (Figma Node 4462:286)
+         6. "TRUSTED PARTNERS IN GURUGRAM / ACTIVE ECOSYSTEM PARTNERS"
          ───────────────────────────────────────────────────────────────────────────── */}
-      <section className="partner-network-section">
+      <section className="partner-network-section" id="active-partners">
         <div className="partner-network-container">
           <div className="partner-section-header">
             <span className="partner-eyebrow">ACTIVE PARTNERS</span>
-            <h2 className="partner-section-title">Trusted partners in Gurugram</h2>
+            <h2 className="partner-section-title">Trusted partners in Gurugram &amp; NCR</h2>
             <p className="partner-section-subhead">
-              These are some of the partners already active in our pilot. Vetted, geo-matched,
-              and coordinated through the MaiHoonNa platform.
+              Verified, geo-matched healthcare providers and specialized eldercare partners active in our ecosystem.
             </p>
           </div>
 
-          <div className="partner-network-grid">
-            {SHOWCASE_PARTNERS.map((partner, idx) => (
-              <div key={idx} className="partner-showcase-card">
-                <div className="partner-showcase-img-wrap">
-                  <img
-                    src={partner.img}
-                    alt={partner.name}
-                    className="partner-showcase-img"
-                    loading="lazy"
-                  />
-                  <span className={`partner-showcase-category-pill ${partner.badgeClass}`}>
-                    {partner.category}
-                  </span>
-                </div>
-                <div className="partner-showcase-body">
-                  <h3 className="partner-showcase-title">{partner.name}</h3>
-                  <div className="partner-showcase-location">📍 {partner.location}</div>
-                  <p className="partner-showcase-desc">{partner.desc}</p>
-                  <div className="partner-showcase-footer">
-                    <span className="partner-verified-badge">
-                      <Shield className="w-3.5 h-3.5 text-emerald-600 inline mr-1" />
-                      Active partner
+          {/* Dynamic Category Filter Pills */}
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px", margin: "24px 0 32px" }}>
+            <button
+              type="button"
+              onClick={() => setSelectedFilterCategory("ALL")}
+              style={{
+                padding: "8px 18px",
+                borderRadius: "24px",
+                fontSize: "13px",
+                fontWeight: "600",
+                cursor: "pointer",
+                border: selectedFilterCategory === "ALL" ? "2px solid #FE6700" : "1px solid #E5E7EB",
+                backgroundColor: selectedFilterCategory === "ALL" ? "#FFF7ED" : "#FFFFFF",
+                color: selectedFilterCategory === "ALL" ? "#FE6700" : "#4B5563",
+                transition: "all 0.15s ease",
+              }}
+            >
+              All Partners ({allFormattedPartners.length})
+            </button>
+
+            {/* List all available categories with live partner counts */}
+            {availableCategories.map((cat) => {
+              const isSelected = selectedFilterCategory.trim().toLowerCase() === cat.trim().toLowerCase();
+              const count = allFormattedPartners.filter(
+                (p) => p.category.trim().toLowerCase() === cat.trim().toLowerCase()
+              ).length;
+
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedFilterCategory(cat)}
+                  style={{
+                    padding: "8px 18px",
+                    borderRadius: "24px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    border: isSelected ? "2px solid #FE6700" : "1px solid #E5E7EB",
+                    backgroundColor: isSelected ? "#FFF7ED" : "#FFFFFF",
+                    color: isSelected ? "#FE6700" : "#4B5563",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {cat} ({count})
+                </button>
+              );
+            })}
+          </div>
+
+
+          {loadingPartners ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px" }}>
+              <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-3" style={{ color: "#FE6700" }} />
+              <p style={{ color: "#6B7280", fontSize: "14px", fontWeight: "500" }}>Loading active partner network...</p>
+            </div>
+          ) : displayPartners.length === 0 ? (
+            <div style={{
+              textAlign: "center",
+              padding: "48px 24px",
+              backgroundColor: "#F9FAFB",
+              borderRadius: "16px",
+              border: "1px dashed #D1D5DB",
+              maxWidth: "540px",
+              margin: "0 auto"
+            }}>
+              <Building2 style={{ width: "40px", height: "40px", color: "#9CA3AF", margin: "0 auto 12px" }} />
+              <h4 style={{ fontSize: "16px", fontWeight: "700", color: "#1F2937", marginBottom: "6px" }}>
+                No active partners in this category yet
+              </h4>
+              <p style={{ fontSize: "13px", color: "#6B7280", marginBottom: "16px" }}>
+                Are you a healthcare provider or eldercare specialist? Join our verified partner network today.
+              </p>
+              <button
+                type="button"
+                className="partner-btn-primary"
+                style={{ padding: "8px 20px", fontSize: "13px", margin: "0 auto" }}
+                onClick={() => scrollTo("partner-apply")}
+              >
+                Apply as a Partner &rarr;
+              </button>
+            </div>
+          ) : (
+            <div className="partner-network-grid">
+              {displayPartners.map((partner, idx) => (
+                <div key={partner.id || idx} className="partner-showcase-card">
+                  <div className="partner-showcase-img-wrap">
+                    <img
+                      src={partner.img}
+                      alt={partner.name}
+                      className="partner-showcase-img"
+                      loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.src = getCategoryImage(partner.category);
+                      }}
+                    />
+                    <span className={`partner-showcase-category-pill ${partner.badgeClass}`}>
+                      {partner.category}
                     </span>
                   </div>
+                  <div className="partner-showcase-body">
+                    <h3 className="partner-showcase-title">{partner.name}</h3>
+                    <div className="partner-showcase-location">📍 {partner.location}</div>
+                    <p className="partner-showcase-desc">{partner.desc}</p>
+
+                    {partner.highlights && partner.highlights.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", margin: "8px 0" }}>
+                        {partner.highlights.map((hl, hIdx) => (
+                          <span
+                            key={hIdx}
+                            style={{
+                              fontSize: "11px",
+                              padding: "2px 8px",
+                              backgroundColor: "#F3F4F6",
+                              color: "#374151",
+                              borderRadius: "4px",
+                              fontWeight: "500",
+                            }}
+                          >
+                            ✓ {hl}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="partner-showcase-footer">
+                      <span className="partner-verified-badge">
+                        <Shield className="w-3.5 h-3.5 text-emerald-600 inline mr-1" />
+                        {partner.badgeText || "Active partner"}
+                      </span>
+                      {partner.websiteUrl && (
+                        <a
+                          href={partner.websiteUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            fontSize: "12px",
+                            color: "#FE6700",
+                            fontWeight: "600",
+                            textDecoration: "none",
+                          }}
+                        >
+                          Visit Website &rarr;
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
+
 
       {/* ─────────────────────────────────────────────────────────────────────────────
          7. BOTTOM CTA BANNER (Figma Node 4462:286)

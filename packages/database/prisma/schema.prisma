@@ -2226,6 +2226,7 @@ model LegalPolicy {
   footerNote    String?
   sortOrder     Int      @default(0)
   isActive      Boolean  @default(true)
+  status        String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -2433,4 +2434,93 @@ model TaxCategory {
 
   @@map("tax_categories")
 }
+
+// ==========================================
+// DYNAMIC PARTNER & ECOSYSTEM MANAGEMENT
+// ==========================================
+
+enum PartnerStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+model PartnerCategory {
+  id           String    @id @default(uuid())
+  name         String    @unique // Display name, e.g., "Ambulance Services", "Diagnostics"
+  slug         String    @unique // URL slug, e.g., "ambulance-services"
+  code         String?   @unique // Integration code / Zoho CRM match key, e.g., "AMBULANCE"
+  description  String?
+  iconUrl      String?
+  bannerUrl    String?
+  displayOrder Int       @default(0)
+  isActive     Boolean   @default(true)
+  metadata     Json?     // Flexible metadata for custom category tags, dynamic form fields, or UI attributes
+
+  partners     Partner[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([isActive, displayOrder])
+  @@index([code])
+  @@map("partner_categories")
+}
+
+model Partner {
+  id                 String          @id @default(uuid())
+
+  // Core Form Information
+  organizationName   String
+  primaryContactName String?
+  email              String?
+  phone              String?
+  city               String?
+  state              String?
+  description        String
+
+  // Dynamic Category Relation (Foreign Key to PartnerCategory table)
+  categoryId         String
+  category           PartnerCategory @relation(fields: [categoryId], references: [id])
+
+  // Attachments / Documents (e.g. uploaded company profile/license/MOU/Agreements)
+  attachmentUrl      String?
+  documents          Json?           // Array of documents: [{ name, url, documentType, fileSizeBytes, uploadedAt }]
+
+  // Workflow & Admin Management
+  status             PartnerStatus   @default(PENDING)
+  adminNotes         String?
+  assignedToAdmin    String?
+
+  // Website Presentation & Publishing Controls
+  isPublished        Boolean         @default(false)
+  isFeatured         Boolean         @default(false)
+  displayOrder       Int             @default(0)
+  logoUrl            String?
+  bannerImageUrl     String?
+  websiteUrl         String?
+  customBadgeText    String?
+  serviceHighlights  String[]        @default([])
+  photos             String[]        @default([])
+
+  // Zoho CRM Sync & Tracking
+  source             String          @default("DIRECT") // "ZOHO_CRM" | "ADMIN_DIRECT" | "WEBSITE"
+  zohoLeadId         String?         @unique
+  zohoDataPayload    Json?
+  zohoSyncedAt       DateTime?
+
+  // Timestamps
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([status, isPublished])
+  @@index([categoryId])
+  @@index([city])
+  @@index([createdAt])
+  @@map("partners")
+}
+
+
 
