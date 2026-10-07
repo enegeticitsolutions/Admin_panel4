@@ -52,14 +52,21 @@ app.use(globalLimiter);
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, Postman)
-      if (!origin || ALLOWED_ORIGINS.includes(origin))
+      // Allow requests with no origin (mobile apps, curl, Postman) or any localhost port
+      if (
+        !origin ||
+        ALLOWED_ORIGINS.includes(origin) ||
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1')
+      ) {
         return callback(null, true);
+      }
       callback(new Error(`CORS: Origin ${origin} not allowed`));
     },
     credentials: true,
   })
 );
+
 
 const payloadLimit = process.env.JSON_PAYLOAD_LIMIT || '2mb';
 app.use(express.json({
@@ -158,6 +165,7 @@ app.use('/api/website-content', adminsOnly, require('./routes/website-content'))
 app.use('/api/legacy-circle', staffOnly, require('./routes/legacy-circle'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/invoices', staffOnly, require('./modules/invoices/invoice.routes'));
+app.use('/api/partners', require('./routes/partners'));
 
 // ─── Secure File Access — Presigned URL (all authenticated staff) ─────────────────
 // Route never changes. New file types are registered in the block below.
