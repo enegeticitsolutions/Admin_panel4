@@ -1,49 +1,6 @@
 const { prisma } = require('../../lib/prisma');
 const { render: renderInvoiceHtml } = require('./invoice.html.renderer');
 
-// numberToWords is provided by invoice.html.renderer.js — kept here only for
-// backward compatibility if any other code in this file references it.
-function numberToWords(num) {
-  if (num === 0) return 'Zero';
-  const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
-  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-  const inWords = (n) => {
-    let str = '';
-    if (n > 99) {
-      str += a[Math.floor(n / 100)] + 'Hundred ';
-      n %= 100;
-    }
-    if (n > 19) {
-      str += b[Math.floor(n / 10)] + ' ';
-      n %= 10;
-    }
-    if (n > 0) {
-      str += a[n];
-    }
-    return str;
-  };
-
-  let word = '';
-  if (Math.floor(num / 10000000) > 0) {
-    word += inWords(Math.floor(num / 10000000)) + 'Crore ';
-    num %= 10000000;
-  }
-  if (Math.floor(num / 100000) > 0) {
-    word += inWords(Math.floor(num / 100000)) + 'Lakh ';
-    num %= 100000;
-  }
-  if (Math.floor(num / 1000) > 0) {
-    word += inWords(Math.floor(num / 1000)) + 'Thousand ';
-    num %= 1000;
-  }
-  if (num > 0) {
-    word += inWords(Math.floor(num));
-  }
-
-  return word.trim();
-}
-
 /**
  * GET /api/invoices
  * Lists invoices with pagination and search.

@@ -1052,6 +1052,7 @@ async function calculateAddonPricing(benefitId: string, subscriptionId: string, 
     where: { id: subscriptionId, subscriberId: userId, isActive: true },
     include: {
       beneficiary: { select: { id: true, name: true, userId: true, state: true } },
+      subscriber: { select: { id: true, name: true, state: true } },
     }
   });
   if (!subscription) throw new Error('Active subscription not found or access denied');
@@ -1090,7 +1091,7 @@ async function calculateAddonPricing(benefitId: string, subscriptionId: string, 
   const includedUnits = singleUnits * q;
 
   // Place of supply from beneficiary state (not hardcoded)
-  const placeOfSupply = (subscription as any).beneficiary?.state || 'Haryana';
+  const placeOfSupply = (subscription as any).beneficiary?.state || (subscription as any).subscriber?.state || '';
 
   return {
     benefit,
@@ -1362,8 +1363,8 @@ router.post('/addon/purchase', paymentLimiter as unknown as RequestHandler, auth
       }];
 
       // placeOfSupply from beneficiary state — not hardcoded
-      const customerState = p.placeOfSupply || 'Haryana';
-      const invoiceCalc = calculateItemizedInvoice(taxItems, 0, customerState, 'Haryana');
+      const customerState = p.placeOfSupply || p.subscription?.beneficiary?.state || p.subscription?.subscriber?.state || '';
+      const invoiceCalc = calculateItemizedInvoice(taxItems, 0, customerState, process.env.COMPANY_STATE || 'Haryana');
       
       const invoiceId = generateUUID();
       const beneficiaryId = p.subscription.beneficiaryId || null;

@@ -164,13 +164,14 @@ class InvoiceCalculator {
    *   isExempt?: boolean
    * }>} params.items
    * @param {number} [params.totalDiscount=0]     - Total monetary discount to spread proportionally
-   * @param {string} [params.customerState]        - Customer place-of-supply state
-   * @param {string} [params.companyState]         - Provider registered state (default 'Haryana')
+   * @param {string} [params.customerState='']     - Customer place-of-supply state
+   * @param {string} [params.companyState]         - Provider registered state (default process.env.COMPANY_STATE || 'Haryana')
    * @returns {Object} Full calculation result
    */
-  static calculate({ items = [], totalDiscount = 0, customerState = 'Haryana', companyState = 'Haryana' }) {
-    const isInterState =
-      (customerState || '').trim().toLowerCase() !== (companyState || '').trim().toLowerCase();
+  static calculate({ items = [], totalDiscount = 0, customerState = '', companyState = process.env.COMPANY_STATE || 'Haryana' }) {
+    const trimmedCustomer = (customerState || '').trim().toLowerCase();
+    const trimmedCompany = (companyState || '').trim().toLowerCase();
+    const isInterState = Boolean(trimmedCustomer) && trimmedCustomer !== trimmedCompany;
 
     // 1. Raw base amount (before discount)
     const rawBaseAmount = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
@@ -227,7 +228,7 @@ class InvoiceCalculator {
       sgstAmount,
       igstAmount,
       totalAmount,
-      placeOfSupply: customerState || companyState,
+      placeOfSupply: customerState || '',
       items: processedItems,
     };
   }

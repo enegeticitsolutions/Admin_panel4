@@ -62,6 +62,9 @@ async function generatePaymentLink(params) {
         packageType: resolvedPackageType,
         packageName: packageName || resolvedPackageType,
         orderId,
+        benefitId: params.benefitId || '',
+        units: params.units ? String(params.units) : '',
+        addonItems: params.addonItems ? String(params.addonItems) : '',
       },
     });
 

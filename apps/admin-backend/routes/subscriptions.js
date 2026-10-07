@@ -231,8 +231,8 @@ router.post('/calculate-price', async (req, res) => {
     }
 
     // Resolve Customer State for GST determination (Intra-state vs Inter-state)
-    const rawState = inputCustomerState || beneficiaryState || subscriberState || 'Haryana';
-    const customerState = String(rawState).trim() || 'Haryana';
+    const rawState = inputCustomerState || beneficiaryState || subscriberState || '';
+    const customerState = String(rawState).trim();
 
     // Resolve Duration & Trial parameters
     const durationInfo = resolveSubscriptionDuration(
@@ -525,9 +525,9 @@ router.post('/calculate-price', async (req, res) => {
     const totalTaxAmount = Math.round((totalPackageTax + addonsTax) * 100) / 100;
     const finalTotalAmount = Math.max(0, Math.round((packageFinalPayable - couponDiscount + addonsFinalTotal) * 100) / 100);
 
-    // POS Split (Haryana vs Inter-state)
-    const companyState = 'Haryana';
-    const isInterState = (customerState || '').trim().toLowerCase() !== companyState.toLowerCase();
+    // POS Split (Intra-state vs Inter-state)
+    const companyState = process.env.COMPANY_STATE || 'Haryana';
+    const isInterState = Boolean(customerState) && (customerState || '').trim().toLowerCase() !== companyState.toLowerCase();
     const cgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
     const sgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
     const igstAmount = isInterState ? totalTaxAmount : 0;
@@ -679,28 +679,54 @@ router.post('/admin-enroll', async (req, res) => {
       let subscriberUser = await tx.user.findUnique({
         where: { phone: subscriberPhone },
       });
+
+      const cleanEmail = (typeof subscriberEmail === 'string' && subscriberEmail.trim().includes('@'))
+        ? subscriberEmail.trim().toLowerCase()
+        : null;
+
+      let emailToSet = cleanEmail;
+      if (emailToSet) {
+        const existingEmailUser = await tx.user.findUnique({
+          where: { email: emailToSet },
+        });
+        if (existingEmailUser && (!subscriberUser || existingEmailUser.id !== subscriberUser.id)) {
+          console.warn(`[admin-enroll] Email ${emailToSet} is already in use by user ${existingEmailUser.id}. Skipping email assignment.`);
+          emailToSet = null;
+        }
+      }
+
+      const formattedLocation = subscriberAddress
+        ? `${subscriberAddress}, ${subscriberCity || ''}, ${subscriberState || ''} - ${subscriberPincode || ''}`.trim()
+        : '';
+
       if (!subscriberUser) {
         subscriberUser = await tx.user.create({
           data: {
             phone: subscriberPhone,
             name: subscriberName,
+            email: emailToSet || undefined,
             role: 'subscriber',
             password: dummyHash,
             isActive: true,
-            location: subscriberAddress
-              ? `${subscriberAddress}, ${subscriberCity || ''}, ${subscriberState || ''} - ${subscriberPincode || ''}`.trim()
-              : '',
+            location: formattedLocation,
+            city: subscriberCity || undefined,
+            state: subscriberState || undefined,
+            pincode: subscriberPincode || undefined,
           },
         });
       } else {
         // Update name if provided and different, and promote to subscriber if currently prospect
         const newLocation = subscriberAddress
-          ? `${subscriberAddress}, ${subscriberCity || ''}, ${subscriberState || ''} - ${subscriberPincode || ''}`.trim()
+          ? formattedLocation
           : subscriberUser.location;
 
         const updateData = {};
         if (subscriberUser.name !== subscriberName) updateData.name = subscriberName;
         if (subscriberUser.location !== newLocation) updateData.location = newLocation;
+        if (emailToSet && subscriberUser.email !== emailToSet) updateData.email = emailToSet;
+        if (subscriberCity && !subscriberUser.city) updateData.city = subscriberCity;
+        if (subscriberState && !subscriberUser.state) updateData.state = subscriberState;
+        if (subscriberPincode && !subscriberUser.pincode) updateData.pincode = subscriberPincode;
         
         if (subscriberUser.role === 'prospect') {
           updateData.role = 'subscriber';
@@ -994,12 +1020,12 @@ router.post('/admin-enroll', async (req, res) => {
       }
 
       // ──────────────────────────────────────────────────────────────────
-      // 7. Create Invoice & Payment record (offline / admin-enrolled / trial)
-      // Generated for free trials or whenever payment was collected or !csaMode
+      // 7. Create Invoice & Payment record (offline / admin-enrolled / trial / CSA mode)
+      // Always generated so subscriber profile consistently has statutory invoice
       // ──────────────────────────────────────────────────────────────────
       let invoice = null;
       let invoiceNumber = null;
-      if (isFree || !csaMode || parseFloat(amountPaid) > 0) {
+      {
         const durationMonths = durationInfo.displayMonths;
         const paid = isFree ? 0 : (parseFloat(amountPaid) || 0);
         let pkgGrossBase = 0;
@@ -1021,9 +1047,9 @@ router.post('/admin-enroll', async (req, res) => {
           inputCustomerState ||
           beneficiaryState ||
           subscriberState ||
-          beneficiary.state ||
-          subscriberUser.state ||
-          'Haryana'
+          beneficiary?.state ||
+          subscriberUser?.state ||
+          ''
         ).toString().trim();
 
         invoice = await invoiceService.generateSubscriptionInvoice(tx, {
@@ -1035,7 +1061,7 @@ router.post('/admin-enroll', async (req, res) => {
           discountAmount: discount,
           subscriberId: subscriberUser.id,
           beneficiaryId: beneficiary.id,
-          status: 'PAID',
+          status: (paid > 0 || isFree) ? 'PAID' : 'ISSUED',
         });
         invoiceNumber = invoice.invoiceNumber;
 
@@ -1126,6 +1152,7 @@ router.post('/admin-enroll', async (req, res) => {
           id: subscriberUser.id,
           name: subscriberUser.name,
           phone: subscriberUser.phone,
+          email: subscriberUser.email,
         },
         beneficiary: { id: beneficiary.id, name: beneficiary.name },
         package: { 
@@ -1451,7 +1478,7 @@ router.post('/:id/addons/allocate', async (req, res) => {
       const numericAmount = parseFloat(amountPaid);
       let invoice = null;
       if (numericAmount > 0) {
-        const customerState = subscription.beneficiary?.state || 'Haryana';
+        const customerState = subscription.beneficiary?.state || subscription.subscriber?.state || '';
         invoice = await invoiceService.generateAddonInvoice(tx, {
           subscriptionId,
           benefit,
@@ -2454,7 +2481,7 @@ router.post('/:id/renew', async (req, res) => {
       // 6. Create new Payment & Invoice
       const amountPaid = parseFloat(payment.amountPaid) || pkg.basePrice;
       const discount = pkg.basePrice - amountPaid > 0 ? pkg.basePrice - amountPaid : 0;
-      const customerState = currentSub.beneficiary?.state || 'Haryana';
+      const customerState = currentSub.beneficiary?.state || currentSub.subscriber?.state || '';
 
       const invoice = await invoiceService.generateRenewalInvoice(tx, {
         newSubscription: newSub,

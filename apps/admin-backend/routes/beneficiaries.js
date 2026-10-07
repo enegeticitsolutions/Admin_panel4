@@ -715,10 +715,19 @@ router.get('/:id', async (req, res) => {
       readings: b.vitalReadings.filter(r => (r.visitId && r.visitId === v.id) || (r.encounterId && v.encounterId && r.encounterId === v.encounterId))
     }));
 
-    const sub = await prisma.subscription.findFirst({
+    let sub = await prisma.subscription.findFirst({
       where: { beneficiaryId: b.id, isActive: true },
       include: { package: true },
+      orderBy: { createdAt: 'desc' },
     });
+    if (!sub) {
+      // Fallback for CSA-enrolled subscriptions awaiting user mobile activation
+      sub = await prisma.subscription.findFirst({
+        where: { beneficiaryId: b.id },
+        include: { package: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
 
     // Compute sanitized live care scores
     let emotionalScore = b.emotionalScore != null ? Number(b.emotionalScore) : null;

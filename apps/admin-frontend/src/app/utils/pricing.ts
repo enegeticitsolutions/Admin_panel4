@@ -118,7 +118,7 @@ export function calculateWizardPricing(
   pkg: any | undefined,
   duration: string = 'monthly',
   addons: any[] = [],
-  customerState: string = 'Haryana',
+  customerState: string = '',
   companyState: string = 'Haryana',
   couponDiscount: number = 0
 ): WizardPricingBreakdown {
@@ -207,7 +207,7 @@ export function calculateWizardPricing(
   const totalBaseAmount = packageBasePrice + addonsBasePrice;
 
   // Inter-state determination (Haryana is company POS)
-  const isInterState = (customerState || '').trim().toLowerCase() !== (companyState || 'Haryana').trim().toLowerCase();
+  const isInterState = Boolean(customerState) && (customerState || '').trim().toLowerCase() !== (companyState || 'Haryana').trim().toLowerCase();
   const pkgGstRate = isFree ? 0 : Number(pkg.gstRate ?? 18);
   const packageTax = isFree ? 0 : Math.round((packageBasePrice * pkgGstRate) / 100);
 
