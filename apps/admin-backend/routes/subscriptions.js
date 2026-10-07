@@ -766,9 +766,9 @@ router.post('/admin-enroll', async (req, res) => {
             primaryPhysicianName: primaryPhysicianName,
             primaryPhysicianPhone: primaryPhysicianPhone,
             hobbiesInterests: hobbiesInterests,
-            isActive: sameAsSubscriber ? true : (csaMode ? false : true),
+            isActive: csaMode ? false : true,
             createdBy: csaMode ? 'csa' : 'subscriber',
-            verificationStatus: sameAsSubscriber ? 'verified' : (csaMode ? 'pending' : 'verified'),
+            verificationStatus: csaMode ? 'pending' : 'verified',
             // Nested creates
             emergencyContacts: {
               create: [
@@ -922,8 +922,8 @@ router.post('/admin-enroll', async (req, res) => {
           data: {
             name: beneficiaryName || subscriberName || beneficiary.name,
             relationship: sameAsSubscriber ? 'Self' : (relationship || beneficiary.relationship || 'Family'),
-            isActive: sameAsSubscriber ? true : (csaMode ? false : true),
-            verificationStatus: sameAsSubscriber ? 'verified' : (csaMode ? 'pending' : 'verified'),
+            isActive: csaMode ? false : true,
+            verificationStatus: csaMode ? 'pending' : 'verified',
             ...(beneficiaryAddress ? { address: beneficiaryAddress } : {}),
             ...(beneficiaryPincode ? { pincode: beneficiaryPincode } : {}),
             ...(beneficiaryCity ? { city: beneficiaryCity } : {}),
@@ -969,8 +969,8 @@ router.post('/admin-enroll', async (req, res) => {
           endDate: end,
           visitsTotal: pkg.visitsPerWeek * 4,
           hoursTotal: pkg.hoursPerMonth || 0,
-          // Free trials (price ₹0) and sameAsSubscriber activate immediately; CSA mode without payment starts inactive
-          isActive: (isFree || sameAsSubscriber) ? true : (csaMode && parseFloat(amountPaid) === 0 ? false : true),
+          // In CSA mode, subscriptions start inactive regardless of price or self-enrollment. They await subscriber activation.
+          isActive: csaMode ? false : true,
         },
       });
 

@@ -634,7 +634,7 @@ export default function EnrollmentWizardPage() {
         paymentMethod,
         paymentNote,
         couponCode: appliedCoupon?.code,
-        csaMode: paymentMode === 'online_link',
+        csaMode: true, // Always true for Admin enrollment to require subscriber activation
       });
       // Allocate any selected add-ons
       const subId = result?.subscription?.id || (result as any)?.id || (result as any)?.data?.subscription?.id;
