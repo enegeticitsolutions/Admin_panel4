@@ -1,0 +1,17 @@
+{
+  "name": "@maihoonna/billing",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "npx tsx --test __tests__/calculator.test.ts __tests__/financial_audit.test.ts",
+    "dev": "tsc -w"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.8.0"
+  }
+}

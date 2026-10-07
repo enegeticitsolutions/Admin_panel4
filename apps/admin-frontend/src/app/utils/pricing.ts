@@ -208,8 +208,58 @@ export function calculateWizardPricing(
 
   // Inter-state determination (Haryana is company POS)
   const isInterState = Boolean(customerState) && (customerState || '').trim().toLowerCase() !== (companyState || 'Haryana').trim().toLowerCase();
-  const pkgGstRate = isFree ? 0 : Number(pkg.gstRate ?? 18);
-  const packageTax = isFree ? 0 : Math.round((packageBasePrice * pkgGstRate) / 100);
+
+  // Benefit-level tax calculation (supports mixed tax brackets within the same package)
+  const packageBenefits: any[] = pkg.packageBenefits || pkg.benefits || [];
+  let packageTax = 0;
+  const benefitsBreakdown: any[] = [];
+
+  if (packageBenefits.length > 0 && !isFree) {
+    const totalWeight = packageBenefits.reduce((sum, pb) => {
+      const uCost = pb.benefit?.isChargeable !== false ? (Number(pb.benefit?.unitCost) || 100) : 0;
+      const count = (pb.unitsIncluded || 1) * (isDays ? 1 : months);
+      return sum + (uCost * count);
+    }, 0) || 1;
+
+    let remainingBase = packageBasePrice;
+    packageBenefits.forEach((pb, idx) => {
+      const b = pb.benefit || pb;
+      const count = (pb.unitsIncluded || 1) * (isDays ? 1 : months);
+      const uCost = b.isChargeable !== false ? (Number(b.unitCost) || 100) : 0;
+      const lineWeight = uCost * count;
+
+      let allocatedBase = 0;
+      if (idx === packageBenefits.length - 1) {
+        allocatedBase = remainingBase;
+      } else {
+        allocatedBase = Math.round(((lineWeight / totalWeight) * packageBasePrice) * 100) / 100;
+        remainingBase -= allocatedBase;
+      }
+
+      const isExempt = Boolean(b.isGstExempt);
+      const rate = isExempt ? 0 : Number(b.gstRate !== null && b.gstRate !== undefined ? b.gstRate : (pkg.gstRate ?? 18));
+      const lineTax = isExempt ? 0 : Math.round((allocatedBase * rate) / 100 * 100) / 100;
+      const unitPrice = count > 0 ? Math.round((allocatedBase / count) * 100) / 100 : 0;
+
+      packageTax += lineTax;
+      benefitsBreakdown.push({
+        benefitId: b.id,
+        name: b.name,
+        units: count,
+        unitLabel: b.unitLabel || 'units',
+        unitPrice,
+        price: allocatedBase,
+        gstRate: rate,
+        gstAmount: lineTax,
+        finalPrice: Math.round((allocatedBase + lineTax) * 100) / 100,
+        isGstExempt: isExempt,
+        hsnSacCode: b.hsnSacCode || (isExempt ? '999312' : '998399'),
+      });
+    });
+  } else {
+    const pkgGstRate = isFree ? 0 : Number(pkg.gstRate ?? 18);
+    packageTax = isFree ? 0 : Math.round((packageBasePrice * pkgGstRate) / 100);
+  }
 
   let addonsTax = 0;
   for (const a of (addons || [])) {
@@ -217,13 +267,14 @@ export function calculateWizardPricing(
     addonsTax += Math.round(((Number(a.totalAmount) || 0) * rate) / 100);
   }
 
-  const totalTaxAmount = packageTax + addonsTax;
-  const cgstAmount = isInterState ? 0 : Math.round(totalTaxAmount / 2);
-  const sgstAmount = isInterState ? 0 : Math.round(totalTaxAmount / 2);
+  const totalTaxAmount = Math.round((packageTax + addonsTax) * 100) / 100;
+  const cgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
+  const sgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
   const igstAmount = isInterState ? totalTaxAmount : 0;
-  const finalTotalAmount = Math.max(0, totalBaseAmount + totalTaxAmount - couponDiscount);
+  const finalTotalAmount = Math.max(0, Math.round((totalBaseAmount + totalTaxAmount - couponDiscount) * 100) / 100);
 
-  const taxLabel = isInterState ? `IGST (${pkgGstRate}%)` : `CGST (${pkgGstRate / 2}%) + SGST (${pkgGstRate / 2}%)`;
+  const dominantRate = pkg.gstRate ?? 18;
+  const taxLabel = isInterState ? `IGST` : `CGST + SGST`;
 
   return {
     months: isDays ? 1 : months,
@@ -241,7 +292,7 @@ export function calculateWizardPricing(
     totalBaseAmount,
     isInterState,
     customerState,
-    gstRate: pkgGstRate,
+    gstRate: dominantRate,
     taxLabel,
     packageTax,
     totalTaxAmount,
@@ -250,5 +301,6 @@ export function calculateWizardPricing(
     igstAmount,
     couponDiscount,
     finalTotalAmount,
+    benefitsBreakdown,
   };
 }

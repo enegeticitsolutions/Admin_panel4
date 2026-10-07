@@ -17,6 +17,7 @@ class InvoiceService {
     subPackage,
     packageVersion,
     durationMonths = 1,
+    packageTotalBasePrice,
     customerState = '',
     discountAmount = 0,
     subscriberId,
@@ -33,42 +34,19 @@ class InvoiceService {
 
     // 1. Resolve tax for each benefit in the package version (live DB records = source of truth)
     if (packageVersion && Array.isArray(packageVersion.versionBenefits) && packageVersion.versionBenefits.length > 0) {
-      let totalNominalCost = 0;
-      const loadedBenefits = [];
-
       for (const vb of packageVersion.versionBenefits) {
         const benefit = vb.benefit || (await tx.benefit.findUnique({ where: { id: vb.benefitId } }));
         const qty = (vb.unitsIncluded || 1) * months;
-        const nominalCost = benefit?.unitCost || benefit?.cost || 100; // Use cost as a relative weight
-        totalNominalCost += (nominalCost * qty);
-        loadedBenefits.push({ vb, benefit, qty, nominalCost });
-      }
-
-      let remainingPackagePrice = packageVersion.basePrice;
-      let itemsProcessed = 0;
-
-      for (const item of loadedBenefits) {
-        itemsProcessed++;
-        const { vb, benefit, qty, nominalCost } = item;
+        const nominalCost = benefit?.unitCost || benefit?.cost || 100; // Relative weight for pro-rata allocation
         const taxMeta = await this.taxResolver.resolveBenefitTax(benefit || vb.benefitId, tx);
-
-        // Proportionately allocate the package's base price
-        let lineTotalPrice = 0;
-        if (itemsProcessed === loadedBenefits.length) {
-          lineTotalPrice = remainingPackagePrice; // Last item gets the exact remainder to prevent rounding leaks
-        } else {
-          lineTotalPrice = Math.round(((nominalCost * qty) / totalNominalCost) * packageVersion.basePrice * 100) / 100;
-          remainingPackagePrice -= lineTotalPrice;
-        }
-
-        const unitPrice = Math.round((lineTotalPrice / qty) * 100) / 100;
         const benefitLabel = vb.snapshotName || benefit?.name || 'Included Benefit';
 
         taxItems.push({
           benefitId: vb.benefitId,
           name: `${packageLabel}${versionLabel} — ${benefitLabel}${durationLabel}`,
           quantity: qty,
-          unitPrice: unitPrice,
+          unitPrice: nominalCost,
+          nominalCost,
           gstRate: taxMeta.gstRate,
           hsnSacCode: taxMeta.hsnSacCode,
           isExempt: taxMeta.isExempt,
@@ -76,26 +54,32 @@ class InvoiceService {
       }
     }
 
+    const targetPackagePrice = packageTotalBasePrice !== undefined
+      ? packageTotalBasePrice
+      : (packageVersion?.basePrice || subPackage?.basePrice || 0) * months;
+
     // Fallback: package has no itemized version benefits — treat entire package as single line
     if (taxItems.length === 0) {
       const pkgTaxMeta = await this.taxResolver.resolvePackageTax(subPackage, tx);
+
       taxItems.push({
         benefitId: null,
         name: `${packageLabel}${versionLabel}${durationLabel}`,
-        quantity: 1,
-        unitPrice: packageVersion?.basePrice || subPackage?.basePrice || 0,
+        quantity: months,
+        unitPrice: Math.round((targetPackagePrice / months) * 100) / 100,
         gstRate: pkgTaxMeta.gstRate,
         hsnSacCode: pkgTaxMeta.hsnSacCode,
         isExempt: pkgTaxMeta.isExempt,
       });
     }
 
-    // 2. Compute GST & proportional discounts (pure math, no DB)
+    // 2. Compute GST, pro-rata package base price allocation, and proportional discounts via @maihoonna/billing
     const calculationResult = InvoiceCalculator.calculate({
       items: taxItems,
       totalDiscount: discountAmount,
       customerState,
       companyState: process.env.COMPANY_STATE || 'Haryana',
+      packageTotalBasePrice: targetPackagePrice,
     });
 
     // 3. Persist Invoice + Line Items atomically in DB

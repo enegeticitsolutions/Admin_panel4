@@ -737,12 +737,8 @@ export const purchaseSubscription = async (
     // the invoice engine will handle it via discount logic or we could just trust the sum of unit prices.
     // To ensure exact matching with packageBasePrice + addons, we can adjust the total discount to enforce finalAmountPaid.
     
-    // Frontend applies discounts post-tax to the gross package price, so we calculate the raw invoice at 0 discount first
-    const invoiceCalc = calculateItemizedInvoice(taxItems, 0, customerState, process.env.COMPANY_STATE || 'Haryana');
-    
-    // Calculate the post-tax package total (gross)
-    const packageItems = invoiceCalc.items.filter(i => !i.description.startsWith('Add-on:'));
-    const packageGrossPrice = packageItems.reduce((acc, curr) => acc + curr.amount + curr.tax, 0);
+    const preTaxDuration = Math.max(0, (subPackage.basePrice * months) - packageBasePrice);
+    const couponDiscount = Math.max(0, discountAmount - preTaxDuration);
     
     let durationDiscountPct = 0;
     if (!(subPackage as any).isFreeTrial) {
@@ -751,16 +747,20 @@ export const purchaseSubscription = async (
       else if (months >= 12) durationDiscountPct = Number(subPackage.discountAnnual ?? 20);
     }
     
-    // Exact match for frontend duration discount
-    const durationDiscount = Math.round((packageGrossPrice * durationDiscountPct) / 100 * 100) / 100;
-    
-    // We already calculated the coupon discount earlier in purchaseSubscription (stored in discountAmount alongside the pre-tax duration discount).
-    // We can extract it here without needing to re-validate the coupon.
-    const preTaxDuration = Math.max(0, (subPackage.basePrice * months) - packageBasePrice);
-    const couponDiscount = Math.max(0, discountAmount - preTaxDuration);
-    
-    // The final total discount recorded in the invoice (combines duration + coupon)
+    const durationDiscount = preTaxDuration > 0
+      ? preTaxDuration
+      : Math.round(((subPackage.basePrice * months) * durationDiscountPct) / 100 * 100) / 100;
     const finalDiscountAmount = durationDiscount + couponDiscount;
+    const totalDiscounts = finalDiscountAmount + (saathiDiscountAmount || 0);
+
+    // Statutory calculation: Discounts deducted pre-tax according to CGST Act Section 15
+    const invoiceCalc = calculateItemizedInvoice(
+      taxItems,
+      totalDiscounts,
+      customerState,
+      process.env.COMPANY_STATE || 'Haryana',
+      packageBasePrice
+    );
 
     const invoice = await tx.invoice.create({
       data: {
@@ -776,7 +776,7 @@ export const purchaseSubscription = async (
         saathiCouponCode: saathiCouponCode ? saathiCouponCode.trim().toUpperCase() : null,
         saathiDiscountAmount: saathiDiscountAmount,
         taxAmount: invoiceCalc.taxAmount,
-        totalAmount: Math.max(0, invoiceCalc.totalAmount - finalDiscountAmount - saathiDiscountAmount),
+        totalAmount: invoiceCalc.totalAmount,
         placeOfSupply: customerState,
         cgstAmount: invoiceCalc.cgstAmount,
         sgstAmount: invoiceCalc.sgstAmount,
@@ -817,12 +817,13 @@ export const purchaseSubscription = async (
           units: vb.unitsIncluded * months,
           unitLabel: vb.snapshotUnitLabel
         })),
-        baseAmount: packageBasePrice,
-        discountAmount: discountAmount,
+        baseAmount: invoiceCalc.baseAmount,
+        discountAmount: finalDiscountAmount,
         couponCode: couponCode || null,
         saathiCouponCode: saathiCouponCode ? saathiCouponCode.trim().toUpperCase() : null,
         saathiDiscountAmount: saathiDiscountAmount,
-        amountPaid: finalAmountPaid,
+        taxAmount: invoiceCalc.taxAmount,
+        amountPaid: invoiceCalc.totalAmount,
         currency: 'INR',
         paymentMethod: paymentDetails?.razorpay_payment_id ? 'Razorpay' : 'UPI',
         paymentStatus: 'success',
@@ -900,7 +901,7 @@ export const purchaseSubscription = async (
       beneficiaryId: beneficiary?.id || null,
       invoiceId: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
-      amountPaid: finalAmountPaid,
+      amountPaid: invoiceCalc.totalAmount,
     };
   });
 
