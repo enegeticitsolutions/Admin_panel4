@@ -11,7 +11,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
-import { enrollmentApi, subscriptionApi, packageApi, staffOnboardingApi, vitalApi, hobbyApi, paymentApi } from '../../services/api';
+import { enrollmentApi, subscriptionApi, packageApi, staffOnboardingApi, vitalApi, hobbyApi, paymentApi, couponApi } from '../../services/api';
 import { PaymentMethodSelector } from '../components/payment/PaymentMethodSelector';
 import { toast } from 'sonner';
 import { AddonBenefitModal } from '../components/addons/AddonBenefitModal';
@@ -21,7 +21,7 @@ import {
   CreditCard, CheckCircle2, Loader2, AlertCircle, Users,
   Info, Calendar, Activity, ShieldAlert, Plus, Trash2, HeartPulse,
   Mail, MapPin, Camera, UserSquare, Stethoscope, Heart, Building, X, Clock,
-  Printer,
+  Printer, Tag, Percent, Sparkles, Gift,
 } from 'lucide-react';
 import { PincodeCheck } from '../components/enrollment/PincodeCheck';
 import { Badge } from '../components/ui/badge';
@@ -56,7 +56,7 @@ const STEPS: { id: Step; label: string; icon: React.ElementType }[] = [
   { id: 'confirm', label: 'Confirm', icon: Check },
 ];
 
-import { DURATION_OPTIONS, calculateWizardPricing } from '../utils/pricing';
+import { DURATION_OPTIONS, calculateWizardPricing, parseDurationDetails } from '../utils/pricing';
 
 const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'NEFT/RTGS', 'Other'];
 
@@ -175,6 +175,14 @@ export default function EnrollmentWizardPage() {
   // ── Add-on Benefits State
   const [selectedAddons, setSelectedAddons] = useState<any[]>([]);
   const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
+
+  // ── Coupons State
+  const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [showCouponsList, setShowCouponsList] = useState(false);
 
   // ── Authoritative Server Pricing
   const [serverPricing, setServerPricing] = useState<any>(null);
@@ -317,10 +325,12 @@ export default function EnrollmentWizardPage() {
       const date = new Date(startStr);
       if (isNaN(date.getTime())) return '';
       
-      const opt = DURATION_OPTIONS.find(d => d.value === dur);
-      const months = opt ? opt.months : 1;
-      
-      date.setMonth(date.getMonth() + months);
+      const durInfo = parseDurationDetails(dur, selectedPackage);
+      if (durInfo.isDays && durInfo.days) {
+        date.setDate(date.getDate() + durInfo.days);
+      } else {
+        date.setMonth(date.getMonth() + durInfo.months);
+      }
       return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
     } catch (e) {
       return '';
@@ -354,7 +364,113 @@ export default function EnrollmentWizardPage() {
         }
       })
       .catch(() => console.error('Failed to load hobbies from backend, using fallback list'));
+
+    // Fetch active coupons
+    couponApi.getAll()
+      .then((res: any) => {
+        const list = Array.isArray(res) ? res : (res?.data || []);
+        const now = new Date();
+        const active = list.filter((c: any) => {
+          if (!c.isActive) return false;
+          if (c.endDate && new Date(c.endDate) < now) return false;
+          return true;
+        });
+        setAvailableCoupons(active);
+      })
+      .catch((e: any) => console.warn('Failed to load coupons from backend:', e));
   }, []);
+
+  // Beneficiary sameAsSubscriber handler & auto-sync
+  const handleSameAsSubscriberToggle = (checked: boolean) => {
+    setSameAsSubscriber(checked);
+    if (checked) {
+      setBeneficiaryName(subscriberName);
+      setBeneficiaryPhone(subscriberPhone);
+      if (subscriberAddress) setBeneficiaryAddress(subscriberAddress);
+      if (subscriberPincode) setBeneficiaryPincode(subscriberPincode);
+      if (subscriberCity) setBeneficiaryCity(subscriberCity);
+      if (subscriberState) setBeneficiaryState(subscriberState);
+      setRelationship('Self');
+    } else {
+      if (relationship === 'Self') setRelationship('');
+    }
+  };
+
+  // Keep beneficiary name and location details synced whenever subscriber details change if sameAsSubscriber is true
+  useEffect(() => {
+    if (sameAsSubscriber) {
+      if (subscriberName) setBeneficiaryName(subscriberName);
+      if (subscriberPhone) setBeneficiaryPhone(subscriberPhone);
+      if (subscriberAddress && !beneficiaryAddress) setBeneficiaryAddress(subscriberAddress);
+      if (subscriberPincode && !beneficiaryPincode) setBeneficiaryPincode(subscriberPincode);
+      if (subscriberCity && !beneficiaryCity) setBeneficiaryCity(subscriberCity);
+      if (subscriberState && !beneficiaryState) setBeneficiaryState(subscriberState);
+      setRelationship('Self');
+    }
+  }, [sameAsSubscriber, subscriberName, subscriberPhone, subscriberAddress, subscriberPincode, subscriberCity, subscriberState]);
+
+  // Apply Coupon handler
+  const handleApplyCoupon = async (codeToApply?: string) => {
+    const rawCode = codeToApply || couponCodeInput;
+    if (!rawCode || !rawCode.trim()) {
+      toast.error('Please enter a coupon code');
+      return;
+    }
+    const code = rawCode.trim().toUpperCase();
+    if (!selectedPackage) {
+      toast.error('Please select a package first in Plan & Timing');
+      return;
+    }
+    setApplyingCoupon(true);
+    setCouponError(null);
+    try {
+      const customerState = sameAsSubscriber ? subscriberState : (beneficiaryState || subscriberState || 'Haryana');
+      const pricingRes = await subscriptionApi.calculatePrice({
+        packageId: selectedPackage.id,
+        duration,
+        addons: selectedAddons.map(a => ({
+          benefitId: a.benefit.id,
+          units: a.units,
+          totalAmount: a.totalAmount,
+        })),
+        customerState: customerState || 'Haryana',
+        couponCode: code,
+      });
+
+      const resData = (pricingRes as any)?.data || pricingRes;
+      if (resData.couponError) {
+        setCouponError(resData.couponError);
+        toast.error(resData.couponError);
+      } else if (resData.couponDiscount > 0) {
+        setAppliedCoupon({
+          code,
+          name: resData.couponDetails?.name || code,
+          type: resData.couponDetails?.type || 'flat',
+          discount: resData.couponDiscount,
+        });
+        setServerPricing(resData);
+        setAmountPaid(String(resData.finalTotalAmount));
+        setCouponCodeInput(code);
+        toast.success(`Coupon "${code}" applied! You save ₹${resData.couponDiscount.toLocaleString('en-IN')}`);
+      } else {
+        setCouponError('Coupon could not be applied or provides 0 discount.');
+        toast.error('Coupon could not be applied.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to apply coupon');
+      setCouponError(err.message || 'Failed to apply coupon');
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
+
+  // Remove Coupon handler
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCodeInput('');
+    setCouponError(null);
+    toast.info('Coupon removed');
+  };
 
   // Authoritative server-side price & tax calculation
   useEffect(() => {
@@ -374,16 +490,30 @@ export default function EnrollmentWizardPage() {
         totalAmount: a.totalAmount,
       })),
       customerState: customerState || 'Haryana',
+      couponCode: appliedCoupon?.code,
     })
       .then(p => {
         if (isMounted) {
-          setServerPricing(p);
-          setAmountPaid(String(p.finalTotalAmount));
+          const resData = (p as any)?.data || p;
+          setServerPricing(resData);
+          setAmountPaid(String(resData.finalTotalAmount));
+          if (resData.couponError && appliedCoupon) {
+            setCouponError(resData.couponError);
+            setAppliedCoupon(null);
+            toast.error(resData.couponError);
+          }
         }
       })
       .catch(err => {
         console.error('Server pricing error:', err);
-        const local = calculateWizardPricing(selectedPackage, duration, selectedAddons, customerState);
+        const local = calculateWizardPricing(
+          selectedPackage,
+          duration,
+          selectedAddons,
+          customerState,
+          'Haryana',
+          appliedCoupon?.discount || 0
+        );
         if (isMounted) {
           setServerPricing(local);
           setAmountPaid(String(local.finalTotalAmount));
@@ -394,7 +524,7 @@ export default function EnrollmentWizardPage() {
       });
 
     return () => { isMounted = false; };
-  }, [selectedPackage, duration, selectedAddons, beneficiaryState, subscriberState, sameAsSubscriber]);
+  }, [selectedPackage, duration, selectedAddons, beneficiaryState, subscriberState, sameAsSubscriber, appliedCoupon]);
 
   // Phone debounce check
   useEffect(() => {
@@ -503,7 +633,8 @@ export default function EnrollmentWizardPage() {
         amountPaid: parseFloat(amountPaid) || 0,
         paymentMethod,
         paymentNote,
-        csaMode: true, // Always CSA mode from admin — subscriber activates via app
+        couponCode: appliedCoupon?.code,
+        csaMode: true, // Always true for Admin enrollment to require subscriber activation
       });
       // Allocate any selected add-ons
       const subId = result?.subscription?.id || (result as any)?.id || (result as any)?.data?.subscription?.id;
@@ -550,10 +681,12 @@ export default function EnrollmentWizardPage() {
   const endDate = (() => {
     if (!startDate) return '';
     const d = new Date(startDate);
-    if (duration === 'three_months') d.setMonth(d.getMonth() + 3);
-    else if (duration === 'six_months') d.setMonth(d.getMonth() + 6);
-    else if (duration === 'annual') d.setFullYear(d.getFullYear() + 1);
-    else d.setMonth(d.getMonth() + 1);
+    const durInfo = parseDurationDetails(duration, selectedPackage);
+    if (durInfo.isDays && durInfo.days) {
+      d.setDate(d.getDate() + durInfo.days);
+    } else {
+      d.setMonth(d.getMonth() + durInfo.months);
+    }
     return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   })();
 
@@ -603,7 +736,7 @@ export default function EnrollmentWizardPage() {
                 </div>
               </div>
               <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                {relationship || 'Self'}
+                {sameAsSubscriber ? 'Self' : (relationship || 'Family')}
               </Badge>
             </div>
             <div className="flex justify-between text-sm">
@@ -644,7 +777,7 @@ export default function EnrollmentWizardPage() {
           <Button onClick={() => navigate('/subscribers')} variant="outline">
             <Users className="w-4 h-4 mr-2" /> View Subscribers
           </Button>
-          <Button onClick={() => { setStep('subscriber'); setEnrolledResult(null); setSubscriberPhone(''); setSubscriberName(''); setPhoneCheck(null); setSelectedPackageId(''); setAmountPaid(''); setBeneficiaryName(''); setBeneficiaryPhone(''); setSameAsSubscriber(false); }} className="bg-primary">
+          <Button onClick={() => { setStep('subscriber'); setEnrolledResult(null); setSubscriberPhone(''); setSubscriberName(''); setPhoneCheck(null); setSelectedPackageId(''); setAmountPaid(''); setBeneficiaryName(''); setBeneficiaryPhone(''); setSameAsSubscriber(false); setAppliedCoupon(null); setCouponCodeInput(''); }} className="bg-primary">
             <UserPlus className="w-4 h-4 mr-2" /> Enroll Another
           </Button>
         </div>
@@ -906,13 +1039,22 @@ export default function EnrollmentWizardPage() {
                   type="checkbox"
                   id="same-as-sub"
                   checked={sameAsSubscriber}
-                  onChange={e => setSameAsSubscriber(e.target.checked)}
+                  onChange={e => handleSameAsSubscriberToggle(e.target.checked)}
                   className="w-4 h-4 accent-primary"
                 />
                 <label htmlFor="same-as-sub" className="text-sm font-semibold text-blue-900 cursor-pointer">
-                  Beneficiary is the same as Subscriber ({subscriberName})
+                  Beneficiary is the same as Subscriber ({subscriberName || 'Self'})
                 </label>
               </div>
+
+              {sameAsSubscriber && (
+                <div className="flex items-center gap-2 p-3 bg-blue-50/70 border border-blue-200 rounded-xl text-xs text-blue-800 mb-2">
+                  <Info className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                  <span>
+                    <strong>Subscriber is also the Beneficiary:</strong> {subscriberName || 'Subscriber'} will be enrolled for self-care and will appear under both <strong>Subscribers</strong> and <strong>Beneficiaries</strong>.
+                  </span>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 flex justify-center mb-2">
@@ -968,7 +1110,21 @@ export default function EnrollmentWizardPage() {
                   </div>
                 </div>
 
-                {!sameAsSubscriber && (
+                {sameAsSubscriber ? (
+                  <div className="space-y-1 col-span-2">
+                    <Label htmlFor="ben-phone-sub">Phone Number</Label>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+                      <Input
+                        id="ben-phone-sub"
+                        className="pl-9 bg-muted text-muted-foreground cursor-not-allowed font-medium"
+                        value={subscriberPhone}
+                        readOnly
+                      />
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">Mirrored from Subscriber</span>
+                  </div>
+                ) : (
                   <div className="space-y-1 col-span-2">
                     <Label htmlFor="ben-phone">Phone Number *</Label>
                     <div className="relative">
@@ -1001,8 +1157,22 @@ export default function EnrollmentWizardPage() {
                 )}
 
                 <div className="space-y-1 col-span-2 sm:col-span-1">
-                  <Label htmlFor="ben-name">Beneficiary Name *</Label>
-                  <Input id="ben-name" value={beneficiaryName} onChange={e => setBeneficiaryName(e.target.value)} placeholder="Full name" />
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="ben-name">Beneficiary Name *</Label>
+                    {sameAsSubscriber && (
+                      <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                        Copied from Subscriber
+                      </Badge>
+                    )}
+                  </div>
+                  <Input 
+                    id="ben-name" 
+                    value={sameAsSubscriber ? (subscriberName || beneficiaryName) : beneficiaryName} 
+                    onChange={e => setBeneficiaryName(e.target.value)} 
+                    placeholder="Full name" 
+                    readOnly={sameAsSubscriber}
+                    className={sameAsSubscriber ? 'bg-muted text-foreground font-medium cursor-not-allowed' : ''}
+                  />
                 </div>
 
                 <div className="space-y-1 col-span-2 sm:col-span-1">
@@ -1633,58 +1803,207 @@ export default function EnrollmentWizardPage() {
                 {packages.filter(p => p.isActive).length === 0 && (
                   <p className="text-muted-foreground text-sm text-center py-8">No active packages found.</p>
                 )}
-                {packages.filter(p => p.isActive).map(pkg => (
-                  <div
-                    key={pkg.id}
-                    onClick={() => setSelectedPackageId(pkg.id)}
-                    className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${selectedPackageId === pkg.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-semibold">{pkg.name}</p>
-                          <Badge 
-                            variant="secondary" 
-                            className={`text-[9px] uppercase px-1.5 h-4 border-none ${
-                              pkg.isGlobal 
-                                ? 'bg-blue-100 text-blue-700 hover:bg-blue-100' 
-                                : pkg.regions && pkg.regions.length > 0
-                                ? 'bg-[#FFE6D5] text-[#FF7A00] hover:bg-[#FFE6D5]'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-100'
-                            }`}
-                          >
-                            {pkg.isGlobal ? 'Global' : pkg.regions && pkg.regions.length > 0 ? 'Region Based' : 'Private'}
-                          </Badge>
+                {packages.filter(p => p.isActive).map(pkg => {
+                  const isTrialPkg = Boolean(pkg.isFreeTrial || pkg.trialDurationDays);
+                  const isFree = Number(pkg.basePrice) === 0;
+                  const trialDays = pkg.trialDurationDays || 7;
+                  return (
+                    <div
+                      key={pkg.id}
+                      onClick={() => {
+                        setSelectedPackageId(pkg.id);
+                        if (isTrialPkg) {
+                          setDuration(`${trialDays}_days`);
+                          if (isFree) {
+                            setAmountPaid('0');
+                          }
+                        } else if (duration.endsWith('_days') && !isTrialPkg) {
+                          setDuration('monthly');
+                        }
+                      }}
+                      className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${selectedPackageId === pkg.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'}`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold">{pkg.name}</p>
+                            {isTrialPkg ? (
+                              isFree ? (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="text-[10px] uppercase font-bold px-2 h-4.5 border-none bg-emerald-100 text-emerald-800"
+                                >
+                                  Free Trial ({trialDays} Days)
+                                </Badge>
+                              ) : (
+                                <Badge 
+                                  variant="secondary" 
+                                  className="text-[10px] uppercase font-bold px-2 h-4.5 border-none bg-purple-100 text-purple-800 border border-purple-200"
+                                >
+                                  Trial ({trialDays} Days)
+                                </Badge>
+                              )
+                            ) : (
+                              <Badge 
+                                variant="secondary" 
+                                className={`text-[9px] uppercase px-1.5 h-4 border-none ${
+                                  pkg.isGlobal 
+                                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-100' 
+                                    : pkg.regions && pkg.regions.length > 0
+                                    ? 'bg-[#FFE6D5] text-[#FF7A00] hover:bg-[#FFE6D5]'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-100'
+                                }`}
+                              >
+                                {pkg.isGlobal ? 'Global' : pkg.regions && pkg.regions.length > 0 ? 'Region Based' : 'Private'}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {isTrialPkg ? (
+                              isFree ? (
+                                <span className="font-semibold text-emerald-700">₹0 (Free Trial)</span>
+                              ) : (
+                                <span className="font-semibold text-slate-800">₹{pkg.basePrice} for {trialDays} days</span>
+                              )
+                            ) : (
+                              `₹${pkg.basePrice} / month`
+                            )}
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">₹{pkg.basePrice} / month</p>
+                        {selectedPackageId === pkg.id && <Check className="w-5 h-5 text-primary" />}
                       </div>
-                      {selectedPackageId === pkg.id && <Check className="w-5 h-5 text-primary" />}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
-              {selectedPackageId && (
+              {selectedPackageId && selectedPackage && (
                 <>
-                  <div className="space-y-2">
-                    <Label>Duration</Label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {DURATION_OPTIONS.map(d => (
-                        <Button
-                          key={d.value}
-                          variant={duration === d.value ? 'default' : 'outline'}
-                          onClick={() => setDuration(d.value)}
-                          className="h-9 text-xs"
-                        >
-                          {d.label}
-                        </Button>
-                      ))}
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="font-semibold text-sm">Package Duration & Plan Type</Label>
+                      <span className="text-[11px] text-muted-foreground font-mono font-medium">
+                        Current: {pricing.durationLabel || duration.replace('_', ' ')}
+                      </span>
                     </div>
+
+                    {/* If selected package is a configured Trial Package (from /subscriptions route) */}
+                    {Boolean(selectedPackage.isFreeTrial || selectedPackage.trialDurationDays) ? (
+                      <div className="bg-purple-50/80 border border-purple-200/90 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">🧪</span>
+                            <div>
+                              <p className="font-semibold text-sm text-purple-950">
+                                {Number(selectedPackage.basePrice) === 0 ? 'Free Trial Package' : 'Trial Package'} Duration ({selectedPackage.trialDurationDays || 7} Days Configured)
+                              </p>
+                              <p className="text-[11px] text-purple-700">
+                                Validity configured on package definition in /subscriptions. Price: {Number(selectedPackage.basePrice) === 0 ? 'Free (₹0)' : `₹${selectedPackage.basePrice} for ${selectedPackage.trialDurationDays || 7} days`}.
+                              </p>
+                            </div>
+                          </div>
+                          <Badge className="bg-purple-600 text-white hover:bg-purple-600 font-bold">
+                            {selectedPackage.trialDurationDays || 7} Days Default
+                          </Badge>
+                        </div>
+
+                        {/* Dynamic Days Input */}
+                        <div className="flex flex-wrap items-center gap-3 pt-1">
+                          <Label htmlFor="custom-trial-days" className="text-xs text-purple-950 font-semibold shrink-0">
+                            Trial Duration (Days):
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="custom-trial-days"
+                              type="number"
+                              min={1}
+                              max={90}
+                              value={duration.match(/^(\d+)_days$/)?.[1] || selectedPackage.trialDurationDays || 7}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!isNaN(val) && val > 0) {
+                                  setDuration(`${val}_days`);
+                                }
+                              }}
+                              className="h-9 w-24 text-center font-mono font-bold text-sm bg-white border-purple-300"
+                            />
+                            <span className="text-xs text-purple-900 font-medium">days</span>
+                          </div>
+
+                          {selectedPackage.trialDurationDays && duration !== `${selectedPackage.trialDurationDays}_days` && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setDuration(`${selectedPackage.trialDurationDays}_days`)}
+                              className="h-8 text-xs border-purple-300 text-purple-800 hover:bg-purple-100"
+                            >
+                              Reset to Package Config ({selectedPackage.trialDurationDays} Days)
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Standard Multi-Month Packages with optional Custom/Trial Day Sale */
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <span className="text-xs font-medium text-slate-600 block">Monthly & Multi-Month Tenures:</span>
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                            {DURATION_OPTIONS.map((d) => (
+                              <Button
+                                key={d.value}
+                                type="button"
+                                variant={duration === d.value ? 'default' : 'outline'}
+                                onClick={() => setDuration(d.value)}
+                                className={`h-9 text-xs font-semibold ${
+                                  duration === d.value ? 'bg-primary text-white shadow-sm' : 'hover:bg-slate-50'
+                                }`}
+                              >
+                                {d.label}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Optional Custom Day / Trial Sale for a standard package */}
+                        <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                              Or Sell as Custom / Short Trial (Prorated Daily):
+                            </span>
+                            <span className="text-[11px] text-muted-foreground block">
+                              Enter custom days (e.g. 2, 3, 10 days) to prorate daily rate
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={1}
+                              max={60}
+                              placeholder="Days"
+                              value={duration.match(/^(\d+)_days$/)?.[1] || ''}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!isNaN(val) && val > 0) {
+                                  setDuration(`${val}_days`);
+                                } else if (e.target.value === '') {
+                                  setDuration('monthly');
+                                }
+                              }}
+                              className="h-8 w-20 text-center font-mono text-xs bg-white"
+                            />
+                            <span className="text-xs text-muted-foreground font-medium">days</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                     <div className="space-y-1">
                       <Label htmlFor="start-date" className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-primary" /> Start Date
+                        <Calendar className="w-3.5 h-3.5 text-primary" /> Estimated Start Date
                       </Label>
                       <Input 
                         id="start-date" 
@@ -1695,12 +2014,25 @@ export default function EnrollmentWizardPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="flex items-center gap-1 text-muted-foreground">
-                        <Clock className="w-3 h-3 text-muted-foreground" /> Suggested End Date
+                      <Label className="flex items-center gap-1 text-slate-700">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" /> Predicted End Date (Post-Activation)
                       </Label>
-                      <div className="h-10 px-3 border border-border bg-slate-50 text-slate-500 rounded-md text-xs flex items-center font-mono">
-                        {getSuggestedEndDate(startDate, duration) || 'N/A'}
+                      <div className="h-10 px-3 border border-amber-200 bg-amber-50/60 text-amber-900 rounded-md text-xs flex items-center font-mono font-bold">
+                        ~ {getSuggestedEndDate(startDate, duration) || 'N/A'}
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-950">
+                    <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-amber-900">Mobile App Activation Notice</p>
+                      <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                        The end date shown above is <strong>predicted</strong> based on estimated enrollment. 
+                        Because actual service commences when the subscriber activates the package on the mobile app, 
+                        the official validity clock (<strong>{pricing.durationLabel || duration.replace('_', ' ')}</strong>) 
+                        begins upon mobile app activation.
+                      </p>
                     </div>
                   </div>
 
@@ -1867,6 +2199,19 @@ export default function EnrollmentWizardPage() {
                               </td>
                             </tr>
                           )}
+                          {(pricing.couponDiscount > 0 || (appliedCoupon && appliedCoupon.discount > 0)) && (
+                            <tr className="text-emerald-700 bg-emerald-50/50">
+                              <td colSpan={4} className="py-1.5 px-3 font-semibold">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Tag className="w-3.5 h-3.5 text-emerald-600" />
+                                  Coupon Discount ({serverPricing?.couponCode || appliedCoupon?.code})
+                                </span>
+                              </td>
+                              <td className="py-1.5 px-3 text-right font-mono font-bold text-emerald-700">
+                                - ₹{(pricing.couponDiscount || appliedCoupon?.discount)?.toLocaleString('en-IN')}
+                              </td>
+                            </tr>
+                          )}
                           <tr className="border-t-2 border-slate-300 bg-emerald-50/80 font-bold text-emerald-950 text-sm">
                             <td colSpan={4} className="py-2.5 px-3">
                               Final Payable Total (Sum after discount)
@@ -1881,6 +2226,173 @@ export default function EnrollmentWizardPage() {
                   )}
                 </div>
               )}
+
+              {/* ── Coupon & Promo Code Section ── */}
+              <div className="bg-gradient-to-r from-orange-50/70 to-amber-50/50 rounded-xl p-4 border border-orange-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-[#FF7A00]">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                        Apply Coupon / Promo Code
+                        {availableCoupons.length > 0 && (
+                          <Badge variant="secondary" className="bg-[#FF7A00]/10 text-[#FF7A00] hover:bg-[#FF7A00]/10 text-[10px] font-bold px-1.5 py-0">
+                            {availableCoupons.length} Available
+                          </Badge>
+                        )}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">Enter promo code or choose from active discounts</p>
+                    </div>
+                  </div>
+                  {availableCoupons.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowCouponsList(!showCouponsList)}
+                      className="text-xs font-semibold text-[#FF7A00] hover:bg-orange-100/50 h-8 gap-1"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      {showCouponsList ? 'Hide Offers' : 'View Offers'}
+                    </Button>
+                  )}
+                </div>
+
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
+                        <Check className="w-4 h-4 stroke-[3]" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold tracking-wide text-xs bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded">
+                            {appliedCoupon.code}
+                          </span>
+                          <span className="text-xs font-bold text-emerald-800">
+                            ₹{(serverPricing?.couponDiscount || appliedCoupon.discount)?.toLocaleString('en-IN')} Saved!
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-emerald-700 mt-0.5">{appliedCoupon.name || 'Coupon Applied Successfully'}</p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemoveCoupon}
+                      className="h-7 text-xs font-bold text-red-600 hover:bg-red-50 hover:text-red-700"
+                    >
+                      <X className="w-3.5 h-3.5 mr-1" /> Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Tag className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+                      <Input
+                        value={couponCodeInput}
+                        onChange={e => {
+                          setCouponCodeInput(e.target.value.toUpperCase());
+                          if (couponError) setCouponError(null);
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleApplyCoupon();
+                          }
+                        }}
+                        placeholder="Enter coupon code (e.g. WELCOME10, MHN-GIFT...)"
+                        className="pl-9 font-mono uppercase tracking-wider text-xs h-10 bg-white"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      disabled={applyingCoupon || !couponCodeInput.trim()}
+                      onClick={() => handleApplyCoupon()}
+                      className="h-10 px-5 font-bold bg-[#FF7A00] hover:bg-[#e66e00] text-white shadow-sm"
+                    >
+                      {applyingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Apply'}
+                    </Button>
+                  </div>
+                )}
+
+                {couponError && (
+                  <p className="text-xs text-red-600 font-medium flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    {couponError}
+                  </p>
+                )}
+
+                {/* Available Coupons drawer / list */}
+                {showCouponsList && availableCoupons.length > 0 && (
+                  <div className="pt-2 border-t border-orange-200/60 space-y-2">
+                    <p className="text-[11px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <Gift className="w-3.5 h-3.5 text-[#FF7A00]" />
+                      Available Offers &amp; Promo Codes
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                      {availableCoupons.map((c: any) => {
+                        const isSelected = appliedCoupon?.code === c.code;
+                        const isExpired = c.endDate && new Date(c.endDate) < new Date();
+                        const discountLabel = c.type === 'percentage'
+                          ? `${c.discountValue}% OFF${c.maxDiscountAmount ? ` up to ₹${c.maxDiscountAmount}` : ''}`
+                          : `₹${c.discountValue} FLAT OFF`;
+
+                        return (
+                          <div
+                            key={c.id || c.code}
+                            className={`p-2.5 rounded-lg border text-left transition-all ${
+                              isSelected
+                                ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-300'
+                                : 'bg-white border-orange-100 hover:border-orange-300 shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-1">
+                              <div>
+                                <span className="font-mono font-bold text-xs bg-orange-100/70 text-[#FF7A00] px-1.5 py-0.5 rounded tracking-wide">
+                                  {c.code}
+                                </span>
+                                <p className="text-xs font-bold text-gray-800 mt-1">{discountLabel}</p>
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={isSelected ? 'outline' : 'default'}
+                                disabled={isExpired || applyingCoupon}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    handleRemoveCoupon();
+                                  } else {
+                                    handleApplyCoupon(c.code);
+                                  }
+                                }}
+                                className={`h-7 text-xs font-bold px-3 ${
+                                  isSelected
+                                    ? 'border-emerald-300 text-emerald-700 hover:bg-red-50 hover:text-red-600'
+                                    : 'bg-[#FF7A00] hover:bg-[#e66e00] text-white'
+                                }`}
+                              >
+                                {isSelected ? 'Applied' : 'Apply'}
+                              </Button>
+                            </div>
+                            {c.description && (
+                              <p className="text-[11px] text-gray-500 mt-1 line-clamp-1">{c.description}</p>
+                            )}
+                            {c.minOrderAmount && (
+                              <p className="text-[10px] text-gray-400 mt-0.5">
+                                Min order: ₹{c.minOrderAmount?.toLocaleString('en-IN')}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <PaymentMethodSelector
                 amount={parseFloat(amountPaid) || pricing.finalTotalAmount || 4999}
@@ -1943,7 +2455,12 @@ export default function EnrollmentWizardPage() {
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">Enrollment Summary</p>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">Subscriber</span><span className="font-medium">{subscriberName} ({subscriberPhone})</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Beneficiary</span><span className="font-medium">{sameAsSubscriber ? subscriberName : beneficiaryName} {!sameAsSubscriber && beneficiaryPhone ? `(${beneficiaryPhone})` : ''}</span></div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Beneficiary</span>
+                  <span className="font-medium">
+                    {sameAsSubscriber ? `${subscriberName} (Self)` : beneficiaryName} {!sameAsSubscriber && beneficiaryPhone ? `(${beneficiaryPhone})` : ''}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Package</span>
                   <div className="flex items-center gap-2">
@@ -1970,7 +2487,22 @@ export default function EnrollmentWizardPage() {
                     <span className="font-medium text-[#FF7A00]">{selectedAddons.map(a => `${a.benefit.name} (${a.units}u)`).join(', ')}</span>
                   </div>
                 )}
-                <div className="flex justify-between"><span className="text-muted-foreground">Duration</span><span className="font-medium capitalize">{duration.replace('_', ' ')} · until {endDate}</span></div>
+                <div className="flex justify-between items-start">
+                  <span className="text-muted-foreground">Validity & End Date</span>
+                  <div className="text-right">
+                    <span className="font-medium capitalize block">{pricing.durationLabel || duration.replace('_', ' ')}</span>
+                    <span className="text-xs text-muted-foreground block">Predicted End: ~{endDate}</span>
+                    <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 mt-0.5 inline-block font-medium">
+                      Validity begins upon mobile app activation
+                    </span>
+                  </div>
+                </div>
+                {(pricing.couponDiscount > 0 || appliedCoupon) && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span className="flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Coupon ({serverPricing?.couponCode || appliedCoupon?.code})</span>
+                    <span className="font-bold">-₹{(pricing.couponDiscount || appliedCoupon?.discount)?.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t pt-2"><span className="text-muted-foreground">Amount</span><span className="font-bold text-green-700">₹{amountPaid} via {paymentMethod}</span></div>
               </div>
             </CardContent>

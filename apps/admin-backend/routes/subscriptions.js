@@ -86,6 +86,105 @@ router.get('/check-phone', async (req, res) => {
   }
 });
 
+/**
+ * Resolves package duration parameters and end-date calculation.
+ * Supports:
+ * - Free trial packages (isFreeTrial: true, trialDurationDays)
+ * - Explicit trial/day packages: '2_days', '3_days', '10_days', durationDays = 2/3/10
+ * - Multi-month durations: 'monthly' (1), 'two_months' / '2_months' (2), 'three_months' (3), 'six_months' (6), 'annual' / '12_months' (12)
+ * - Direct durationMonths / durationDays
+ * - Safe mapping to Postgres SubscriptionDuration enum ('monthly' | 'six_months' | 'annual')
+ */
+function resolveSubscriptionDuration(pkg, durationInput = 'monthly', explicitDays = null, explicitMonths = null, startDate = new Date()) {
+  const isPkgFreeTrial = Boolean(pkg?.isFreeTrial);
+  const durStr = String(durationInput || '').trim().toLowerCase();
+
+  let isDays = false;
+  let days = 0;
+  let months = 1;
+  let durationLabel = 'Monthly (1 Mo)';
+  let dbDurationEnum = 'monthly';
+  let isTrial = isPkgFreeTrial;
+
+  // 1. Check if days are explicitly given or encoded in duration string (e.g. '2_days', '3_days', '10_days', 'trial')
+  const dayMatch = durStr.match(/^(\d+)[ _-]?days?$/i);
+  if (explicitDays && Number(explicitDays) > 0) {
+    isDays = true;
+    days = parseInt(explicitDays, 10);
+  } else if (dayMatch) {
+    isDays = true;
+    days = parseInt(dayMatch[1], 10);
+  } else if (durStr === 'trial' || durStr === 'free_trial' || (isPkgFreeTrial && !durStr.includes('month') && durStr !== 'annual')) {
+    isDays = true;
+    days = Number(pkg?.trialDurationDays) || 7;
+    isTrial = true;
+  }
+
+  if (isDays) {
+    if (days <= 0) days = Number(pkg?.trialDurationDays) || 7;
+    const isFree = Number(pkg?.basePrice) === 0;
+    durationLabel = `${days} Days${isFree ? ' Free Trial' : (isTrial || days <= 14 ? ' Trial' : '')}`;
+    // DB enum only allows 'monthly' | 'six_months' | 'annual', so store 'monthly' for day-based
+    dbDurationEnum = 'monthly';
+  } else {
+    // 2. Month-based mapping
+    const monthMatch = durStr.match(/^(\d+)[ _-]?months?$/i);
+    if (explicitMonths && Number(explicitMonths) > 0) {
+      months = parseInt(explicitMonths, 10);
+    } else if (monthMatch) {
+      months = parseInt(monthMatch[1], 10);
+    } else if (durStr === 'two_months' || durStr === '2_months' || durStr === '2') {
+      months = 2;
+    } else if (durStr === 'three_months' || durStr === '3_months' || durStr === 'quarterly' || durStr === '3') {
+      months = 3;
+    } else if (durStr === 'six_months' || durStr === '6_months' || durStr === 'half_yearly' || durStr === '6') {
+      months = 6;
+    } else if (durStr === 'annual' || durStr === 'yearly' || durStr === 'twelve_months' || durStr === '12_months' || durStr === '12') {
+      months = 12;
+    } else {
+      months = 1;
+    }
+
+    if (months === 6) {
+      dbDurationEnum = 'six_months';
+      durationLabel = '6 Months';
+    } else if (months === 12) {
+      dbDurationEnum = 'annual';
+      durationLabel = 'Annual (12 Mo)';
+    } else if (months === 1) {
+      dbDurationEnum = 'monthly';
+      durationLabel = 'Monthly (1 Mo)';
+    } else if (months === 2) {
+      dbDurationEnum = 'monthly';
+      durationLabel = '2 Months';
+    } else {
+      dbDurationEnum = 'monthly';
+      durationLabel = `${months} Months`;
+    }
+  }
+
+  // 3. Compute precise calendar End Date
+  const start = startDate ? new Date(startDate) : new Date();
+  const end = new Date(start);
+  if (isDays) {
+    end.setDate(end.getDate() + days);
+  } else {
+    end.setMonth(end.getMonth() + months);
+  }
+
+  return {
+    isDays,
+    days: isDays ? days : null,
+    months: isDays ? Math.max(0.1, Math.round((days / 30) * 100) / 100) : months,
+    displayMonths: isDays ? 1 : months,
+    isTrial,
+    durationLabel,
+    dbDurationEnum,
+    startDate: start,
+    endDate: end,
+  };
+}
+
 // ── POST /api/subscriptions/calculate-price ──────────────────────────────────
 // Authoritative benefit-level pricing & GST calculation engine
 // Takes each benefit's exact GST % from the database and computes itemized GST
@@ -96,7 +195,17 @@ router.get('/check-phone', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/calculate-price', async (req, res) => {
   try {
-    const { packageId, duration = 'monthly', addons = [], customerState = 'Haryana' } = req.body;
+    const {
+      packageId,
+      duration = 'monthly',
+      durationDays: inputDurationDays,
+      durationMonths: inputDurationMonths,
+      addons = [],
+      customerState: inputCustomerState,
+      subscriberState,
+      beneficiaryState,
+      couponCode
+    } = req.body;
 
     if (!packageId) {
       return res.status(400).json({ success: false, message: 'packageId is required' });
@@ -111,6 +220,9 @@ router.post('/calculate-price', async (req, res) => {
             benefit: true,
           },
         },
+        packageDiscounts: {
+          where: { isActive: true },
+        },
       },
     });
 
@@ -118,22 +230,39 @@ router.post('/calculate-price', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Package not found' });
     }
 
-    const DURATION_MONTHS_MAP = {
-      monthly: 1,
-      three_months: 3,
-      six_months: 6,
-      annual: 12,
-    };
-    const DURATION_DISCOUNT_PERCENT_MAP = {
-      monthly: 0,
-      three_months: Number(pkg.discountThreeMonths ?? 5),
-      six_months: Number(pkg.discountSixMonths ?? 10),
-      annual: Number(pkg.discountAnnual ?? 20),
-    };
+    // Resolve Customer State for GST determination (Intra-state vs Inter-state)
+    const rawState = inputCustomerState || beneficiaryState || subscriberState || 'Haryana';
+    const customerState = String(rawState).trim() || 'Haryana';
 
-    const months = DURATION_MONTHS_MAP[duration] || 1;
-    const discountPercent = DURATION_DISCOUNT_PERCENT_MAP[duration] || 0;
-    const baseMonthlyRate = Number(pkg.basePrice) || 0;
+    // Resolve Duration & Trial parameters
+    const durationInfo = resolveSubscriptionDuration(
+      pkg,
+      duration,
+      inputDurationDays,
+      inputDurationMonths
+    );
+
+    // Only strictly free if the package base price is ₹0
+    const isFree = Number(pkg.basePrice) === 0;
+    const baseRate = Number(pkg.basePrice) || 0;
+
+    // Multi-month duration discount percentage mapping
+    let discountPercent = 0;
+    if (!isFree && !durationInfo.isDays) {
+      if (durationInfo.months === 3) {
+        discountPercent = Number(pkg.discountThreeMonths ?? 5);
+      } else if (durationInfo.months === 6) {
+        discountPercent = Number(pkg.discountSixMonths ?? 10);
+      } else if (durationInfo.months >= 12) {
+        discountPercent = Number(pkg.discountAnnual ?? 20);
+      } else if (durationInfo.months === 2) {
+        // Check if packageDiscounts has a specific 2-month discount configured
+        const twoMonthDisc = (pkg.packageDiscounts || []).find(
+          pd => pd.billingCycle === 'two_months' || pd.billingCycle === '2_months'
+        );
+        discountPercent = twoMonthDisc ? Number(twoMonthDisc.discountValue || 0) : 0;
+      }
+    }
 
     // 1. Calculate each benefit's base price and GST using its database GST %
     const packageBenefits = pkg.packageBenefits || [];
@@ -162,20 +291,42 @@ router.post('/calculate-price', async (req, res) => {
         // Proportional share of the package monthly base rate
         let benefitMonthlyBase = 0;
         if (catalogTotal > 0) {
-          benefitMonthlyBase = (baseMonthlyRate * lineCatalog) / catalogTotal;
+          benefitMonthlyBase = (baseRate * lineCatalog) / catalogTotal;
         } else {
-          benefitMonthlyBase = baseMonthlyRate / packageBenefits.length;
+          benefitMonthlyBase = baseRate / packageBenefits.length;
         }
 
-        const benefitTermBase = Math.round(benefitMonthlyBase * months * 100) / 100;
-        const gstRate = b.isGstExempt ? 0 : Number(b.gstRate !== null && b.gstRate !== undefined ? b.gstRate : 18);
-        const gstAmount = Math.round((benefitTermBase * gstRate) / 100 * 100) / 100;
+        let benefitTermBase = 0;
+        let count = uCount;
+
+        if (isFree) {
+          benefitTermBase = 0;
+          count = uCount;
+        } else if (durationInfo.isDays) {
+          // If the package is configured with fixed trial days and duration matches, charge exact base rate without dividing by 30
+          if (pkg.trialDurationDays && durationInfo.days === pkg.trialDurationDays) {
+            benefitTermBase = Math.round(benefitMonthlyBase * 100) / 100;
+          } else if (pkg.trialDurationDays) {
+            benefitTermBase = Math.round(((benefitMonthlyBase / pkg.trialDurationDays) * durationInfo.days) * 100) / 100;
+          } else {
+            // Standard monthly package prorated by 30 days
+            const benefitDailyBase = benefitMonthlyBase / 30;
+            benefitTermBase = Math.round(benefitDailyBase * durationInfo.days * 100) / 100;
+          }
+          count = uCount;
+        } else {
+          // Multi-month duration (1, 2, 3, 6, 12 months)
+          benefitTermBase = Math.round(benefitMonthlyBase * durationInfo.months * 100) / 100;
+          count = uCount * durationInfo.months;
+        }
+
+        const gstRate = (isFree || b.isGstExempt) ? 0 : Number(b.gstRate !== null && b.gstRate !== undefined ? b.gstRate : 18);
+        const gstAmount = isFree ? 0 : Math.round((benefitTermBase * gstRate) / 100 * 100) / 100;
         const finalPrice = Math.round((benefitTermBase + gstAmount) * 100) / 100;
 
         totalPackageBase += benefitTermBase;
         totalPackageTax += gstAmount;
 
-        const count = uCount * months;
         const unitType = formatUnitType(b.unitLabel, count);
 
         benefitsBreakdown.push({
@@ -189,14 +340,29 @@ router.post('/calculate-price', async (req, res) => {
           gstRate,
           gstAmount,
           finalPrice,
-          isGstExempt: b.isGstExempt || false,
+          isGstExempt: isFree || b.isGstExempt || false,
           hsnSacCode: b.hsnSacCode || '',
         });
       });
     } else {
-      const gstRate = Number(pkg.gstRate ?? 18);
-      const benefitTermBase = Math.round(baseMonthlyRate * months * 100) / 100;
-      const gstAmount = Math.round((benefitTermBase * gstRate) / 100 * 100) / 100;
+      const gstRate = isFree ? 0 : Number(pkg.gstRate ?? 18);
+      let benefitTermBase = 0;
+
+      if (isFree) {
+        benefitTermBase = 0;
+      } else if (durationInfo.isDays) {
+        if (pkg.trialDurationDays && durationInfo.days === pkg.trialDurationDays) {
+          benefitTermBase = baseRate;
+        } else if (pkg.trialDurationDays) {
+          benefitTermBase = Math.round(((baseRate / pkg.trialDurationDays) * durationInfo.days) * 100) / 100;
+        } else {
+          benefitTermBase = Math.round(((baseRate / 30) * durationInfo.days) * 100) / 100;
+        }
+      } else {
+        benefitTermBase = Math.round(baseRate * durationInfo.months * 100) / 100;
+      }
+
+      const gstAmount = isFree ? 0 : Math.round((benefitTermBase * gstRate) / 100 * 100) / 100;
       const finalPrice = benefitTermBase + gstAmount;
 
       totalPackageBase = benefitTermBase;
@@ -212,7 +378,7 @@ router.post('/calculate-price', async (req, res) => {
         gstRate,
         gstAmount,
         finalPrice,
-        isGstExempt: false,
+        isGstExempt: isFree || false,
         hsnSacCode: '998399',
       });
     }
@@ -273,10 +439,91 @@ router.post('/calculate-price', async (req, res) => {
     addonsTax = Math.round(addonsTax * 100) / 100;
     const addonsFinalTotal = Math.round((addonsBasePrice + addonsTax) * 100) / 100;
 
-    // 3. Overall Totals
+    // 3. Coupon Discount Calculation (if couponCode provided)
+    let couponDiscount = 0;
+    let appliedCouponData = null;
+    let couponError = null;
+
+    if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+      const trimmedCode = couponCode.trim();
+      const now = new Date();
+
+      // Look up standard coupon (case-insensitive)
+      const coupon = await prisma.coupon.findFirst({
+        where: {
+          code: { equals: trimmedCode, mode: 'insensitive' },
+        },
+      });
+
+      if (coupon) {
+        if (!coupon.isActive) {
+          couponError = 'This coupon is currently inactive.';
+        } else if (now < new Date(coupon.startDate) || now > new Date(coupon.endDate)) {
+          couponError = 'This coupon is expired or not yet valid.';
+        } else if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
+          couponError = 'This coupon has reached its maximum usage limit.';
+        } else if (coupon.minOrderAmount !== null && packageGrossPrice < coupon.minOrderAmount) {
+          couponError = `Minimum order amount of ₹${coupon.minOrderAmount} required for this coupon.`;
+        } else if (
+          coupon.allowedPackages &&
+          coupon.allowedPackages.length > 0 &&
+          !coupon.allowedPackages.includes(pkg.id) &&
+          !coupon.allowedPackages.includes(pkg.type)
+        ) {
+          couponError = `This coupon is not applicable to package "${pkg.name}".`;
+        } else {
+          if (coupon.type === 'percentage') {
+            let disc = Math.round(((packageGrossPrice * coupon.discountValue) / 100) * 100) / 100;
+            if (coupon.maxDiscountAmount !== null && disc > coupon.maxDiscountAmount) {
+              disc = coupon.maxDiscountAmount;
+            }
+            couponDiscount = Math.min(disc, packageFinalPayable);
+          } else {
+            couponDiscount = Math.min(coupon.discountValue, packageFinalPayable);
+          }
+
+          appliedCouponData = {
+            id: coupon.id,
+            code: coupon.code,
+            name: coupon.name,
+            type: coupon.type,
+            discountValue: coupon.discountValue,
+            discountAmount: couponDiscount,
+          };
+        }
+      } else {
+        // Look up Saathi volunteer reward gift card (MHN-GIFT-...)
+        const giftCoupon = await prisma.volunteerRewardCoupon.findFirst({
+          where: { code: { equals: trimmedCode, mode: 'insensitive' } },
+        });
+
+        if (giftCoupon) {
+          if (giftCoupon.status === 'CLAIMED') {
+            couponError = 'This MHN gift card has already been claimed and used.';
+          } else if (giftCoupon.status !== 'ACTIVE') {
+            couponError = 'This MHN gift card is no longer active.';
+          } else {
+            couponDiscount = Math.min(giftCoupon.valueRs, packageFinalPayable);
+            appliedCouponData = {
+              id: giftCoupon.id,
+              code: giftCoupon.code,
+              name: 'Saathi Volunteer Reward Gift Card',
+              type: 'flat',
+              discountValue: giftCoupon.valueRs,
+              discountAmount: couponDiscount,
+              isGiftCoupon: true,
+            };
+          }
+        } else {
+          couponError = 'Invalid coupon code.';
+        }
+      }
+    }
+
+    // 4. Overall Totals
     const totalBaseAmount = Math.round((totalPackageBase + addonsBasePrice) * 100) / 100;
     const totalTaxAmount = Math.round((totalPackageTax + addonsTax) * 100) / 100;
-    const finalTotalAmount = Math.round((packageFinalPayable + addonsFinalTotal) * 100) / 100;
+    const finalTotalAmount = Math.max(0, Math.round((packageFinalPayable - couponDiscount + addonsFinalTotal) * 100) / 100);
 
     // POS Split (Haryana vs Inter-state)
     const companyState = 'Haryana';
@@ -291,7 +538,12 @@ router.post('/calculate-price', async (req, res) => {
         packageId: pkg.id,
         packageName: pkg.name,
         duration,
-        months,
+        durationLabel: durationInfo.durationLabel,
+        months: durationInfo.displayMonths,
+        fractionalMonths: durationInfo.months,
+        days: durationInfo.days,
+        isDays: durationInfo.isDays,
+        isTrial: durationInfo.isTrial,
         baseMonthlyRate,
         benefitsBreakdown,
         addonsBreakdown,
@@ -301,6 +553,10 @@ router.post('/calculate-price', async (req, res) => {
         discountPercent,
         packageDiscount,
         packageFinalPayable,
+        couponCode: appliedCouponData?.code || null,
+        couponDiscount,
+        couponDetails: appliedCouponData,
+        couponError,
         addonsBasePrice,
         addonsTax,
         addonsFinalTotal,
@@ -368,11 +624,15 @@ router.post('/admin-enroll', async (req, res) => {
     // Package
     packageId,
     duration = 'monthly',
+    durationDays: inputDurationDays,
+    durationMonths: inputDurationMonths,
     startDate,
+    customerState: inputCustomerState,
     // Payment
     amountPaid,
     paymentMethod = 'Cash',
     paymentNote = '',
+    couponCode = '',
     csaMode = false,
   } = req.body;
 
@@ -398,12 +658,16 @@ router.post('/admin-enroll', async (req, res) => {
         .status(404)
         .json({ success: false, message: 'Package not found' });
 
-    // Compute dates
-    const start = startDate ? new Date(startDate) : new Date();
-    const end = new Date(start);
-    if (duration === 'six_months') end.setMonth(end.getMonth() + 6);
-    else if (duration === 'annual') end.setFullYear(end.getFullYear() + 1);
-    else end.setMonth(end.getMonth() + 1);
+    // Compute duration details and exact calendar dates
+    const durationInfo = resolveSubscriptionDuration(
+      pkg,
+      duration,
+      inputDurationDays,
+      inputDurationMonths,
+      startDate
+    );
+    const start = durationInfo.startDate;
+    const end = durationInfo.endDate;
 
     // Pure OTP-only authentication: unguessable random password placeholder
     const dummyHash = await bcrypt.hash(Math.random().toString(36) + Date.now().toString(), 10);
@@ -652,6 +916,21 @@ router.post('/admin-enroll', async (req, res) => {
             });
           }
         }
+      } else {
+        beneficiary = await tx.beneficiary.update({
+          where: { id: beneficiary.id },
+          data: {
+            name: beneficiaryName || subscriberName || beneficiary.name,
+            relationship: sameAsSubscriber ? 'Self' : (relationship || beneficiary.relationship || 'Family'),
+            isActive: csaMode ? false : true,
+            verificationStatus: csaMode ? 'pending' : 'verified',
+            ...(beneficiaryAddress ? { address: beneficiaryAddress } : {}),
+            ...(beneficiaryPincode ? { pincode: beneficiaryPincode } : {}),
+            ...(beneficiaryCity ? { city: beneficiaryCity } : {}),
+            ...(beneficiaryState ? { state: beneficiaryState } : {}),
+            ...(profilePhoto ? { photo: profilePhoto } : {}),
+          },
+        });
       }
 
       // 4. Deactivate existing active subscriptions for this beneficiary
@@ -678,18 +957,19 @@ router.post('/admin-enroll', async (req, res) => {
       // ──────────────────────────────────────────────────────────────────
       // 5. Create new Subscription
       // ──────────────────────────────────────────────────────────────────
+      const isFree = Number(pkg.basePrice) === 0;
       const sub = await tx.subscription.create({
         data: {
           subscriberId: subscriberUser.id,
           beneficiaryId: beneficiary.id,
           packageType: pkg.type,
           packageVersionId: pVersion.id,
-          duration,
+          duration: durationInfo.dbDurationEnum,
           startDate: start,
           endDate: end,
           visitsTotal: pkg.visitsPerWeek * 4,
           hoursTotal: pkg.hoursPerMonth || 0,
-          // In CSA mode, subscription starts inactive until subscriber activates via mobile app
+          // In CSA mode, subscriptions start inactive regardless of price or self-enrollment. They await subscriber activation.
           isActive: csaMode ? false : true,
         },
       });
@@ -714,21 +994,43 @@ router.post('/admin-enroll', async (req, res) => {
       }
 
       // ──────────────────────────────────────────────────────────────────
-      // 7. Create Invoice & Payment record (offline / admin-enrolled)
-      // In CSA mode, payment is deferred until subscriber activates the plan.
+      // 7. Create Invoice & Payment record (offline / admin-enrolled / trial)
+      // Generated for free trials or whenever payment was collected or !csaMode
       // ──────────────────────────────────────────────────────────────────
       let invoice = null;
       let invoiceNumber = null;
-      if (!csaMode) {
-        const paid = parseFloat(amountPaid) || pkg.basePrice;
-        const discount = pkg.basePrice - paid > 0 ? pkg.basePrice - paid : 0;
-        const customerState = beneficiary.state || 'Haryana';
+      if (isFree || !csaMode || parseFloat(amountPaid) > 0) {
+        const durationMonths = durationInfo.displayMonths;
+        const paid = isFree ? 0 : (parseFloat(amountPaid) || 0);
+        let pkgGrossBase = 0;
+        if (isFree) {
+          pkgGrossBase = 0;
+        } else if (durationInfo.isDays) {
+          if (pkg.trialDurationDays && durationInfo.days === pkg.trialDurationDays) {
+            pkgGrossBase = Number(pkg.basePrice);
+          } else if (pkg.trialDurationDays) {
+            pkgGrossBase = Math.round(((Number(pkg.basePrice) / pkg.trialDurationDays) * durationInfo.days) * 100) / 100;
+          } else {
+            pkgGrossBase = Math.round(((Number(pkg.basePrice) / 30) * durationInfo.days) * 100) / 100;
+          }
+        } else {
+          pkgGrossBase = Number(pkg.basePrice) * durationMonths;
+        }
+        const discount = isFree ? 0 : Math.max(0, pkgGrossBase - paid);
+        const customerState = (
+          inputCustomerState ||
+          beneficiaryState ||
+          subscriberState ||
+          beneficiary.state ||
+          subscriberUser.state ||
+          'Haryana'
+        ).toString().trim();
 
         invoice = await invoiceService.generateSubscriptionInvoice(tx, {
           subscription: sub,
           subPackage: pkg,
           packageVersion: pVersion,
-          durationMonths: 1,
+          durationMonths,
           customerState,
           discountAmount: discount,
           subscriberId: subscriberUser.id,
@@ -747,16 +1049,17 @@ router.post('/admin-enroll', async (req, res) => {
             packageType: pkg.type,
             packageVersionId: pVersion.id,
             snapshotPackageName: pVersion.name,
-            snapshotBasePrice: pVersion.basePrice,
+            snapshotBasePrice: isFree ? 0 : pVersion.basePrice,
             snapshotBenefits: pVersion.versionBenefits.map(vb => ({
               name: vb.snapshotName,
               units: vb.unitsIncluded,
               unitLabel: vb.snapshotUnitLabel
             })),
-            baseAmount: pkg.basePrice,
+            baseAmount: pkgGrossBase,
             amountPaid: paid,
             discountAmount: discount,
-            paymentMethod: paymentMethod,
+            couponCode: couponCode ? String(couponCode).trim().toUpperCase() : null,
+            paymentMethod: isFree ? 'Free Trial' : (paymentMethod || 'Cash'),
             paymentStatus: 'success',
             planStartDate: start,
             planEndDate: end,
@@ -767,6 +1070,38 @@ router.post('/admin-enroll', async (req, res) => {
             failureReason: paymentNote || null,
           },
         });
+
+        // Record coupon usage if coupon was used
+        if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+          const trimmedCode = couponCode.trim();
+          const usedCoupon = await tx.coupon.findFirst({
+            where: { code: { equals: trimmedCode, mode: 'insensitive' } }
+          });
+          if (usedCoupon) {
+            await tx.coupon.update({
+              where: { id: usedCoupon.id },
+              data: { usedCount: { increment: 1 } }
+            });
+            await tx.couponUsage.create({
+              data: {
+                couponId: usedCoupon.id,
+                userId: subscriberUser.id,
+                orderAmount: pkg.basePrice * durationMonths,
+                discountApplied: discount,
+              }
+            });
+          } else {
+            const usedGift = await tx.volunteerRewardCoupon.findFirst({
+              where: { code: { equals: trimmedCode, mode: 'insensitive' } }
+            });
+            if (usedGift && usedGift.status === 'ACTIVE') {
+              await tx.volunteerRewardCoupon.update({
+                where: { id: usedGift.id },
+                data: { status: 'CLAIMED', claimedAt: new Date() }
+              });
+            }
+          }
+        }
       }
 
       await tx.activityLog.create({
@@ -911,6 +1246,8 @@ router.post('/enroll', async (req, res) => {
     beneficiaryId,
     packageId,
     duration = 'monthly',
+    durationDays: inputDurationDays,
+    durationMonths: inputDurationMonths,
     startDate = new Date(),
   } = req.body;
   if (!subscriberId || !beneficiaryId || !packageId) {
@@ -928,11 +1265,15 @@ router.post('/enroll', async (req, res) => {
         .status(404)
         .json({ success: false, message: 'Package not found' });
 
-    const start = new Date(startDate);
-    const end = new Date(start);
-    if (duration === 'six_months') end.setMonth(end.getMonth() + 6);
-    else if (duration === 'annual') end.setFullYear(end.getFullYear() + 1);
-    else end.setMonth(end.getMonth() + 1);
+    const durationInfo = resolveSubscriptionDuration(
+      pkg,
+      duration,
+      inputDurationDays,
+      inputDurationMonths,
+      startDate
+    );
+    const start = durationInfo.startDate;
+    const end = durationInfo.endDate;
 
     const subscription = await prisma.$transaction(async (tx) => {
       await tx.subscription.updateMany({
@@ -960,7 +1301,7 @@ router.post('/enroll', async (req, res) => {
           beneficiaryId,
           packageType: pkg.type,
           packageVersionId: pVersion.id,
-          duration,
+          duration: durationInfo.dbDurationEnum,
           startDate: start,
           endDate: end,
           visitsTotal: pkg.visitsPerWeek * 4,

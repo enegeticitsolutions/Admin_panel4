@@ -940,6 +940,9 @@ export const packageApi = {
   async toggleStatus(id: string, isActive: boolean): Promise<any> {
     return apiJson(`/packages/${id}`, { method: 'PATCH', body: JSON.stringify({ isActive }) });
   },
+  async togglePrivacy(id: string, isPrivate: boolean): Promise<any> {
+    return apiJson(`/packages/${id}/privacy`, { method: 'PATCH', body: JSON.stringify({ isPrivate }) });
+  },
   async delete(id: string): Promise<void> { return apiJson(`/packages/${id}`, { method: 'DELETE' }); },
   async updateBenefits(id: string, benefits: { benefitId: string; unitsIncluded: number; unitsPeriod?: string; isUnlimited?: boolean }[]): Promise<any> {
     return apiJson(`/packages/${id}/benefits`, { method: 'POST', body: JSON.stringify({ benefits }) });
@@ -1163,20 +1166,31 @@ export const subscriptionApi = {
   async calculatePrice(payload: {
     packageId: string;
     duration: string;
+    durationDays?: number;
+    durationMonths?: number;
     addons?: Array<{ benefitId: string; units?: number; totalAmount?: number }>;
     customerState?: string;
+    subscriberState?: string;
+    beneficiaryState?: string;
+    couponCode?: string;
   }): Promise<{
     packageId: string;
     packageName: string;
     duration: string;
+    durationLabel?: string;
     months: number;
+    days?: number | null;
+    isDays?: boolean;
+    isTrial?: boolean;
     baseMonthlyRate: number;
     undiscountedPackageTotal: number;
     packageBasePrice: number;
     packageDiscount: number;
+    discountPercent?: number;
     addonsBasePrice: number;
     addonsTax: number;
     addonsBreakdown: any[];
+    addonsFinalTotal?: number;
     totalBaseAmount: number;
     isInterState: boolean;
     customerState: string;
@@ -1187,7 +1201,10 @@ export const subscriptionApi = {
     cgstAmount: number;
     sgstAmount: number;
     igstAmount: number;
+    couponCode?: string | null;
+    couponDiscount?: number;
     finalTotalAmount: number;
+    benefitsBreakdown?: any[];
   }> {
     return apiJson('/subscriptions/calculate-price', {
       method: 'POST',
@@ -1507,6 +1524,7 @@ export const enrollmentApi = {
     amountPaid: number;
     paymentMethod: string;
     paymentNote?: string;
+    couponCode?: string;
     csaMode?: boolean;
     subscriberPassword?: string;
   }): Promise<{

@@ -12,6 +12,7 @@ import AuthPage from "./pages/AuthPage";
 import AccountPage from "./pages/AccountPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import PlansPage from "./pages/PlansPage";
+import PartnerPage from "./pages/PartnerPage";
 import SiteGatekeeper from "./components/SiteGatekeeper";
 import { fetchSubscriptionPackages, isTokenExpired } from "./services/api";
 
@@ -38,6 +39,9 @@ const ROUTE_ALIASES = {
   "sign-up": "auth",
   login: "auth",
   register: "auth",
+  partner: "partners",
+  "partner-with-us": "partners",
+  "partner-network": "partners",
 };
 
 const LEGAL_PAGES = [
@@ -59,6 +63,7 @@ const VALID_PAGES = [
   "story",
   "team",
   "plans",
+  "partners",
   "auth",
   ...LEGAL_PAGES,
 ];
@@ -299,6 +304,8 @@ const App = () => {
             <AboutPage openForm={openForm} setActivePage={setActivePage} />
           ) : activePage === "team" ? (
             <TeamPage />
+          ) : activePage === "partners" ? (
+            <PartnerPage />
           ) : activePage === "plans" ? (
             <PlansPage
               livePackages={livePackages}

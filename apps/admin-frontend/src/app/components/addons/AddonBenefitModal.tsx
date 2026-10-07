@@ -164,8 +164,19 @@ export const AddonBenefitModal: React.FC<AddonBenefitModalProps> = ({
         : (addon.unitCost || 0) * baseUnits;
     const discountPrice = addon.addonDiscountPrice || 0;
     const finalUnitPrice = discountPrice > 0 && discountPrice < unitPrice ? discountPrice : unitPrice;
-    const totalAmount = finalUnitPrice * multiplier;
-    return { baseUnits, totalUnits, unitPrice, discountPrice, finalUnitPrice, totalAmount };
+    
+    let gstAmount = 0;
+    if (!addon.isGstExempt && addon.gstRate !== 0) {
+      const rate = addon.gstRate ?? 18;
+      gstAmount = finalUnitPrice * (rate / 100);
+    }
+    
+    const priceWithGst = finalUnitPrice + gstAmount;
+    
+    // We can round to 2 decimal places to avoid floating point issues
+    const totalAmount = Number((priceWithGst * multiplier).toFixed(2));
+    
+    return { baseUnits, totalUnits, unitPrice, discountPrice, finalUnitPrice, gstAmount, priceWithGst, totalAmount };
   };
 
   // Aggregate total pricing across all selected benefits
@@ -177,7 +188,7 @@ export const AddonBenefitModal: React.FC<AddonBenefitModalProps> = ({
         totalAmount += getAddonPricing(addon, multiplier).totalAmount;
       }
     });
-    return { totalAmount };
+    return { totalAmount: Number(totalAmount.toFixed(2)) };
   }, [selectedBenefits, allAddons]);
 
   // Keep amountPaid in sync with total amount

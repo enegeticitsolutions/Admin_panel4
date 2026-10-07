@@ -1815,29 +1815,36 @@ export const getSubscriptionPackages = async (regionId?: string) => {
         include: { region: true }
       },
       packageBenefits: {
+        where: {
+          benefit: {
+            isActive: true,
+          },
+        },
         include: {
           benefit: {
             include: {
-              benefitType: true
-            }
-          }
-        }
-      }
+              benefitType: true,
+            },
+          },
+        },
+      },
     },
-    orderBy: { basePrice: 'asc' }
+    orderBy: { basePrice: 'asc' },
   });
 
-  // Map Prisma relations to the format expected by Admin Frontend
+  // Map Prisma relations to the format expected by Website and Frontend
   const mappedPackages = packages.map((pkg: any) => ({
     ...pkg,
     regions: pkg.packageRegions?.map((pr: any) => pr.region) || [],
     regionIds: pkg.packageRegions?.map((pr: any) => pr.regionId) || [],
-    benefits: pkg.packageBenefits?.map((pb: any) => ({
-      ...pb,
-      benefitId: pb.benefitId,
-      monthlyUnits: pb.unitsIncluded,
-      unitsIncluded: pb.unitsIncluded,
-    })) || []
+    benefits: pkg.packageBenefits
+      ?.filter((pb: any) => pb.benefit && pb.benefit.isActive !== false)
+      ?.map((pb: any) => ({
+        ...pb,
+        benefitId: pb.benefitId,
+        monthlyUnits: pb.unitsIncluded,
+        unitsIncluded: pb.unitsIncluded,
+      })) || [],
   }));
 
   return mappedPackages;

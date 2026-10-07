@@ -14,11 +14,12 @@ import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { packageApi, benefitApi, regionApi } from '../../services/api';
 import type { SubscriptionPackage, Benefit, PackageBenefit } from '../../types';
-import { Plus, Check, ArrowRight, ArrowLeft, Package, Edit, Trash2, Calendar, Clock, ShieldCheck, Sparkles } from 'lucide-react';
+import { Plus, Check, ArrowRight, ArrowLeft, Package, Edit, Trash2, Calendar, Clock, ShieldCheck, Sparkles, Lock, Globe, Search, Filter, X, RotateCcw } from 'lucide-react';
 import { PackageCardPreview } from '../components/packages/PackageCardPreview';
 import { toast } from 'sonner';
 import { StatusChip } from '../components/common/StatusChip';
 import { RegionSelector } from '../components/common/RegionSelector';
+import { SearchFilterBar, FilterEmptyState } from '../components/common/SearchFilterBar';
 
 export interface BenefitSetting {
   quantity: number;
@@ -132,6 +133,90 @@ export default function SubscriptionsPage() {
       setIsGlobal(false);
     }
   }, [selectedRegionIds]);
+
+  // Packages Tab Filters (Defaulting to 'active' packages as requested)
+  const [packageSearch, setPackageSearch] = useState('');
+  const [packageStatusFilter, setPackageStatusFilter] = useState<'active' | 'inactive' | 'all'>('active');
+  const [packageScopeFilter, setPackageScopeFilter] = useState<'all' | 'global' | 'regional' | 'private'>('all');
+
+  // Benefits Catalog Tab Filters
+  const [benefitSearch, setBenefitSearch] = useState('');
+  const [benefitTypeFilter, setBenefitTypeFilter] = useState('all');
+  const [benefitChargeableFilter, setBenefitChargeableFilter] = useState<'all' | 'chargeable' | 'included'>('all');
+
+  // Memoized Filtered Packages
+  const filteredPackages = React.useMemo(() => {
+    return packages.filter((pkg: any) => {
+      // 1. Status Filter
+      if (packageStatusFilter === 'active' && !pkg.isActive) return false;
+      if (packageStatusFilter === 'inactive' && pkg.isActive) return false;
+
+      // 2. Scope Filter (global, regional, private)
+      const isPrivate = !pkg.isGlobal && (!pkg.regions || pkg.regions.length === 0);
+      const isRegional = !pkg.isGlobal && pkg.regions && pkg.regions.length > 0;
+      const isGlobal = !!pkg.isGlobal;
+
+      if (packageScopeFilter === 'global' && !isGlobal) return false;
+      if (packageScopeFilter === 'regional' && !isRegional) return false;
+      if (packageScopeFilter === 'private' && !isPrivate) return false;
+
+      // 3. Search Query
+      if (packageSearch.trim()) {
+        const q = packageSearch.toLowerCase().trim();
+        const matchName = (pkg.name || '').toLowerCase().includes(q);
+        const matchDesc = (pkg.description || '').toLowerCase().includes(q);
+        const matchRegions = (pkg.regions || []).some((r: any) => (r.name || '').toLowerCase().includes(q));
+        const matchBenefits = (pkg.benefits || []).some((b: any) => 
+          (b.benefit?.name || b.name || '').toLowerCase().includes(q)
+        );
+        if (!matchName && !matchDesc && !matchRegions && !matchBenefits) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [packages, packageStatusFilter, packageScopeFilter, packageSearch]);
+
+  // Unique benefit categories/types for the filter dropdown
+  const uniqueBenefitTypes = React.useMemo(() => {
+    const set = new Set<string>();
+    benefits.forEach((b: any) => {
+      const typeName = b.benefitType?.name || b.type;
+      if (typeName) set.add(typeName);
+    });
+    return Array.from(set).sort();
+  }, [benefits]);
+
+  // Memoized Filtered Benefits Catalog
+  const filteredBenefits = React.useMemo(() => {
+    return benefits.filter((b: any) => {
+      // 1. Category / Type filter
+      if (benefitTypeFilter !== 'all') {
+        const typeName = b.benefitType?.name || b.type;
+        if (typeName !== benefitTypeFilter) return false;
+      }
+
+      // 2. Chargeable filter
+      if (benefitChargeableFilter === 'chargeable' && b.isChargeable === false) return false;
+      if (benefitChargeableFilter === 'included' && b.isChargeable !== false) return false;
+
+      // 3. Search query
+      if (benefitSearch.trim()) {
+        const q = benefitSearch.toLowerCase().trim();
+        const matchName = (b.name || '').toLowerCase().includes(q);
+        const matchDesc = (b.description || '').toLowerCase().includes(q);
+        const matchCode = (b.code || '').toLowerCase().includes(q);
+        const matchType = (b.benefitType?.name || b.type || '').toLowerCase().includes(q);
+        const matchUnit = (b.unitLabel || '').toLowerCase().includes(q);
+        if (!matchName && !matchDesc && !matchCode && !matchType && !matchUnit) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [benefits, benefitSearch, benefitTypeFilter, benefitChargeableFilter]);
 
   useEffect(() => {
     loadData();
@@ -416,13 +501,35 @@ export default function SubscriptionsPage() {
   const handleToggleStatus = async (pkg: any) => {
     const newStatus = !pkg.isActive;
     const action = newStatus ? 'Active' : 'Inactive';
-    if (!window.confirm(`Do you want to set this package to ${action}?`)) return;
+    const alertMessage = newStatus
+      ? `Activate Package?\n\nAre you sure you want to change "${pkg.name}" to ACTIVE?\nThis package will become active and available again.`
+      : `Deactivate Package?\n\nAre you sure you want to change "${pkg.name}" to INACTIVE?\nThis package will be marked as inactive and hidden from active selections.`;
+
+    if (!window.confirm(alertMessage)) return;
+
     try {
       await packageApi.toggleStatus(pkg.id, newStatus);
-      toast.success(`Package set to ${action}`);
+      toast.success(`Package "${pkg.name}" status changed to ${action}!`);
       await loadData();
-    } catch (error) {
-      toast.error(`Failed to set package to ${action}`);
+    } catch (error: any) {
+      toast.error(error?.message || `Failed to set package to ${action}`);
+    }
+  };
+
+  const handleTogglePrivacy = async (pkg: any) => {
+    const isCurrentlyPrivate = !pkg.isGlobal && (!pkg.regions || pkg.regions.length === 0);
+    const newIsPrivate = !isCurrentlyPrivate;
+    const confirmMsg = newIsPrivate
+      ? `Set "${pkg.name}" as Private?\n\nThis will remove it from the public website by default. It can still be assigned to users by admins.`
+      : `Make "${pkg.name}" Global?\n\nThis will make it visible to all users on the public website.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await packageApi.togglePrivacy(pkg.id, newIsPrivate);
+      toast.success(newIsPrivate ? 'Package set to Private (hidden from website)' : 'Package set to Global (public on website)');
+      await loadData();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update package privacy');
     }
   };
 
@@ -984,17 +1091,100 @@ export default function SubscriptionsPage() {
                   </div>
 
                   <div className="flex flex-col gap-3 mb-6">
-                    <RegionSelector
-                      isGlobal={isGlobal}
-                      setIsGlobal={setIsGlobal}
-                      selectedRegionIds={selectedRegionIds}
-                      setSelectedRegionIds={setSelectedRegionIds}
-                      regions={regions}
-                      globalLabel="Make this package Global"
-                      globalDescription="When checked, this package will be visible to all app users across all regions. When unchecked, it will be restricted to targeted regions."
-                      title="Target Regions"
-                      description="Search and select specific regions this package is limited to (applicable only if non-global)."
-                    />
+                    <div className="space-y-3 p-4 bg-orange-50/60 border border-orange-200 rounded-xl">
+                      <Label className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-orange-600" />
+                        Package Visibility & Scope
+                      </Label>
+                      <p className="text-xs text-gray-600">
+                        Choose whether this package appears publicly on the website or stays private for admin-only enrollment.
+                      </p>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => { setIsGlobal(true); setSelectedRegionIds([]); }}
+                          className={`p-3 rounded-lg border text-left transition-all ${
+                            isGlobal
+                              ? 'bg-blue-50/90 border-blue-500 shadow-sm ring-1 ring-blue-500'
+                              : 'bg-white border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold text-xs text-blue-900 mb-1">
+                            <Globe className="w-3.5 h-3.5 text-blue-600" />
+                            Global
+                          </div>
+                          <p className="text-[11px] text-gray-600 leading-tight">
+                            Visible to all visitors across all regions on website & app.
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => { setIsGlobal(false); }}
+                          className={`p-3 rounded-lg border text-left transition-all ${
+                            !isGlobal && selectedRegionIds.length > 0
+                              ? 'bg-purple-50/90 border-purple-500 shadow-sm ring-1 ring-purple-500'
+                              : 'bg-white border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold text-xs text-purple-900 mb-1">
+                            <Package className="w-3.5 h-3.5 text-purple-600" />
+                            Regional
+                          </div>
+                          <p className="text-[11px] text-gray-600 leading-tight">
+                            Visible only to users in specific targeted regions.
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => { setIsGlobal(false); setSelectedRegionIds([]); }}
+                          className={`p-3 rounded-lg border text-left transition-all ${
+                            !isGlobal && selectedRegionIds.length === 0
+                              ? 'bg-amber-50/90 border-amber-500 shadow-sm ring-1 ring-amber-500'
+                              : 'bg-white border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 font-bold text-xs text-amber-900 mb-1">
+                            <Lock className="w-3.5 h-3.5 text-amber-600" />
+                            Private
+                          </div>
+                          <p className="text-[11px] text-gray-600 leading-tight">
+                            Hidden from website. Offline/admin manual assignment only.
+                          </p>
+                        </button>
+                      </div>
+
+                      {!isGlobal && selectedRegionIds.length === 0 && (
+                        <div className="p-3 bg-amber-100/70 border border-amber-300 rounded-lg text-amber-950 text-xs flex items-start gap-2.5">
+                          <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-semibold block mb-0.5">Private Package Configured:</span>
+                            This package is set to <strong>Private</strong>. It will NOT appear on the public website (maihoonna.in/plans) by default. It can be enrolled manually by administrators.
+                          </div>
+                        </div>
+                      )}
+
+                      {!isGlobal && (
+                        <div className="pt-2">
+                          <RegionSelector
+                            isGlobal={false}
+                            setIsGlobal={(val) => {
+                              if (val) {
+                                setIsGlobal(true);
+                                setSelectedRegionIds([]);
+                              }
+                            }}
+                            selectedRegionIds={selectedRegionIds}
+                            setSelectedRegionIds={setSelectedRegionIds}
+                            regions={regions}
+                            title="Target Regions (Select 1 or more for Regional, or leave empty for Private)"
+                            description="Select the specific regions where this plan is offered."
+                          />
+                        </div>
+                      )}
+                    </div>
 
                     <div className="flex items-center space-x-3 p-4 bg-orange-50 border border-orange-200 rounded-lg">
                       <Checkbox
@@ -1391,11 +1581,105 @@ export default function SubscriptionsPage() {
           </TabsList>
 
           <TabsContent value="packages" className="space-y-4">
+          {/* Reusable Search and Filters Toolbar for Packages */}
+          <SearchFilterBar
+            searchValue={packageSearch}
+            onSearchChange={setPackageSearch}
+            searchPlaceholder="Search packages by name, description, region, or included benefit..."
+            filteredCount={filteredPackages.length}
+            totalCount={packages.length}
+            entityName="packages"
+            showReset={Boolean(packageSearch || packageStatusFilter !== 'active' || packageScopeFilter !== 'all')}
+            onReset={() => {
+              setPackageSearch('');
+              setPackageStatusFilter('active');
+              setPackageScopeFilter('all');
+            }}
+            filters={[
+              {
+                id: 'status',
+                value: packageStatusFilter,
+                onChange: (val: any) => setPackageStatusFilter(val),
+                placeholder: 'Status',
+                widthClass: 'w-44',
+                options: [
+                  { value: 'active', label: '🟢 Active Only (Default)' },
+                  { value: 'inactive', label: '🔴 Inactive Only' },
+                  { value: 'all', label: '⚪ All Statuses' },
+                ],
+              },
+              {
+                id: 'scope',
+                value: packageScopeFilter,
+                onChange: (val: any) => setPackageScopeFilter(val),
+                placeholder: 'Scope',
+                widthClass: 'w-38',
+                options: [
+                  { value: 'all', label: 'All Scopes' },
+                  { value: 'global', label: '🌐 Global' },
+                  { value: 'regional', label: '📍 Regional' },
+                  { value: 'private', label: '🔒 Private' },
+                ],
+              },
+            ]}
+            activeBadges={[
+              ...(packageStatusFilter !== 'all' ? [{
+                id: 'status-badge',
+                label: 'Status',
+                value: packageStatusFilter === 'active' ? 'Active' : 'Inactive',
+                color: (packageStatusFilter === 'active' ? 'emerald' : 'rose') as any,
+                onRemove: () => setPackageStatusFilter('all'),
+              }] : []),
+              ...(packageScopeFilter !== 'all' ? [{
+                id: 'scope-badge',
+                label: 'Scope',
+                value: packageScopeFilter.charAt(0).toUpperCase() + packageScopeFilter.slice(1),
+                color: 'blue' as any,
+                onRemove: () => setPackageScopeFilter('all'),
+              }] : []),
+            ]}
+          />
+
+          {/* Packages Grid or Empty State */}
+          {filteredPackages.length === 0 ? (
+            <FilterEmptyState
+              title="No packages found"
+              description={
+                packageStatusFilter === 'active' && packages.some((p: any) => !p.isActive)
+                  ? 'No active packages match your search or filter. You have inactive packages available in the "Inactive Only" or "All Statuses" filter.'
+                  : 'No packages match the current search query or filter selection.'
+              }
+              icon={Package}
+              resetLabel="View All Packages"
+              onReset={() => {
+                setPackageSearch('');
+                setPackageStatusFilter('all');
+                setPackageScopeFilter('all');
+              }}
+            />
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {packages.map((pkg: any) => (
+              {filteredPackages.map((pkg: any) => (
                 <Card key={pkg.id} className="relative overflow-hidden flex flex-col justify-between">
                   <div className="absolute top-0 right-0 p-4">
-                    <StatusChip status={pkg.isActive ? 'active' : 'inactive'} />
+                    <button
+                      type="button"
+                      onClick={() => handleToggleStatus(pkg)}
+                      className="cursor-pointer transition-all hover:scale-105 active:scale-95 focus:outline-none"
+                      title={pkg.isActive ? "Package is Active. Click to deactivate" : "Package is Inactive. Click to activate"}
+                    >
+                      {pkg.isActive ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#DFF4E6] text-[#1F8A3E] border border-emerald-300 hover:bg-emerald-100 transition-colors shadow-xs">
+                          <span className="w-2 h-2 rounded-full bg-[#1F8A3E]"></span>
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300 hover:bg-rose-100 hover:border-rose-400 transition-all shadow-xs">
+                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                          Inactive (Click to Activate)
+                        </span>
+                      )}
+                    </button>
                   </div>
                   <CardHeader>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -1405,8 +1689,12 @@ export default function SubscriptionsPage() {
                       )}
                       {pkg.isGlobal ? (
                         <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 font-medium">Global</span>
-                      ) : (
+                      ) : pkg.regions && pkg.regions.length > 0 ? (
                         <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-200 font-medium">Regional</span>
+                      ) : (
+                        <span className="text-[10px] bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-300 font-semibold flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5 text-amber-600" /> Private
+                        </span>
                       )}
                       {pkg.isPopular && (
                         <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold border border-orange-200">★ Popular</span>
@@ -1464,12 +1752,36 @@ export default function SubscriptionsPage() {
                       <p className="text-xs text-muted-foreground">
                         {pkg.benefits.length} benefits included
                       </p>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
+                        {(!pkg.isGlobal && (!pkg.regions || pkg.regions.length === 0)) ? (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="h-8 px-2.5 text-xs font-semibold text-emerald-700 border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-1"
+                            onClick={() => handleTogglePrivacy(pkg)}
+                            title="Make Global (Public on Website)"
+                          >
+                            <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                            Make Public
+                          </Button>
+                        ) : (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="h-8 px-2.5 text-xs font-semibold text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800 flex items-center gap-1"
+                            onClick={() => handleTogglePrivacy(pkg)}
+                            title="Set as Private (Hide from Website)"
+                          >
+                            <Lock className="w-3.5 h-3.5 text-amber-600" />
+                            Set Private
+                          </Button>
+                        )}
                         <Button 
                           variant="ghost" 
                           size="icon" 
                           className="h-8 w-8 text-primary"
                           onClick={() => handleEdit(pkg)}
+                          title="Edit Package"
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -1478,6 +1790,7 @@ export default function SubscriptionsPage() {
                           size="icon" 
                           className="h-8 w-8 text-destructive"
                           onClick={() => handleDelete(pkg.id)}
+                          title="Delete Package"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -1487,28 +1800,95 @@ export default function SubscriptionsPage() {
                 </Card>
               ))}
             </div>
+          )}
           </TabsContent>
 
           <TabsContent value="benefits" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {benefits.map((benefit) => (
-                <Card key={benefit.id}>
-                  <CardHeader>
-                    <CardTitle className="text-base">{benefit.name}</CardTitle>
-                    <CardDescription className="text-xs">{benefit.type}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-3">{benefit.description}</p>
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">Default:</span>
-                      <span className="ml-2 font-medium">
-                        {benefit.defaultUnits} {benefit.unitLabel}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search benefits..."
+                  value={benefitSearch}
+                  onChange={(e) => setBenefitSearch(e.target.value)}
+                  className="pl-9 bg-card"
+                />
+        </div>
+              <Select value={benefitTypeFilter} onValueChange={setBenefitTypeFilter}>
+                <SelectTrigger className="w-[180px] bg-card">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {uniqueBenefitTypes.map(type => (
+                    <SelectItem key={type} value={type}>{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={benefitChargeableFilter} onValueChange={(val: any) => setBenefitChargeableFilter(val)}>
+                <SelectTrigger className="w-[180px] bg-card">
+                  <SelectValue placeholder="Pricing" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Pricing</SelectItem>
+                  <SelectItem value="chargeable">Chargeable</SelectItem>
+                  <SelectItem value="included">Free / Included</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Benefits Grid or Empty State */}
+            {filteredBenefits.length === 0 ? (
+              <FilterEmptyState
+                title="No benefits found"
+                description="No benefits match the search term or selected category filter."
+                icon={ShieldCheck}
+                resetLabel="View All Benefits"
+                onReset={() => {
+                  setBenefitSearch('');
+                  setBenefitTypeFilter('all');
+                  setBenefitChargeableFilter('all');
+                }}
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredBenefits.map((benefit) => (
+                  <Card key={benefit.id}>
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-base">{benefit.name}</CardTitle>
+                        {benefit.code && (
+                          <span className="text-[10px] font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                            {benefit.code}
+                          </span>
+                        )}
+                      </div>
+                      <CardDescription className="text-xs">{benefit.type}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground mb-3">{benefit.description}</p>
+                      <div className="text-sm flex items-center justify-between">
+                        <div>
+                          <span className="text-muted-foreground">Default:</span>
+                          <span className="ml-2 font-medium">
+                            {benefit.defaultUnits} {benefit.unitLabel}
+                          </span>
+                        </div>
+                        {benefit.isChargeable === false ? (
+                          <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">
+                            Free / Included
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200">
+                            ₹{benefit.unitCost || 0} / {benefit.unitLabel || 'unit'}
+                          </span>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       )}

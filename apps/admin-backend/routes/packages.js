@@ -28,6 +28,11 @@ router.get('/', async (req, res) => {
         },
         packageBenefits: {
           orderBy: { displayOrder: 'asc' },
+          where: {
+            benefit: {
+              isActive: true,
+            },
+          },
           include: {
             benefit: {
               include: {
@@ -46,10 +51,12 @@ router.get('/', async (req, res) => {
       totalCost: pkg.basePrice,
       regionIds: (pkg.packageRegions || []).map(pr => pr.regionId),
       regions: (pkg.packageRegions || []).map(pr => pr.region),
-      benefits: (pkg.packageBenefits || []).map((pb) => ({
-        ...pb,
-        monthlyUnits: pb.unitsIncluded,
-      })),
+      benefits: (pkg.packageBenefits || [])
+        .filter(pb => pb.benefit && pb.benefit.isActive !== false)
+        .map((pb) => ({
+          ...pb,
+          monthlyUnits: pb.unitsIncluded,
+        })),
     }));
 
     res.json({ success: true, data: mappedPackages });
@@ -70,6 +77,11 @@ router.get('/:id', async (req, res) => {
         },
         packageBenefits: {
           orderBy: { displayOrder: 'asc' },
+          where: {
+            benefit: {
+              isActive: true,
+            },
+          },
           include: {
             benefit: { include: { benefitType: { select: { name: true } } } },
           },
@@ -88,10 +100,12 @@ router.get('/:id', async (req, res) => {
       totalCost: pkg.basePrice,
       regionIds: (pkg.packageRegions || []).map(pr => pr.regionId),
       regions: (pkg.packageRegions || []).map(pr => pr.region),
-      benefits: (pkg.packageBenefits || []).map((pb) => ({
-        ...pb,
-        monthlyUnits: pb.unitsIncluded,
-      })),
+      benefits: (pkg.packageBenefits || [])
+        .filter(pb => pb.benefit && pb.benefit.isActive !== false)
+        .map((pb) => ({
+          ...pb,
+          monthlyUnits: pb.unitsIncluded,
+        })),
     };
 
     res.json({ success: true, data: mappedPackage });
@@ -664,6 +678,117 @@ router.post('/:id/benefits', async (req, res) => {
     res.json({ success: true, data: pkg });
   } catch (err) {
     console.error('POST packages/:id/benefits error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PATCH /api/packages/:id — update partial fields (status, privacy, etc.)
+router.patch('/:id', async (req, res) => {
+  const { id } = req.params;
+  const { isActive, isPrivate, isGlobal, clearRegions } = req.body;
+  try {
+    const data = {};
+    if (isActive !== undefined) data.isActive = isActive;
+    if (isPrivate !== undefined) {
+      data.isGlobal = !isPrivate;
+    } else if (isGlobal !== undefined) {
+      data.isGlobal = isGlobal;
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      // If marked private or explicit clearRegions requested, clear regions so package is hidden from web
+      if (isPrivate === true || clearRegions === true || (isGlobal === false && req.body.regionIds?.length === 0)) {
+        await tx.subscriptionPackageRegion.deleteMany({ where: { packageId: id } });
+      }
+
+      return tx.subscriptionPackage.update({
+        where: { id },
+        data,
+        include: {
+          packageRegions: { include: { region: true } },
+          packageBenefits: {
+            where: { benefit: { isActive: true } },
+            include: { benefit: true }
+          },
+        }
+      });
+    });
+
+    res.json({
+      success: true,
+      message: isPrivate !== undefined 
+        ? (isPrivate ? 'Package set to Private (hidden from website)' : 'Package set to Global (visible on website)')
+        : 'Package updated successfully',
+      data: updated
+    });
+  } catch (err) {
+    console.error('PATCH package error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PATCH /api/packages/:id/status — direct toggle for isActive
+router.patch('/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { isActive } = req.body;
+  try {
+    const updated = await prisma.subscriptionPackage.update({
+      where: { id },
+      data: { isActive: Boolean(isActive) },
+    });
+    res.json({
+      success: true,
+      message: `Package ${isActive ? 'activated' : 'deactivated'} successfully`,
+      data: updated,
+    });
+  } catch (err) {
+    console.error('PATCH package status error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PATCH /api/packages/:id/privacy — dedicated quick toggle for privacy
+router.patch('/:id/privacy', async (req, res) => {
+  const { id } = req.params;
+  const { isPrivate } = req.body;
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      if (isPrivate) {
+        await tx.subscriptionPackageRegion.deleteMany({ where: { packageId: id } });
+        return tx.subscriptionPackage.update({
+          where: { id },
+          data: { isGlobal: false },
+          include: {
+            packageRegions: { include: { region: true } },
+            packageBenefits: {
+              where: { benefit: { isActive: true } },
+              include: { benefit: true }
+            },
+          }
+        });
+      } else {
+        await tx.subscriptionPackageRegion.deleteMany({ where: { packageId: id } });
+        return tx.subscriptionPackage.update({
+          where: { id },
+          data: { isGlobal: true },
+          include: {
+            packageRegions: { include: { region: true } },
+            packageBenefits: {
+              where: { benefit: { isActive: true } },
+              include: { benefit: true }
+            },
+          }
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      message: isPrivate ? 'Package set to Private (hidden from website)' : 'Package set to Global (visible on website)',
+      data: updated
+    });
+  } catch (err) {
+    console.error('PATCH package privacy error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });
