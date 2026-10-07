@@ -23,32 +23,6 @@ const paymentLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// ─── GST rate used everywhere in checkout (server-side source of truth) ───────
-const GST_RATE = 0.18; // 18% fallback
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper to resolve multi-month package price
-// ─────────────────────────────────────────────────────────────────────────────
-function getMultiMonthPackagePrice(pkg: any, monthlyBase: number, months: number): number {
-  if (months === 3) {
-    if (pkg.priceThreeMonths) return Number(pkg.priceThreeMonths);
-    const disc = Number(pkg.discountThreeMonths ?? 5);
-    return Math.round(monthlyBase * 3 * (1 - disc / 100));
-  }
-  if (months === 6) {
-    if (pkg.priceSixMonths) return Number(pkg.priceSixMonths);
-    const disc = Number(pkg.discountSixMonths ?? 10);
-    return Math.round(monthlyBase * 6 * (1 - disc / 100));
-  }
-  if (months >= 12) {
-    if (pkg.priceTwelveMonths) return Number(pkg.priceTwelveMonths);
-    const disc = Number(pkg.discountAnnual ?? 20);
-    return Math.round(monthlyBase * 12 * (1 - disc / 100));
-  }
-  // Default: 1 month = monthly base
-  return monthlyBase;
-}
-
 function formatUnitType(unitLabel: string | null | undefined, units: number = 1): string {
   if (!unitLabel) return units === 1 ? 'Unit' : 'Units';
   const clean = String(unitLabel).replace(/^per\s+/i, '').trim().toLowerCase();
@@ -157,6 +131,7 @@ async function calculatePricing(
         unitLabel: b.unitLabel || 'units',
         unitType,
         unitDisplay: `Units: ${count} ${unitType}`,
+        unitPrice: count > 0 ? Math.round((benefitTermBase / count) * 100) / 100 : 0,
         price: benefitTermBase,
         gstRate,
         gstAmount,
@@ -180,6 +155,7 @@ async function calculatePricing(
       unitLabel: 'package',
       unitType: 'Package',
       unitDisplay: 'Units: 1 Package',
+      unitPrice: benefitTermBase,
       price: benefitTermBase,
       gstRate,
       gstAmount,
@@ -1176,7 +1152,7 @@ router.post('/addon/preview', authenticate, async (req: AuthRequest, res: Respon
         originalPrice: p.originalPrice,
         basePrice: p.basePrice,
         hasDiscount: p.hasDiscount,
-        gstRate: GST_RATE,
+        gstRate: p.taxRate,
         tax: p.tax,
         total: p.total,
       }

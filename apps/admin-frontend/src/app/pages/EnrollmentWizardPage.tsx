@@ -2131,7 +2131,7 @@ export default function EnrollmentWizardPage() {
                                 <span className="font-semibold text-slate-900">{b.name}</span>
                                 {b.units > 0 && (
                                   <span className="text-[11px] text-muted-foreground ml-1.5 font-normal">
-                                    ({b.unitDisplay || `Units: ${b.units} ${b.unitType || b.unitLabel}`})
+                                    ({b.unitDisplay || `Units: ${b.units} ${b.unitType || b.unitLabel}`}{b.unitPrice !== undefined ? ` · ₹${b.unitPrice.toLocaleString('en-IN')}/unit` : ''})
                                   </span>
                                 )}
                               </td>
