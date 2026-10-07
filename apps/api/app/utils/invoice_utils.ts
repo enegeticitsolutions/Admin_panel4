@@ -98,10 +98,11 @@ export interface TaxCalculationResult {
 export function calculateItemizedInvoice(
   items: BenefitTaxItem[],
   totalDiscount: number = 0,
-  customerState: string = 'Haryana',
-  companyState: string = 'Haryana'
+  customerState: string = '',
+  companyState: string = process.env.COMPANY_STATE || 'Haryana'
 ): TaxCalculationResult {
   const isInterState =
+    Boolean(customerState) &&
     customerState.trim().toLowerCase() !== companyState.trim().toLowerCase();
 
   const rawBaseAmount = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);

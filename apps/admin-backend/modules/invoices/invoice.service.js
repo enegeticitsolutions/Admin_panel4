@@ -17,7 +17,7 @@ class InvoiceService {
     subPackage,
     packageVersion,
     durationMonths = 1,
-    customerState = 'Haryana',
+    customerState = '',
     discountAmount = 0,
     subscriberId,
     beneficiaryId = null,
@@ -80,7 +80,7 @@ class InvoiceService {
       items: taxItems,
       totalDiscount: discountAmount,
       customerState,
-      companyState: 'Haryana',
+      companyState: process.env.COMPANY_STATE || 'Haryana',
     });
 
     // 3. Persist Invoice + Line Items atomically in DB
@@ -103,18 +103,34 @@ class InvoiceService {
     benefit,
     units = 1,
     unitPrice,
-    customerState = 'Haryana',
+    items: inputItems,
+    customerState = '',
     discountAmount = 0,
     subscriberId,
     beneficiaryId = null,
     status = 'PAID',
   }) {
-    const taxMeta = await this.taxResolver.resolveBenefitTax(benefit, tx);
-    const qty = Math.max(1, parseInt(units, 10) || 1);
-    const price = unitPrice !== undefined ? unitPrice : (benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0);
+    let taxItems = [];
 
-    const taxItems = [
-      {
+    if (Array.isArray(inputItems) && inputItems.length > 0) {
+      for (const item of inputItems) {
+        const itemBenefit = item.benefit || (item.benefitId ? await tx.benefit.findUnique({ where: { id: item.benefitId } }) : null);
+        const taxMeta = itemBenefit ? await this.taxResolver.resolveBenefitTax(itemBenefit, tx) : { gstRate: 18, hsnSacCode: '998311', isExempt: false };
+        taxItems.push({
+          benefitId: itemBenefit?.id || item.benefitId || null,
+          name: `Add-on: ${item.name || itemBenefit?.name || 'Care Service'}`,
+          quantity: Math.max(1, parseInt(item.units, 10) || 1),
+          unitPrice: item.unitPrice !== undefined ? Number(item.unitPrice) : (itemBenefit?.addonDiscountPrice ?? itemBenefit?.addonPrice ?? 0),
+          gstRate: taxMeta.gstRate,
+          hsnSacCode: taxMeta.hsnSacCode,
+          isExempt: taxMeta.isExempt,
+        });
+      }
+    } else if (benefit) {
+      const taxMeta = await this.taxResolver.resolveBenefitTax(benefit, tx);
+      const qty = Math.max(1, parseInt(units, 10) || 1);
+      const price = unitPrice !== undefined ? unitPrice : (benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0);
+      taxItems.push({
         benefitId: benefit.id,
         name: `Add-on: ${benefit.name}`,
         quantity: qty,
@@ -122,14 +138,14 @@ class InvoiceService {
         gstRate: taxMeta.gstRate,
         hsnSacCode: taxMeta.hsnSacCode,
         isExempt: taxMeta.isExempt,
-      },
-    ];
+      });
+    }
 
     const calculationResult = InvoiceCalculator.calculate({
       items: taxItems,
       totalDiscount: discountAmount,
       customerState,
-      companyState: 'Haryana',
+      companyState: process.env.COMPANY_STATE || 'Haryana',
     });
 
     return await this.engine.createInvoiceRecord(tx, {
@@ -150,7 +166,7 @@ class InvoiceService {
     pkg,
     packageVersion,
     durationMonths = 1,
-    customerState = 'Haryana',
+    customerState = '',
     discountAmount = 0,
     subscriberId,
     beneficiaryId = null,
@@ -182,6 +198,98 @@ class InvoiceService {
         });
       }
 
+      // 1. If payment is for an add-on benefit:
+      const rawNotes = payment.gatewayResponse?.notes || payment.gatewayResponse?.payload?.payment?.entity?.notes || {};
+      const isAddonPayment =
+        payment.packageType === 'addon' ||
+        rawNotes.packageType === 'addon' ||
+        (payment.failureReason && String(payment.failureReason).startsWith('Add-on')) ||
+        (rawNotes.packageName && String(rawNotes.packageName).startsWith('Add-on'));
+
+      if (isAddonPayment) {
+        let sub = payment.subscriptionId ? await tx.subscription.findUnique({
+          where: { id: payment.subscriptionId },
+          include: { beneficiary: true, subscriber: true },
+        }) : null;
+
+        const customerState = sub?.beneficiary?.state || sub?.subscriber?.state || payment.beneficiary?.state || payment.subscriber?.state || '';
+
+        // Check if multi-item addonItems exists
+        let addonItems = null;
+        if (rawNotes.addonItems) {
+          try {
+            addonItems = typeof rawNotes.addonItems === 'string' ? JSON.parse(rawNotes.addonItems) : rawNotes.addonItems;
+          } catch (_) {}
+        }
+
+        if (Array.isArray(addonItems) && addonItems.length > 0) {
+          const invoice = await this.generateAddonInvoice(tx, {
+            subscriptionId: sub?.id || payment.subscriptionId || null,
+            items: addonItems,
+            customerState,
+            discountAmount: payment.discountAmount || 0,
+            subscriberId: payment.subscriberId,
+            beneficiaryId: payment.beneficiaryId || sub?.beneficiaryId || null,
+            status: payment.paymentStatus === 'success' ? 'PAID' : 'ISSUED',
+          });
+
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber },
+          });
+
+          return invoice;
+        }
+
+        // Single add-on fallback
+        let benefit = null;
+        if (rawNotes.benefitId) {
+          benefit = await tx.benefit.findUnique({ where: { id: rawNotes.benefitId } });
+        }
+        if (!benefit) {
+          const targetName = rawNotes.packageName || payment.snapshotPackageName || payment.failureReason || '';
+          const cleanedName = targetName.replace(/^Add-on(s)?:\s*/i, '').trim();
+          if (cleanedName) {
+            benefit = await tx.benefit.findFirst({
+              where: { name: { contains: cleanedName, mode: 'insensitive' } }
+            });
+          }
+        }
+
+        if (benefit) {
+          let units = parseInt(rawNotes.units, 10);
+          const totalPaid = Number(payment.amountPaid || payment.baseAmount || 0);
+          if (!units || isNaN(units) || units <= 0) {
+            const unitPrice = benefit.addonDiscountPrice || benefit.addonPrice || 0;
+            if (unitPrice > 0 && totalPaid > 0) {
+              units = Math.max(1, Math.round(totalPaid / unitPrice));
+            } else {
+              units = benefit.addonIncludedUnits || 1;
+            }
+          }
+          const unitPrice = units > 0 ? (totalPaid / units) : totalPaid;
+
+          const invoice = await this.generateAddonInvoice(tx, {
+            subscriptionId: sub?.id || payment.subscriptionId || null,
+            benefit,
+            units,
+            unitPrice,
+            customerState,
+            discountAmount: payment.discountAmount || 0,
+            subscriberId: payment.subscriberId,
+            beneficiaryId: payment.beneficiaryId || sub?.beneficiaryId || null,
+            status: payment.paymentStatus === 'success' ? 'PAID' : 'ISSUED',
+          });
+
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber },
+          });
+
+          return invoice;
+        }
+      }
+
       // If subscription exists, create subscription invoice
       if (payment.subscriptionId) {
         let sub = await tx.subscription.findUnique({
@@ -190,6 +298,7 @@ class InvoiceService {
             package: true,
             packageVersion: { include: { versionBenefits: true } },
             beneficiary: true,
+            subscriber: true,
           },
         });
 
@@ -198,7 +307,7 @@ class InvoiceService {
           if (!pkg && sub.packageType) {
             pkg = await tx.subscriptionPackage.findUnique({ where: { type: sub.packageType } }).catch(() => null);
           }
-          const customerState = sub.beneficiary?.state || 'Haryana';
+          const customerState = sub.beneficiary?.state || sub.subscriber?.state || payment.beneficiary?.state || payment.subscriber?.state || '';
           const invoice = await this.generateSubscriptionInvoice(tx, {
             subscription: sub,
             subPackage: pkg,
@@ -224,7 +333,7 @@ class InvoiceService {
       if (payment.packageType) {
         const pkg = await tx.subscriptionPackage.findUnique({ where: { type: payment.packageType } }).catch(() => null);
         const subscriber = await tx.user.findUnique({ where: { id: payment.subscriberId } }).catch(() => null);
-        const customerState = subscriber?.state || 'Haryana';
+        const customerState = subscriber?.state || payment.beneficiary?.state || '';
         const basePrice = payment.baseAmount || payment.amountPaid || pkg?.basePrice || 0;
         const discountAmount = payment.discountAmount || 0;
 
@@ -247,7 +356,7 @@ class InvoiceService {
           items,
           totalDiscount: discountAmount,
           customerState,
-          companyState: 'Haryana',
+          companyState: process.env.COMPANY_STATE || 'Haryana',
         });
 
         const invoice = await this.engine.generateAndPersist(tx, {

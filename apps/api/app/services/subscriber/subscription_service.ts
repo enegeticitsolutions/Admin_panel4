@@ -689,7 +689,11 @@ export const purchaseSubscription = async (
     // 3. Generate Invoice for this purchase
     const invoiceNumber = await generateInvoiceNumber(tx);
     
-    const customerState = beneficiaryData?.state || 'Haryana';
+    const subscriber = await tx.user.findUnique({
+      where: { id: userId },
+      select: { state: true },
+    });
+    const customerState = beneficiaryData?.state || subscriber?.state || '';
     
     // Prepare items for tax engine
     // Use the un-discounted total base price for the package so that the duration discount
@@ -734,7 +738,7 @@ export const purchaseSubscription = async (
     // To ensure exact matching with packageBasePrice + addons, we can adjust the total discount to enforce finalAmountPaid.
     
     // Frontend applies discounts post-tax to the gross package price, so we calculate the raw invoice at 0 discount first
-    const invoiceCalc = calculateItemizedInvoice(taxItems, 0, customerState, 'Haryana');
+    const invoiceCalc = calculateItemizedInvoice(taxItems, 0, customerState, process.env.COMPANY_STATE || 'Haryana');
     
     // Calculate the post-tax package total (gross)
     const packageItems = invoiceCalc.items.filter(i => !i.description.startsWith('Add-on:'));
