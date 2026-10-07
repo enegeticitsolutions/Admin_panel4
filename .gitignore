@@ -82,3 +82,4 @@ node_modules/
 Thumbs.db
 .idea/
 .vscode/
+.agents/mcp_config.json

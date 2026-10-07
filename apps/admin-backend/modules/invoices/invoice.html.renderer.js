@@ -76,8 +76,8 @@ function render(invoice, company = {}) {
   const subscriberName    = esc(invoice.subscriber?.name    || 'Valued Customer');
   const subscriberPhone   = esc(invoice.subscriber?.phone   || '');
   const subscriberEmail   = esc(invoice.subscriber?.email   || '');
-  const subscriberAddress = esc(invoice.subscriber?.address || invoice.placeOfSupply || 'Haryana');
-  const placeOfSupply     = esc(invoice.placeOfSupply       || 'Haryana');
+  const subscriberAddress = esc(invoice.subscriber?.address || invoice.beneficiary?.address || invoice.placeOfSupply || '');
+  const placeOfSupply     = esc(invoice.placeOfSupply       || invoice.beneficiary?.state   || invoice.subscriber?.state  || '');
   const issuedDate        = esc(invoice.issuedAt
     ? new Date(invoice.issuedAt).toLocaleDateString('en-IN')
     : new Date().toLocaleDateString('en-IN'));
@@ -94,9 +94,11 @@ function render(invoice, company = {}) {
       : item.tax     !== undefined ? item.tax
       : price * qty * (taxRate / 100)
     );
-    const lineAmount = Number(
-      item.amount !== undefined ? item.amount : (price * qty) + taxAmount
-    );
+    // Line item Amount column = gross per-line (unitPrice × qty + tax on that line).
+    // This matches InvoiceGenerator.ts: `(item.unitPrice * item.quantity) + (item.tax || 0)`.
+    // Do NOT use item.amount directly — that field stores the post-discount taxable value,
+    // which produces a lower number that confuses readers.
+    const lineGross = (price * qty) + taxAmount;
 
     return `
     <tr>
@@ -107,7 +109,7 @@ function render(invoice, company = {}) {
       <td>₹${price.toFixed(2)}</td>
       <td>${taxRate}%</td>
       <td>₹${taxAmount.toFixed(2)}</td>
-      <td>₹${lineAmount.toFixed(2)}</td>
+      <td>₹${lineGross.toFixed(2)}</td>
     </tr>`;
   }).join('');
 
@@ -121,7 +123,12 @@ function render(invoice, company = {}) {
   const saathiDiscountAmount = Number(invoice.saathiDiscountAmount || 0);
   const totalAmount         = Number(invoice.totalAmount         || (baseAmount + totalTax - discountAmount - saathiDiscountAmount));
 
-  const totalBeforeDiscount = baseAmount + cgstAmount + sgstAmount + (igstAmount || totalTax);
+  // "Total Amount" row = gross base (before discount) + full tax on that gross base.
+  // We store tax computed on the discounted amount. To show the pre-discount gross total:
+  //   gross total = baseAmount + cgst + sgst + igst
+  // This matches InvoiceGenerator.ts in the mobile app exactly.
+  // NOTE: Do NOT use `(igstAmount || totalTax)` — that double-counts tax on intra-state invoices.
+  const totalBeforeDiscount = baseAmount + cgstAmount + sgstAmount + igstAmount;
   const amountInWords       = numberToWords(Math.round(totalAmount));
 
   // ── Discount rows (matches InvoiceGenerator.ts exactly) ────────────────────

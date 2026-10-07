@@ -594,19 +594,34 @@ export const AddonBenefitModal: React.FC<AddonBenefitModalProps> = ({
                   onGenerateLink={async (channels) => {
                     setGeneratingLink(true);
                     try {
-                      const firstId = [...selectedBenefits.keys()][0];
-                      const firstName = allAddons.find((b) => b.id === firstId)?.name || 'Add-on';
+                      const addonItems = [...selectedBenefits.entries()].map(([benefitId, multiplier]) => {
+                        const addon = allAddons.find((b) => b.id === benefitId);
+                        const pricing = addon ? getAddonPricing(addon, multiplier) : null;
+                        const units = pricing?.totalUnits || (multiplier * (addon?.addonIncludedUnits || 1));
+                        return {
+                          benefitId,
+                          name: addon?.name || 'Add-on Benefit',
+                          units,
+                          amount: pricing?.totalAmount || 0,
+                          unitPrice: pricing?.unitPrice || (addon?.addonPrice || 0),
+                        };
+                      });
+
+                      const firstItem = addonItems[0];
                       const res = await paymentApi.generateLink({
                         subscriberId: subscriberId || '',
                         beneficiaryId: beneficiaryId || '',
                         subscriptionId: subscriptionId || '',
                         packageType: 'addon',
-                        packageName: `Add-on${selectedCount > 1 ? 's' : ''}: ${firstName}${selectedCount > 1 ? ` +${selectedCount - 1} more` : ''}`,
+                        packageName: `Add-on: ${addonItems.map((i) => i.name).join(', ')}`,
                         amount: parseFloat(amountPaid) || totalPricing.totalAmount,
                         subscriberPhone,
                         subscriberEmail,
                         subscriberName,
                         duration: 'one_time',
+                        benefitId: firstItem?.benefitId,
+                        units: firstItem?.units,
+                        addonItems: JSON.stringify(addonItems),
                       });
                       const data = res?.data || res;
                       if (data && (data.shortUrl || data.orderId)) {

@@ -238,19 +238,23 @@ router.get('/:id/utilization-summary', async (req, res) => {
   try {
     const { id: subscriberId } = req.params;
 
-    // Get all active beneficiaries for this subscriber
+    // Get all beneficiaries for this subscriber (including CSA-enrolled pending activation)
     const beneficiaries = await prisma.beneficiary.findMany({
-      where: { subscriberId, isActive: true },
+      where: { subscriberId },
       select: {
         id: true,
         name: true,
         age: true,
         gender: true,
         photo: true,
+        isActive: true,
+        verificationStatus: true,
         primaryCC: { select: { id: true, name: true, ccType: true } },
         subscriptions: {
-          where: { isActive: true },
-          orderBy: { createdAt: 'desc' },
+          orderBy: [
+            { isActive: 'desc' },
+            { createdAt: 'desc' },
+          ],
           take: 1,
           include: {
             package: { select: { id: true, name: true, type: true } },
