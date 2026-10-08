@@ -247,18 +247,74 @@ export interface ActivityLog {
 // PARTNER & VOLUNTEER TYPES
 // ============================================================================
 
-export interface Partner {
+export interface PartnerCategory {
   id: string;
   name: string;
-  type: 'pharmacy' | 'laboratory' | 'hospital' | 'other';
-  phone: string;
-  email: string;
-  address: string;
-  contactPerson: string;
-  servicesOffered: string[];
+  slug: string;
+  code?: string | null;
+  description?: string | null;
+  iconUrl?: string | null;
+  bannerUrl?: string | null;
+  displayOrder: number;
   isActive: boolean;
-  onboardedDate: string;
+  metadata?: any;
+  _count?: {
+    partners: number;
+  };
+  createdAt: string;
+  updatedAt: string;
 }
+
+export interface PartnerDocument {
+  id?: string;
+  name: string;
+  url: string;
+  documentType?: string;
+  fileSizeBytes?: number;
+  uploadedAt?: string;
+}
+
+export interface Partner {
+  id: string;
+  organizationName: string;
+  primaryContactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  city?: string | null;
+  state?: string | null;
+  description: string;
+  categoryId: string;
+  category?: PartnerCategory;
+  attachmentUrl?: string | null;
+  documents?: PartnerDocument[];
+  status: PartnerStatus;
+  adminNotes?: string | null;
+  assignedToAdmin?: string | null;
+  isPublished: boolean;
+  isFeatured: boolean;
+  displayOrder: number;
+  logoUrl?: string | null;
+  bannerImageUrl?: string | null;
+  websiteUrl?: string | null;
+  customBadgeText?: string | null;
+  serviceHighlights: string[];
+  photos?: string[];
+  source: 'DIRECT' | 'ZOHO_CRM' | 'ADMIN_DIRECT' | 'WEBSITE' | string;
+  zohoLeadId?: string | null;
+  zohoDataPayload?: any;
+  zohoSyncedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+
+  // Legacy field aliases for compatibility
+  name?: string;
+  contactPerson?: string;
+  type?: string;
+  address?: string;
+  isActive?: boolean;
+  onboardedDate?: string;
+}
+
 
 export interface Volunteer {
   id: string;
