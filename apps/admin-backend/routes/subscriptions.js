@@ -316,7 +316,10 @@ router.post('/calculate-price', async (req, res) => {
           count = uCount;
         } else {
           // Multi-month duration (1, 2, 3, 6, 12 months)
-          benefitTermBase = Math.round(benefitMonthlyBase * durationInfo.months * 100) / 100;
+          const undiscountedMonthlyBase = Math.round(benefitMonthlyBase * durationInfo.months * 100) / 100;
+          benefitTermBase = discountPercent > 0
+            ? Math.round(undiscountedMonthlyBase * (1 - discountPercent / 100) * 100) / 100
+            : undiscountedMonthlyBase;
           count = uCount * durationInfo.months;
         }
 
@@ -360,7 +363,10 @@ router.post('/calculate-price', async (req, res) => {
           benefitTermBase = Math.round(((baseRate / 30) * durationInfo.days) * 100) / 100;
         }
       } else {
-        benefitTermBase = Math.round(baseRate * durationInfo.months * 100) / 100;
+        const undiscountedTermBase = Math.round(baseRate * durationInfo.months * 100) / 100;
+        benefitTermBase = discountPercent > 0
+          ? Math.round(undiscountedTermBase * (1 - discountPercent / 100) * 100) / 100
+          : undiscountedTermBase;
       }
 
       const gstAmount = isFree ? 0 : Math.round((benefitTermBase * gstRate) / 100 * 100) / 100;
@@ -388,9 +394,9 @@ router.post('/calculate-price', async (req, res) => {
     totalPackageTax = Math.round(totalPackageTax * 100) / 100;
     const packageGrossPrice = Math.round((totalPackageBase + totalPackageTax) * 100) / 100;
 
-    // Multi-month duration discount applied on package gross price
-    const packageDiscount = Math.round((packageGrossPrice * discountPercent) / 100 * 100) / 100;
-    const packageFinalPayable = Math.round((packageGrossPrice - packageDiscount) * 100) / 100;
+    const rawPackageTotal = Math.round(baseRate * (durationInfo.isDays ? 1 : durationInfo.months) * 100) / 100;
+    const packageDiscount = discountPercent > 0 ? Math.round((rawPackageTotal * discountPercent / 100) * 100) / 100 : 0;
+    const packageFinalPayable = packageGrossPrice;
 
     // 2. Add-ons breakdown with their own database-configured GST rates
     let addonsBasePrice = 0;
@@ -407,13 +413,26 @@ router.post('/calculate-price', async (req, res) => {
         });
         if (benefit) {
           const q = Math.max(1, Number(item.units) || 1);
-          const unitPrice = benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0;
-          const lineTotal = Number(item.totalAmount) || (unitPrice * q);
           const rate = benefit.isGstExempt ? 0 : Number(benefit.gstRate !== null && benefit.gstRate !== undefined ? benefit.gstRate : 18);
-          const lineTax = Math.round((lineTotal * rate) / 100 * 100) / 100;
-          const finalPrice = Math.round((lineTotal + lineTax) * 100) / 100;
+          
+          // item.totalAmount from frontend is POST-TAX
+          const postTaxAmount = Number(item.totalAmount) || 0;
+          let baseAmount = 0;
+          let lineTax = 0;
+          let finalPrice = postTaxAmount;
+          
+          if (postTaxAmount > 0) {
+             baseAmount = Math.round((postTaxAmount / (1 + rate / 100)) * 100) / 100;
+             lineTax = Math.round((postTaxAmount - baseAmount) * 100) / 100;
+          } else {
+             // Fallback to calculate normally if totalAmount wasn't provided correctly
+             const unitPrice = benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0;
+             baseAmount = unitPrice * q;
+             lineTax = Math.round((baseAmount * rate) / 100 * 100) / 100;
+             finalPrice = Math.round((baseAmount + lineTax) * 100) / 100;
+          }
 
-          addonsBasePrice += lineTotal;
+          addonsBasePrice += baseAmount;
           addonsTax += lineTax;
 
           const unitType = formatUnitType(benefit.unitLabel, q);
@@ -425,10 +444,10 @@ router.post('/calculate-price', async (req, res) => {
             unitLabel: benefit.unitLabel || 'units',
             unitType,
             unitDisplay: `Units: ${q} ${unitType}`,
-            price: lineTotal,
+            price: baseAmount,
             gstRate: rate,
             gstAmount: lineTax,
-            finalPrice,
+            finalPrice: finalPrice,
             isGstExempt: benefit.isGstExempt || false,
             hsnSacCode: benefit.hsnSacCode || '',
           });
@@ -545,7 +564,7 @@ router.post('/calculate-price', async (req, res) => {
         days: durationInfo.days,
         isDays: durationInfo.isDays,
         isTrial: durationInfo.isTrial,
-        baseMonthlyRate,
+        baseMonthlyRate: baseRate,
         benefitsBreakdown,
         addonsBreakdown,
         totalPackageBase,
@@ -635,6 +654,7 @@ router.post('/admin-enroll', async (req, res) => {
     paymentNote = '',
     couponCode = '',
     csaMode = false,
+    addons = [],
   } = req.body;
 
   if (!subscriberPhone || typeof subscriberPhone !== 'string' || !subscriberName || typeof subscriberName !== 'string' || !packageId) {
@@ -1041,7 +1061,13 @@ router.post('/admin-enroll', async (req, res) => {
             pkgGrossBase = Math.round(((Number(pkg.basePrice) / 30) * durationInfo.days) * 100) / 100;
           }
         } else {
-          pkgGrossBase = Number(pkg.basePrice) * durationMonths;
+          const rawBase = Number(pkg.basePrice) * durationMonths;
+          const durDiscountPercent = durationMonths === 3 ? Number(pkg.discountThreeMonths ?? 5)
+            : durationMonths === 6 ? Number(pkg.discountSixMonths ?? 10)
+            : durationMonths >= 12 ? Number(pkg.discountAnnual ?? 20)
+            : 0;
+          const durDiscount = durDiscountPercent > 0 ? Math.round((rawBase * durDiscountPercent / 100) * 100) / 100 : 0;
+          pkgGrossBase = Math.round((rawBase - durDiscount) * 100) / 100;
         }
         const discount = isFree ? 0 : Math.max(0, pkgGrossBase - paid);
         const customerState = (
@@ -1053,6 +1079,45 @@ router.post('/admin-enroll', async (req, res) => {
           ''
         ).toString().trim();
 
+        // Resolve any add-on benefits selected during enrollment
+        const resolvedAddons = [];
+        if (Array.isArray(addons) && addons.length > 0) {
+          for (const item of addons) {
+            const bId = item.benefitId || item.benefit?.id;
+            if (!bId) continue;
+            const benefit = await prisma.benefit.findUnique({
+              where: { id: bId },
+              select: { id: true, name: true, unitLabel: true, addonPrice: true, addonDiscountPrice: true, gstRate: true, isGstExempt: true, hsnSacCode: true }
+            });
+            if (benefit) {
+              const q = Math.max(1, Number(item.units) || 1);
+              const rate = benefit.isGstExempt ? 0 : Number(benefit.gstRate !== null && benefit.gstRate !== undefined ? benefit.gstRate : 18);
+              const postTaxAmount = Number(item.totalAmount) || 0;
+              let baseAmount = 0;
+              let lineTax = 0;
+              if (postTaxAmount > 0) {
+                baseAmount = Math.round((postTaxAmount / (1 + rate / 100)) * 100) / 100;
+                lineTax = Math.round((postTaxAmount - baseAmount) * 100) / 100;
+              } else {
+                const unitPrice = benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0;
+                baseAmount = unitPrice * q;
+                lineTax = Math.round((baseAmount * rate) / 100 * 100) / 100;
+              }
+              resolvedAddons.push({
+                benefitId: benefit.id,
+                name: benefit.name,
+                units: q,
+                unitLabel: benefit.unitLabel || 'units',
+                price: baseAmount,
+                gstRate: rate,
+                gstAmount: lineTax,
+                isGstExempt: benefit.isGstExempt || false,
+                hsnSacCode: benefit.hsnSacCode || '998399',
+              });
+            }
+          }
+        }
+
         invoice = await invoiceService.generateSubscriptionInvoice(tx, {
           subscription: sub,
           subPackage: pkg,
@@ -1061,11 +1126,47 @@ router.post('/admin-enroll', async (req, res) => {
           packageTotalBasePrice: pkgGrossBase,
           customerState,
           discountAmount: discount,
+          amountPaid: paid,
           subscriberId: subscriberUser.id,
           beneficiaryId: beneficiary.id,
           status: (paid > 0 || isFree) ? 'PAID' : 'ISSUED',
+          addons: resolvedAddons,
         });
         invoiceNumber = invoice.invoiceNumber;
+
+        // Provision add-on benefit balances directly in subscription
+        for (const addon of resolvedAddons) {
+          const balance = await tx.subscriptionBenefitBalance.findUnique({
+            where: {
+              subscriptionId_benefitId: {
+                subscriptionId: sub.id,
+                benefitId: addon.benefitId,
+              },
+            },
+          });
+          if (balance) {
+            await tx.subscriptionBenefitBalance.update({
+              where: { id: balance.id },
+              data: {
+                totalUnits: { increment: addon.units },
+                availableUnits: { increment: addon.units },
+              },
+            });
+          } else {
+            await tx.subscriptionBenefitBalance.create({
+              data: {
+                subscriptionId: sub.id,
+                benefitId: addon.benefitId,
+                totalUnits: addon.units,
+                usedUnits: 0,
+                reservedUnits: 0,
+                availableUnits: addon.units,
+              },
+            });
+          }
+        }
+
+        const totalBaseWithAddons = pkgGrossBase + resolvedAddons.reduce((sum, a) => sum + (a.price || 0), 0);
 
         await tx.payment.create({
           data: {
@@ -1083,7 +1184,7 @@ router.post('/admin-enroll', async (req, res) => {
               units: vb.unitsIncluded,
               unitLabel: vb.snapshotUnitLabel
             })),
-            baseAmount: pkgGrossBase,
+            baseAmount: totalBaseWithAddons,
             amountPaid: paid,
             discountAmount: discount,
             couponCode: couponCode ? String(couponCode).trim().toUpperCase() : null,
@@ -2237,6 +2338,7 @@ router.post('/:id/renew', async (req, res) => {
     renewalMode = 'from_expiry', // 'from_expiry' | 'today'
     customStartDate,
     payment = {},
+    addons = [],
   } = req.body;
 
   try {
@@ -2481,22 +2583,106 @@ router.post('/:id/renew', async (req, res) => {
       }
 
       // 6. Create new Payment & Invoice
-      const amountPaid = parseFloat(payment.amountPaid) || pkg.basePrice;
-      const discount = pkg.basePrice - amountPaid > 0 ? pkg.basePrice - amountPaid : 0;
+      const rawBase = Number(pkg.basePrice) * durationMonths;
+      const durDiscountPercent = durationMonths === 3 ? Number(pkg.discountThreeMonths ?? 5)
+        : durationMonths === 6 ? Number(pkg.discountSixMonths ?? 10)
+        : durationMonths >= 12 ? Number(pkg.discountAnnual ?? 20)
+        : 0;
+      const durDiscount = durDiscountPercent > 0 ? Math.round((rawBase * durDiscountPercent / 100) * 100) / 100 : 0;
+      const pkgGrossBase = Math.round((rawBase - durDiscount) * 100) / 100;
+
+      const amountPaid = parseFloat(payment.amountPaid) || pkgGrossBase;
+      const discount = pkgGrossBase - amountPaid > 0 ? pkgGrossBase - amountPaid : 0;
       const customerState = currentSub.beneficiary?.state || currentSub.subscriber?.state || '';
+
+      // Resolve any add-on benefits selected during renewal
+      const resolvedAddons = [];
+      if (Array.isArray(addons) && addons.length > 0) {
+        for (const item of addons) {
+          const bId = item.benefitId || item.benefit?.id;
+          if (!bId) continue;
+          const benefit = await prisma.benefit.findUnique({
+            where: { id: bId },
+            select: { id: true, name: true, unitLabel: true, addonPrice: true, addonDiscountPrice: true, gstRate: true, isGstExempt: true, hsnSacCode: true }
+          });
+          if (benefit) {
+            const q = Math.max(1, Number(item.units) || 1);
+            const rate = benefit.isGstExempt ? 0 : Number(benefit.gstRate !== null && benefit.gstRate !== undefined ? benefit.gstRate : 18);
+            const postTaxAmount = Number(item.totalAmount) || 0;
+            let baseAmount = 0;
+            let lineTax = 0;
+            if (postTaxAmount > 0) {
+              baseAmount = Math.round((postTaxAmount / (1 + rate / 100)) * 100) / 100;
+              lineTax = Math.round((postTaxAmount - baseAmount) * 100) / 100;
+            } else {
+              const unitPrice = benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0;
+              baseAmount = unitPrice * q;
+              lineTax = Math.round((baseAmount * rate) / 100 * 100) / 100;
+            }
+            resolvedAddons.push({
+              benefitId: benefit.id,
+              name: benefit.name,
+              units: q,
+              unitLabel: benefit.unitLabel || 'units',
+              price: baseAmount,
+              gstRate: rate,
+              gstAmount: lineTax,
+              isGstExempt: benefit.isGstExempt || false,
+              hsnSacCode: benefit.hsnSacCode || '998399',
+            });
+          }
+        }
+      }
 
       const invoice = await invoiceService.generateRenewalInvoice(tx, {
         newSubscription: newSub,
         pkg,
         packageVersion: pVersion,
         durationMonths,
+        packageTotalBasePrice: pkgGrossBase,
         customerState,
         discountAmount: discount,
+        amountPaid,
         subscriberId: currentSub.subscriberId,
         beneficiaryId: currentSub.beneficiaryId,
         status: 'PAID',
+        addons: resolvedAddons,
       });
       const invoiceNumber = invoice.invoiceNumber;
+
+      // Provision add-on benefit balances directly in new subscription
+      for (const addon of resolvedAddons) {
+        const balance = await tx.subscriptionBenefitBalance.findUnique({
+          where: {
+            subscriptionId_benefitId: {
+              subscriptionId: newSub.id,
+              benefitId: addon.benefitId,
+            },
+          },
+        });
+        if (balance) {
+          await tx.subscriptionBenefitBalance.update({
+            where: { id: balance.id },
+            data: {
+              totalUnits: { increment: addon.units },
+              availableUnits: { increment: addon.units },
+            },
+          });
+        } else {
+          await tx.subscriptionBenefitBalance.create({
+            data: {
+              subscriptionId: newSub.id,
+              benefitId: addon.benefitId,
+              totalUnits: addon.units,
+              usedUnits: 0,
+              reservedUnits: 0,
+              availableUnits: addon.units,
+            },
+          });
+        }
+      }
+
+      const totalBaseWithAddons = (Number(pkg.basePrice) * durationMonths) + resolvedAddons.reduce((sum, a) => sum + (a.price || 0), 0);
 
       const newPayment = await tx.payment.create({
         data: {
@@ -2514,7 +2700,7 @@ router.post('/:id/renew', async (req, res) => {
             units: vb.unitsIncluded,
             unitLabel: vb.snapshotUnitLabel,
           })),
-          baseAmount: pkg.basePrice,
+          baseAmount: totalBaseWithAddons,
           amountPaid,
           discountAmount: discount,
           paymentMethod: payment.paymentMethod || 'Cash',

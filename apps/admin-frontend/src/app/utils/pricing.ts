@@ -42,6 +42,9 @@ export interface WizardPricingBreakdown {
   igstAmount: number;
   couponCode?: string | null;
   couponDiscount?: number;
+  totalPackageBase?: number;
+  totalPackageTax?: number;
+  packageGrossPrice?: number;
   finalTotalAmount: number;
   benefitsBreakdown?: any[];
 }
@@ -160,13 +163,13 @@ export function calculateWizardPricing(
   let undiscountedPackageTotal = 0;
   let packageBasePrice = 0;
   let discountPercent = 0;
+  let packageDiscount = 0;
 
   if (isFree) {
     undiscountedPackageTotal = 0;
     packageBasePrice = 0;
     discountPercent = 0;
   } else if (isDays && days) {
-    // If the package is configured for fixed trial days and days match, charge base rate directly!
     if (pkg.trialDurationDays && days === pkg.trialDurationDays) {
       undiscountedPackageTotal = baseRate;
       packageBasePrice = baseRate;
@@ -175,37 +178,31 @@ export function calculateWizardPricing(
       undiscountedPackageTotal = Math.round(dailyRate * days);
       packageBasePrice = undiscountedPackageTotal;
     } else {
-      // Standard monthly package prorated by 30 days
       const dailyRate = baseRate / 30;
       undiscountedPackageTotal = Math.round(dailyRate * days);
       packageBasePrice = undiscountedPackageTotal;
     }
     discountPercent = 0;
   } else {
-    // Multi-month duration (1, 2, 3, 6, 12 months)
     undiscountedPackageTotal = baseRate * months;
     if (months === 3) {
       discountPercent = Number(pkg.discountThreeMonths ?? 5);
-      packageBasePrice = pkg.priceThreeMonths ? Number(pkg.priceThreeMonths) : Math.round(undiscountedPackageTotal * (1 - discountPercent / 100));
     } else if (months === 6) {
       discountPercent = Number(pkg.discountSixMonths ?? 10);
-      packageBasePrice = pkg.priceSixMonths ? Number(pkg.priceSixMonths) : Math.round(undiscountedPackageTotal * (1 - discountPercent / 100));
     } else if (months >= 12) {
       discountPercent = Number(pkg.discountAnnual ?? 20);
-      packageBasePrice = pkg.priceTwelveMonths ? Number(pkg.priceTwelveMonths) : Math.round(undiscountedPackageTotal * (1 - discountPercent / 100));
-    } else if (months === 2) {
-      packageBasePrice = undiscountedPackageTotal;
-      discountPercent = 0;
     } else {
-      packageBasePrice = baseRate;
       discountPercent = 0;
     }
+    // Apply duration discount on pre-tax base price
+    packageDiscount = discountPercent > 0 ? Math.round((undiscountedPackageTotal * discountPercent / 100) * 100) / 100 : 0;
+    packageBasePrice = Math.round((undiscountedPackageTotal - packageDiscount) * 100) / 100;
   }
-
-  const packageDiscount = Math.max(0, undiscountedPackageTotal - packageBasePrice);
-  const addonsBasePrice = (addons || []).reduce((sum, a) => sum + (Number(a.totalAmount) || 0), 0);
-  const totalBaseAmount = packageBasePrice + addonsBasePrice;
-
+  
+  if (couponDiscount > 0) {
+    packageBasePrice = Math.max(0, packageBasePrice - couponDiscount);
+  }
+  
   // Inter-state determination (Haryana is company POS)
   const isInterState = Boolean(customerState) && (customerState || '').trim().toLowerCase() !== (companyState || 'Haryana').trim().toLowerCase();
 
@@ -261,17 +258,47 @@ export function calculateWizardPricing(
     packageTax = isFree ? 0 : Math.round((packageBasePrice * pkgGstRate) / 100);
   }
 
+  let addonsBasePrice = 0;
   let addonsTax = 0;
+  const addonsBreakdown: any[] = [];
+  
   for (const a of (addons || [])) {
     const rate = (a.benefit?.isGstExempt || a.benefit?.gstRate === 0) ? 0 : Number(a.benefit?.gstRate ?? 18);
-    addonsTax += Math.round(((Number(a.totalAmount) || 0) * rate) / 100);
+    // If a.totalAmount is the post-tax amount from the modal, we need to extract the base amount
+    // Wait, the modal gives us post-tax. Base = Post / (1 + Rate / 100).
+    const postTaxAmount = Number(a.totalAmount) || 0;
+    const baseAmount = Math.round((postTaxAmount / (1 + rate / 100)) * 100) / 100;
+    const taxAmount = Math.round((postTaxAmount - baseAmount) * 100) / 100;
+    
+    addonsBasePrice += baseAmount;
+    addonsTax += taxAmount;
+    
+    addonsBreakdown.push({
+      benefitId: a.benefit?.id,
+      name: a.benefit?.name,
+      units: a.units || 1,
+      unitLabel: a.benefit?.unitLabel || 'units',
+      price: baseAmount,
+      gstRate: rate,
+      gstAmount: taxAmount,
+      finalPrice: postTaxAmount,
+      isGstExempt: a.benefit?.isGstExempt || false,
+    });
   }
 
+  const totalBaseAmount = packageBasePrice + addonsBasePrice;
   const totalTaxAmount = Math.round((packageTax + addonsTax) * 100) / 100;
+  
+  const packageGrossPrice = Math.round((packageBasePrice + packageTax) * 100) / 100;
+  const packageFinalPayable = packageGrossPrice;
+
+  const addonsFinalTotal = Math.round((addonsBasePrice + addonsTax) * 100) / 100;
+
   const cgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
   const sgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
   const igstAmount = isInterState ? totalTaxAmount : 0;
-  const finalTotalAmount = Math.max(0, Math.round((totalBaseAmount + totalTaxAmount - couponDiscount) * 100) / 100);
+  
+  const finalTotalAmount = Math.max(0, Math.round((packageFinalPayable + addonsFinalTotal) * 100) / 100);
 
   const dominantRate = pkg.gstRate ?? 18;
   const taxLabel = isInterState ? `IGST` : `CGST + SGST`;
@@ -302,5 +329,10 @@ export function calculateWizardPricing(
     couponDiscount,
     finalTotalAmount,
     benefitsBreakdown,
+    addonsBreakdown,
+    totalPackageBase: packageBasePrice,
+    totalPackageTax: packageTax,
+    packageGrossPrice,
+    addonsFinalTotal,
   };
 }

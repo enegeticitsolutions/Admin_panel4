@@ -19,25 +19,19 @@ export class BillingCalculator {
     const rawItems = input.items || [];
 
     // 1. Determine gross paise per line item
-    let lineGrossPaise: number[] = [];
+    const lineGrossPaise: number[] = rawItems.map((item) => {
+      const qty = Math.max(1, item.quantity || 1);
+      const unitPaise = Money.toPaise(item.unitPrice || 0);
+      return unitPaise * qty;
+    });
 
+    const totalStandaloneGrossPaise = lineGrossPaise.reduce((acc, val) => acc + val, 0);
+
+    let packageDiscountPaise = 0;
     if (input.packageTotalBasePrice !== undefined && input.packageTotalBasePrice !== null) {
-      // Allocate package lump sum base across benefits using their relative weights
-      const totalPkgPaise = Money.toPaise(input.packageTotalBasePrice);
-      const weights = rawItems.map((item) => {
-        const qty = Math.max(1, item.quantity || 1);
-        const weight = item.nominalCost !== undefined ? item.nominalCost : (item.unitPrice || 100);
-        return Math.max(1, weight * qty);
-      });
-
-      lineGrossPaise = Money.distribute(totalPkgPaise, weights);
-    } else {
-      // Direct sum from item unit prices
-      lineGrossPaise = rawItems.map((item) => {
-        const qty = Math.max(1, item.quantity || 1);
-        const unitPaise = Money.toPaise(item.unitPrice || 0);
-        return unitPaise * qty;
-      });
+      const targetPkgPaise = Money.toPaise(input.packageTotalBasePrice);
+      // Bundle discount is the difference between standalone sum and the bundled price
+      packageDiscountPaise = Math.max(0, totalStandaloneGrossPaise - targetPkgPaise);
     }
 
     // 2. Pro-rata discount allocation across items (Pre-tax)
@@ -45,7 +39,9 @@ export class BillingCalculator {
       durationDiscountAmount: input.durationDiscountAmount,
       couponDiscountAmount: input.couponDiscountAmount,
       saathiDiscountAmount: input.saathiDiscountAmount,
-      packageDiscountAmount: input.packageDiscountAmount,
+      packageDiscountAmount: input.packageDiscountAmount !== undefined 
+        ? input.packageDiscountAmount 
+        : Money.toRupees(packageDiscountPaise),
     });
 
     // 3. Line-by-line tax computation
