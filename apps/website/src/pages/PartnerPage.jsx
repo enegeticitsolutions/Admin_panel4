@@ -234,10 +234,38 @@ const getCategoryBadgeClass = (categoryName) => {
   return "partner-showcase-category-pill--teal";
 };
 
+const getCategoryIconStyle = (categoryName) => {
+  const name = (categoryName || '').toLowerCase();
+  if (name.includes('ambulance') || name.includes('emergency')) {
+    return { icon: Truck, iconColor: "#EF4444", bg: "#FEF2F2", border: "rgba(239, 68, 68, 0.2)" };
+  }
+  if (name.includes('pharmacy') || name.includes('medicine')) {
+    return { icon: Pill, iconColor: "#7C3AED", bg: "#F5F3FF", border: "rgba(124, 58, 237, 0.2)" };
+  }
+  if (name.includes('diagnostic') || name.includes('lab')) {
+    return { icon: FlaskConical, iconColor: "#0EA5E9", bg: "#F0F9FF", border: "rgba(14, 165, 233, 0.2)" };
+  }
+  if (name.includes('care') || name.includes('physio') || name.includes('attendant') || name.includes('nurse')) {
+    return { icon: Stethoscope, iconColor: "#FE6700", bg: "#FFF7ED", border: "rgba(254, 103, 0, 0.2)" };
+  }
+  if (name.includes('hospital') || name.includes('clinic')) {
+    return { icon: Building2, iconColor: "#10B981", bg: "#ECFDF5", border: "rgba(16, 185, 129, 0.2)" };
+  }
+  if (name.includes('tele') || name.includes('doctor') || name.includes('consultation')) {
+    return { icon: Video, iconColor: "#F59E0B", bg: "#FFFBEB", border: "rgba(245, 158, 11, 0.2)" };
+  }
+  if (name.includes('corporate') || name.includes('b2b') || name.includes('enterprise')) {
+    return { icon: Briefcase, iconColor: "#6366F1", bg: "#EEF2FF", border: "rgba(99, 102, 241, 0.2)" };
+  }
+  if (name.includes('rwa') || name.includes('housing') || name.includes('society')) {
+    return { icon: Users, iconColor: "#14B8A6", bg: "#F0FDFA", border: "rgba(20, 184, 166, 0.2)" };
+  }
+  return { icon: Building2, iconColor: "#FE6700", bg: "#FFF7ED", border: "rgba(254, 103, 0, 0.2)" };
+};
+
 export default function PartnerPage() {
   const [dbPartners, setDbPartners] = useState([]);
   const [dbCategories, setDbCategories] = useState([]);
-  const [selectedFilterCategory, setSelectedFilterCategory] = useState("ALL");
   const [loadingPartners, setLoadingPartners] = useState(true);
 
   React.useEffect(() => {
@@ -293,23 +321,35 @@ export default function PartnerPage() {
     });
   }, [dbPartners]);
 
-  // Unique list of categories from live partners
-  const availableCategories = React.useMemo(() => {
-    return Array.from(new Set(allFormattedPartners.map((p) => p.category.trim())));
-  }, [allFormattedPartners]);
+  const displayPartners = allFormattedPartners;
 
-  // Filtered partners based on selected category
-  const displayPartners = React.useMemo(() => {
-    if (selectedFilterCategory === "ALL") {
-      return allFormattedPartners;
-    }
-    return allFormattedPartners.filter(
-      (p) => p.category.trim().toLowerCase() === selectedFilterCategory.trim().toLowerCase()
-    );
-  }, [allFormattedPartners, selectedFilterCategory]);
+  const dynamicHeroPills = React.useMemo(() => {
+    if (!dbCategories || dbCategories.length === 0) return HERO_PILLS;
+    return dbCategories.map((c) => {
+      const style = getCategoryIconStyle(c.name);
+      return {
+        title: c.name,
+        icon: style.icon,
+        iconColor: style.iconColor,
+        bg: style.bg,
+        border: style.border,
+      };
+    });
+  }, [dbCategories]);
 
-
-
+  const dynamicCategoriesList = React.useMemo(() => {
+    if (!dbCategories || dbCategories.length === 0) return CATEGORIES_8;
+    return dbCategories.map((c) => {
+      const style = getCategoryIconStyle(c.name);
+      return {
+        title: c.name,
+        desc: c.description || `Verified ${c.name} partners in our senior care network.`,
+        icon: style.icon,
+        iconColor: style.iconColor,
+        bg: style.bg,
+      };
+    });
+  }, [dbCategories]);
 
   return (
     <div className="partner-page">
@@ -389,10 +429,10 @@ export default function PartnerPage() {
             </div>
           </div>
 
-          {/* Right Column: 8 Rounded Floating Pill Cards (Figma Spec) */}
+          {/* Right Column: Rounded Floating Pill Cards (Dynamic from DB) */}
           <div className="partner-hero__right">
             <div className="partner-hero__pills-grid">
-              {HERO_PILLS.map((pill, idx) => {
+              {dynamicHeroPills.map((pill, idx) => {
                 const IconComponent = pill.icon;
                 return (
                   <div key={idx} className="partner-pill-card">
@@ -421,11 +461,15 @@ export default function PartnerPage() {
       <section className="partner-stats-section">
         <div className="partner-stats-bar">
           <div className="partner-stat-item">
-            <div className="partner-stat-value partner-stat-value--orange">50+</div>
+            <div className="partner-stat-value partner-stat-value--orange">
+              {dbPartners.length > 0 ? `${dbPartners.length}+` : "50+"}
+            </div>
             <div className="partner-stat-label">Active partners</div>
           </div>
           <div className="partner-stat-item">
-            <div className="partner-stat-value partner-stat-value--orange">8</div>
+            <div className="partner-stat-value partner-stat-value--orange">
+              {dbCategories.length > 0 ? dbCategories.length : "8"}
+            </div>
             <div className="partner-stat-label">Partner categories</div>
           </div>
           <div className="partner-stat-item">
@@ -440,7 +484,7 @@ export default function PartnerPage() {
       </section>
 
       {/* ─────────────────────────────────────────────────────────────────────────────
-         3. "WHO WE WORK WITH" GRID (Figma Node 3645:8774)
+         3. "WHO WE WORK WITH" GRID (Dynamic from DB Categories)
          ───────────────────────────────────────────────────────────────────────────── */}
       <section className="partner-categories-section" id="who-we-work-with">
         <div className="partner-section-header">
@@ -453,7 +497,7 @@ export default function PartnerPage() {
         </div>
 
         <div className="partner-categories-grid">
-          {CATEGORIES_8.map((cat, idx) => {
+          {dynamicCategoriesList.map((cat, idx) => {
             const IconComponent = cat.icon;
             return (
               <div key={idx} className="partner-category-card">
@@ -602,57 +646,6 @@ export default function PartnerPage() {
               Verified, geo-matched healthcare providers and specialized eldercare partners active in our ecosystem.
             </p>
           </div>
-
-          {/* Dynamic Category Filter Pills */}
-          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px", margin: "24px 0 32px" }}>
-            <button
-              type="button"
-              onClick={() => setSelectedFilterCategory("ALL")}
-              style={{
-                padding: "8px 18px",
-                borderRadius: "24px",
-                fontSize: "13px",
-                fontWeight: "600",
-                cursor: "pointer",
-                border: selectedFilterCategory === "ALL" ? "2px solid #FE6700" : "1px solid #E5E7EB",
-                backgroundColor: selectedFilterCategory === "ALL" ? "#FFF7ED" : "#FFFFFF",
-                color: selectedFilterCategory === "ALL" ? "#FE6700" : "#4B5563",
-                transition: "all 0.15s ease",
-              }}
-            >
-              All Partners ({allFormattedPartners.length})
-            </button>
-
-            {/* List all available categories with live partner counts */}
-            {availableCategories.map((cat) => {
-              const isSelected = selectedFilterCategory.trim().toLowerCase() === cat.trim().toLowerCase();
-              const count = allFormattedPartners.filter(
-                (p) => p.category.trim().toLowerCase() === cat.trim().toLowerCase()
-              ).length;
-
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setSelectedFilterCategory(cat)}
-                  style={{
-                    padding: "8px 18px",
-                    borderRadius: "24px",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    border: isSelected ? "2px solid #FE6700" : "1px solid #E5E7EB",
-                    backgroundColor: isSelected ? "#FFF7ED" : "#FFFFFF",
-                    color: isSelected ? "#FE6700" : "#4B5563",
-                    transition: "all 0.15s ease",
-                  }}
-                >
-                  {cat} ({count})
-                </button>
-              );
-            })}
-          </div>
-
 
           {loadingPartners ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px" }}>

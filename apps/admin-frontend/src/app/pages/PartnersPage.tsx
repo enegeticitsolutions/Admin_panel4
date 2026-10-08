@@ -608,32 +608,146 @@ export default function PartnersPage() {
         </div>
       </div>
 
-      {/* Stats Bar */}
+      {/* Stats Bar (Interactive Filter Buttons) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        {/* Total Partners */}
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedCategory('ALL');
+            setSelectedStatus('ALL');
+            setSelectedPublish('ALL');
+            setSelectedSource('ALL');
+            setSearchTerm('');
+          }}
+          className={`text-left p-4 rounded-xl border transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md active:scale-[0.98] ${
+            selectedStatus === 'ALL' && selectedPublish === 'ALL' && selectedSource === 'ALL' && selectedCategory === 'ALL' && !searchTerm
+              ? 'bg-gray-50 border-gray-400 ring-2 ring-gray-700 shadow-inner'
+              : 'bg-white border-gray-200 hover:border-gray-400'
+          }`}
+          title="Show All Partners"
+        >
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Partners</div>
           <div className="text-2xl font-bold text-gray-900 mt-1">{stats.total || partners.length}</div>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        </button>
+
+        {/* Pending Review */}
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedStatus === 'PENDING') {
+              setSelectedStatus('ALL');
+            } else {
+              setSelectedStatus('PENDING');
+              setSelectedPublish('ALL');
+              setSelectedSource('ALL');
+            }
+          }}
+          className={`text-left p-4 rounded-xl border transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md active:scale-[0.98] ${
+            selectedStatus === 'PENDING'
+              ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-500 shadow-inner'
+              : 'bg-white border-gray-200 hover:border-amber-300 hover:bg-amber-50/30'
+          }`}
+          title="Filter by Pending Review"
+        >
           <div className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Pending Review</div>
           <div className="text-2xl font-bold text-amber-600 mt-1">{stats.pending}</div>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        </button>
+
+        {/* Approved */}
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedStatus === 'APPROVED') {
+              setSelectedStatus('ALL');
+            } else {
+              setSelectedStatus('APPROVED');
+              setSelectedPublish('ALL');
+              setSelectedSource('ALL');
+            }
+          }}
+          className={`text-left p-4 rounded-xl border transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md active:scale-[0.98] ${
+            selectedStatus === 'APPROVED'
+              ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500 shadow-inner'
+              : 'bg-white border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/30'
+          }`}
+          title="Filter by Approved"
+        >
           <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Approved</div>
           <div className="text-2xl font-bold text-emerald-600 mt-1">{stats.approved}</div>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        </button>
+
+        {/* Live on Website */}
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedPublish === 'PUBLISHED') {
+              setSelectedPublish('ALL');
+            } else {
+              setSelectedPublish('PUBLISHED');
+              setSelectedStatus('ALL');
+              setSelectedSource('ALL');
+            }
+          }}
+          className={`text-left p-4 rounded-xl border transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md active:scale-[0.98] ${
+            selectedPublish === 'PUBLISHED'
+              ? 'bg-blue-50 border-blue-400 ring-2 ring-blue-500 shadow-inner'
+              : 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50/30'
+          }`}
+          title="Filter by Live on Website"
+        >
           <div className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Live on Website</div>
           <div className="text-2xl font-bold text-blue-600 mt-1">{stats.published}</div>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        </button>
+
+        {/* Zoho CRM Synced */}
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedSource === 'ZOHO_CRM') {
+              setSelectedSource('ALL');
+            } else {
+              setSelectedSource('ZOHO_CRM');
+              setSelectedStatus('ALL');
+              setSelectedPublish('ALL');
+            }
+          }}
+          className={`text-left p-4 rounded-xl border transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md active:scale-[0.98] ${
+            selectedSource === 'ZOHO_CRM'
+              ? 'bg-orange-50 border-orange-400 ring-2 ring-orange-500 shadow-inner'
+              : 'bg-white border-gray-200 hover:border-orange-300 hover:bg-orange-50/30'
+          }`}
+          title="Filter by Zoho CRM Synced"
+        >
           <div className="text-xs font-semibold text-orange-600 uppercase tracking-wider">Zoho CRM Synced</div>
           <div className="text-2xl font-bold text-orange-600 mt-1">{stats.zohoSynced}</div>
-        </div>
-        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-          <div className="text-xs font-semibold text-purple-600 uppercase tracking-wider">Categories</div>
+        </button>
+
+        {/* Categories */}
+        <button
+          type="button"
+          onClick={() => {
+            setEditingCategory(null);
+            setCategoryFormData({
+              name: '',
+              slug: '',
+              code: '',
+              description: '',
+              iconUrl: '',
+              displayOrder: 0,
+              isActive: true,
+            });
+            setIsCategoryModalOpen(true);
+          }}
+          className="text-left p-4 rounded-xl border border-gray-200 bg-white hover:border-purple-300 hover:bg-purple-50/40 transition-all duration-150 shadow-sm cursor-pointer hover:shadow-md active:scale-[0.98] group"
+          title="Open Categories Management Modal"
+        >
+          <div className="text-xs font-semibold text-purple-600 uppercase tracking-wider flex items-center justify-between">
+            <span>Categories</span>
+            <Layers className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition" />
+          </div>
           <div className="text-2xl font-bold text-purple-600 mt-1">{categories.length}</div>
-        </div>
+        </button>
       </div>
 
       {/* Filters & Search */}
