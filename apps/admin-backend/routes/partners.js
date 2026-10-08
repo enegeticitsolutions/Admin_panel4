@@ -6,8 +6,133 @@ const upload = require('../middleware/upload');
 const storageService = require('../services/storage');
 const { resolveFileUrl } = require('../services/storage/urlResolver');
 
+/**
+ * Helper: Forward partner submission directly to Zoho CRM Web-to-Entity endpoint
+ */
+async function syncPartnerToZohoCrm(data) {
+  try {
+    const zohoParams = new URLSearchParams({
+      xnQsjsdp: 'a5e62960e1af5b50449f290933d99d6ee6a3d676fbd4f567c17b40f3766b484f',
+      zc_gad: '',
+      xmIwtLD: 'bbe7b2f69b3fb4f8d2c83581c560ad1cecb4ead8fd2fe46d56fb91a48fd635dee9133caaa828df77edca61e708cdd62f',
+      actionType: 'Q3VzdG9tTW9kdWxlMw==',
+      returnURL: 'null',
+      NAME: data.organizationName || data.name || 'Partner',
+      COBJ3CF5: data.categoryName || data.category || '-None-',
+      COBJ3CF7: data.description || '',
+      COBJ3CF1: data.primaryContactName || '',
+      Email: data.email || '',
+      COBJ3CF2: data.phone || '',
+      COBJ3CF4: data.city || '',
+      COBJ3CF3: data.state || '',
+      aG9uZXlwb3Q: '',
+    });
+
+    const response = await fetch('https://crm.zoho.in/crm/WebForm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+      body: zohoParams.toString(),
+    });
+
+    const responseText = await response.text();
+    console.log('[Zoho CRM Sync] Status:', response.status, 'Response:', responseText.slice(0, 200));
+    return { success: response.ok, raw: responseText };
+  } catch (err) {
+    console.error('[Zoho CRM Sync Error]:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 // ==========================================
-// 1. ZOHO CRM WEBHOOK RECEIVER (PUBLIC / SECRET VERIFIED)
+// 1. PUBLIC PARTNER APPLICATION & ZOHO CRM SYNC
+// ==========================================
+router.post('/apply', async (req, res) => {
+  try {
+    const payload = req.body;
+    const organizationName = (payload.organization_name || payload.name || payload.NAME || '').trim();
+    const primaryContactName = (payload.primary_contact_name || payload.contactName || payload.COBJ3CF1 || '').trim() || null;
+    const email = (payload.email || payload.Email || '').trim() || null;
+    const phone = (payload.phone || payload.COBJ3CF2 || '').trim() || null;
+    const city = (payload.city || payload.COBJ3CF4 || '').trim() || null;
+    const state = (payload.state || payload.COBJ3CF3 || '').trim() || null;
+    const description = (payload.description || payload.COBJ3CF7 || '').trim() || 'Website Application';
+    const categoryName = (payload.category || payload.COBJ3CF5 || 'General Partner').trim();
+
+    if (!organizationName) {
+      return res.status(400).json({ success: false, message: 'Organization name is required' });
+    }
+
+    // 1. Dynamic category find/create
+    const categorySlug = categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    let category = await prisma.partnerCategory.findFirst({
+      where: {
+        OR: [
+          { name: { equals: categoryName, mode: 'insensitive' } },
+          { slug: categorySlug },
+          { code: categoryName.toUpperCase() },
+        ],
+      },
+    });
+
+    if (!category) {
+      category = await prisma.partnerCategory.create({
+        data: {
+          name: categoryName,
+          slug: categorySlug,
+          code: categoryName.toUpperCase().replace(/[^A-Z0-9_]+/g, '_'),
+          isActive: true,
+        },
+      });
+    }
+
+    // 2. Create partner in DB with PENDING review status
+    const partner = await prisma.partner.create({
+      data: {
+        organizationName,
+        primaryContactName,
+        email,
+        phone,
+        city,
+        state,
+        description,
+        categoryId: category.id,
+        status: 'PENDING',
+        source: 'WEBSITE',
+        isPublished: false,
+        zohoDataPayload: payload,
+        zohoSyncedAt: new Date(),
+      },
+    });
+
+    // 3. Sync directly to Zoho CRM Cloud
+    const zohoResult = await syncPartnerToZohoCrm({
+      organizationName,
+      categoryName,
+      description,
+      primaryContactName,
+      email,
+      phone,
+      city,
+      state,
+    });
+
+    res.json({
+      success: true,
+      message: 'Partner application received successfully',
+      data: partner,
+      zohoSynced: zohoResult.success,
+    });
+  } catch (error) {
+    console.error('Error processing partner application:', error);
+    res.status(500).json({ success: false, message: 'Failed to process application' });
+  }
+});
+
+// ==========================================
+// 1.1 ZOHO CRM WEBHOOK RECEIVER (PUBLIC / SECRET VERIFIED)
 // ==========================================
 router.post('/webhook/zoho', async (req, res) => {
   try {
@@ -23,14 +148,14 @@ router.post('/webhook/zoho', async (req, res) => {
     }
 
     const zohoLeadId = payload.lead_id || payload.id || payload.Zoho_Lead_ID || payload.LEADID;
-    const organizationName = payload.organization_name || payload.Company || payload.Organisation_Name || payload.Account_Name || 'Unknown Organization';
-    const primaryContactName = payload.primary_contact_name || payload.Full_Name || `${payload.First_Name || ''} ${payload.Last_Name || ''}`.trim() || null;
+    const organizationName = payload.organization_name || payload.Company || payload.Organisation_Name || payload.Account_Name || payload.NAME || 'Unknown Organization';
+    const primaryContactName = payload.primary_contact_name || payload.Full_Name || payload.COBJ3CF1 || `${payload.First_Name || ''} ${payload.Last_Name || ''}`.trim() || null;
     const email = payload.email || payload.Email || null;
-    const phone = payload.phone || payload.Phone || payload.Mobile || null;
-    const city = payload.city || payload.City || null;
-    const state = payload.state || payload.State || null;
-    const description = payload.description || payload.Description || payload.Brief_Description || 'Synced from Zoho CRM';
-    const categoryName = payload.category || payload.Partner_Category || payload.Category || 'General Partner';
+    const phone = payload.phone || payload.Phone || payload.Mobile || payload.COBJ3CF2 || null;
+    const city = payload.city || payload.City || payload.COBJ3CF4 || null;
+    const state = payload.state || payload.State || payload.COBJ3CF3 || null;
+    const description = payload.description || payload.Description || payload.Brief_Description || payload.COBJ3CF7 || 'Synced from Zoho CRM';
+    const categoryName = payload.category || payload.Partner_Category || payload.Category || payload.COBJ3CF5 || 'General Partner';
     const attachmentUrl = payload.attachment_url || payload.File_URL || null;
 
     // 1. Find or create the dynamic PartnerCategory
@@ -86,7 +211,7 @@ router.post('/webhook/zoho', async (req, res) => {
           categoryId: category.id,
           attachmentUrl,
           status: 'PENDING',
-          source: 'ZOHO_CRM',
+          source: payload.source || (zohoLeadId ? 'ZOHO_CRM' : 'WEBSITE'),
           isPublished: false,
           zohoDataPayload: payload,
           zohoSyncedAt: new Date(),
@@ -105,11 +230,23 @@ router.post('/webhook/zoho', async (req, res) => {
           categoryId: category.id,
           attachmentUrl,
           status: 'PENDING',
-          source: 'ZOHO_CRM',
+          source: payload.source || 'WEBSITE',
           isPublished: false,
           zohoDataPayload: payload,
           zohoSyncedAt: new Date(),
         },
+      });
+
+      // Forward to Zoho CRM if created from website
+      syncPartnerToZohoCrm({
+        organizationName,
+        categoryName,
+        description,
+        primaryContactName,
+        email,
+        phone,
+        city,
+        state,
       });
     }
 
