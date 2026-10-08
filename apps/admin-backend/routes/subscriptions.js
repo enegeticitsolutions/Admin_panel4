@@ -655,6 +655,12 @@ router.post('/admin-enroll', async (req, res) => {
     couponCode = '',
     csaMode = false,
     addons = [],
+    // Explicit discount breakdown from the frontend's server-calculated pricing.
+    // These are the authoritative values shown to the customer on the payment screen.
+    // Using them avoids the incorrect inference: max(0, pkgGrossBase - amountPaid)
+    // which breaks when addons/tax are included in amountPaid.
+    packageDiscount: inputPackageDiscount,
+    couponDiscount: inputCouponDiscount,
   } = req.body;
 
   if (!subscriberPhone || typeof subscriberPhone !== 'string' || !subscriberName || typeof subscriberName !== 'string' || !packageId) {
@@ -1049,27 +1055,46 @@ router.post('/admin-enroll', async (req, res) => {
       {
         const durationMonths = durationInfo.displayMonths;
         const paid = isFree ? 0 : (parseFloat(amountPaid) || 0);
-        let pkgGrossBase = 0;
+        let rawBase = 0;
+        let computedDurDiscount = 0;
         if (isFree) {
-          pkgGrossBase = 0;
+          rawBase = 0;
         } else if (durationInfo.isDays) {
           if (pkg.trialDurationDays && durationInfo.days === pkg.trialDurationDays) {
-            pkgGrossBase = Number(pkg.basePrice);
+            rawBase = Number(pkg.basePrice);
           } else if (pkg.trialDurationDays) {
-            pkgGrossBase = Math.round(((Number(pkg.basePrice) / pkg.trialDurationDays) * durationInfo.days) * 100) / 100;
+            rawBase = Math.round(((Number(pkg.basePrice) / pkg.trialDurationDays) * durationInfo.days) * 100) / 100;
           } else {
-            pkgGrossBase = Math.round(((Number(pkg.basePrice) / 30) * durationInfo.days) * 100) / 100;
+            rawBase = Math.round(((Number(pkg.basePrice) / 30) * durationInfo.days) * 100) / 100;
           }
         } else {
-          const rawBase = Number(pkg.basePrice) * durationMonths;
+          rawBase = Math.round(Number(pkg.basePrice) * durationMonths * 100) / 100;
           const durDiscountPercent = durationMonths === 3 ? Number(pkg.discountThreeMonths ?? 5)
             : durationMonths === 6 ? Number(pkg.discountSixMonths ?? 10)
             : durationMonths >= 12 ? Number(pkg.discountAnnual ?? 20)
             : 0;
-          const durDiscount = durDiscountPercent > 0 ? Math.round((rawBase * durDiscountPercent / 100) * 100) / 100 : 0;
-          pkgGrossBase = Math.round((rawBase - durDiscount) * 100) / 100;
+          computedDurDiscount = durDiscountPercent > 0 ? Math.round((rawBase * durDiscountPercent / 100) * 100) / 100 : 0;
         }
-        const discount = isFree ? 0 : Math.max(0, pkgGrossBase - paid);
+        // Use explicit discount amounts passed from the frontend (which has server-computed
+        // pricing values already shown to the customer). This prevents the broken inference
+        // of `max(0, pkgGrossBase - amountPaid)` which goes negative when addons are included.
+        const explicitPackageDiscount = inputPackageDiscount !== undefined && inputPackageDiscount !== null
+          ? Math.max(0, parseFloat(inputPackageDiscount) || 0)
+          : null;
+        const explicitCouponDiscount = inputCouponDiscount !== undefined && inputCouponDiscount !== null
+          ? Math.max(0, parseFloat(inputCouponDiscount) || 0)
+          : 0;
+
+        let discount;
+        if (isFree) {
+          discount = 0;
+        } else if (explicitPackageDiscount !== null) {
+          // Frontend sent explicit values — use them as the total pre-tax discount
+          discount = Math.round((explicitPackageDiscount + explicitCouponDiscount) * 100) / 100;
+        } else {
+          // Fallback: computed duration discount + coupon discount
+          discount = Math.round((computedDurDiscount + explicitCouponDiscount) * 100) / 100;
+        }
         const customerState = (
           inputCustomerState ||
           beneficiaryState ||
@@ -1123,7 +1148,7 @@ router.post('/admin-enroll', async (req, res) => {
           subPackage: pkg,
           packageVersion: pVersion,
           durationMonths,
-          packageTotalBasePrice: pkgGrossBase,
+          packageTotalBasePrice: rawBase,
           customerState,
           discountAmount: discount,
           amountPaid: paid,
@@ -1166,7 +1191,7 @@ router.post('/admin-enroll', async (req, res) => {
           }
         }
 
-        const totalBaseWithAddons = pkgGrossBase + resolvedAddons.reduce((sum, a) => sum + (a.price || 0), 0);
+        const totalBaseWithAddons = rawBase + resolvedAddons.reduce((sum, a) => sum + (a.price || 0), 0);
 
         await tx.payment.create({
           data: {
@@ -2583,16 +2608,28 @@ router.post('/:id/renew', async (req, res) => {
       }
 
       // 6. Create new Payment & Invoice
-      const rawBase = Number(pkg.basePrice) * durationMonths;
+      const rawBase = Math.round(Number(pkg.basePrice) * durationMonths * 100) / 100;
       const durDiscountPercent = durationMonths === 3 ? Number(pkg.discountThreeMonths ?? 5)
         : durationMonths === 6 ? Number(pkg.discountSixMonths ?? 10)
         : durationMonths >= 12 ? Number(pkg.discountAnnual ?? 20)
         : 0;
-      const durDiscount = durDiscountPercent > 0 ? Math.round((rawBase * durDiscountPercent / 100) * 100) / 100 : 0;
-      const pkgGrossBase = Math.round((rawBase - durDiscount) * 100) / 100;
+      const computedDurDiscount = durDiscountPercent > 0 ? Math.round((rawBase * durDiscountPercent / 100) * 100) / 100 : 0;
 
-      const amountPaid = parseFloat(payment.amountPaid) || pkgGrossBase;
-      const discount = pkgGrossBase - amountPaid > 0 ? pkgGrossBase - amountPaid : 0;
+      const amountPaid = parseFloat(payment.amountPaid) || rawBase;
+
+      // Use explicit discount amounts from the payment object when provided (sent from
+      // the frontend's server-computed pricing). Prevents the broken inference of
+      // pkgGrossBase - amountPaid which goes negative when addons are included.
+      const renewalExplicitPkgDiscount = payment.packageDiscount !== undefined && payment.packageDiscount !== null
+        ? Math.max(0, parseFloat(payment.packageDiscount) || 0)
+        : null;
+      const renewalExplicitCouponDiscount = payment.couponDiscount !== undefined && payment.couponDiscount !== null
+        ? Math.max(0, parseFloat(payment.couponDiscount) || 0)
+        : 0;
+
+      const discount = renewalExplicitPkgDiscount !== null
+        ? Math.round((renewalExplicitPkgDiscount + renewalExplicitCouponDiscount) * 100) / 100
+        : Math.round((computedDurDiscount + renewalExplicitCouponDiscount) * 100) / 100;
       const customerState = currentSub.beneficiary?.state || currentSub.subscriber?.state || '';
 
       // Resolve any add-on benefits selected during renewal
@@ -2639,7 +2676,7 @@ router.post('/:id/renew', async (req, res) => {
         pkg,
         packageVersion: pVersion,
         durationMonths,
-        packageTotalBasePrice: pkgGrossBase,
+        packageTotalBasePrice: rawBase,
         customerState,
         discountAmount: discount,
         amountPaid,

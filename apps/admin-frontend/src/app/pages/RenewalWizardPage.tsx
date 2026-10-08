@@ -586,6 +586,10 @@ export default function RenewalWizardPage() {
           paymentMethod,
           transactionId,
           paymentNote,
+          // Pass server-computed discount breakdown so backend does not have to infer
+          // from amountPaid subtraction (which breaks when addons are included).
+          packageDiscount: serverPricing?.packageDiscount ?? 0,
+          couponDiscount: serverPricing?.couponDiscount ?? 0,
         },
         addons: selectedAddons.map(a => ({
           benefitId: a.benefit.id,
