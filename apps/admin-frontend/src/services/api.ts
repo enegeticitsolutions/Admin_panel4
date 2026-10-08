@@ -1133,6 +1133,7 @@ export const subscriptionApi = {
       transactionId?: string;
       paymentNote?: string;
     };
+    addons?: any[];
   }): Promise<{
     newSubscription: any;
     invoiceNumber: string;
@@ -1527,6 +1528,7 @@ export const enrollmentApi = {
     couponCode?: string;
     csaMode?: boolean;
     subscriberPassword?: string;
+    addons?: any[];
   }): Promise<{
     subscription: any;
     subscriber: { id: string; name: string; phone: string };

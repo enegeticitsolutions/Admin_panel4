@@ -76,9 +76,7 @@ function render(invoice, company = {}) {
 
     return `
     <tr>
-      <td>${index + 1}</td>
       <td>${esc(item.description || item.name || 'Service')}</td>
-      <td>${esc(item.hsnSacCode  || '998399')}</td>
       <td>${qty}</td>
       <td>₹${unitPrice.toFixed(2)}</td>
       <td>${taxRate}%</td>
@@ -122,10 +120,6 @@ function render(invoice, company = {}) {
     <tr>
       <td style="font-weight: 600;">Total Discount</td>
       <td style="font-weight: 600;">-₹${(discountAmount + saathiDiscountAmount).toFixed(2)}</td>
-    </tr>` : (discountAmount > 0 || saathiDiscountAmount > 0) ? `
-    <tr>
-      <td>Total Discount</td>
-      <td>-₹${(discountAmount + saathiDiscountAmount).toFixed(2)}</td>
     </tr>` : ''}
   `;
 
@@ -229,14 +223,12 @@ function render(invoice, company = {}) {
   <table>
     <thead>
       <tr>
-        <th>#</th>
         <th>Name</th>
-        <th>HSN/SAC</th>
-        <th>Quantity</th>
-        <th>Unit Price</th>
-        <th>Tax %</th>
+        <th>Unit</th>
+        <th>Price</th>
+        <th>Tax</th>
         <th>Tax Amount</th>
-        <th>Amount</th>
+        <th>Price</th>
       </tr>
     </thead>
     <tbody>

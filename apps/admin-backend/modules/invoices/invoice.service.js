@@ -20,9 +20,11 @@ class InvoiceService {
     packageTotalBasePrice,
     customerState = '',
     discountAmount = 0,
+    amountPaid,
     subscriberId,
     beneficiaryId = null,
     status = 'PAID',
+    addons = [],
   }) {
     const months = Math.max(1, parseInt(durationMonths, 10) || 1);
     const taxItems = [];
@@ -32,55 +34,58 @@ class InvoiceService {
     const versionLabel = packageVersion?.version ? ` v${packageVersion.version}` : '';
     const durationLabel = months > 1 ? ` (${months} Months)` : '';
 
-    // 1. Resolve tax for each benefit in the package version (live DB records = source of truth)
-    if (packageVersion && Array.isArray(packageVersion.versionBenefits) && packageVersion.versionBenefits.length > 0) {
-      for (const vb of packageVersion.versionBenefits) {
-        const benefit = vb.benefit || (await tx.benefit.findUnique({ where: { id: vb.benefitId } }));
-        const qty = (vb.unitsIncluded || 1) * months;
-        const nominalCost = benefit?.unitCost || benefit?.cost || 100; // Relative weight for pro-rata allocation
-        const taxMeta = await this.taxResolver.resolveBenefitTax(benefit || vb.benefitId, tx);
-        const benefitLabel = vb.snapshotName || benefit?.name || 'Included Benefit';
-
-        taxItems.push({
-          benefitId: vb.benefitId,
-          name: `${packageLabel}${versionLabel} — ${benefitLabel}${durationLabel}`,
-          quantity: qty,
-          unitPrice: nominalCost,
-          nominalCost,
-          gstRate: taxMeta.gstRate,
-          hsnSacCode: taxMeta.hsnSacCode,
-          isExempt: taxMeta.isExempt,
-        });
-      }
-    }
-
     const targetPackagePrice = packageTotalBasePrice !== undefined
       ? packageTotalBasePrice
       : (packageVersion?.basePrice || subPackage?.basePrice || 0) * months;
 
-    // Fallback: package has no itemized version benefits — treat entire package as single line
-    if (taxItems.length === 0) {
-      const pkgTaxMeta = await this.taxResolver.resolvePackageTax(subPackage, tx);
+    const pkgTaxMeta = await this.taxResolver.resolvePackageTax(subPackage, tx);
 
-      taxItems.push({
-        benefitId: null,
-        name: `${packageLabel}${versionLabel}${durationLabel}`,
-        quantity: months,
-        unitPrice: Math.round((targetPackagePrice / months) * 100) / 100,
-        gstRate: pkgTaxMeta.gstRate,
-        hsnSacCode: pkgTaxMeta.hsnSacCode,
-        isExempt: pkgTaxMeta.isExempt,
-      });
+    // 1. Add the main package as a single line item
+    taxItems.push({
+      benefitId: null,
+      name: `${packageLabel}${versionLabel}${durationLabel}`,
+      quantity: 1,
+      unitPrice: targetPackagePrice,
+      nominalCost: targetPackagePrice,
+      gstRate: pkgTaxMeta.gstRate,
+      hsnSacCode: pkgTaxMeta.hsnSacCode,
+      isExempt: pkgTaxMeta.isExempt,
+    });
+
+    // 2. Add any addon items
+    if (Array.isArray(addons) && addons.length > 0) {
+      for (const addon of addons) {
+        const unitPrice = addon.units > 0 ? (addon.price / addon.units) : addon.price;
+        const rawName = addon.name || 'Care Service';
+        const displayName = rawName.startsWith('Add-on') ? rawName : `Add-on: ${rawName}`;
+        taxItems.push({
+          benefitId: addon.benefitId || null,
+          name: displayName,
+          quantity: addon.units || 1,
+          unitPrice: unitPrice,
+          nominalCost: unitPrice,
+          gstRate: addon.gstRate ?? 18,
+          hsnSacCode: addon.hsnSacCode || '998399',
+          isExempt: Boolean(addon.isExempt ?? addon.isGstExempt),
+        });
+      }
     }
 
     // 2. Compute GST, pro-rata package base price allocation, and proportional discounts via @maihoonna/billing
     const calculationResult = InvoiceCalculator.calculate({
       items: taxItems,
-      totalDiscount: discountAmount,
+      totalDiscount: discountAmount, // Properly allocate the pre-tax discount
       customerState,
       companyState: process.env.COMPANY_STATE || 'Haryana',
-      packageTotalBasePrice: targetPackagePrice,
     });
+
+    // 2b. We no longer apply Post-Tax Discount manually.
+    // The exact discount is already allocated proportionally to the pre-tax line items by the calculator.
+    // However, if there's a tiny 1 paisa rounding mismatch between the calculated total and `amountPaid`, 
+    // we can strictly sync the final total amount for reconciliation.
+    if (amountPaid !== undefined && amountPaid !== null && Math.abs(calculationResult.totalAmount - amountPaid) <= 0.1) {
+      calculationResult.totalAmount = amountPaid;
+    }
 
     // 3. Persist Invoice + Line Items atomically in DB
     return await this.engine.createInvoiceRecord(tx, {
@@ -165,22 +170,28 @@ class InvoiceService {
     pkg,
     packageVersion,
     durationMonths = 1,
+    packageTotalBasePrice,
     customerState = '',
     discountAmount = 0,
+    amountPaid,
     subscriberId,
     beneficiaryId = null,
     status = 'PAID',
+    addons = [],
   }) {
     return await this.generateSubscriptionInvoice(tx, {
       subscription: newSubscription,
       subPackage: pkg,
       packageVersion,
       durationMonths,
+      packageTotalBasePrice,
       customerState,
       discountAmount,
+      amountPaid,
       subscriberId,
       beneficiaryId,
       status,
+      addons,
     });
   }
 
@@ -218,7 +229,7 @@ class InvoiceService {
         if (rawNotes.addonItems) {
           try {
             addonItems = typeof rawNotes.addonItems === 'string' ? JSON.parse(rawNotes.addonItems) : rawNotes.addonItems;
-          } catch (_) {}
+          } catch (_) { }
         }
 
         if (Array.isArray(addonItems) && addonItems.length > 0) {

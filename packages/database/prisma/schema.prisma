@@ -2226,6 +2226,7 @@ model LegalPolicy {
   footerNote    String?
   sortOrder     Int      @default(0)
   isActive      Boolean  @default(true)
+  status        String   @default("PUBLISHED") // 'DRAFT', 'PUBLISHED', 'ARCHIVED'
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
