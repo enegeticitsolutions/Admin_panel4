@@ -104,7 +104,6 @@ function render(invoice, company = {}) {
   const amountInWords       = numberToWords(Math.round(totalAmount));
 
   // ── Discount rows (matches InvoiceGenerator.ts exactly) ────────────────────
-  const bothDiscounts = discountAmount > 0 && saathiDiscountAmount > 0;
   const discountRows = `
     ${discountAmount > 0 ? `
     <tr>
@@ -116,10 +115,14 @@ function render(invoice, company = {}) {
       <td>Saathi Discount</td>
       <td>-₹${saathiDiscountAmount.toFixed(2)}</td>
     </tr>` : ''}
-    ${bothDiscounts ? `
+    ${(discountAmount > 0 && saathiDiscountAmount > 0) ? `
     <tr>
       <td style="font-weight: 600;">Total Discount</td>
       <td style="font-weight: 600;">-₹${(discountAmount + saathiDiscountAmount).toFixed(2)}</td>
+    </tr>` : (discountAmount > 0 || saathiDiscountAmount > 0) ? `
+    <tr>
+      <td>Total Discount</td>
+      <td>-₹${(discountAmount + saathiDiscountAmount).toFixed(2)}</td>
     </tr>` : ''}
   `;
 

@@ -634,6 +634,10 @@ export default function EnrollmentWizardPage() {
         paymentMethod,
         paymentNote,
         couponCode: appliedCoupon?.code,
+        // Pass server-computed discount breakdown so backend does not have to infer
+        // from amountPaid subtraction (which breaks when addons are included).
+        packageDiscount: serverPricing?.packageDiscount ?? 0,
+        couponDiscount: serverPricing?.couponDiscount ?? appliedCoupon?.discount ?? 0,
         csaMode: true, // Always true for Admin enrollment to require subscriber activation
         addons: selectedAddons.map(a => ({
           benefitId: a.benefit.id,
