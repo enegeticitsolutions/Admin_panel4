@@ -66,6 +66,36 @@ export class PartnerService {
 
     return data;
   }
+
+  /**
+   * Fetch approved and published partners & categories for public website display
+   */
+  async getPublishedPartners() {
+    const urls = [
+      'http://localhost:3001/api/partners/public',
+      'http://127.0.0.1:3001/api/partners/public',
+      '/api/partners/public',
+      `${this.apiBaseUrl}/website/partners`,
+      '/api/website/partners',
+    ];
+
+    for (const url of urls) {
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.success && data.data) {
+            return data.data;
+          }
+        }
+      } catch (err) {}
+    }
+
+    return { categories: [], partners: [] };
+  }
 }
 
 export default new PartnerService();
+
+
+

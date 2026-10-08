@@ -149,4 +149,53 @@ Service Details: ${serviceDetails ? serviceDetails.trim() : 'None provided'}`,
   }
 });
 
+/**
+ * GET /api/website/partners
+ * Returns dynamic active partner categories and approved/published partners for the website.
+ */
+router.get('/partners', async (req: Request, res: Response) => {
+  try {
+    const [categories, partners] = await Promise.all([
+      (prisma as any).partnerCategory.findMany({
+        where: { isActive: true },
+        orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+      }),
+      (prisma as any).partner.findMany({
+        where: {
+          isPublished: true,
+          status: 'APPROVED',
+        },
+        include: {
+          category: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              code: true,
+              iconUrl: true,
+            },
+          },
+        },
+        orderBy: [{ isFeatured: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'desc' }],
+      }),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        categories,
+        partners,
+      },
+    });
+  } catch (error: any) {
+    console.error('❌ [Fetch Website Partners Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch partners for website.',
+      data: { categories: [], partners: [] },
+    });
+  }
+});
+
 export default router;
+
