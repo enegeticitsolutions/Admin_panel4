@@ -68,7 +68,7 @@ async function dispatchMedicationMissed({ beneficiaryId, medicationName, schedul
     const beneficiary = await prisma.beneficiary.findUnique({
       where: { id: beneficiaryId },
       include: {
-        subscriber: { select: { id: true, name: true, phone: true } },
+        subscriber: { select: { id: true, name: true, phone: true, email: true } },
         primaryCC: { select: { userId: true } }
       }
     });
@@ -112,6 +112,21 @@ async function dispatchMedicationMissed({ beneficiaryId, medicationName, schedul
           scheduledTime,
         }
       }).catch(err => console.error('[MedicationDispatcher] Missed Dose WhatsApp Error:', err.message));
+    }
+
+    // D. AWS SES Email to Subscriber
+    const subscriberEmail = beneficiary.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'MEDICATION_MISSED',
+        to: subscriberEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+          medication_name: medicationName,
+          scheduled_time: scheduledTime,
+        }
+      }).catch(err => console.error('[MedicationDispatcher] Missed Dose Email Error:', err.message));
     }
   } catch (err) {
     console.error('[MedicationDispatcher] dispatchMedicationMissed Exception:', err.message);

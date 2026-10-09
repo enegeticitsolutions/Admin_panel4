@@ -25,7 +25,7 @@ async function dispatchVitalsAlert({ readingId, beneficiaryId, vitalName, readin
     const beneficiary = await prisma.beneficiary.findUnique({
       where: { id: beneficiaryId },
       include: {
-        subscriber: { select: { id: true, name: true, phone: true } },
+        subscriber: { select: { id: true, name: true, phone: true, email: true } },
         primaryCC: { select: { userId: true } }
       }
     });
@@ -72,6 +72,22 @@ async function dispatchVitalsAlert({ readingId, beneficiaryId, vitalName, readin
         }
       }).catch(err => console.error('[VitalsDispatcher] WhatsApp Error:', err.message));
     }
+
+    // D. AWS SES Email to Subscriber
+    const subscriberEmail = beneficiary.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'VITALS_ALERT',
+        to: subscriberEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+          vital_type: vitalName,
+          reading: String(readingValue),
+          cc_name: ccName,
+        }
+      }).catch(err => console.error('[VitalsDispatcher] SES Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[VitalsDispatcher] dispatchVitalsAlert Exception:', err.message);
   }
@@ -85,7 +101,7 @@ async function dispatchEMRVitalsReport({ beneficiaryId, month }) {
     const beneficiary = await prisma.beneficiary.findUnique({
       where: { id: beneficiaryId },
       include: {
-        subscriber: { select: { id: true, name: true, phone: true } }
+        subscriber: { select: { id: true, name: true, phone: true, email: true } }
       }
     });
 
@@ -113,11 +129,23 @@ async function dispatchEMRVitalsReport({ beneficiaryId, month }) {
         variables: { beneficiaryName, month }
       }).catch(err => console.error('[VitalsDispatcher] EMR WhatsApp Error:', err.message));
     }
+
+    const subscriberEmail = beneficiary.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'MONTHLY_HEALTH_SUMMARY',
+        to: subscriberEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+          month: month || 'Current Month',
+        }
+      }).catch(err => console.error('[VitalsDispatcher] Monthly Summary Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[VitalsDispatcher] dispatchEMRVitalsReport Exception:', err.message);
   }
 }
-
 
 module.exports = {
   dispatchVitalsAlert,

@@ -26,8 +26,8 @@ async function getBeneficiary(beneficiaryId) {
   return prisma.beneficiary.findUnique({
     where: { id: beneficiaryId },
     include: {
-      subscriber: { select: { id: true, name: true, phone: true } },
-      user: { select: { id: true, name: true, phone: true } }
+      subscriber: { select: { id: true, name: true, phone: true, email: true } },
+      user: { select: { id: true, name: true, phone: true, email: true } }
     }
   });
 }
@@ -148,6 +148,20 @@ async function dispatchCommunityEventUpcoming({ beneficiaryId, eventName, date, 
         to: validPhone,
         variables: { eventName, date, venue }
       }).catch(err => console.error('[CommunityDispatcher] WhatsApp Error:', err.message));
+    }
+
+    const email = beneficiary.user?.email || beneficiary.subscriber?.email;
+    if (email && email.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'COMMUNITY_EVENT_UPCOMING',
+        to: email,
+        variables: {
+          event_name: eventName,
+          event_date: date,
+          event_location: venue || 'MaiHoonNa Center',
+        }
+      }).catch(err => console.error('[CommunityDispatcher] Email Error:', err.message));
     }
   } catch (err) {
     console.error('[CommunityDispatcher] dispatchCommunityEventUpcoming Exception:', err.message);

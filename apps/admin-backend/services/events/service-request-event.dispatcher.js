@@ -25,8 +25,8 @@ async function getBeneficiary(beneficiaryId) {
   return prisma.beneficiary.findUnique({
     where: { id: beneficiaryId },
     include: {
-      subscriber: { select: { id: true, name: true, phone: true } },
-      user: { select: { id: true, name: true, phone: true } }
+      subscriber: { select: { id: true, name: true, phone: true, email: true } },
+      user: { select: { id: true, name: true, phone: true, email: true } }
     }
   });
 }
@@ -34,17 +34,17 @@ async function getBeneficiary(beneficiaryId) {
 /**
  * Helper to notify subscriber and beneficiary
  */
-async function notifyStakeholders(beneficiaryId, pushConfig, whatsappConfig) {
+async function notifyStakeholders(beneficiaryId, pushConfig, whatsappConfig, emailConfig = null) {
   const beneficiary = await getBeneficiary(beneficiaryId);
   if (!beneficiary) return;
 
   const notifyRoles = [];
   if (beneficiary.user?.id) {
-    notifyRoles.push({ id: beneficiary.user.id, phone: beneficiary.user.phone });
+    notifyRoles.push({ id: beneficiary.user.id, phone: beneficiary.user.phone, email: beneficiary.user.email });
   }
   
   if (beneficiary.subscriber?.id && beneficiary.subscriber.id !== beneficiary.user?.id) {
-    notifyRoles.push({ id: beneficiary.subscriber.id, phone: beneficiary.subscriber.phone });
+    notifyRoles.push({ id: beneficiary.subscriber.id, phone: beneficiary.subscriber.phone, email: beneficiary.subscriber.email });
   }
 
   for (const role of notifyRoles) {
@@ -62,6 +62,14 @@ async function notifyStakeholders(beneficiaryId, pushConfig, whatsappConfig) {
         to: validPhone,
         ...whatsappConfig
       }).catch(err => console.error(`[ServiceRequestDispatcher] WhatsApp Error:`, err.message));
+    }
+
+    if (emailConfig && role.email && role.email.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        to: role.email,
+        ...emailConfig
+      }).catch(err => console.error(`[ServiceRequestDispatcher] Email Error:`, err.message));
     }
   }
 }
@@ -86,6 +94,14 @@ async function dispatchTeleconsultationRequested({ beneficiaryId, dateTime, doct
       {
         event: 'TELECONSULTATION_REQUESTED',
         variables: { beneficiaryName, dateTime, doctorName }
+      },
+      {
+        event: 'APPOINTMENT_UPDATE',
+        variables: {
+          beneficiary_name: beneficiaryName,
+          service_type: `Tele-consultation with Dr. ${doctorName}`,
+          appointment_time: dateTime,
+        }
       }
     );
   } catch (err) {
@@ -113,6 +129,14 @@ async function dispatchLabTestScheduled({ beneficiaryId, testName, dateTime, lab
       {
         event: 'LAB_TEST_SCHEDULED',
         variables: { beneficiaryName, testName, dateTime, labLocation }
+      },
+      {
+        event: 'LAB_APPOINTMENT_SCHEDULED',
+        variables: {
+          beneficiary_name: beneficiaryName,
+          lab_name: labLocation || testName || 'Diagnostic Lab',
+          scheduled_time: dateTime,
+        }
       }
     );
   } catch (err) {
@@ -123,7 +147,7 @@ async function dispatchLabTestScheduled({ beneficiaryId, testName, dateTime, lab
 /**
  * 3. Dispatch PHYSIOTHERAPY_SCHEDULED (NT-082)
  */
-async function dispatchPhysiotherapyScheduled({ beneficiaryId, dateTime, center }) {
+async function dispatchPhysiotherapyScheduled({ beneficiaryId, dateTime, center, therapistName }) {
   try {
     const beneficiary = await getBeneficiary(beneficiaryId);
     if (!beneficiary) return;
@@ -140,6 +164,14 @@ async function dispatchPhysiotherapyScheduled({ beneficiaryId, dateTime, center 
       {
         event: 'PHYSIOTHERAPY_SCHEDULED',
         variables: { beneficiaryName, dateTime, center }
+      },
+      {
+        event: 'PHYSIOTHERAPY_SCHEDULED',
+        variables: {
+          beneficiary_name: beneficiaryName,
+          therapist_name: therapistName || center || 'Physiotherapist',
+          scheduled_time: dateTime,
+        }
       }
     );
   } catch (err) {
