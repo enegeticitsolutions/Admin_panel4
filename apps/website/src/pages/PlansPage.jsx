@@ -1067,7 +1067,7 @@ export default function PlansPage({
       <section className="faq plans-faq">
         <div className="section-heading">
           <span>FAQ</span>
-          <h2>Questions we hear often</h2>
+          <h2>Questions we often hear</h2>
           <p>
             Can't find what you're looking for? Write to us at{" "}
             <a href="mailto:info@maihoonna.com">info@maihoonna.com</a>

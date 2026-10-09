@@ -22,6 +22,19 @@ function getValidPhone(phone) {
   return cleanPhone.length >= 10 ? cleanPhone : null;
 }
 
+async function getVolunteerEmail(volunteerId, fallbackEmail) {
+  if (fallbackEmail && fallbackEmail.includes('@')) return fallbackEmail;
+  if (!volunteerId) return null;
+  try {
+    const user = await prisma.user.findUnique({ where: { id: volunteerId }, select: { email: true } });
+    if (user?.email && user.email.includes('@')) return user.email;
+    const vol = await prisma.volunteer.findUnique({ where: { id: volunteerId }, select: { email: true } });
+    return vol?.email && vol.email.includes('@') ? vol.email : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Ensures shadow User record exists for Volunteer so foreign keys in notifications table succeed
  */
@@ -60,7 +73,7 @@ async function resolveVolunteerUserId(volunteerId, fallbackPhone, fallbackName) 
 /**
  * ST-003: Saathi profile approved & activated
  */
-async function dispatchSaathiProfileApproved({ volunteerId, volunteerName, volunteerPhone, volunteerUserId }) {
+async function dispatchSaathiProfileApproved({ volunteerId, volunteerName, volunteerPhone, volunteerUserId, volunteerEmail }) {
   try {
     const userId = volunteerUserId || (await resolveVolunteerUserId(volunteerId, volunteerPhone, volunteerName));
     if (userId) {
@@ -94,6 +107,18 @@ async function dispatchSaathiProfileApproved({ volunteerId, volunteerName, volun
         console.error('[SathiAdminDispatcher] WhatsApp ST-003 Exception:', err.message);
       });
     }
+
+    const email = await getVolunteerEmail(volunteerId || userId, volunteerEmail);
+    if (email) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SAATHI_PROFILE_APPROVED',
+        to: email,
+        variables: {
+          volunteer_name: volunteerName || 'Volunteer',
+        }
+      }).catch(err => console.error('[SathiAdminDispatcher] Email ST-003 Error:', err.message));
+    }
   } catch (err) {
     console.error('[SathiAdminDispatcher] dispatchSaathiProfileApproved Exception:', err.message);
   }
@@ -102,7 +127,7 @@ async function dispatchSaathiProfileApproved({ volunteerId, volunteerName, volun
 /**
  * ST-010: New beneficiary match assigned
  */
-async function dispatchSaathiBeneficiaryMatched({ volunteerId, volunteerName, volunteerPhone, beneficiaryName, distanceKm = '2.5' }) {
+async function dispatchSaathiBeneficiaryMatched({ volunteerId, volunteerName, volunteerPhone, volunteerEmail, beneficiaryName, distanceKm = '2.5' }) {
   try {
     const userId = await resolveVolunteerUserId(volunteerId, volunteerPhone, volunteerName);
     if (userId) {
@@ -133,6 +158,20 @@ async function dispatchSaathiBeneficiaryMatched({ volunteerId, volunteerName, vo
           distanceKm: String(distanceKm),
         },
       }).catch(() => {});
+    }
+
+    const email = await getVolunteerEmail(volunteerId || userId, volunteerEmail);
+    if (email) {
+      notificationService.send({
+        channel: 'email',
+        event: 'NEW_BENEFICIARY_MATCH',
+        to: email,
+        variables: {
+          volunteer_name: volunteerName || 'Volunteer',
+          beneficiary_name: beneficiaryName,
+          distance_km: String(distanceKm),
+        }
+      }).catch(err => console.error('[SathiAdminDispatcher] Email ST-010 Error:', err.message));
     }
   } catch (err) {
     console.error('[SathiAdminDispatcher] dispatchSaathiBeneficiaryMatched Exception:', err.message);
@@ -229,7 +268,7 @@ async function dispatchSaathiFeedbackConcernFlagged({ coordinatorUserId, volunte
 /**
  * ST-060: New Saathi volunteer registered (To Coordinator)
  */
-async function dispatchCoordinatorNewVolunteerRegistered({ coordinatorUserId, volunteerName, zoneCity }) {
+async function dispatchCoordinatorNewVolunteerRegistered({ coordinatorUserId, volunteerName, zoneCity, volunteerEmail }) {
   try {
     if (coordinatorUserId) {
       notifyUser(prisma, {
@@ -244,6 +283,17 @@ async function dispatchCoordinatorNewVolunteerRegistered({ coordinatorUserId, vo
           zoneCity,
         },
       }).catch(err => console.error('[SathiAdminDispatcher] Push Error ST-060:', err.message));
+    }
+
+    if (volunteerEmail && volunteerEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SAATHI_REGISTRATION_SUBMITTED',
+        to: volunteerEmail,
+        variables: {
+          volunteer_name: volunteerName || 'Volunteer',
+        }
+      }).catch(err => console.error('[SathiAdminDispatcher] Email ST-060 Error:', err.message));
     }
   } catch (err) {
     console.error('[SathiAdminDispatcher] dispatchCoordinatorNewVolunteerRegistered Exception:', err.message);

@@ -5,6 +5,7 @@ const { verifyToken } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const storageService = require('../services/storage');
 const { resolveFileUrl } = require('../services/storage/urlResolver');
+const { dispatchPartnerEnrolmentRequest, dispatchPartnerEnrolmentApproved } = require('../services/events/admin-event.dispatcher');
 
 /**
  * Helper: Forward partner submission directly to Zoho CRM Web-to-Entity endpoint
@@ -118,6 +119,13 @@ router.post('/apply', async (req, res) => {
       city,
       state,
     });
+
+    // 4. Dispatch Event Notifications (Admin notification + SES email)
+    dispatchPartnerEnrolmentRequest({
+      partnerName: organizationName,
+      partnerType: categoryName,
+      partnerEmail: email,
+    }).catch(err => console.warn('[PartnerApply] Event dispatch warning:', err.message));
 
     res.json({
       success: true,
@@ -707,6 +715,15 @@ router.put('/:id', async (req, res) => {
       },
     });
 
+    if (status === 'APPROVED' && existing.status !== 'APPROVED') {
+      dispatchPartnerEnrolmentApproved({
+        partnerName: updated.organizationName,
+        partnerPhone: updated.phone,
+        partnerEmail: updated.email,
+        date: new Date().toLocaleDateString('en-IN'),
+      }).catch(err => console.warn('[PartnerUpdate] Event dispatch warning:', err.message));
+    }
+
     res.json({ success: true, data: updated, message: 'Partner updated successfully' });
   } catch (error) {
     console.error('Error updating partner:', error);
@@ -825,6 +842,15 @@ router.patch('/:id/status', async (req, res) => {
       },
       include: { category: true },
     });
+
+    if (status === 'APPROVED') {
+      dispatchPartnerEnrolmentApproved({
+        partnerName: updated.organizationName,
+        partnerPhone: updated.phone,
+        partnerEmail: updated.email,
+        date: new Date().toLocaleDateString('en-IN'),
+      }).catch(err => console.warn('[PartnerStatus] Event dispatch warning:', err.message));
+    }
 
     res.json({ success: true, data: updated, message: `Partner status updated to ${status}` });
   } catch (error) {

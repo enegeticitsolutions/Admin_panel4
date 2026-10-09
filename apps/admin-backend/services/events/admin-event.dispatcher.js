@@ -22,10 +22,21 @@ function getValidPhone(phone) {
   return cleanPhone.length >= 10 ? cleanPhone : null;
 }
 
+async function getUserEmail(userId, fallbackEmail) {
+  if (fallbackEmail && fallbackEmail.includes('@')) return fallbackEmail;
+  if (!userId) return process.env.ADMIN_NOTIFICATION_EMAIL || null;
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+    return user?.email && user.email.includes('@') ? user.email : (process.env.ADMIN_NOTIFICATION_EMAIL || null);
+  } catch {
+    return process.env.ADMIN_NOTIFICATION_EMAIL || null;
+  }
+}
+
 /**
  * 1. Dispatch SUBSCRIPTION_PENDING_CSA (NT-090)
  */
-async function dispatchSubscriptionPendingCSA({ csaUserId, subscriberName, beneficiaryName }) {
+async function dispatchSubscriptionPendingCSA({ csaUserId, csaEmail, subscriberName, beneficiaryName, packageName }) {
   try {
     if (csaUserId) {
       notifyUser(prisma, {
@@ -36,6 +47,20 @@ async function dispatchSubscriptionPendingCSA({ csaUserId, subscriberName, benef
         data: { event: 'SUBSCRIPTION_PENDING_CSA' },
       }).catch(err => console.error('[AdminDispatcher] Push Error:', err.message));
     }
+
+    const email = await getUserEmail(csaUserId, csaEmail);
+    if (email) {
+      notificationService.send({
+        channel: 'email',
+        event: 'NEW_SUBSCRIPTION_PENDING_REVIEW',
+        to: email,
+        variables: {
+          subscriber_name: subscriberName || 'Subscriber',
+          beneficiary_name: beneficiaryName || 'Beneficiary',
+          package_name: packageName || 'Care Plan',
+        }
+      }).catch(err => console.error('[AdminDispatcher] Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[AdminDispatcher] dispatchSubscriptionPendingCSA Exception:', err.message);
   }
@@ -44,7 +69,7 @@ async function dispatchSubscriptionPendingCSA({ csaUserId, subscriberName, benef
 /**
  * 2. Dispatch SUBSCRIPTION_PENDING_OM (NT-091)
  */
-async function dispatchSubscriptionPendingOM({ omUserId, subscriptionId, beneficiaryName }) {
+async function dispatchSubscriptionPendingOM({ omUserId, omEmail, subscriptionId, subscriberName, beneficiaryName, packageName }) {
   try {
     if (omUserId) {
       notifyUser(prisma, {
@@ -55,6 +80,20 @@ async function dispatchSubscriptionPendingOM({ omUserId, subscriptionId, benefic
         data: { event: 'SUBSCRIPTION_PENDING_OM' },
       }).catch(err => console.error('[AdminDispatcher] Push Error:', err.message));
     }
+
+    const email = await getUserEmail(omUserId, omEmail);
+    if (email) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SUBSCRIPTION_PENDING_APPROVAL',
+        to: email,
+        variables: {
+          subscriber_name: subscriberName || 'Subscriber',
+          beneficiary_name: beneficiaryName || 'Beneficiary',
+          package_name: packageName || 'Care Plan',
+        }
+      }).catch(err => console.error('[AdminDispatcher] Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[AdminDispatcher] dispatchSubscriptionPendingOM Exception:', err.message);
   }
@@ -63,7 +102,7 @@ async function dispatchSubscriptionPendingOM({ omUserId, subscriptionId, benefic
 /**
  * 3. Dispatch PARTNER_ENROLMENT_REQUEST (NT-092)
  */
-async function dispatchPartnerEnrolmentRequest({ omUserId, partnerName, partnerType }) {
+async function dispatchPartnerEnrolmentRequest({ omUserId, omEmail, partnerName, partnerType, partnerEmail }) {
   try {
     if (omUserId) {
       notifyUser(prisma, {
@@ -74,6 +113,33 @@ async function dispatchPartnerEnrolmentRequest({ omUserId, partnerName, partnerT
         data: { event: 'PARTNER_ENROLMENT_REQUEST' },
       }).catch(err => console.error('[AdminDispatcher] Push Error:', err.message));
     }
+
+    // 1. Notify Admin / Operations Manager
+    const adminEmail = await getUserEmail(omUserId, omEmail);
+    if (adminEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'PARTNER_ENROLMENT_REQUEST',
+        to: adminEmail,
+        variables: {
+          partner_name: partnerName,
+          partner_type: partnerType || 'Service Partner',
+        }
+      }).catch(err => console.error('[AdminDispatcher] Admin Email Error:', err.message));
+    }
+
+    // 2. Send acknowledgment to the Partner Applicant if email is provided
+    if (partnerEmail && partnerEmail.includes('@') && partnerEmail !== adminEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'PARTNER_ENROLMENT_REQUEST',
+        to: partnerEmail,
+        variables: {
+          partner_name: partnerName,
+          partner_type: partnerType || 'Service Partner',
+        }
+      }).catch(err => console.error('[AdminDispatcher] Applicant Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[AdminDispatcher] dispatchPartnerEnrolmentRequest Exception:', err.message);
   }
@@ -82,7 +148,7 @@ async function dispatchPartnerEnrolmentRequest({ omUserId, partnerName, partnerT
 /**
  * 4. Dispatch PARTNER_ENROLMENT_APPROVED (NT-093)
  */
-async function dispatchPartnerEnrolmentApproved({ partnerUserId, partnerPhone, partnerName, date }) {
+async function dispatchPartnerEnrolmentApproved({ partnerUserId, partnerPhone, partnerEmail, partnerName, date }) {
   try {
     if (partnerUserId) {
       notifyUser(prisma, {
@@ -92,6 +158,18 @@ async function dispatchPartnerEnrolmentApproved({ partnerUserId, partnerPhone, p
         body: `Congratulations, ${partnerName} is now an approved MaiHoonNa partner effective ${date}.`,
         data: { event: 'PARTNER_ENROLMENT_APPROVED' },
       }).catch(err => console.error('[AdminDispatcher] Push Error:', err.message));
+    }
+
+    const email = await getUserEmail(partnerUserId, partnerEmail);
+    if (email) {
+      notificationService.send({
+        channel: 'email',
+        event: 'PARTNER_ENROLMENT_APPROVED',
+        to: email,
+        variables: {
+          partner_name: partnerName,
+        }
+      }).catch(err => console.error('[AdminDispatcher] Email Error:', err.message));
     }
   } catch (err) {
     console.error('[AdminDispatcher] dispatchPartnerEnrolmentApproved Exception:', err.message);
@@ -130,7 +208,7 @@ async function dispatchCCAbsenceReported({ fmUserId, fmPhone, ccName, date, coun
 /**
  * 6. Dispatch BGV_STATUS_UPDATE (NT-095)
  */
-async function dispatchBGVStatusUpdate({ omUserId, candidateName, status }) {
+async function dispatchBGVStatusUpdate({ omUserId, candidateEmail, candidateName, status }) {
   try {
     if (omUserId) {
       notifyUser(prisma, {
@@ -141,6 +219,19 @@ async function dispatchBGVStatusUpdate({ omUserId, candidateName, status }) {
         data: { event: 'BGV_STATUS_UPDATE' },
       }).catch(err => console.error('[AdminDispatcher] Push Error:', err.message));
     }
+
+    const email = candidateEmail || (await getUserEmail(omUserId));
+    if (email) {
+      notificationService.send({
+        channel: 'email',
+        event: 'BGV_STATUS_UPDATE',
+        to: email,
+        variables: {
+          candidate_name: candidateName,
+          bgv_status: status,
+        }
+      }).catch(err => console.error('[AdminDispatcher] Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[AdminDispatcher] dispatchBGVStatusUpdate Exception:', err.message);
   }
@@ -149,7 +240,7 @@ async function dispatchBGVStatusUpdate({ omUserId, candidateName, status }) {
 /**
  * 7. Dispatch WEEKLY_ZONE_UTILISATION (NT-096)
  */
-async function dispatchWeeklyZoneUtilisation({ omUserId, zoneName, weekStartDate }) {
+async function dispatchWeeklyZoneUtilisation({ omUserId, omEmail, zoneName, weekStartDate, weekEndDate }) {
   try {
     if (omUserId) {
       notifyUser(prisma, {
@@ -159,6 +250,20 @@ async function dispatchWeeklyZoneUtilisation({ omUserId, zoneName, weekStartDate
         body: `Attached: utilisation, CC performance, and SLA summary for ${zoneName} zone, week of ${weekStartDate}.`,
         data: { event: 'WEEKLY_ZONE_UTILISATION' },
       }).catch(err => console.error('[AdminDispatcher] Push Error:', err.message));
+    }
+
+    const email = await getUserEmail(omUserId, omEmail);
+    if (email) {
+      notificationService.send({
+        channel: 'email',
+        event: 'WEEKLY_ZONE_REPORT',
+        to: email,
+        variables: {
+          zone_name: zoneName,
+          week_start: weekStartDate,
+          week_end: weekEndDate || 'Current Week',
+        }
+      }).catch(err => console.error('[AdminDispatcher] Email Error:', err.message));
     }
   } catch (err) {
     console.error('[AdminDispatcher] dispatchWeeklyZoneUtilisation Exception:', err.message);

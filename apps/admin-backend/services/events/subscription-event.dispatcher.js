@@ -21,17 +21,32 @@ function getValidPhone(phone) {
   return cleanPhone.length >= 10 ? cleanPhone : null;
 }
 
+async function getSubscriberEmail(subscriberId, fallbackEmail) {
+  if (fallbackEmail && fallbackEmail.includes('@')) return fallbackEmail;
+  if (!subscriberId) return null;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: subscriberId },
+      select: { email: true }
+    });
+    return user?.email && user.email.includes('@') ? user.email : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * 1. Dispatch SCHEDULE_CHANGE_REQUEST (NT-040)
  */
-async function dispatchScheduleChangeRequest({ subscriberId, beneficiaryName, requestedDate, omUserId, omPhone }) {
+async function dispatchScheduleChangeRequest({ subscriberId, beneficiaryName, requestedDate, omUserId, omPhone, subscriberEmail }) {
   try {
     const subscriber = await prisma.user.findUnique({
       where: { id: subscriberId },
-      select: { name: true }
+      select: { name: true, email: true }
     });
     
     const subscriberName = subscriber?.name || 'Subscriber';
+    const email = subscriberEmail || subscriber?.email;
 
     // A. Notify OM (Push)
     if (omUserId) {
@@ -54,6 +69,20 @@ async function dispatchScheduleChangeRequest({ subscriberId, beneficiaryName, re
         variables: { subscriberName, beneficiaryName, requestedDate }
       }).catch(err => console.error('[SubscriptionDispatcher] WhatsApp Error:', err.message));
     }
+
+    // C. AWS SES Email Notification to Subscriber
+    if (email && email.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SCHEDULE_CHANGE_REQUEST_SUBMITTED',
+        to: email,
+        variables: {
+          subscriber_name: subscriberName,
+          beneficiary_name: beneficiaryName,
+          requested_date: requestedDate,
+        }
+      }).catch(err => console.error('[SubscriptionDispatcher] Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[SubscriptionDispatcher] dispatchScheduleChangeRequest Exception:', err.message);
   }
@@ -62,7 +91,7 @@ async function dispatchScheduleChangeRequest({ subscriberId, beneficiaryName, re
 /**
  * 2. Dispatch SUBSCRIPTION_RENEWAL_REMINDER (NT-042)
  */
-async function dispatchSubscriptionRenewalReminder({ subscriberId, phone, subscriberName, packageName, beneficiaryName, expiryDate }) {
+async function dispatchSubscriptionRenewalReminder({ subscriberId, phone, email, subscriberName, packageName, beneficiaryName, expiryDate }) {
   try {
     // A. Notify Subscriber (Push)
     if (subscriberId) {
@@ -85,6 +114,22 @@ async function dispatchSubscriptionRenewalReminder({ subscriberId, phone, subscr
         variables: { subscriberName, packageName, beneficiaryName, expiryDate }
       }).catch(err => console.error('[SubscriptionDispatcher] WhatsApp Error:', err.message));
     }
+
+    // C. AWS SES Email Notification
+    const targetEmail = await getSubscriberEmail(subscriberId, email);
+    if (targetEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SUBSCRIPTION_RENEWAL_REMINDER',
+        to: targetEmail,
+        variables: {
+          subscriber_name: subscriberName,
+          package_name: packageName,
+          beneficiary_name: beneficiaryName,
+          expiry_date: expiryDate,
+        }
+      }).catch(err => console.error('[SubscriptionDispatcher] Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[SubscriptionDispatcher] dispatchSubscriptionRenewalReminder Exception:', err.message);
   }
@@ -93,7 +138,7 @@ async function dispatchSubscriptionRenewalReminder({ subscriberId, phone, subscr
 /**
  * 3. Dispatch PAYMENT_FAILED (NT-045)
  */
-async function dispatchPaymentFailed({ subscriberId, phone, subscriberName, amount, beneficiaryName, paymentLink }) {
+async function dispatchPaymentFailed({ subscriberId, phone, email, subscriberName, amount, beneficiaryName, paymentLink }) {
   try {
     let name = subscriberName;
     if (!name && subscriberId) {
@@ -123,6 +168,21 @@ async function dispatchPaymentFailed({ subscriberId, phone, subscriberName, amou
         variables: { subscriberName: name, amount: amount.toString(), beneficiaryName, paymentLink }
       }).catch(err => console.error('[SubscriptionDispatcher] WhatsApp Error:', err.message));
     }
+
+    // C. AWS SES Email Notification
+    const targetEmail = await getSubscriberEmail(subscriberId, email);
+    if (targetEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'PAYMENT_FAILED',
+        to: targetEmail,
+        variables: {
+          amount: amount.toString(),
+          beneficiary_name: beneficiaryName,
+          payment_link: paymentLink || '',
+        }
+      }).catch(err => console.error('[SubscriptionDispatcher] Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[SubscriptionDispatcher] dispatchPaymentFailed Exception:', err.message);
   }
@@ -131,7 +191,7 @@ async function dispatchPaymentFailed({ subscriberId, phone, subscriberName, amou
 /**
  * 4. Dispatch SUBSCRIPTION_HOURS_LOW (NT-046)
  */
-async function dispatchSubscriptionHoursLow({ subscriberId, phone, beneficiaryName, percentConsumed }) {
+async function dispatchSubscriptionHoursLow({ subscriberId, phone, email, beneficiaryName, percentConsumed }) {
   try {
     if (subscriberId) {
       notifyUser(prisma, {
@@ -152,6 +212,19 @@ async function dispatchSubscriptionHoursLow({ subscriberId, phone, beneficiaryNa
         variables: { beneficiaryName, percentConsumed: percentConsumed.toString() }
       }).catch(err => console.error('[SubscriptionDispatcher] WhatsApp Error:', err.message));
     }
+
+    const targetEmail = await getSubscriberEmail(subscriberId, email);
+    if (targetEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SUBSCRIPTION_HOURS_RUNNING_LOW',
+        to: targetEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+          consumed_percentage: percentConsumed.toString(),
+        }
+      }).catch(err => console.error('[SubscriptionDispatcher] Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[SubscriptionDispatcher] dispatchSubscriptionHoursLow Exception:', err.message);
   }
@@ -160,7 +233,7 @@ async function dispatchSubscriptionHoursLow({ subscriberId, phone, beneficiaryNa
 /**
  * 5. Dispatch SUBSCRIPTION_HOURS_EXHAUSTED (NT-047)
  */
-async function dispatchSubscriptionHoursExhausted({ subscriberId, phone, beneficiaryName, csaUserId, csaPhone }) {
+async function dispatchSubscriptionHoursExhausted({ subscriberId, phone, email, beneficiaryName, csaUserId, csaPhone }) {
   try {
     // Subscriber
     if (subscriberId) {
@@ -183,6 +256,18 @@ async function dispatchSubscriptionHoursExhausted({ subscriberId, phone, benefic
       }).catch(err => console.error('[SubscriptionDispatcher] Subscriber WhatsApp Error:', err.message));
     }
 
+    const targetEmail = await getSubscriberEmail(subscriberId, email);
+    if (targetEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SUBSCRIPTION_HOURS_EXHAUSTED',
+        to: targetEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+        }
+      }).catch(err => console.error('[SubscriptionDispatcher] Subscriber Email Error:', err.message));
+    }
+
     // CSA
     if (csaUserId) {
       notifyUser(prisma, {
@@ -201,7 +286,7 @@ async function dispatchSubscriptionHoursExhausted({ subscriberId, phone, benefic
 /**
  * 6. Dispatch SUBSCRIPTION_TERMINATED (NT-048)
  */
-async function dispatchSubscriptionTerminated({ subscriberId, phone, beneficiaryName, effectiveDate }) {
+async function dispatchSubscriptionTerminated({ subscriberId, phone, email, beneficiaryName, effectiveDate }) {
   try {
     if (subscriberId) {
       notifyUser(prisma, {
@@ -222,6 +307,19 @@ async function dispatchSubscriptionTerminated({ subscriberId, phone, beneficiary
         variables: { beneficiaryName, effectiveDate }
       }).catch(err => console.error('[SubscriptionDispatcher] WhatsApp Error:', err.message));
     }
+
+    const targetEmail = await getSubscriberEmail(subscriberId, email);
+    if (targetEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SUBSCRIPTION_TERMINATED',
+        to: targetEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+          effective_date: effectiveDate,
+        }
+      }).catch(err => console.error('[SubscriptionDispatcher] Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[SubscriptionDispatcher] dispatchSubscriptionTerminated Exception:', err.message);
   }
@@ -230,7 +328,7 @@ async function dispatchSubscriptionTerminated({ subscriberId, phone, beneficiary
 /**
  * 7. Dispatch FREE_TRIAL_ENDING (NT-049)
  */
-async function dispatchFreeTrialEnding({ subscriberId, phone, subscriberName, beneficiaryName, endDate }) {
+async function dispatchFreeTrialEnding({ subscriberId, phone, email, subscriberName, beneficiaryName, endDate, daysLeft = '3' }) {
   try {
     if (subscriberId) {
       notifyUser(prisma, {
@@ -251,8 +349,53 @@ async function dispatchFreeTrialEnding({ subscriberId, phone, subscriberName, be
         variables: { subscriberName, beneficiaryName, endDate }
       }).catch(err => console.error('[SubscriptionDispatcher] WhatsApp Error:', err.message));
     }
+
+    const targetEmail = await getSubscriberEmail(subscriberId, email);
+    if (targetEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'FREE_TRIAL_ENDING_SOON',
+        to: targetEmail,
+        variables: {
+          days_left: String(daysLeft),
+        }
+      }).catch(err => console.error('[SubscriptionDispatcher] Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[SubscriptionDispatcher] dispatchFreeTrialEnding Exception:', err.message);
+  }
+}
+
+/**
+ * 8. Dispatch SCHEDULE_CHANGE_STATUS
+ */
+async function dispatchScheduleChangeStatus({ subscriberId, phone, email, beneficiaryName, status, newDatetime }) {
+  try {
+    if (subscriberId) {
+      notifyUser(prisma, {
+        userId: subscriberId,
+        type: 'info',
+        title: `📅 Schedule Change ${status}`,
+        body: `Your schedule change request for ${beneficiaryName} has been ${status}. New scheduled time: ${newDatetime}.`,
+        data: { event: 'SCHEDULE_CHANGE_STATUS' },
+      }).catch(err => console.error('[SubscriptionDispatcher] Push Error:', err.message));
+    }
+
+    const targetEmail = await getSubscriberEmail(subscriberId, email);
+    if (targetEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SCHEDULE_CHANGE_STATUS',
+        to: targetEmail,
+        variables: {
+          status,
+          beneficiary_name: beneficiaryName,
+          new_datetime: newDatetime,
+        }
+      }).catch(err => console.error('[SubscriptionDispatcher] Email Error:', err.message));
+    }
+  } catch (err) {
+    console.error('[SubscriptionDispatcher] dispatchScheduleChangeStatus Exception:', err.message);
   }
 }
 
@@ -264,4 +407,5 @@ module.exports = {
   dispatchSubscriptionHoursExhausted,
   dispatchSubscriptionTerminated,
   dispatchFreeTrialEnding,
+  dispatchScheduleChangeStatus,
 };

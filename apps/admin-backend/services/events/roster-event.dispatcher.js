@@ -25,8 +25,8 @@ async function dispatchCareCompanionAssigned({ beneficiaryId, ccName, primaryOrS
     const beneficiary = await prisma.beneficiary.findUnique({
       where: { id: beneficiaryId },
       include: {
-        user: { select: { id: true, name: true } },
-        subscriber: { select: { id: true, name: true, phone: true } }
+        user: { select: { id: true, name: true, email: true } },
+        subscriber: { select: { id: true, name: true, phone: true, email: true } }
       }
     });
 
@@ -69,6 +69,21 @@ async function dispatchCareCompanionAssigned({ beneficiaryId, ccName, primaryOrS
           primaryOrSecondary,
         }
       }).catch(err => console.error('[RosterDispatcher] WhatsApp Error:', err.message));
+    }
+
+    // AWS SES Email to Subscriber
+    const subscriberEmail = beneficiary.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'CARE_MITRA_ASSIGNED',
+        to: subscriberEmail,
+        variables: {
+          cc_name: ccName,
+          beneficiary_name: beneficiaryName,
+          contact_number: 'Contact Support',
+        }
+      }).catch(err => console.error('[RosterDispatcher] Email Error:', err.message));
     }
   } catch (err) {
     console.error('[RosterDispatcher] dispatchCareCompanionAssigned Exception:', err.message);
@@ -231,6 +246,19 @@ async function dispatchCCDeactivated({ fmUserId, omUserId, fmPhone, omPhone, ccN
           variables: { ccName, lastWorkingDate, reason }
         }).catch(err => console.error('[RosterDispatcher] WhatsApp Error:', err.message));
       }
+    }
+
+    const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.AWS_SES_FROM_EMAIL;
+    if (adminEmail && adminEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'CARE_MITRA_DEACTIVATED',
+        to: adminEmail,
+        variables: {
+          cc_name: ccName,
+          reason: reason || 'Operations Update',
+        }
+      }).catch(err => console.error('[RosterDispatcher] Deactivation Email Error:', err.message));
     }
   } catch (err) {
     console.error('[RosterDispatcher] dispatchCCDeactivated Exception:', err.message);
