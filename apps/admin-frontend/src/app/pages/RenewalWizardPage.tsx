@@ -1558,7 +1558,12 @@ export default function RenewalWizardPage() {
                             {pkg.isGlobal ? 'Global' : pkg.regions && pkg.regions.length > 0 ? 'Region Based' : 'Private'}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">₹{pkg.basePrice} / month</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {(() => {
+                            const p = calculateWizardPricing(pkg, duration);
+                            return `₹${p.packageBasePrice} for ${p.durationLabel}`;
+                          })()}
+                        </p>
                       </div>
                       {selectedPackageId === pkg.id && <Check className="w-5 h-5 text-primary" />}
                     </div>
@@ -1699,11 +1704,6 @@ export default function RenewalWizardPage() {
                           <tr className="hover:bg-slate-50/50">
                             <td className="py-2 px-3 font-semibold text-slate-900">
                               <div>{pricing.packageName || selectedPackage?.name}</div>
-                              {pricing.discountPercent > 0 && (
-                                <div className="text-[11px] font-normal text-emerald-600 mt-0.5">
-                                  Includes {pricing.discountPercent}% duration discount (-₹{pricing.packageDiscount?.toLocaleString('en-IN', {minimumFractionDigits: 2})})
-                                </div>
-                              )}
                             </td>
                             <td className="py-2 px-3 text-center">1</td>
                             <td className="py-2 px-3 text-right font-mono">₹{pricing.totalPackageBase?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
