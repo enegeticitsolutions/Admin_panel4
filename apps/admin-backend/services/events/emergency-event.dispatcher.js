@@ -143,7 +143,7 @@ async function dispatchEmergencyResolved({ requestId, beneficiaryId, outcome = '
     const beneficiary = await prisma.beneficiary.findUnique({
       where: { id: beneficiaryId },
       include: {
-        subscriber: { select: { id: true, name: true, phone: true } }
+        subscriber: { select: { id: true, name: true, phone: true, email: true } }
       }
     });
 
@@ -173,6 +173,20 @@ async function dispatchEmergencyResolved({ requestId, beneficiaryId, outcome = '
           outcome,
         }
       }).catch(err => console.error('[EmergencyDispatcher] Resolved WhatsApp Error:', err.message));
+    }
+
+    // AWS SES Email to Subscriber
+    const subscriberEmail = beneficiary.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'EMERGENCY_RESOLVED',
+        to: subscriberEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+          resolution_notes: outcome,
+        }
+      }).catch(err => console.error('[EmergencyDispatcher] Resolved Email Error:', err.message));
     }
   } catch (err) {
     console.error('[EmergencyDispatcher] dispatchEmergencyResolved Exception:', err.message);
