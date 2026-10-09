@@ -25,7 +25,7 @@ async function getBeneficiaryWithSubscriber(beneficiaryId) {
   return prisma.beneficiary.findUnique({
     where: { id: beneficiaryId },
     include: {
-      subscriber: { select: { id: true, name: true, phone: true } }
+      subscriber: { select: { id: true, name: true, phone: true, email: true } }
     }
   });
 }
@@ -59,6 +59,20 @@ async function dispatchMoodAlert({ beneficiaryId, mood, ccName }) {
         to: subscriberPhone,
         variables: { beneficiaryName, mood, ccName }
       }).catch(err => console.error('[MoodDispatcher] WhatsApp Error:', err.message));
+    }
+
+    const subscriberEmail = beneficiary.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'MOOD_ALERT',
+        to: subscriberEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+          mood: mood || 'Concerned',
+          cc_name: ccName || 'Care Companion',
+        }
+      }).catch(err => console.error('[MoodDispatcher] Email Error:', err.message));
     }
   } catch (err) {
     console.error('[MoodDispatcher] dispatchMoodAlert Exception:', err.message);
@@ -95,6 +109,18 @@ async function dispatchWellbeingCheckRecommended({ beneficiaryId }) {
         variables: { beneficiaryName }
       }).catch(err => console.error('[MoodDispatcher] WhatsApp Error:', err.message));
     }
+
+    const subscriberEmail = beneficiary.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'CONSECUTIVE_NEGATIVE_MOOD',
+        to: subscriberEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+        }
+      }).catch(err => console.error('[MoodDispatcher] Consecutive Negative Mood Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[MoodDispatcher] dispatchWellbeingCheckRecommended Exception:', err.message);
   }
@@ -130,6 +156,19 @@ async function dispatchHappinessScoreUpdate({ beneficiaryId, newScore }) {
         variables: { beneficiaryName, newScore: newScore.toString() }
       }).catch(err => console.error('[MoodDispatcher] WhatsApp Error:', err.message));
     }
+
+    const subscriberEmail = beneficiary.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'HAPPINESS_SCORE_DROPPED',
+        to: subscriberEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+          new_score: String(newScore),
+        }
+      }).catch(err => console.error('[MoodDispatcher] Happiness Score Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[MoodDispatcher] dispatchHappinessScoreUpdate Exception:', err.message);
   }
@@ -164,6 +203,18 @@ async function dispatchWeeklyWellbeingDigest({ beneficiaryId }) {
         to: subscriberPhone,
         variables: { beneficiaryName }
       }).catch(err => console.error('[MoodDispatcher] WhatsApp Error:', err.message));
+    }
+
+    const subscriberEmail = beneficiary.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'WEEKLY_WELLBEING_DIGEST',
+        to: subscriberEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+        }
+      }).catch(err => console.error('[MoodDispatcher] Weekly Digest Email Error:', err.message));
     }
   } catch (err) {
     console.error('[MoodDispatcher] dispatchWeeklyWellbeingDigest Exception:', err.message);

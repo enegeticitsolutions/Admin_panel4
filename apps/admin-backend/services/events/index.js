@@ -21,6 +21,7 @@ const subscriptionEvents = require('./subscription-event.dispatcher');
 const communityEvents = require('./community-event.dispatcher');
 const serviceRequestEvents = require('./service-request-event.dispatcher');
 const adminEvents = require('./admin-event.dispatcher');
+const sathiEvents = require('./sathi-event.dispatcher');
 
 module.exports = {
   visitEvents,
@@ -34,6 +35,7 @@ module.exports = {
   communityEvents,
   serviceRequestEvents,
   adminEvents,
+  sathiEvents,
 
   // Direct helper exports for convenience
   ...visitEvents,
@@ -47,4 +49,5 @@ module.exports = {
   ...communityEvents,
   ...serviceRequestEvents,
   ...adminEvents,
+  ...sathiEvents,
 };

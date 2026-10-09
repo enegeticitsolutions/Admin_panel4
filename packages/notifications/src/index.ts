@@ -7,6 +7,7 @@ import { PushNotificationMessage } from './interfaces/IPushProvider';
 
 import { EmailChannel } from './channels/email.channel';
 import { EmailMessage } from './interfaces/IEmailProvider';
+import { notificationService } from './services/notification.service';
 
 export * from './interfaces/ISmsProvider';
 export * from './interfaces/IWhatsAppProvider';
@@ -23,6 +24,7 @@ export * from './services/notification.service';
 export * from './services/care-mitra-notification.service';
 export * from './services/sathi-notification.service';
 export * from './registry/whatsapp.registry';
+export * from './registry/email.registry';
 export * from './registry/care-mitra-templates.registry';
 export * from './registry/sathi-templates.registry';
 export * from './pubsub/notification-event-bus';
@@ -77,8 +79,18 @@ export async function sendEmail(message: EmailMessage | { to: string; subject: s
   return emailChannel.send(message as EmailMessage);
 }
 
+export async function sendEmailTemplate(event: string, to: string, variables: Record<string, any> = {}) {
+  return notificationService.send({
+    channel: 'email',
+    event,
+    to,
+    variables,
+  });
+}
+
 export async function sendPush(message: PushNotificationMessage) {
   return pushChannel.send(message);
 }
+
 
 
