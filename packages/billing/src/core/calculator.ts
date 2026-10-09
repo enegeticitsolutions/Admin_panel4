@@ -21,7 +21,7 @@ export class BillingCalculator {
     // 1. Determine gross paise per line item
     const lineGrossPaise: number[] = rawItems.map((item) => {
       const qty = Math.max(1, item.quantity || 1);
-      const unitPaise = Money.toPaise(item.unitPrice || 0);
+      const unitPaise = Money.toPaise(item.unitPrice !== undefined && item.unitPrice !== null ? item.unitPrice : (item.nominalCost || 0));
       return unitPaise * qty;
     });
 
@@ -67,7 +67,7 @@ export class BillingCalculator {
       const qty = Math.max(1, raw.quantity || 1);
       const grossPaise = lineGrossPaise[i] || 0;
       const discountPaise = discountResult.lineDiscountPaise[i] || 0;
-      const taxablePaise = discountResult.lineTaxablePaise[i] || 0;
+      const taxablePaise = grossPaise;
 
       const isExempt = Boolean(raw.isGstExempt);
       const rate = isExempt ? 0 : (raw.gstRate !== undefined && raw.gstRate !== null ? raw.gstRate : 18);
@@ -118,7 +118,8 @@ export class BillingCalculator {
     }
 
     const miscPaise = Money.toPaise(input.miscellaneousCost || 0);
-    const grandTotalPaise = totalTaxablePaise + totalTaxPaise + miscPaise;
+    const totalDiscountPaise = Money.toPaise(discountResult.discountsBreakdown.totalDiscount);
+    const grandTotalPaise = totalTaxablePaise + totalTaxPaise + miscPaise - totalDiscountPaise;
 
     const taxSummary = TaxEngine.buildTaxSummary(taxSummaryRows);
 

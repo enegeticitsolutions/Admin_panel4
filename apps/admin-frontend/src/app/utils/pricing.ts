@@ -9,7 +9,6 @@ export interface DurationOption {
 // Standard multi-month billing tenures
 export const DURATION_OPTIONS: DurationOption[] = [
   { value: 'monthly', label: '1 Month', months: 1 },
-  { value: 'two_months', label: '2 Months', months: 2 },
   { value: 'three_months', label: '3 Months', months: 3 },
   { value: 'six_months', label: '6 Months', months: 6 },
   { value: 'annual', label: '12 Months (Annual)', months: 12 },
@@ -184,23 +183,36 @@ export function calculateWizardPricing(
     }
     discountPercent = 0;
   } else {
-    undiscountedPackageTotal = baseRate * months;
-    if (months === 3) {
-      discountPercent = Number(pkg.discountThreeMonths ?? 5);
-    } else if (months === 6) {
-      discountPercent = Number(pkg.discountSixMonths ?? 10);
-    } else if (months >= 12) {
-      discountPercent = Number(pkg.discountAnnual ?? 20);
-    } else {
+    // Check for explicit override prices first
+    if (months === 3 && pkg.priceThreeMonths !== undefined && pkg.priceThreeMonths !== null) {
+      undiscountedPackageTotal = Number(pkg.priceThreeMonths);
       discountPercent = 0;
+    } else if (months === 6 && pkg.priceSixMonths !== undefined && pkg.priceSixMonths !== null) {
+      undiscountedPackageTotal = Number(pkg.priceSixMonths);
+      discountPercent = 0;
+    } else if (months >= 12 && pkg.priceTwelveMonths !== undefined && pkg.priceTwelveMonths !== null) {
+      undiscountedPackageTotal = Number(pkg.priceTwelveMonths);
+      discountPercent = 0;
+    } else {
+      // Fallback to proportional calculation with percentage discount
+      const proportionalBase = baseRate * months;
+      if (months === 3) {
+        discountPercent = Number(pkg.discountThreeMonths ?? 5);
+      } else if (months === 6) {
+        discountPercent = Number(pkg.discountSixMonths ?? 10);
+      } else if (months >= 12) {
+        discountPercent = Number(pkg.discountAnnual ?? 20);
+      } else {
+        discountPercent = 0;
+      }
+      
+      const calculatedDiscount = discountPercent > 0 ? Math.round((proportionalBase * discountPercent / 100) * 100) / 100 : 0;
+      undiscountedPackageTotal = proportionalBase - calculatedDiscount;
+      discountPercent = 0; // Baked into total
     }
-    // Apply duration discount on pre-tax base price
-    packageDiscount = discountPercent > 0 ? Math.round((undiscountedPackageTotal * discountPercent / 100) * 100) / 100 : 0;
-    packageBasePrice = Math.round((undiscountedPackageTotal - packageDiscount) * 100) / 100;
-  }
-  
-  if (couponDiscount > 0) {
-    packageBasePrice = Math.max(0, packageBasePrice - couponDiscount);
+  // No separate duration discount applied
+    packageDiscount = 0;
+    packageBasePrice = undiscountedPackageTotal;
   }
   
   // Inter-state determination (Haryana is company POS)
@@ -298,7 +310,9 @@ export function calculateWizardPricing(
   const sgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
   const igstAmount = isInterState ? totalTaxAmount : 0;
   
-  const finalTotalAmount = Math.max(0, Math.round((packageFinalPayable + addonsFinalTotal) * 100) / 100);
+  let finalTotalAmount = Math.round((packageFinalPayable + addonsFinalTotal) * 100) / 100;
+  // Deduct all discounts post-tax
+  finalTotalAmount = Math.max(0, finalTotalAmount - packageDiscount - couponDiscount);
 
   const dominantRate = pkg.gstRate ?? 18;
   const taxLabel = isInterState ? `IGST` : `CGST + SGST`;

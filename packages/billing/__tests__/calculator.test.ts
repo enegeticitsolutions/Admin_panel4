@@ -119,13 +119,13 @@ describe('Billing Engine - Core Invariants', () => {
       ],
     });
 
-    // Base: 1000, Discounts: 200, Taxable: 800
+    // Base: 1000, Discounts: 200, Taxable: 1000
     assert.strictEqual(result.baseAmount, 1000);
     assert.strictEqual(result.discountAmount, 200);
-    assert.strictEqual(result.taxableAmount, 800);
+    assert.strictEqual(result.taxableAmount, 1000);
 
-    // GST on 800 at 18% = 144
-    assert.strictEqual(result.taxAmount, 144);
-    assert.strictEqual(result.totalAmount, 944);
+    // GST on 1000 at 18% = 180
+    assert.strictEqual(result.taxAmount, 180);
+    assert.strictEqual(result.totalAmount, 980);
   });
 });

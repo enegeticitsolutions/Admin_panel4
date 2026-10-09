@@ -1808,6 +1808,164 @@ export default function EnrollmentWizardPage() {
                 </div>
               </div>
 
+              {/* Package Duration & Plan Type - MOVED UP */}
+              <div className="space-y-3 pt-1 pb-4 border-b border-dashed border-gray-200">
+                <div className="flex items-center justify-between">
+                  <Label className="font-semibold text-sm">Package Duration & Plan Type</Label>
+                  <span className="text-[11px] text-muted-foreground font-mono font-medium">
+                    Current: {pricing.durationLabel || duration.replace('_', ' ')}
+                  </span>
+                </div>
+
+                {/* If selected package is a configured Trial Package (from /subscriptions route) */}
+                {Boolean(selectedPackage?.isFreeTrial || selectedPackage?.trialDurationDays) ? (
+                  <div className="bg-purple-50/80 border border-purple-200/90 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🧪</span>
+                        <div>
+                          <p className="font-semibold text-sm text-purple-950">
+                            {Number(selectedPackage?.basePrice) === 0 ? 'Free Trial Package' : 'Trial Package'} Duration ({selectedPackage?.trialDurationDays || 7} Days Configured)
+                          </p>
+                          <p className="text-[11px] text-purple-700">
+                            Validity configured on package definition in /subscriptions. Price: {Number(selectedPackage?.basePrice) === 0 ? 'Free (₹0)' : `₹${selectedPackage?.basePrice} for ${selectedPackage?.trialDurationDays || 7} days`}.
+                          </p>
+                        </div>
+                      </div>
+                      <Badge className="bg-purple-600 text-white hover:bg-purple-600 font-bold">
+                        {selectedPackage?.trialDurationDays || 7} Days Default
+                      </Badge>
+                    </div>
+
+                    {/* Dynamic Days Input */}
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      <Label htmlFor="custom-trial-days" className="text-xs text-purple-950 font-semibold shrink-0">
+                        Trial Duration (Days):
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="custom-trial-days"
+                          type="number"
+                          min={1}
+                          max={90}
+                          value={duration.match(/^(\d+)_days$/)?.[1] || selectedPackage?.trialDurationDays || 7}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setDuration(`${val}_days`);
+                            }
+                          }}
+                          className="h-9 w-24 text-center font-mono font-bold text-sm bg-white border-purple-300"
+                        />
+                        <span className="text-xs text-purple-900 font-medium">days</span>
+                      </div>
+
+                      {selectedPackage?.trialDurationDays && duration !== `${selectedPackage?.trialDurationDays}_days` && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDuration(`${selectedPackage?.trialDurationDays}_days`)}
+                          className="h-8 text-xs border-purple-300 text-purple-800 hover:bg-purple-100"
+                        >
+                          Reset to Package Config ({selectedPackage?.trialDurationDays} Days)
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard Multi-Month Packages with optional Custom/Trial Day Sale */
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <span className="text-xs font-medium text-slate-600 block">Monthly & Multi-Month Tenures:</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {DURATION_OPTIONS.map((d) => (
+                          <Button
+                            key={d.value}
+                            type="button"
+                            variant={duration === d.value ? 'default' : 'outline'}
+                            onClick={() => setDuration(d.value)}
+                            className={`h-9 text-xs font-semibold ${
+                              duration === d.value ? 'bg-primary text-white shadow-sm' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            {d.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Optional Custom Day / Trial Sale for a standard package */}
+                    <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          Or Sell as Custom / Short Trial (Prorated Daily):
+                        </span>
+                        <span className="text-[11px] text-muted-foreground block">
+                          Enter custom days (e.g. 2, 3, 10 days) to prorate daily rate
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={60}
+                          placeholder="Days"
+                          value={duration.match(/^(\d+)_days$/)?.[1] || ''}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setDuration(`${val}_days`);
+                            } else if (e.target.value === '') {
+                              setDuration('monthly');
+                            }
+                          }}
+                          className="h-8 w-20 text-center font-mono text-xs bg-white"
+                        />
+                        <span className="text-xs text-muted-foreground font-medium">days</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="start-date" className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-primary" /> Estimated Start Date
+                    </Label>
+                    <Input 
+                      id="start-date" 
+                      type="date" 
+                      value={startDate} 
+                      onChange={e => setStartDate(e.target.value)} 
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1 text-slate-700">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" /> Predicted End Date (Post-Activation)
+                    </Label>
+                    <div className="h-10 px-3 border border-amber-200 bg-amber-50/60 text-amber-900 rounded-md text-xs flex items-center font-mono font-bold">
+                      ~ {getSuggestedEndDate(startDate, duration) || 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-950 mt-4">
+                  <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-amber-900">Mobile App Activation Notice</p>
+                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                      The end date shown above is <strong>predicted</strong> based on estimated enrollment. 
+                      Because actual service commences when the subscriber activates the package on the mobile app, 
+                      the official validity clock (<strong>{pricing.durationLabel || duration.replace('_', ' ')}</strong>) 
+                      begins upon mobile app activation.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 gap-3 pt-2">
                 <Label>Choose Package</Label>
                 {packages.filter(p => p.isActive).length === 0 && (
@@ -1875,9 +2033,10 @@ export default function EnrollmentWizardPage() {
                               ) : (
                                 <span className="font-semibold text-slate-800">₹{pkg.basePrice} for {trialDays} days</span>
                               )
-                            ) : (
-                              `₹${pkg.basePrice} / month`
-                            )}
+                            ) : (() => {
+                               const p = calculateWizardPricing(pkg, duration);
+                               return `₹${p.packageBasePrice} for ${p.durationLabel}`;
+                            })()}
                           </p>
                         </div>
                         {selectedPackageId === pkg.id && <Check className="w-5 h-5 text-primary" />}
@@ -1889,162 +2048,6 @@ export default function EnrollmentWizardPage() {
 
               {selectedPackageId && selectedPackage && (
                 <>
-                  <div className="space-y-3 pt-1">
-                    <div className="flex items-center justify-between">
-                      <Label className="font-semibold text-sm">Package Duration & Plan Type</Label>
-                      <span className="text-[11px] text-muted-foreground font-mono font-medium">
-                        Current: {pricing.durationLabel || duration.replace('_', ' ')}
-                      </span>
-                    </div>
-
-                    {/* If selected package is a configured Trial Package (from /subscriptions route) */}
-                    {Boolean(selectedPackage.isFreeTrial || selectedPackage.trialDurationDays) ? (
-                      <div className="bg-purple-50/80 border border-purple-200/90 rounded-xl p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🧪</span>
-                            <div>
-                              <p className="font-semibold text-sm text-purple-950">
-                                {Number(selectedPackage.basePrice) === 0 ? 'Free Trial Package' : 'Trial Package'} Duration ({selectedPackage.trialDurationDays || 7} Days Configured)
-                              </p>
-                              <p className="text-[11px] text-purple-700">
-                                Validity configured on package definition in /subscriptions. Price: {Number(selectedPackage.basePrice) === 0 ? 'Free (₹0)' : `₹${selectedPackage.basePrice} for ${selectedPackage.trialDurationDays || 7} days`}.
-                              </p>
-                            </div>
-                          </div>
-                          <Badge className="bg-purple-600 text-white hover:bg-purple-600 font-bold">
-                            {selectedPackage.trialDurationDays || 7} Days Default
-                          </Badge>
-                        </div>
-
-                        {/* Dynamic Days Input */}
-                        <div className="flex flex-wrap items-center gap-3 pt-1">
-                          <Label htmlFor="custom-trial-days" className="text-xs text-purple-950 font-semibold shrink-0">
-                            Trial Duration (Days):
-                          </Label>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              id="custom-trial-days"
-                              type="number"
-                              min={1}
-                              max={90}
-                              value={duration.match(/^(\d+)_days$/)?.[1] || selectedPackage.trialDurationDays || 7}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (!isNaN(val) && val > 0) {
-                                  setDuration(`${val}_days`);
-                                }
-                              }}
-                              className="h-9 w-24 text-center font-mono font-bold text-sm bg-white border-purple-300"
-                            />
-                            <span className="text-xs text-purple-900 font-medium">days</span>
-                          </div>
-
-                          {selectedPackage.trialDurationDays && duration !== `${selectedPackage.trialDurationDays}_days` && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setDuration(`${selectedPackage.trialDurationDays}_days`)}
-                              className="h-8 text-xs border-purple-300 text-purple-800 hover:bg-purple-100"
-                            >
-                              Reset to Package Config ({selectedPackage.trialDurationDays} Days)
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      /* Standard Multi-Month Packages with optional Custom/Trial Day Sale */
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <span className="text-xs font-medium text-slate-600 block">Monthly & Multi-Month Tenures:</span>
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                            {DURATION_OPTIONS.map((d) => (
-                              <Button
-                                key={d.value}
-                                type="button"
-                                variant={duration === d.value ? 'default' : 'outline'}
-                                onClick={() => setDuration(d.value)}
-                                className={`h-9 text-xs font-semibold ${
-                                  duration === d.value ? 'bg-primary text-white shadow-sm' : 'hover:bg-slate-50'
-                                }`}
-                              >
-                                {d.label}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Optional Custom Day / Trial Sale for a standard package */}
-                        <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                              Or Sell as Custom / Short Trial (Prorated Daily):
-                            </span>
-                            <span className="text-[11px] text-muted-foreground block">
-                              Enter custom days (e.g. 2, 3, 10 days) to prorate daily rate
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              min={1}
-                              max={60}
-                              placeholder="Days"
-                              value={duration.match(/^(\d+)_days$/)?.[1] || ''}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (!isNaN(val) && val > 0) {
-                                  setDuration(`${val}_days`);
-                                } else if (e.target.value === '') {
-                                  setDuration('monthly');
-                                }
-                              }}
-                              className="h-8 w-20 text-center font-mono text-xs bg-white"
-                            />
-                            <span className="text-xs text-muted-foreground font-medium">days</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="start-date" className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-primary" /> Estimated Start Date
-                      </Label>
-                      <Input 
-                        id="start-date" 
-                        type="date" 
-                        value={startDate} 
-                        onChange={e => setStartDate(e.target.value)} 
-                        className="w-full"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="flex items-center gap-1 text-slate-700">
-                        <Clock className="w-3.5 h-3.5 text-amber-600" /> Predicted End Date (Post-Activation)
-                      </Label>
-                      <div className="h-10 px-3 border border-amber-200 bg-amber-50/60 text-amber-900 rounded-md text-xs flex items-center font-mono font-bold">
-                        ~ {getSuggestedEndDate(startDate, duration) || 'N/A'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-950">
-                    <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-semibold text-amber-900">Mobile App Activation Notice</p>
-                      <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                        The end date shown above is <strong>predicted</strong> based on estimated enrollment. 
-                        Because actual service commences when the subscriber activates the package on the mobile app, 
-                        the official validity clock (<strong>{pricing.durationLabel || duration.replace('_', ' ')}</strong>) 
-                        begins upon mobile app activation.
-                      </p>
-                    </div>
-                  </div>
 
                   {/* ── Add-on Benefits Picker ── */}
                   <div className="pt-4 border-t border-dashed space-y-3">
@@ -2140,11 +2143,6 @@ export default function EnrollmentWizardPage() {
                           <tr className="hover:bg-slate-50/50">
                             <td className="py-2 px-3 font-semibold text-slate-900">
                               <div>{pricing.packageName || selectedPackage?.name}</div>
-                              {pricing.discountPercent > 0 && (
-                                <div className="text-[11px] font-normal text-emerald-600 mt-0.5">
-                                  Includes {pricing.discountPercent}% duration discount (-₹{pricing.packageDiscount?.toLocaleString('en-IN', {minimumFractionDigits: 2})})
-                                </div>
-                              )}
                             </td>
                             <td className="py-2 px-3 text-center">1</td>
                             <td className="py-2 px-3 text-right font-mono">₹{pricing.totalPackageBase?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>

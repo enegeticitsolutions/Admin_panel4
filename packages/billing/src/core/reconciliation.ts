@@ -28,15 +28,15 @@ export class InvoiceReconciler {
     const totalPaise = Money.toPaise(snapshot.totalAmount);
 
     // 1. Header equation
-    if (basePaise - discountPaise !== taxablePaise) {
+    if (basePaise !== taxablePaise) {
       errors.push(
-        `Header Taxable Value Mismatch: baseAmount (${snapshot.baseAmount}) - discountAmount (${snapshot.discountAmount}) = ${Money.toRupees(basePaise - discountPaise)}, expected taxableAmount (${snapshot.taxableAmount})`
+        `Header Taxable Value Mismatch: baseAmount (${snapshot.baseAmount}) = ${Money.toRupees(basePaise)}, expected taxableAmount (${snapshot.taxableAmount})`
       );
     }
 
-    if (taxablePaise + taxPaise + miscPaise !== totalPaise) {
+    if (taxablePaise + taxPaise + miscPaise - discountPaise !== totalPaise) {
       errors.push(
-        `Header Grand Total Mismatch: taxableAmount (${snapshot.taxableAmount}) + taxAmount (${snapshot.taxAmount}) + misc (${snapshot.miscellaneousCost}) = ${Money.toRupees(taxablePaise + taxPaise + miscPaise)}, expected totalAmount (${snapshot.totalAmount})`
+        `Header Grand Total Mismatch: taxableAmount (${snapshot.taxableAmount}) + taxAmount (${snapshot.taxAmount}) + misc (${snapshot.miscellaneousCost}) - discount (${snapshot.discountAmount}) = ${Money.toRupees(taxablePaise + taxPaise + miscPaise - discountPaise)}, expected totalAmount (${snapshot.totalAmount})`
       );
     }
 
@@ -77,9 +77,9 @@ export class InvoiceReconciler {
       const lineIgst = Money.toPaise(item.igstAmount);
 
       // Line taxable equation
-      if (lineGross - lineDiscount !== lineTaxable) {
+      if (lineGross !== lineTaxable) {
         errors.push(
-          `Line ${i + 1} (${item.name}) Taxable Mismatch: gross (${item.grossAmount}) - discount (${item.allocatedDiscount}) !== taxable (${item.taxableAmount})`
+          `Line ${i + 1} (${item.name}) Taxable Mismatch: gross (${item.grossAmount}) !== taxable (${item.taxableAmount})`
         );
       }
 
@@ -121,8 +121,8 @@ export class InvoiceReconciler {
       errors.push(`Sum of line tax amounts (${Money.toRupees(sumLineTaxPaise)}) does not equal taxAmount (${snapshot.taxAmount})`);
     }
 
-    if (sumLineTotalPaise + miscPaise !== totalPaise) {
-      errors.push(`Sum of line totals + misc does not equal totalAmount (${snapshot.totalAmount})`);
+    if (sumLineTotalPaise + miscPaise - discountPaise !== totalPaise) {
+      errors.push(`Sum of line totals + misc - discount does not equal totalAmount (${snapshot.totalAmount})`);
     }
 
     return {

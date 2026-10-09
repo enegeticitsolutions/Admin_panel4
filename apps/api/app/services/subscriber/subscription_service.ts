@@ -272,7 +272,7 @@ export const purchaseSubscription = async (
 
   // Calculate pricing & validate coupon
   let finalAmountPaid = packageBasePrice;
-  let discountAmount = Math.max(0, (subPackage.basePrice * months) - packageBasePrice);
+  let discountAmount = 0;
   let appliedCouponId: string | null = null;
 
   if (couponCode) {
@@ -703,7 +703,7 @@ export const purchaseSubscription = async (
         benefitId: undefined,
         name: `${subPackage.name}${durationMonths > 1 ? ` (${durationMonths} Months)` : ''}`,
         quantity: 1,
-        unitPrice: Number(subPackage.basePrice) * months,
+        unitPrice: packageBasePrice, // Was: Number(subPackage.basePrice) * months
         gstRate: subPackage.gstRate ?? 18,
         hsnSacCode: subPackage.hsnSacCode || '998399',
         isGstExempt: subPackage.isGstExempt || false,
@@ -733,25 +733,9 @@ export const purchaseSubscription = async (
     }
 
     // Calculate invoice and tax amounts
-    // NOTE: For now, if the total packageBasePrice is different from sum of unit prices, 
-    // the invoice engine will handle it via discount logic or we could just trust the sum of unit prices.
-    // To ensure exact matching with packageBasePrice + addons, we can adjust the total discount to enforce finalAmountPaid.
-    
-    const preTaxDuration = Math.max(0, (subPackage.basePrice * months) - packageBasePrice);
-    const couponDiscount = Math.max(0, discountAmount - preTaxDuration);
-    
-    let durationDiscountPct = 0;
-    if (!(subPackage as any).isFreeTrial) {
-      if (months === 3) durationDiscountPct = Number(subPackage.discountThreeMonths ?? 5);
-      else if (months === 6) durationDiscountPct = Number(subPackage.discountSixMonths ?? 10);
-      else if (months >= 12) durationDiscountPct = Number(subPackage.discountAnnual ?? 20);
-    }
-    
-    const durationDiscount = preTaxDuration > 0
-      ? preTaxDuration
-      : Math.round(((subPackage.basePrice * months) * durationDiscountPct) / 100 * 100) / 100;
-    const finalDiscountAmount = durationDiscount + couponDiscount;
-    const totalDiscounts = finalDiscountAmount + (saathiDiscountAmount || 0);
+    // Since unitPrice is set directly to packageBasePrice (which has the duration discount baked in),
+    // we do not need to calculate or subtract a separate duration discount. We only apply the coupon/saathi discount.
+    const totalDiscounts = (discountAmount || 0) + (saathiDiscountAmount || 0);
 
     // Statutory calculation: Discounts deducted pre-tax according to CGST Act Section 15
     const invoiceCalc = calculateItemizedInvoice(
@@ -772,7 +756,7 @@ export const purchaseSubscription = async (
         beneficiaryId: beneficiary ? beneficiary.id : null,
         subscriptionId: subscription.id,
         baseAmount: invoiceCalc.baseAmount,
-        discountAmount: finalDiscountAmount,
+        discountAmount: discountAmount,
         saathiCouponCode: saathiCouponCode ? saathiCouponCode.trim().toUpperCase() : null,
         saathiDiscountAmount: saathiDiscountAmount,
         taxAmount: invoiceCalc.taxAmount,
@@ -818,7 +802,7 @@ export const purchaseSubscription = async (
           unitLabel: vb.snapshotUnitLabel
         })),
         baseAmount: invoiceCalc.baseAmount,
-        discountAmount: finalDiscountAmount,
+        discountAmount: discountAmount,
         couponCode: couponCode || null,
         saathiCouponCode: saathiCouponCode ? saathiCouponCode.trim().toUpperCase() : null,
         saathiDiscountAmount: saathiDiscountAmount,

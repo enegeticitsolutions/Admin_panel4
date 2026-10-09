@@ -245,24 +245,32 @@ router.post('/calculate-price', async (req, res) => {
     // Only strictly free if the package base price is ₹0
     const isFree = Number(pkg.basePrice) === 0;
     const baseRate = Number(pkg.basePrice) || 0;
+    const discountPercent = 0;
 
-    // Multi-month duration discount percentage mapping
-    let discountPercent = 0;
+    // 1. Handle Explicit Override Prices and Duration Discounts
+    let overrideBaseRate = null;
+    let overrideDiscount = 0;
     if (!isFree && !durationInfo.isDays) {
-      if (durationInfo.months === 3) {
-        discountPercent = Number(pkg.discountThreeMonths ?? 5);
-      } else if (durationInfo.months === 6) {
-        discountPercent = Number(pkg.discountSixMonths ?? 10);
-      } else if (durationInfo.months >= 12) {
-        discountPercent = Number(pkg.discountAnnual ?? 20);
-      } else if (durationInfo.months === 2) {
-        // Check if packageDiscounts has a specific 2-month discount configured
-        const twoMonthDisc = (pkg.packageDiscounts || []).find(
-          pd => pd.billingCycle === 'two_months' || pd.billingCycle === '2_months'
-        );
-        discountPercent = twoMonthDisc ? Number(twoMonthDisc.discountValue || 0) : 0;
+      if (durationInfo.months === 3 && pkg.priceThreeMonths !== undefined && pkg.priceThreeMonths !== null) {
+        overrideBaseRate = Number(pkg.priceThreeMonths);
+      } else if (durationInfo.months === 6 && pkg.priceSixMonths !== undefined && pkg.priceSixMonths !== null) {
+        overrideBaseRate = Number(pkg.priceSixMonths);
+      } else if (durationInfo.months >= 12 && pkg.priceTwelveMonths !== undefined && pkg.priceTwelveMonths !== null) {
+        overrideBaseRate = Number(pkg.priceTwelveMonths);
+      } else {
+        // Fallback to proportional calculation if override not present
+        if (durationInfo.months === 3) overrideDiscount = Number(pkg.discountThreeMonths ?? 5);
+        else if (durationInfo.months === 6) overrideDiscount = Number(pkg.discountSixMonths ?? 10);
+        else if (durationInfo.months >= 12) overrideDiscount = Number(pkg.discountAnnual ?? 20);
+        else if (durationInfo.months === 2) {
+          const twoMonthDisc = (pkg.packageDiscounts || []).find(
+            pd => pd.billingCycle === 'two_months' || pd.billingCycle === '2_months'
+          );
+          overrideDiscount = twoMonthDisc ? Number(twoMonthDisc.discountValue || 0) : 0;
+        }
       }
     }
+    const finalBaseRateToDistribute = overrideBaseRate !== null ? overrideBaseRate : (baseRate * durationInfo.months);
 
     // 1. Calculate each benefit's base price and GST using its database GST %
     const packageBenefits = pkg.packageBenefits || [];
@@ -316,10 +324,18 @@ router.post('/calculate-price', async (req, res) => {
           count = uCount;
         } else {
           // Multi-month duration (1, 2, 3, 6, 12 months)
-          const undiscountedMonthlyBase = Math.round(benefitMonthlyBase * durationInfo.months * 100) / 100;
-          benefitTermBase = discountPercent > 0
-            ? Math.round(undiscountedMonthlyBase * (1 - discountPercent / 100) * 100) / 100
-            : undiscountedMonthlyBase;
+          let preDiscountBase = 0;
+          if (catalogTotal > 0) {
+            preDiscountBase = (finalBaseRateToDistribute * lineCatalog) / catalogTotal;
+          } else {
+            preDiscountBase = finalBaseRateToDistribute / packageBenefits.length;
+          }
+          
+          let calcDiscount = 0;
+          if (overrideBaseRate === null && overrideDiscount > 0) {
+             calcDiscount = preDiscountBase * (overrideDiscount / 100);
+          }
+          benefitTermBase = Math.max(0, preDiscountBase - calcDiscount);
           count = uCount * durationInfo.months;
         }
 
@@ -363,10 +379,12 @@ router.post('/calculate-price', async (req, res) => {
           benefitTermBase = Math.round(((baseRate / 30) * durationInfo.days) * 100) / 100;
         }
       } else {
-        const undiscountedTermBase = Math.round(baseRate * durationInfo.months * 100) / 100;
-        benefitTermBase = discountPercent > 0
-          ? Math.round(undiscountedTermBase * (1 - discountPercent / 100) * 100) / 100
-          : undiscountedTermBase;
+        let preDiscountBase = finalBaseRateToDistribute;
+        let calcDiscount = 0;
+        if (overrideBaseRate === null && overrideDiscount > 0) {
+           calcDiscount = preDiscountBase * (overrideDiscount / 100);
+        }
+        benefitTermBase = Math.max(0, preDiscountBase - calcDiscount);
       }
 
       const gstAmount = isFree ? 0 : Math.round((benefitTermBase * gstRate) / 100 * 100) / 100;
@@ -394,8 +412,7 @@ router.post('/calculate-price', async (req, res) => {
     totalPackageTax = Math.round(totalPackageTax * 100) / 100;
     const packageGrossPrice = Math.round((totalPackageBase + totalPackageTax) * 100) / 100;
 
-    const rawPackageTotal = Math.round(baseRate * (durationInfo.isDays ? 1 : durationInfo.months) * 100) / 100;
-    const packageDiscount = discountPercent > 0 ? Math.round((rawPackageTotal * discountPercent / 100) * 100) / 100 : 0;
+    const packageDiscount = 0;
     const packageFinalPayable = packageGrossPrice;
 
     // 2. Add-ons breakdown with their own database-configured GST rates
@@ -1068,12 +1085,27 @@ router.post('/admin-enroll', async (req, res) => {
             rawBase = Math.round(((Number(pkg.basePrice) / 30) * durationInfo.days) * 100) / 100;
           }
         } else {
-          rawBase = Math.round(Number(pkg.basePrice) * durationMonths * 100) / 100;
-          const durDiscountPercent = durationMonths === 3 ? Number(pkg.discountThreeMonths ?? 5)
-            : durationMonths === 6 ? Number(pkg.discountSixMonths ?? 10)
-            : durationMonths >= 12 ? Number(pkg.discountAnnual ?? 20)
-            : 0;
-          computedDurDiscount = durDiscountPercent > 0 ? Math.round((rawBase * durDiscountPercent / 100) * 100) / 100 : 0;
+          // Check for explicit override prices first
+          if (durationMonths === 3 && pkg.priceThreeMonths !== undefined && pkg.priceThreeMonths !== null) {
+            rawBase = Number(pkg.priceThreeMonths);
+            computedDurDiscount = 0;
+          } else if (durationMonths === 6 && pkg.priceSixMonths !== undefined && pkg.priceSixMonths !== null) {
+            rawBase = Number(pkg.priceSixMonths);
+            computedDurDiscount = 0;
+          } else if (durationMonths >= 12 && pkg.priceTwelveMonths !== undefined && pkg.priceTwelveMonths !== null) {
+            rawBase = Number(pkg.priceTwelveMonths);
+            computedDurDiscount = 0;
+          } else {
+            // Proportional calculation
+            const proportionalBase = Math.round(Number(pkg.basePrice) * durationMonths * 100) / 100;
+            const durDiscountPercent = durationMonths === 3 ? Number(pkg.discountThreeMonths ?? 5)
+              : durationMonths === 6 ? Number(pkg.discountSixMonths ?? 10)
+              : durationMonths >= 12 ? Number(pkg.discountAnnual ?? 20)
+              : 0;
+            const proportionalDiscount = durDiscountPercent > 0 ? Math.round((proportionalBase * durDiscountPercent / 100) * 100) / 100 : 0;
+            rawBase = proportionalBase - proportionalDiscount;
+            computedDurDiscount = 0;
+          }
         }
         // Use explicit discount amounts passed from the frontend (which has server-computed
         // pricing values already shown to the customer). This prevents the broken inference
@@ -2613,7 +2645,7 @@ router.post('/:id/renew', async (req, res) => {
         : durationMonths === 6 ? Number(pkg.discountSixMonths ?? 10)
         : durationMonths >= 12 ? Number(pkg.discountAnnual ?? 20)
         : 0;
-      const computedDurDiscount = durDiscountPercent > 0 ? Math.round((rawBase * durDiscountPercent / 100) * 100) / 100 : 0;
+      const computedDurDiscount = 0;
 
       const amountPaid = parseFloat(payment.amountPaid) || rawBase;
 
