@@ -10,7 +10,7 @@ const storage = require('../services/storage');
 const { dispatchVisitScheduled } = require('../services/notification.dispatcher');
 const visitEventDispatcher = require('../services/events/visit-event.dispatcher');
 const { rosterEvents } = require('../services/events');
-const { resolveFileUrl } = require('../services/storage/urlResolver');
+const { resolveFileUrl, resolveFileUrls, extractStorageKey } = require('../services/storage/urlResolver');
 const { requirePermission, getVisitFilter } = require('../utils/rbac');
 
 
@@ -567,11 +567,8 @@ router.get('/:id', async (req, res) => {
     let resolvedImageUrls = visit.imageUrls;
     if (visit.imageUrls) {
       try {
-        const rawUrls = JSON.parse(visit.imageUrls);
-        if (Array.isArray(rawUrls)) {
-          const urls = await Promise.all(rawUrls.map(resolveFileUrl));
-          resolvedImageUrls = JSON.stringify(urls);
-        }
+        const urls = await resolveFileUrls(visit.imageUrls, 1800);
+        resolvedImageUrls = JSON.stringify(urls);
       } catch (e) {
         console.error('Failed to parse imageUrls for visit', visit.id, e);
       }
@@ -702,9 +699,12 @@ router.patch('/:id/edit', async (req, res) => {
         updateData.followUpDate = d;
       }
     }
-    // imageUrls: admin sent the new full array (after deletions)
+    // imageUrls: admin sent the new full array (after deletions or additions)
     if (imageUrls !== undefined) {
-      const newJson = JSON.stringify(imageUrls);
+      const cleanKeys = Array.isArray(imageUrls)
+        ? imageUrls.map(img => extractStorageKey(img) || img).filter(Boolean)
+        : [];
+      const newJson = JSON.stringify(cleanKeys);
       if (newJson !== existing.imageUrls) {
         changes.imageUrls = { from: existing.imageUrls, to: newJson };
         updateData.imageUrls = newJson;
@@ -798,12 +798,13 @@ router.post('/:id/upload-image', uploadMemory.single('image'), async (req, res) 
 
     let existing = [];
     try { existing = visit.imageUrls ? JSON.parse(visit.imageUrls) : []; } catch (_) {}
-    existing.push(url);
+    const cleanKey = extractStorageKey(url) || filePath;
+    existing.push(cleanKey);
 
     await prisma.visit.update({ where: { id }, data: { imageUrls: JSON.stringify(existing) } });
 
-    const resolvedUrl = await resolveFileUrl(url);
-    const resolvedImageUrls = await Promise.all(existing.map(resolveFileUrl));
+    const resolvedUrl = await resolveFileUrl(cleanKey, 1800);
+    const resolvedImageUrls = await resolveFileUrls(existing, 1800);
 
     res.json({ success: true, data: { url: resolvedUrl, imageUrls: resolvedImageUrls } });
   } catch (err) {
@@ -897,11 +898,8 @@ router.get('/', async (req, res) => {
       let resolvedImageUrls = v.imageUrls;
       if (v.imageUrls) {
         try {
-          const rawUrls = JSON.parse(v.imageUrls);
-          if (Array.isArray(rawUrls)) {
-            const urls = await Promise.all(rawUrls.map(resolveFileUrl));
-            resolvedImageUrls = JSON.stringify(urls);
-          }
+          const urls = await resolveFileUrls(v.imageUrls, 1800);
+          resolvedImageUrls = JSON.stringify(urls);
         } catch (e) {
           console.error('Failed to parse imageUrls for visit', v.id, e);
         }

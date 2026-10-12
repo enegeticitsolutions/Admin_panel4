@@ -111,11 +111,12 @@ class S3Storage extends StorageService {
    * @returns {Promise<string>}  - HTTPS presigned URL valid for ttlSeconds
    */
   async getPresignedUrl(path, ttlSeconds = 900) {
+    const safeTtl = (typeof ttlSeconds === 'number' && ttlSeconds > 0) ? ttlSeconds : 900;
     const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: path,
     });
-    return getSignedUrl(this.s3Client, command, { expiresIn: ttlSeconds });
+    return getSignedUrl(this.s3Client, command, { expiresIn: safeTtl });
   }
 }
 

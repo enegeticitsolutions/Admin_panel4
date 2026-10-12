@@ -54,16 +54,25 @@ export default function VisitDetailsModal({ visitId, onClose }: VisitDetailsModa
     checkOutTime: '',
   });
 
+  const parseImageUrls = (raw: any): string[] => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      } catch (_) {}
+    }
+    return [];
+  };
+
   useEffect(() => {
     setLoading(true);
     visitApi.getById(visitId)
       .then((res: any) => {
         if (res) {
           setVisit(res);
-          // Parse imageUrls for editing
-          let parsed: string[] = [];
-          try { parsed = res.imageUrls ? JSON.parse(res.imageUrls) : []; } catch (_) {}
-          setEditImages(parsed);
+          setEditImages(parseImageUrls(res.imageUrls));
           setEditForm({
             notes: res.notes || '',
             visitSummary: res.visitSummary || '',
@@ -113,9 +122,7 @@ export default function VisitDetailsModal({ visitId, onClose }: VisitDetailsModa
       const res = await visitApi.editVisit(visitId, payload);
       const fresh = await visitApi.getById(visitId);
       setVisit(fresh);
-      let freshParsed: string[] = [];
-      try { freshParsed = fresh.imageUrls ? JSON.parse(fresh.imageUrls) : []; } catch (_) {}
-      setEditImages(freshParsed);
+      setEditImages(parseImageUrls(fresh.imageUrls));
       setEditMode(false);
       const changesCount = Object.keys((res as any).changesLogged || {}).length;
       toast.success(`Visit updated! ${changesCount} field(s) changed and logged.`);
@@ -156,7 +163,9 @@ export default function VisitDetailsModal({ visitId, onClose }: VisitDetailsModa
     setUploadingImage(true);
     try {
       const res = await visitApi.uploadVisitImage(visitId, file);
-      setEditImages(res.imageUrls);
+      const newUrls = parseImageUrls(res.imageUrls);
+      setEditImages(newUrls);
+      setVisit((prev: any) => prev ? { ...prev, imageUrls: JSON.stringify(newUrls) } : prev);
       toast.success('Image uploaded!');
     } catch (err: any) {
       toast.error(err.message || 'Upload failed');
@@ -206,13 +215,7 @@ export default function VisitDetailsModal({ visitId, onClose }: VisitDetailsModa
     );
   }
 
-  let imageUrls: string[] = [];
-  try {
-    if (visit.imageUrls) {
-      const parsed = JSON.parse(visit.imageUrls);
-      imageUrls = Array.isArray(parsed) ? parsed : [];
-    }
-  } catch (_) {}
+  const imageUrls = parseImageUrls(visit.imageUrls);
 
   const renderVital = (label: string, value: any, unit: string) => {
     if (value === null || value === undefined) return null;
