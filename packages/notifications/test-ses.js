@@ -14,11 +14,14 @@ const path = require('path');
 
 // 1. Auto-discover and load .env from common locations
 const envPaths = [
+  path.resolve(__dirname, '.env'),
+  path.resolve(__dirname, '../../.env'),
+  path.resolve(__dirname, '../../apps/api/.env'),
+  path.resolve(__dirname, '../../apps/admin-backend/.env'),
   path.resolve(process.cwd(), '.env'),
-  path.resolve(__dirname, '../.env'),
-  path.resolve(__dirname, '../apps/api/.env'),
-  path.resolve(__dirname, '../apps/admin-backend/.env'),
-  path.resolve(__dirname, '../packages/notifications/.env'),
+  path.resolve(process.cwd(), 'packages/notifications/.env'),
+  path.resolve(process.cwd(), 'apps/api/.env'),
+  path.resolve(process.cwd(), 'apps/admin-backend/.env'),
 ];
 
 let loadedEnvPath = null;
