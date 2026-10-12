@@ -125,6 +125,8 @@ app.use('/api/upload-document', staffOnly, require('./routes/upload'));
 app.use('/api/callbacks', staffOnly, require('./routes/callbacks'));
 // Teams — ops roles + all portal for field-manager to view own team
 app.use('/api/teams', staffOnly, require('./routes/teams'));
+// Prospects — mobile app installs without packages
+app.use('/api/prospects', staffOnly, require('./routes/prospects'));
 // Subscribers — client facing + ops
 app.use('/api/subscribers', staffOnly, require('./routes/subscribers'));
 // Beneficiaries — all portal roles (scoped per role in handler)
