@@ -473,6 +473,49 @@ export const subscriberApi = {
 };
 
 // ============================================================================
+// PROSPECT API (App Installs / Signups Without Package)
+// ============================================================================
+
+export const prospectApi = {
+  async getAll(params?: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    filter?: string;
+  }): Promise<{
+    data: any[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+    stats: {
+      totalProspects: number;
+      loggedInCount: number;
+      withBeneficiaryCount: number;
+      appActive: number;
+      highIntent?: number;
+      recentSignups?: number;
+    };
+  }> {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.page) query.append('page', params.page.toString());
+    if (params?.limit) query.append('limit', params.limit.toString());
+    if (params?.filter && params.filter !== 'all') query.append('filter', params.filter);
+    return apiJson(`/prospects?${query.toString()}`);
+  },
+
+  async logCallback(id: string, data: { notes: string; status?: string; scheduledAt?: string }): Promise<any> {
+    return apiJson(`/prospects/${id}/log-callback`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// ============================================================================
 // BENEFICIARY API
 // ============================================================================
 
@@ -987,6 +1030,15 @@ export const vitalApi = {
   },
   async createTemplate(data: any): Promise<any> {
     return apiJson('/vitals/templates', { method: 'POST', body: JSON.stringify(data) });
+  },
+  async updateTemplate(id: string, data: any): Promise<any> {
+    return apiJson(`/vitals/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  async deleteTemplate(id: string): Promise<any> {
+    return apiJson(`/vitals/templates/${id}`, { method: 'DELETE' });
+  },
+  async seedDefaultTemplates(): Promise<any> {
+    return apiJson('/vitals/templates/seed-defaults', { method: 'POST' });
   },
   
   // Beneficiary Config
@@ -1660,6 +1712,20 @@ export const enrollmentApi = {
     invoiceNumber: string;
   }> {
     return apiJson('/subscriptions/admin-enroll', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Send or resend activation & verification email to subscriber */
+  async sendActivationEmail(payload: {
+    subscriberEmail: string;
+    subscriberName?: string;
+    subscriberPhone?: string;
+    beneficiaryName?: string;
+    packageName?: string;
+  }): Promise<{ success: boolean; message: string; messageId?: string }> {
+    return apiJson('/subscriptions/send-activation-email', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

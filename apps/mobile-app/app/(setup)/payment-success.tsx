@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'rea
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CallbackButton } from '../../components/CallbackButton';
+import { WhatsAppButton } from '../../components/WhatsAppButton';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Alert } from 'react-native';
 import { API_URL } from '@/constants/api';
@@ -307,9 +308,13 @@ export default function PaymentSuccessScreen() {
                             label="Request Callback"
                             notes="Requested from payment success screen"
                         />
-                        <TouchableOpacity style={styles.chatBtn}>
-                            <Ionicons name="chatbubbles" size={34} color="#FE6700" />
-                        </TouchableOpacity>
+                        <WhatsAppButton
+                            variant="icon"
+                            style={styles.chatBtn}
+                            iconSize={26}
+                            iconColor="#25D366"
+                            message="Hello! I just completed my payment on MaiHoonNa and have a query."
+                        />
                     </View>
                 </View>
 

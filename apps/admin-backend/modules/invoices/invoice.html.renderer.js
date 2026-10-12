@@ -92,37 +92,35 @@ function render(invoice, company = {}) {
   const igstAmount          = Number(invoice.igstAmount          || 0);
   const totalTax            = Number(invoice.taxAmount           || (cgstAmount + sgstAmount + igstAmount) || 0);
   const discountAmount      = Number(invoice.discountAmount      || 0);
-  const saathiDiscountAmount = Number(invoice.saathiDiscountAmount || 0);
-  const totalAmount         = Number(invoice.totalAmount         || (baseAmount + totalTax - discountAmount - saathiDiscountAmount));
+  const payableAmount        = Number(invoice.totalAmount || 0);
 
-  // "Total Amount" row = gross base (before discount) + full tax on that gross base.
-  // We store tax computed on the discounted amount. To show the pre-discount gross total:
-  //   gross total = baseAmount + cgst + sgst + igst
-  // This matches InvoiceGenerator.ts in the mobile app exactly.
-  // NOTE: Do NOT use `(igstAmount || totalTax)` — that double-counts tax on intra-state invoices.
-  const totalBeforeDiscount = baseAmount + cgstAmount + sgstAmount + igstAmount;
-  const amountInWords       = numberToWords(Math.round(totalAmount));
+  // Total gross amount before discount = baseAmount + taxes
+  const totalBeforeDiscount  = baseAmount + cgstAmount + sgstAmount + igstAmount;
+
+  // Predefined duration discounts are already factored into package line items.
+  // In the discount section, ONLY applied coupon and saathi discounts are shown.
+  const couponDiscount   = Number(invoice.discountAmount || 0);
+  const saathiDiscount   = Number(invoice.saathiDiscountAmount || 0);
+  const totalDiscount    = Math.round((couponDiscount + saathiDiscount) * 100) / 100;
+
+  const amountInWords    = numberToWords(Math.round(payableAmount));
 
   // ── Discount rows (matches InvoiceGenerator.ts exactly) ────────────────────
   const discountRows = `
-    ${discountAmount > 0 ? `
+    ${couponDiscount > 0 ? `
     <tr>
       <td>Discount</td>
-      <td>-₹${discountAmount.toFixed(2)}</td>
+      <td>-₹${couponDiscount.toFixed(2)}</td>
     </tr>` : ''}
-    ${saathiDiscountAmount > 0 ? `
-    <tr>
+    ${saathiDiscount > 0 ? `
+      <tr>
       <td>Saathi Discount</td>
-      <td>-₹${saathiDiscountAmount.toFixed(2)}</td>
+      <td>-₹${saathiDiscount.toFixed(2)}</td>
     </tr>` : ''}
-    ${(discountAmount > 0 && saathiDiscountAmount > 0) ? `
+    ${(couponDiscount > 0 && saathiDiscount > 0) ? `
     <tr>
       <td style="font-weight: 600;">Total Discount</td>
-      <td style="font-weight: 600;">-₹${(discountAmount + saathiDiscountAmount).toFixed(2)}</td>
-    </tr>` : (discountAmount > 0 || saathiDiscountAmount > 0) ? `
-    <tr>
-      <td>Total Discount</td>
-      <td>-₹${(discountAmount + saathiDiscountAmount).toFixed(2)}</td>
+      <td style="font-weight: 600;">-₹${totalDiscount.toFixed(2)}</td>
     </tr>` : ''}
   `;
 

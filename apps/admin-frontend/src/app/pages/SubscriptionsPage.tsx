@@ -14,7 +14,7 @@ import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { packageApi, benefitApi, regionApi } from '../../services/api';
 import type { SubscriptionPackage, Benefit, PackageBenefit } from '../../types';
-import { Plus, Check, ArrowRight, ArrowLeft, Package, Edit, Trash2, Calendar, Clock, ShieldCheck, Sparkles, Lock, Globe, Search, Filter, X, RotateCcw } from 'lucide-react';
+import { Plus, Check, ArrowRight, ArrowLeft, Package, Edit, Trash2, Calendar, Clock, ShieldCheck, Sparkles, Lock, Globe, Search, Filter, X, RotateCcw, Copy } from 'lucide-react';
 import { PackageCardPreview } from '../components/packages/PackageCardPreview';
 import { toast } from 'sonner';
 import { StatusChip } from '../components/common/StatusChip';
@@ -64,6 +64,7 @@ export default function SubscriptionsPage() {
   const [benefitConfigs, setBenefitConfigs] = useState<Record<string, BenefitSetting>>({});
   const [totalCost, setTotalCost] = useState('0');
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
+  const [clonedFromPackageName, setClonedFromPackageName] = useState<string | null>(null);
 
   const calculatedPriceOne = Math.round(
     (benefitSubtotal * (1 - (parseFloat(discountPercentage) || 0) / 100)) +
@@ -443,6 +444,7 @@ export default function SubscriptionsPage() {
 
   const handleEdit = (pkg: any) => {
     setEditingPackageId(pkg.id);
+    setClonedFromPackageName(null);
     setPackageName(pkg.name);
     setDescription(pkg.description || '');
     setMrp(String(pkg.mrp || 0));
@@ -496,6 +498,90 @@ export default function SubscriptionsPage() {
     setBenefitUnits(units);
     setBenefitConfigs(configs);
     setShowWizard(true);
+  };
+
+  const handleClone = (pkg: any) => {
+    // 1. Mark as new package draft (null editingPackageId ensures creation, not update)
+    setEditingPackageId(null);
+    setClonedFromPackageName(pkg.name);
+
+    // 2. Derive new package name
+    setPackageName(`${pkg.name} (Copy)`);
+    setDescription(pkg.description || '');
+
+    // 3. Clone financial & duration pricing
+    setMrp(String(pkg.mrp || 0));
+    setDiscountPercentage(String(pkg.discountPercentage || 0));
+    setDiscountThreeMonths(String(pkg.discountThreeMonths ?? 5));
+    setDiscountSixMonths(String(pkg.discountSixMonths ?? 10));
+    setDiscountAnnual(String(pkg.discountAnnual ?? 20));
+
+    const baseVal = pkg.basePrice || pkg.totalCost || 0;
+    setPriceThreeMonths(
+      pkg.priceThreeMonths
+        ? String(pkg.priceThreeMonths)
+        : String(Math.round(baseVal * 3 * (1 - (pkg.discountThreeMonths ?? 5) / 100)))
+    );
+    setPriceSixMonths(
+      pkg.priceSixMonths
+        ? String(pkg.priceSixMonths)
+        : String(Math.round(baseVal * 6 * (1 - (pkg.discountSixMonths ?? 10) / 100)))
+    );
+    setPriceTwelveMonths(
+      pkg.priceTwelveMonths
+        ? String(pkg.priceTwelveMonths)
+        : String(Math.round(baseVal * 12 * (1 - (pkg.discountAnnual ?? 20) / 100)))
+    );
+    setIsManualPriceThree(!!pkg.priceThreeMonths);
+    setIsManualPriceSix(!!pkg.priceSixMonths);
+    setIsManualPriceTwelve(!!pkg.priceTwelveMonths);
+    setMiscellaneousCost(String(pkg.miscellaneousCost || 0));
+    setTotalCost(String(baseVal));
+    setIsManualPrice(true);
+
+    // 4. Dates & settings
+    const today = new Date().toISOString().split('T')[0];
+    setActiveFrom(pkg.activeFrom ? pkg.activeFrom.split('T')[0] : today);
+    setActiveTo(pkg.activeTo ? pkg.activeTo.split('T')[0] : '');
+    setIsGlobal(pkg.isGlobal ?? true);
+    setIsPopular(false);
+    setIsCompared(pkg.isCompared ?? false);
+    setIsFreeTrial(pkg.isFreeTrial ?? false);
+    setTrialDurationDays(String(pkg.trialDurationDays ?? 7));
+    setSelectedRegionIds(pkg.regionIds || (pkg.regions ? pkg.regions.map((r: any) => r.id) : []));
+
+    // 5. Clone benefits & configs
+    const selected = new Set<string>();
+    const units: Record<string, number> = {};
+    const configs: Record<string, BenefitSetting> = {};
+
+    const rawBenefits = pkg.packageBenefits || pkg.benefits || [];
+    rawBenefits.forEach((b: any) => {
+      const bId = b.benefitId || b.benefit?.id;
+      if (!bId) return;
+      selected.add(bId);
+      const qty = b.unitsIncluded ?? b.monthlyUnits ?? 1;
+      units[bId] = qty;
+      configs[bId] = {
+        quantity: qty,
+        frequency: (b.unitsPeriod as any) || 'monthly',
+        allocationBasis: (b.allocationBasis as any) || 'per_billing_cycle',
+        minSubscriptionMonths: b.minSubscriptionMonths || 1,
+        allowRollover: !!b.allowRollover,
+        maxRolloverUnits: b.maxRolloverUnits || undefined,
+        isUnlimited: !!b.isUnlimited,
+        showUnit: b.showUnit !== undefined ? Boolean(b.showUnit) : true,
+      };
+    });
+
+    setSelectedBenefits(selected);
+    setBenefitUnits(units);
+    setBenefitConfigs(configs);
+
+    // 6. Launch wizard at Step 1
+    setCurrentStep('define');
+    setShowWizard(true);
+    toast.info(`Cloned details from "${pkg.name}". Review settings and publish your new package.`);
   };
 
   const handleToggleStatus = async (pkg: any) => {
@@ -571,6 +657,7 @@ export default function SubscriptionsPage() {
     setTotalCost('0');
     setIsManualPrice(false);
     setEditingPackageId(null);
+    setClonedFromPackageName(null);
     setIsGlobal(true);
     setIsPopular(false);
     setIsCompared(false);
@@ -650,6 +737,39 @@ export default function SubscriptionsPage() {
           {/* Step Content */}
           <Card>
             <CardContent className="p-6">
+              {clonedFromPackageName && (
+                <div className="mb-6 p-3.5 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-900 text-xs flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
+                      <Copy className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-blue-900">
+                        Deriving New Package from "{clonedFromPackageName}"
+                      </p>
+                      <p className="text-blue-600 text-[11px]">
+                        All benefits, duration pricing, and configurations have been duplicated. You can modify anything and publish as a new package.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-bold text-blue-700 bg-white px-2.5 py-1 rounded-md border border-blue-200 shadow-xs flex-shrink-0">
+                    Draft Clone
+                  </span>
+                </div>
+              )}
+              {editingPackageId && (
+                <div className="mb-6 p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-bold text-amber-900">Editing Package</p>
+                    <p className="text-amber-700 text-[11px]">
+                      Changes will directly update the existing active package upon publishing.
+                    </p>
+                  </div>
+                  <span className="font-bold text-amber-700 bg-white px-2.5 py-1 rounded-md border border-amber-200 shadow-xs flex-shrink-0">
+                    Edit Mode
+                  </span>
+                </div>
+              )}
               {currentStep === 'define' && (
                 <div className="space-y-6">
                   <div>
@@ -1776,6 +1896,15 @@ export default function SubscriptionsPage() {
                             Set Private
                           </Button>
                         )}
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          onClick={() => handleClone(pkg)}
+                          title="Clone Package (Derive new package)"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 

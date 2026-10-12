@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { API_URL } from '@/constants/api';
 import { CallbackButton } from '@/components/CallbackButton';
+import { WhatsAppButton } from '@/components/WhatsAppButton';
 import { ProfilePhotoUploader } from '@/components/ui/ProfilePhotoUploader';
 import { queryClient } from '@/services/queryClient';
 import { TimelineTab } from './components/beneficiary/TimelineTab';
@@ -331,9 +332,13 @@ export default function BeneficiaryProfileScreen() {
                             style={styles.callbackBtn}
                             textStyle={styles.callbackText}
                         />
-                        <TouchableOpacity style={styles.whatsappBtn}>
-                            <MaterialCommunityIcons name="whatsapp" size={scale(28)} color="#F97316" />
-                        </TouchableOpacity>
+                        <WhatsAppButton
+                            variant="icon"
+                            style={styles.whatsappBtn}
+                            iconSize={scale(28)}
+                            iconColor="#25D366"
+                            message="Hello! I need assistance regarding my beneficiary on MaiHoonNa."
+                        />
                     </View>
                 </View>
 

@@ -15,6 +15,7 @@ type PlanDuration = 'basic' | '6months' | 'annual';
 
 import { API_URL } from '@/constants/api';
 import { CallbackButton } from '../../components/CallbackButton';
+import { WhatsAppButton } from '../../components/WhatsAppButton';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
@@ -281,6 +282,7 @@ export default function SubscriptionPackagesScreen() {
     const calculatePackagePrice = (pkg: any, cycleKey: string) => {
         if (!pkg) return 0;
         const base = pkg.basePrice || 0;
+        if (pkg.isFreeTrial) return base;
         const durNum = parseInt(cycleKey, 10);
         if (durNum === 1) {
             return pkg.priceOneMonth ? pkg.priceOneMonth : base;
@@ -524,12 +526,28 @@ export default function SubscriptionPackagesScreen() {
                             {isTrial && (
                                 <View style={{
                                     position: 'absolute', top: 0, left: 0, right: 0,
-                                    backgroundColor: trialHeaderColor, borderTopLeftRadius: 12, borderTopRightRadius: 12,
-                                    paddingVertical: 5, alignItems: 'center',
+                                    backgroundColor: trialHeaderColor,
+                                    borderTopLeftRadius: 18, borderTopRightRadius: 18,
+                                    paddingVertical: 6, paddingHorizontal: 14,
+                                    flexDirection: 'row', alignItems: 'center',
+                                    justifyContent: isRegional ? 'space-between' : 'center',
                                 }}>
                                     <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
-                                        🧪 {pkg.trialDurationDays ?? 7}-DAY TRIAL
+                                        {pkg.trialDurationDays ?? 7}-DAY TRIAL
                                     </Text>
+                                    {isRegional && (
+                                        <View style={{
+                                            backgroundColor: '#F97316',
+                                            paddingHorizontal: 8,
+                                            paddingVertical: 2,
+                                            borderRadius: 10,
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                        }}>
+                                            <Ionicons name="location" size={10} color="#FFF" style={{ marginRight: 3 }} />
+                                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '700' }}>Local Plan</Text>
+                                        </View>
+                                    )}
                                 </View>
                             )}
                             {!isTrial && isPopular && (
@@ -539,7 +557,7 @@ export default function SubscriptionPackagesScreen() {
                                 </View>
                             )}
 
-                            {isRegional && (
+                            {!isTrial && isRegional && (
                                 <View style={styles.regionalBadge}>
                                     <Ionicons name="location" size={12} color="#FFF" style={{ marginRight: 4 }} />
                                     <Text style={styles.regionalBadgeText}>Local Plan</Text>
@@ -687,6 +705,13 @@ export default function SubscriptionPackagesScreen() {
                             textStyle={styles.callbackText}
                             notes="Requested assistance from Subscription Packages page"
                         />
+                        <WhatsAppButton
+                            variant="icon"
+                            style={styles.whatsappBtn}
+                            iconSize={26}
+                            iconColor="#25D366"
+                            message="Hello! I need assistance choosing a subscription plan on MaiHoonNa."
+                        />
                     </View>
                 </View>
             </ScrollView>
@@ -738,7 +763,9 @@ export default function SubscriptionPackagesScreen() {
                                     </View>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.selectedPkgName}>
-                                            {selectedPackageForAddons.name} ({selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : selectedCycle === '1' ? '1 Month' : '3 Months'})
+                                            {selectedPackageForAddons.name} {selectedPackageForAddons.isFreeTrial 
+                                                ? `(${selectedPackageForAddons.trialDurationDays ?? 30}-Day Trial)` 
+                                                : `(${selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : selectedCycle === '1' ? '1 Month' : '3 Months'})`}
                                         </Text>
                                         <Text style={styles.selectedPkgBenefitsCount}>
                                             {selectedPackageForAddons.packageBenefits?.length || 3} Standard Benefits Included · ₹{calculatePackagePrice(selectedPackageForAddons, selectedCycle).toLocaleString('en-IN')}
@@ -951,6 +978,11 @@ const styles = StyleSheet.create({
     assistanceActions: { flexDirection: 'row', alignItems: 'center' },
     callbackBtn: { flex: 1, flexDirection: 'row', borderWidth: 1, borderColor: '#F97316', borderRadius: 12, height: 50, alignItems: 'center', justifyContent: 'center' },
     callbackText: { color: '#F97316', fontWeight: '600', fontSize: 15 },
+    whatsappBtn: {
+        width: 50, height: 50, borderRadius: 12, backgroundColor: '#F0FDF4',
+        borderWidth: 1, borderColor: '#DCFCE7',
+        justifyContent: 'center', alignItems: 'center', marginLeft: 10,
+    },
 
     // Location picker styles
     locationContainer: {
