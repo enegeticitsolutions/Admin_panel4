@@ -20,6 +20,7 @@ import SeoHead from "./components/seo/SeoHead";
 import NotFoundPage from "./pages/NotFoundPage";
 import LegalPage from "./pages/LegalPage";
 import ErrorBoundary from "./components/ErrorBoundary";
+import WhatsAppButton from "./components/ui/WhatsAppButton";
 
 const ROUTE_ALIASES = {
   about: "story",
@@ -331,6 +332,7 @@ const App = () => {
     <SiteGatekeeper>
       <SeoHead activePage={activePage} />
       {renderAppContent()}
+      <WhatsAppButton />
     </SiteGatekeeper>
   );
 };

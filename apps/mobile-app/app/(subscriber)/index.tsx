@@ -5,10 +5,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { CallbackButton } from '@/components/CallbackButton';
+import { WhatsAppButton } from '@/components/WhatsAppButton';
 import { logoutWithConfirm } from '@/utils/logout';
 import { formatHours } from '@/utils/timeFormat';
 import GlobalDrawer from './components/shared/GlobalDrawer';
@@ -668,9 +668,13 @@ export default function SubscriberDashboardScreen() {
                             textStyle={styles.callbackText}
                             notes="Requested assistance from Subscriber Dashboard"
                         />
-                        {/* <TouchableOpacity style={styles.whatsappBtn}>
-                            <Ionicons name="chatbubbles" size={36} color="#FE6700" />
-                        </TouchableOpacity> */}
+                        <WhatsAppButton
+                            variant="icon"
+                            style={styles.whatsappBtn}
+                            iconSize={scale(30)}
+                            iconColor="#25D366"
+                            message="Hello! I need assistance regarding my MaiHoonNa account."
+                        />
                     </View>
                 </View>
 
