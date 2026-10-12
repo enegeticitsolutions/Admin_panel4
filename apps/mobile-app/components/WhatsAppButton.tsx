@@ -29,7 +29,7 @@ export interface WhatsAppButtonProps {
 }
 
 const DEFAULT_PHONE = '918527070049';
-const DEFAULT_MESSAGE = 'Hello! I would like to know more about MaiHoonNa senior care services.';
+const DEFAULT_MESSAGE = 'Hello! I would like to know more about MaiHoonNa elder care services.';
 
 /**
  * Open WhatsApp via native app scheme or wa.me web link fallback
