@@ -1717,6 +1717,20 @@ export const enrollmentApi = {
     });
   },
 
+  /** Send or resend activation & verification email to subscriber */
+  async sendActivationEmail(payload: {
+    subscriberEmail: string;
+    subscriberName?: string;
+    subscriberPhone?: string;
+    beneficiaryName?: string;
+    packageName?: string;
+  }): Promise<{ success: boolean; message: string; messageId?: string }> {
+    return apiJson('/subscriptions/send-activation-email', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   /** Check if a pincode is serviceable by any active zone */
   async checkPincode(pincode: string): Promise<{
     success: boolean;

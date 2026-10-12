@@ -29,6 +29,8 @@ export const SITE_LINKS = {
   contact: {
     email: "info@maihoonna.com",
     phone: "+91 85270 70049",
+    whatsapp: "+91 85270 70049",
+    whatsappClean: "918527070049",
     supportEmail: "support@maihoonna.in",
     address: "Gurugram Sectors 53 to 57, Haryana, India",
   },
