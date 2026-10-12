@@ -59,11 +59,14 @@ export default function PackageDetailScreen() {
         );
     }
 
+    const isTrial = !!pkg.isFreeTrial;
+
     // ── Cycle-aware pricing helpers ─────────────────────────────────────────────
-    const durNum = parseInt(selectedCycle, 10); // 3, 6, or 12
+    const durNum = isTrial ? 1 : parseInt(selectedCycle, 10); // 1, 3, 6, or 12
 
     const calculatePrice = (p: any, cyc: string): number => {
         if (!p) return 0;
+        if (isTrial) return p.basePrice || 0;
         const d = parseInt(cyc, 10);
         const base = p.basePrice || 0;
         if (d === 1)  return p.priceOneMonth     ?? base;
@@ -75,12 +78,14 @@ export default function PackageDetailScreen() {
 
     const totalPrice   = calculatePrice(pkg, selectedCycle);
     const fullPrice    = (pkg.basePrice || 0) * durNum;   // without discount
-    const savedAmount  = Math.max(0, fullPrice - totalPrice);
-    const discountPct  = fullPrice > 0 ? Math.round((savedAmount / fullPrice) * 100) : 0;
-    const monthlyRate  = durNum > 0 ? Math.round(totalPrice / durNum) : totalPrice;
-    const totalHours   = (pkg.totalHours || pkg.hoursPerMonth || 0) * durNum;
+    const savedAmount  = isTrial ? 0 : Math.max(0, fullPrice - totalPrice);
+    const discountPct  = (!isTrial && fullPrice > 0) ? Math.round((savedAmount / fullPrice) * 100) : 0;
+    const monthlyRate  = isTrial ? (pkg.basePrice || 0) : (durNum > 0 ? Math.round(totalPrice / durNum) : totalPrice);
+    const totalHours   = (pkg.totalHours || pkg.hoursPerMonth || 0) * (isTrial ? 1 : durNum);
 
-    const cycleLabel = selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : selectedCycle === '1' ? '1 Month' : '3 Months';
+    const cycleLabel = isTrial
+        ? `${pkg.trialDurationDays ?? 30} Days Trial`
+        : (selectedCycle === '12' ? '1 Year' : selectedCycle === '6' ? '6 Months' : selectedCycle === '1' ? '1 Month' : '3 Months');
 
     // Compute display units for a benefit based on its period and selected cycle
     const getBenefitUnits = (pb: any): string => {
@@ -124,7 +129,12 @@ export default function PackageDetailScreen() {
                         {/* Cycle-aware total price */}
                         <View style={styles.priceRow}>
                             <Text style={styles.currency}>₹</Text>
-                            <Text style={styles.price}>{monthlyRate.toLocaleString()}<Text style={{ fontSize: scale(24), fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>/mo</Text></Text>
+                            <Text style={styles.price}>
+                                {monthlyRate.toLocaleString()}
+                                <Text style={{ fontSize: scale(24), fontWeight: '700', color: 'rgba(255,255,255,0.85)' }}>
+                                    {isTrial ? ` / ${pkg.trialDurationDays ?? 30} days` : '/mo'}
+                                </Text>
+                            </Text>
                         </View>
                         <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: scale(15), fontWeight: '600', marginBottom: scale(6) }}>
                             ₹{totalPrice.toLocaleString()} total for {cycleLabel}
@@ -147,50 +157,32 @@ export default function PackageDetailScreen() {
                     </View>
                 </LinearGradient>
 
-                {/* ── Cycle Selector Toggle ── */}
-                <View style={styles.cycleToggle}>
-                    {[
-                        { key: '1',  label: '1 Month',  disc: '' },
-                        { key: '3',  label: '3 Months', disc: '5% OFF' },
-                        { key: '6',  label: '6 Months', disc: '10% OFF' },
-                        { key: '12', label: '1 Year',   disc: '20% OFF' },
-                    ].map((item) => {
-                        const isActive = selectedCycle === item.key;
-                        return (
-                            <TouchableOpacity
-                                key={item.key}
-                                onPress={() => setSelectedCycle(item.key)}
-                                style={[styles.cycleBtn, isActive && styles.cycleBtnActive]}
-                            >
-                                <Text style={[styles.cycleBtnLabel, isActive && styles.cycleBtnLabelActive]}>{item.label}</Text>
-                                <Text style={[styles.cycleBtnBadge, isActive && styles.cycleBtnBadgeActive]}>{item.disc || ' '}</Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                {/* ── Cycle Selector Toggle (Only for standard packages, hidden for trial packages) ── */}
+                {!isTrial && (
+                    <View style={styles.cycleToggle}>
+                        {[
+                            { key: '1',  label: '1 Month',  disc: '' },
+                            { key: '3',  label: '3 Months', disc: '5% OFF' },
+                            { key: '6',  label: '6 Months', disc: '10% OFF' },
+                            { key: '12', label: '1 Year',   disc: '20% OFF' },
+                        ].map((item) => {
+                            const isActive = selectedCycle === item.key;
+                            return (
+                                <TouchableOpacity
+                                    key={item.key}
+                                    onPress={() => setSelectedCycle(item.key)}
+                                    style={[styles.cycleBtn, isActive && styles.cycleBtnActive]}
+                                >
+                                    <Text style={[styles.cycleBtnLabel, isActive && styles.cycleBtnLabelActive]}>{item.label}</Text>
+                                    <Text style={[styles.cycleBtnBadge, isActive && styles.cycleBtnBadgeActive]}>{item.disc || ' '}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
 
                 {/* Main Content */}
                 <View style={styles.detailsContent}>
-                    {/* Key Stats — show totals for the selected period */}
-                    <View style={styles.quickStats}>
-                        <View style={styles.statItem}>
-                            <Ionicons name="time-outline" size={scale(24)} color="#F97316" />
-                            <Text style={styles.statValue}>{totalHours}h</Text>
-                            <Text style={styles.statLabel}>Total Care Hours</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Ionicons name="calendar-outline" size={scale(24)} color="#F97316" />
-                            <Text style={styles.statValue}>{pkg.visitsPerWeek || 0}</Text>
-                            <Text style={styles.statLabel}>Visits / week</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Ionicons name="people-outline" size={scale(24)} color="#F97316" />
-                            <Text style={styles.statValue}>{pkg.maxBeneficiaries || 1}</Text>
-                            <Text style={styles.statLabel}>Beneficiaries</Text>
-                        </View>
-                    </View>
 
                     {/* Description */}
                     <View style={styles.section}>
@@ -261,7 +253,7 @@ export default function PackageDetailScreen() {
                         if (!token) {
                             push({ pathname: '/(auth)/register' });
                         } else {
-                            push('/(setup)/checkout', { packageId: pkg.type, durationMonths: selectedCycle });
+                            push('/(setup)/checkout', { packageId: pkg.type, durationMonths: isTrial ? 1 : selectedCycle });
                         }
                     }}
                 >

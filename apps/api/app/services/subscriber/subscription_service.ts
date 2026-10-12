@@ -113,6 +113,12 @@ async function publishPackageVersion(tx: any, packageId: string): Promise<any> {
       isActive: pkg.isActive,
       sortOrder: pkg.sortOrder,
       discountPercentage: pkg.discountPercentage,
+      discountThreeMonths: pkg.discountThreeMonths ?? 5.0,
+      discountSixMonths: pkg.discountSixMonths ?? 10.0,
+      discountAnnual: pkg.discountAnnual ?? 20.0,
+      priceThreeMonths: pkg.priceThreeMonths ? Number(pkg.priceThreeMonths) : null,
+      priceSixMonths: pkg.priceSixMonths ? Number(pkg.priceSixMonths) : null,
+      priceTwelveMonths: pkg.priceTwelveMonths ? Number(pkg.priceTwelveMonths) : null,
       miscellaneousCost: pkg.miscellaneousCost,
     },
   });
@@ -147,14 +153,23 @@ async function publishPackageVersion(tx: any, packageId: string): Promise<any> {
 
 function getMultiMonthPackagePrice(pkg: any, monthlyBase: number, durationMonths: number): number {
   if (durationMonths === 3) {
+    if (pkg.priceThreeMonths !== undefined && pkg.priceThreeMonths !== null && Number(pkg.priceThreeMonths) > 0) {
+      return Number(pkg.priceThreeMonths);
+    }
     const disc = pkg.discountThreeMonths ?? 5;
-    return pkg.priceThreeMonths ? pkg.priceThreeMonths : Math.round(monthlyBase * 3 * (1 - disc / 100));
+    return Math.round(monthlyBase * 3 * (1 - disc / 100));
   } else if (durationMonths === 6) {
+    if (pkg.priceSixMonths !== undefined && pkg.priceSixMonths !== null && Number(pkg.priceSixMonths) > 0) {
+      return Number(pkg.priceSixMonths);
+    }
     const disc = pkg.discountSixMonths ?? 10;
-    return pkg.priceSixMonths ? pkg.priceSixMonths : Math.round(monthlyBase * 6 * (1 - disc / 100));
+    return Math.round(monthlyBase * 6 * (1 - disc / 100));
   } else if (durationMonths === 12) {
+    if (pkg.priceTwelveMonths !== undefined && pkg.priceTwelveMonths !== null && Number(pkg.priceTwelveMonths) > 0) {
+      return Number(pkg.priceTwelveMonths);
+    }
     const disc = pkg.discountAnnual ?? 20;
-    return pkg.priceTwelveMonths ? pkg.priceTwelveMonths : Math.round(monthlyBase * 12 * (1 - disc / 100));
+    return Math.round(monthlyBase * 12 * (1 - disc / 100));
   }
   return monthlyBase;
 }
@@ -742,8 +757,7 @@ export const purchaseSubscription = async (
       taxItems,
       totalDiscounts,
       customerState,
-      process.env.COMPANY_STATE || 'Haryana',
-      packageBasePrice
+      process.env.COMPANY_STATE || 'Haryana'
     );
 
     const invoice = await tx.invoice.create({
@@ -756,9 +770,9 @@ export const purchaseSubscription = async (
         beneficiaryId: beneficiary ? beneficiary.id : null,
         subscriptionId: subscription.id,
         baseAmount: invoiceCalc.baseAmount,
-        discountAmount: discountAmount,
+        discountAmount: discountAmount || 0,
         saathiCouponCode: saathiCouponCode ? saathiCouponCode.trim().toUpperCase() : null,
-        saathiDiscountAmount: saathiDiscountAmount,
+        saathiDiscountAmount: saathiDiscountAmount || 0,
         taxAmount: invoiceCalc.taxAmount,
         totalAmount: invoiceCalc.totalAmount,
         placeOfSupply: customerState,
@@ -802,7 +816,7 @@ export const purchaseSubscription = async (
           unitLabel: vb.snapshotUnitLabel
         })),
         baseAmount: invoiceCalc.baseAmount,
-        discountAmount: discountAmount,
+        discountAmount: invoiceCalc.discountAmount > 0 ? invoiceCalc.discountAmount : discountAmount,
         couponCode: couponCode || null,
         saathiCouponCode: saathiCouponCode ? saathiCouponCode.trim().toUpperCase() : null,
         saathiDiscountAmount: saathiDiscountAmount,
