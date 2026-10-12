@@ -15,6 +15,7 @@ import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useAuth } from '@/contexts/AuthContext';
 import RazorpayCheckout from 'react-native-razorpay';
+import { CouponSuccessModal } from '@/components/shared/CouponSuccessModal';
 
 /**
  * Resolves the Razorpay key in every Expo/EAS environment:
@@ -106,6 +107,14 @@ export default function CheckoutScreen() {
     const [saathiCouponError, setSaathiCouponError] = useState('');
     const [appliedSaathiCouponCode, setAppliedSaathiCouponCode] = useState('');
     const [showSaathiCouponField, setShowSaathiCouponField] = useState(false);
+
+    // Celebratory coupon success modal state
+    const [couponSuccessData, setCouponSuccessData] = useState<{
+        visible: boolean;
+        couponCode: string;
+        savedAmount: number;
+        isSaathi?: boolean;
+    } | null>(null);
 
     const [agreed, setAgreed] = useState(false);
     const [packageBenefits, setPackageBenefits] = useState<string[]>([]);
@@ -382,16 +391,24 @@ export default function CheckoutScreen() {
     }, [packageId, isVerificationFlow, pendingDetailsRaw, serviceRegionId]);
 
     // Apply coupon — calls preview again with the code
-    const handleApplyCoupon = async () => {
-        if (!promoCode.trim()) return;
+    const handleApplyCoupon = async (codeToApply?: string) => {
+        const rawCode = typeof codeToApply === 'string' ? codeToApply : promoCode;
+        const code = (rawCode || '').trim().toUpperCase();
+        if (!code) return;
         setIsApplyingCoupon(true);
         setCouponError('');
 
         try {
-            const result = await fetchCheckoutPreview(promoCode.trim().toUpperCase(), appliedSaathiCouponCode);
+            const result = await fetchCheckoutPreview(code, appliedSaathiCouponCode);
             if (result.couponValid) {
-                setAppliedCouponCode(promoCode.trim().toUpperCase());
-                Alert.alert('✅ Coupon Applied!', `You saved ₹${((result.couponDiscount || 0)).toFixed(2)} on this order.`);
+                setAppliedCouponCode(code);
+                setPromoCode(code);
+                setCouponSuccessData({
+                    visible: true,
+                    couponCode: code,
+                    savedAmount: result.couponDiscount || 0,
+                    isSaathi: false,
+                });
             } else {
                 setCouponError(result.couponMessage || 'Invalid or expired coupon code');
                 setAppliedCouponCode('');
@@ -413,15 +430,21 @@ export default function CheckoutScreen() {
     };
 
     const handleApplySaathiCoupon = async () => {
-        if (!saathiPromoCode.trim()) return;
+        const code = saathiPromoCode.trim().toUpperCase();
+        if (!code) return;
         setIsApplyingSaathiCoupon(true);
         setSaathiCouponError('');
 
         try {
-            const result = await fetchCheckoutPreview(appliedCouponCode, saathiPromoCode.trim().toUpperCase());
+            const result = await fetchCheckoutPreview(appliedCouponCode, code);
             if (result.saathiCouponValid) {
-                setAppliedSaathiCouponCode(saathiPromoCode.trim().toUpperCase());
-                Alert.alert('✅ Saathi Coupon Applied!', `You saved ₹${result.saathiDiscountApplied.toFixed(2)} on this order.`);
+                setAppliedSaathiCouponCode(code);
+                setCouponSuccessData({
+                    visible: true,
+                    couponCode: code,
+                    savedAmount: result.saathiDiscountApplied || 0,
+                    isSaathi: true,
+                });
             } else {
                 setSaathiCouponError(result.saathiCouponMessage || 'Invalid or expired Saathi coupon code');
                 setAppliedSaathiCouponCode('');
@@ -949,7 +972,7 @@ export default function CheckoutScreen() {
                                                     />
                                                     <TouchableOpacity
                                                         style={[styles.applyBtnOutline, (!promoCode || isApplyingCoupon) && { opacity: 0.5 }]}
-                                                        onPress={handleApplyCoupon}
+                                                        onPress={() => handleApplyCoupon()}
                                                         disabled={!promoCode || isApplyingCoupon}
                                                     >
                                                         {isApplyingCoupon ? (
@@ -1320,8 +1343,8 @@ export default function CheckoutScreen() {
                                             <TouchableOpacity 
                                                 style={styles.couponItemApplyBtn}
                                                 onPress={() => {
-                                                    setPromoCode(coupon.code);
                                                     setShowCouponsModal(false);
+                                                    handleApplyCoupon(coupon.code);
                                                 }}
                                             >
                                                 <Text style={styles.couponItemApplyBtnText}>USE</Text>
@@ -1333,6 +1356,17 @@ export default function CheckoutScreen() {
                         </View>
                     </View>
                 </View>
+            )}
+
+            {/* COUPON SUCCESS CELEBRATION MODAL */}
+            {couponSuccessData && (
+                <CouponSuccessModal
+                    visible={couponSuccessData.visible}
+                    couponCode={couponSuccessData.couponCode}
+                    savedAmount={couponSuccessData.savedAmount}
+                    isSaathi={couponSuccessData.isSaathi}
+                    onClose={() => setCouponSuccessData(null)}
+                />
             )}
 
         </View>
