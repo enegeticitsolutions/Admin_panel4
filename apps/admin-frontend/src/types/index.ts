@@ -247,6 +247,8 @@ export interface ActivityLog {
 // PARTNER & VOLUNTEER TYPES
 // ============================================================================
 
+export type PartnerStatus = 'PENDING' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'ARCHIVED';
+
 export interface PartnerCategory {
   id: string;
   name: string;

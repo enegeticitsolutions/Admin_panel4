@@ -31,6 +31,8 @@ import type {
   SupportTicket,
   ActivityLog,
   Partner,
+  PartnerCategory,
+  PartnerStatus,
   Volunteer,
   Benefit,
   SubscriptionPackage,
