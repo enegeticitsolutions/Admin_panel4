@@ -9,7 +9,7 @@ import "./WhatsAppButton.css";
  */
 const WhatsAppButton = ({
   phoneNumber = import.meta.env.VITE_WHATSAPP_NUMBER || SITE_LINKS?.contact?.whatsappClean || "918527070049",
-  defaultMessage = "Hello! I would like to know more about MaiHoonNa senior care services.",
+  defaultMessage = "Hello! I would like to know more about MaiHoonNa elder care services.",
   popupMessage = "Need help? Chat with us on WhatsApp!",
   subText = "Typically replies in minutes",
 }) => {
