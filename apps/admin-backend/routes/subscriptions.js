@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const { calculateAge } = require('../utils/age');
 const { publishPackageVersion } = require('../utils/packageVersionHelper');
 const { invoiceService } = require('../modules/invoices/invoice.service');
+const { notificationService } = require('@maihoonna/notifications');
 
 function normalizeUnit(unitLabel) {
   if (!unitLabel) return 'visits';
@@ -45,6 +46,7 @@ router.get('/check-phone', async (req, res) => {
       select: {
         id: true,
         name: true,
+        email: true,
         role: true,
         isActive: true,
         subscriberBeneficiaries: {
@@ -76,6 +78,7 @@ router.get('/check-phone', async (req, res) => {
         exists: true,
         id: user.id,
         name: user.name,
+        email: user.email,
         role: user.role,
         isActive: user.isActive,
         beneficiaries: user.subscriberBeneficiaries,
@@ -1326,10 +1329,64 @@ router.post('/admin-enroll', async (req, res) => {
       };
     });
 
+    // Auto-dispatch verification & activation email to subscriber
+    const targetEmail = result?.subscriber?.email || (typeof subscriberEmail === 'string' && subscriberEmail.includes('@') ? subscriberEmail.trim().toLowerCase() : null);
+    if (targetEmail) {
+      notificationService.send({
+        channel: 'email',
+        event: 'VERIFY_BENEFICIARY_ACTIVATE_PACKAGE',
+        to: targetEmail,
+        variables: {
+          subscriber_name: result.subscriber?.name || subscriberName || 'Subscriber',
+          subscriber_phone: result.subscriber?.phone || subscriberPhone || '',
+          beneficiary_name: result.beneficiary?.name || beneficiaryName || 'Beneficiary',
+          package_name: result.package?.name || 'Care Package',
+        }
+      }).then((emailRes) => {
+        if (emailRes?.success) {
+          console.log(`[admin-enroll] Automatic activation email dispatched to ${targetEmail} (MessageId: ${emailRes.messageId})`);
+        } else {
+          console.warn(`[admin-enroll] Automatic activation email failed:`, emailRes?.error);
+        }
+      }).catch(err => console.error('[admin-enroll] Auto-send activation email error:', err.message));
+    }
+
     res.status(201).json({ success: true, data: result });
   } catch (err) {
     console.error('Admin Enrollment error:', err);
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── POST /api/subscriptions/send-activation-email ────────────────────────────
+// On-demand / Resend activation email for subscriber
+router.post('/send-activation-email', async (req, res) => {
+  const { subscriberEmail, subscriberName, subscriberPhone, beneficiaryName, packageName } = req.body;
+  if (!subscriberEmail || !String(subscriberEmail).includes('@')) {
+    return res.status(400).json({ success: false, message: 'Valid subscriber email is required' });
+  }
+
+  try {
+    const result = await notificationService.send({
+      channel: 'email',
+      event: 'VERIFY_BENEFICIARY_ACTIVATE_PACKAGE',
+      to: String(subscriberEmail).trim().toLowerCase(),
+      variables: {
+        subscriber_name: subscriberName || 'Subscriber',
+        subscriber_phone: subscriberPhone || '',
+        beneficiary_name: beneficiaryName || 'Beneficiary',
+        package_name: packageName || 'Care Package',
+      }
+    });
+
+    if (!result.success) {
+      return res.status(500).json({ success: false, message: result.error || 'Failed to dispatch email' });
+    }
+
+    res.json({ success: true, message: 'Verification email sent successfully', messageId: result.messageId });
+  } catch (err) {
+    console.error('[send-activation-email] Error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Internal server error' });
   }
 });
 

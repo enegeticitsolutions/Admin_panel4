@@ -15,6 +15,7 @@ type PlanDuration = 'basic' | '6months' | 'annual';
 
 import { API_URL } from '@/constants/api';
 import { CallbackButton } from '../../components/CallbackButton';
+import { WhatsAppButton } from '../../components/WhatsAppButton';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
@@ -687,6 +688,13 @@ export default function SubscriptionPackagesScreen() {
                             textStyle={styles.callbackText}
                             notes="Requested assistance from Subscription Packages page"
                         />
+                        <WhatsAppButton
+                            variant="icon"
+                            style={styles.whatsappBtn}
+                            iconSize={26}
+                            iconColor="#25D366"
+                            message="Hello! I need assistance choosing a subscription plan on MaiHoonNa."
+                        />
                     </View>
                 </View>
             </ScrollView>
@@ -951,6 +959,11 @@ const styles = StyleSheet.create({
     assistanceActions: { flexDirection: 'row', alignItems: 'center' },
     callbackBtn: { flex: 1, flexDirection: 'row', borderWidth: 1, borderColor: '#F97316', borderRadius: 12, height: 50, alignItems: 'center', justifyContent: 'center' },
     callbackText: { color: '#F97316', fontWeight: '600', fontSize: 15 },
+    whatsappBtn: {
+        width: 50, height: 50, borderRadius: 12, backgroundColor: '#F0FDF4',
+        borderWidth: 1, borderColor: '#DCFCE7',
+        justifyContent: 'center', alignItems: 'center', marginLeft: 10,
+    },
 
     // Location picker styles
     locationContainer: {
