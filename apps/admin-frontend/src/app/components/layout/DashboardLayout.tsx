@@ -23,6 +23,7 @@ import {
   Settings,
   Home,
   UserPlus,
+  UserSearch,
   Activity,
   Tag,
   RefreshCw,
@@ -165,6 +166,12 @@ const navigationSections: NavSection[] = [
   {
     title: 'CLIENTS',
     items: [
+      {
+        path: '/prospects',
+        label: 'Prospects (App Installs)',
+        icon: UserSearch,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'customer_service_manager', 'customer_service'],
+      },
       {
         path: '/subscribers',
         label: 'Subscribers',

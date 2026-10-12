@@ -92,11 +92,104 @@ router.post('/', async (req, res) => {
   }
 });
 
+// ─── Helper: Seed Default Vital Templates ──────────────────────────────────
+async function seedDefaultVitalTemplates() {
+  const existingCount = await prisma.vitalConfigTemplate.count();
+  if (existingCount > 0) return;
+
+  const vitals = await prisma.vitalDefinition.findMany({
+    where: { isLatestVersion: true },
+  });
+  const byCode = {};
+  vitals.forEach(v => {
+    byCode[v.code.toUpperCase()] = v.id;
+  });
+
+  const templatesToCreate = [
+    {
+      name: 'Standard care',
+      description: 'Applied to all new beneficiaries unless overridden',
+      isDefault: true,
+      codes: [
+        { code: 'SPO2', freq: 'every_visit', mandatory: false },
+        { code: 'BP', freq: 'every_visit', mandatory: false },
+        { code: 'TEMP', freq: 'every_visit', mandatory: false },
+        { code: 'PULSE', freq: 'every_visit', mandatory: false },
+        { code: 'WEIGHT', freq: 'weekly', mandatory: false },
+      ],
+    },
+    {
+      name: 'Diabetic care',
+      description: 'For beneficiaries with diabetes requiring blood glucose tracking',
+      isDefault: false,
+      codes: [
+        { code: 'SPO2', freq: 'every_visit', mandatory: false },
+        { code: 'BP', freq: 'every_visit', mandatory: false },
+        { code: 'TEMP', freq: 'every_visit', mandatory: false },
+        { code: 'PULSE', freq: 'every_visit', mandatory: false },
+        { code: 'BLOOD_GLUCOSE', freq: 'every_visit', mandatory: true },
+        { code: 'WEIGHT', freq: 'weekly', mandatory: false },
+      ],
+    },
+    {
+      name: 'Cardiac care',
+      description: 'For beneficiaries with heart conditions and hypertension',
+      isDefault: false,
+      codes: [
+        { code: 'SPO2', freq: 'every_visit', mandatory: true },
+        { code: 'BP', freq: 'every_visit', mandatory: true },
+        { code: 'PULSE', freq: 'every_visit', mandatory: true },
+        { code: 'TEMP', freq: 'every_visit', mandatory: false },
+        { code: 'WEIGHT', freq: 'weekly', mandatory: false },
+      ],
+    },
+    {
+      name: 'Post-surgery',
+      description: 'Intensive recovery monitoring post-operation with pain tracking',
+      isDefault: false,
+      codes: [
+        { code: 'SPO2', freq: 'every_visit', mandatory: true },
+        { code: 'BP', freq: 'every_visit', mandatory: true },
+        { code: 'TEMP', freq: 'every_visit', mandatory: true },
+        { code: 'PULSE', freq: 'every_visit', mandatory: true },
+        { code: 'VAS', freq: 'every_visit', mandatory: true },
+        { code: 'WEIGHT', freq: 'weekly', mandatory: false },
+      ],
+    },
+  ];
+
+  for (const t of templatesToCreate) {
+    const validItems = t.codes
+      .filter(c => byCode[c.code])
+      .map((c, idx) => ({
+        vitalDefinitionId: byCode[c.code],
+        frequency: c.freq,
+        isMandatory: c.mandatory,
+        displayOrder: idx,
+      }));
+
+    await prisma.vitalConfigTemplate.create({
+      data: {
+        name: t.name,
+        description: t.description,
+        isDefault: t.isDefault,
+        isActive: true,
+        items: validItems.length > 0 ? { create: validItems } : undefined,
+      },
+    });
+  }
+}
+
 // ─── GET /api/vitals/templates ──────────────────────────────────────────────
 router.get('/templates', async (req, res) => {
   try {
+    const count = await prisma.vitalConfigTemplate.count();
+    if (count === 0) {
+      await seedDefaultVitalTemplates();
+    }
+
     const templates = await prisma.vitalConfigTemplate.findMany({
-      orderBy: { name: 'asc' },
+      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
       include: {
         items: {
           orderBy: { displayOrder: 'asc' },
@@ -112,10 +205,12 @@ router.get('/templates', async (req, res) => {
       description: t.description,
       isDefault: t.isDefault,
       isActive: t.isActive,
-      beneficiaryCount: t.appliedConfigs.length,
-      items: t.items.map(i => ({
-        vitalCode: i.vitalDefinition.code,
-        vitalName: i.vitalDefinition.name,
+      beneficiaryCount: t.appliedConfigs ? t.appliedConfigs.length : 0,
+      items: (t.items || []).map(i => ({
+        id: i.id,
+        vitalDefinitionId: i.vitalDefinitionId,
+        vitalCode: i.vitalDefinition?.code || '',
+        vitalName: i.vitalDefinition?.name || 'Unnamed vital',
         frequency: i.frequency || 'every_visit',
         isMandatory: i.isMandatory,
       })),
@@ -131,15 +226,22 @@ router.get('/templates', async (req, res) => {
 // ─── POST /api/vitals/templates ─────────────────────────────────────────────
 router.post('/templates', async (req, res) => {
   const { name, description, isDefault, items } = req.body;
-  if (!name) return res.status(400).json({ success: false, message: 'name is required' });
+  if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'Template name is required' });
   try {
+    if (isDefault) {
+      await prisma.vitalConfigTemplate.updateMany({
+        where: { isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+
     const template = await prisma.vitalConfigTemplate.create({
       data: {
-        name,
-        description: description || null,
+        name: name.trim(),
+        description: description ? description.trim() : null,
         isDefault: !!isDefault,
         isActive: true,
-        items: items
+        items: items && Array.isArray(items) && items.length > 0
           ? {
               create: items.map((item, idx) => ({
                 vitalDefinitionId: item.vitalDefinitionId,
@@ -150,10 +252,102 @@ router.post('/templates', async (req, res) => {
             }
           : undefined,
       },
+      include: {
+        items: { include: { vitalDefinition: true } },
+        appliedConfigs: { select: { id: true } },
+      },
     });
+
     res.status(201).json({ success: true, data: template });
   } catch (err) {
     console.error('POST /vitals/templates error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── PUT /api/vitals/templates/:id ──────────────────────────────────────────
+router.put('/templates/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, description, isDefault, isActive, items } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ success: false, message: 'Template name is required' });
+  try {
+    const updated = await prisma.$transaction(async (tx) => {
+      if (isDefault) {
+        await tx.vitalConfigTemplate.updateMany({
+          where: { id: { not: id }, isDefault: true },
+          data: { isDefault: false },
+        });
+      }
+
+      if (items && Array.isArray(items)) {
+        await tx.vitalTemplateItem.deleteMany({ where: { templateId: id } });
+        if (items.length > 0) {
+          await tx.vitalTemplateItem.createMany({
+            data: items.map((item, idx) => ({
+              templateId: id,
+              vitalDefinitionId: item.vitalDefinitionId,
+              frequency: item.frequency || 'every_visit',
+              isMandatory: !!item.isMandatory,
+              displayOrder: idx,
+            })),
+          });
+        }
+      }
+
+      return tx.vitalConfigTemplate.update({
+        where: { id },
+        data: {
+          name: name.trim(),
+          description: description !== undefined ? (description ? description.trim() : null) : undefined,
+          isDefault: isDefault !== undefined ? !!isDefault : undefined,
+          isActive: isActive !== undefined ? !!isActive : undefined,
+        },
+        include: {
+          items: { include: { vitalDefinition: true }, orderBy: { displayOrder: 'asc' } },
+          appliedConfigs: { select: { id: true } },
+        },
+      });
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('PUT /vitals/templates/:id error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── DELETE /api/vitals/templates/:id ───────────────────────────────────────
+router.delete('/templates/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const count = await prisma.beneficiaryVitalConfig.count({ where: { templateId: id } });
+    if (count > 0) {
+      await prisma.vitalConfigTemplate.update({ where: { id }, data: { isActive: false } });
+      return res.json({ success: true, message: `Template deactivated (${count} beneficiaries currently assigned)` });
+    }
+    await prisma.vitalTemplateItem.deleteMany({ where: { templateId: id } });
+    await prisma.vitalConfigTemplate.delete({ where: { id } });
+    res.json({ success: true, message: 'Template deleted' });
+  } catch (err) {
+    console.error('DELETE /vitals/templates/:id error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── POST /api/vitals/templates/seed-defaults ──────────────────────────────
+router.post('/templates/seed-defaults', async (req, res) => {
+  try {
+    await seedDefaultVitalTemplates();
+    const templates = await prisma.vitalConfigTemplate.findMany({
+      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+      include: {
+        items: { include: { vitalDefinition: true }, orderBy: { displayOrder: 'asc' } },
+        appliedConfigs: { select: { id: true } },
+      },
+    });
+    res.json({ success: true, data: templates, message: 'Standard templates seeded successfully' });
+  } catch (err) {
+    console.error('POST /vitals/templates/seed-defaults error:', err.message);
     res.status(500).json({ success: false, message: err.message });
   }
 });
