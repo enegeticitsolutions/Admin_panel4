@@ -86,6 +86,7 @@ export default function EnrollmentWizardPage() {
   const [subscriberPhone, setSubscriberPhone] = useState('');
   const [subscriberName, setSubscriberName] = useState('');
   const [subscriberEmail, setSubscriberEmail] = useState('');
+  const [resendingEmail, setResendingEmail] = useState(false);
   const [subscriberAddress, setSubscriberAddress] = useState('');
   const [subscriberPincode, setSubscriberPincode] = useState('');
   const [subscriberCity, setSubscriberCity] = useState('');
@@ -541,6 +542,7 @@ export default function EnrollmentWizardPage() {
         if (data.exists && data.name) {
           setSubscriberName(data.name);
           if (data.id) setExistingSubscriberId(data.id);
+          if ((data as any).email) setSubscriberEmail((data as any).email);
         }
       } catch {
         setPhoneCheck(null);
@@ -671,10 +673,39 @@ export default function EnrollmentWizardPage() {
     }
   };
 
-  // In existing-subscriber mode, we only need phone match; in new mode we need name too
+  const isEmailValid = !!subscriberEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subscriberEmail.trim());
+
+  const handleResendActivationEmail = async () => {
+    const emailToUse = enrolledResult?.subscriber?.email || subscriberEmail;
+    if (!emailToUse || !emailToUse.includes('@')) {
+      toast.error('No valid subscriber email address found.');
+      return;
+    }
+    setResendingEmail(true);
+    try {
+      const res = await enrollmentApi.sendActivationEmail({
+        subscriberEmail: emailToUse,
+        subscriberName: enrolledResult?.subscriber?.name || subscriberName,
+        subscriberPhone: enrolledResult?.subscriber?.phone || subscriberPhone,
+        beneficiaryName: enrolledResult?.beneficiary?.name || beneficiaryName,
+        packageName: enrolledResult?.package?.name || selectedPackage?.name || 'Care Package',
+      });
+      if (res?.success) {
+        toast.success(`Activation & verification email sent to ${emailToUse}! ✉️`);
+      } else {
+        toast.error(res?.message || 'Failed to dispatch email');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to dispatch activation email');
+    } finally {
+      setResendingEmail(false);
+    }
+  };
+
+  // In existing-subscriber mode, we need phone match + compulsory valid email; in new mode name + compulsory valid email
   const canProceedSubscriber = enrollingMode === 'existing'
-    ? subscriberPhone.length >= 10 && phoneCheck?.exists === true
-    : subscriberPhone.length >= 10 && subscriberName.trim().length > 0;
+    ? subscriberPhone.length >= 10 && phoneCheck?.exists === true && isEmailValid
+    : subscriberPhone.length >= 10 && subscriberName.trim().length > 0 && isEmailValid;
   const canProceedBeneficiary = sameAsSubscriber
     ? true
     : beneficiaryName.trim().length > 0 &&
@@ -775,6 +806,51 @@ export default function EnrollmentWizardPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Verification & Activation Email Status Box */}
+        <div className="bg-gradient-to-r from-orange-50/80 to-amber-50/60 border border-orange-200/90 rounded-xl p-4 text-left mb-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center text-[#FF7A00] flex-shrink-0 mt-0.5">
+                <Mail className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                  Beneficiary Verification &amp; Activation Email
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">
+                    Auto-Dispatched
+                  </Badge>
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Sent to <strong className="text-gray-900 font-semibold">{enrolledResult.subscriber?.email || subscriberEmail}</strong>
+                </p>
+                <p className="text-[11px] text-orange-950 mt-1 leading-relaxed">
+                  Contains steps for subscriber to log in, review senior health details, and activate package validity.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={resendingEmail}
+              onClick={handleResendActivationEmail}
+              className="border-orange-300 text-[#FF7A00] hover:bg-[#FF7A00] hover:text-white font-bold text-xs gap-1.5 shadow-sm self-start sm:self-center shrink-0"
+            >
+              {resendingEmail ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Mail className="w-3.5 h-3.5" />
+                  Share / Resend Email
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700 mb-8 flex gap-2 items-start">
           <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -955,22 +1031,36 @@ export default function EnrollmentWizardPage() {
                   </div>
                 )}
 
+                {/* Subscriber Email Address — Compulsory for BOTH modes */}
+                <div className="space-y-1 col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sub-email">
+                      Subscriber Email Address <span className="text-red-500 font-bold">*</span>
+                    </Label>
+                    {subscriberEmail && !isEmailValid && (
+                      <span className="text-[11px] text-destructive font-semibold">Please enter a valid email address</span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+                    <Input
+                      id="sub-email"
+                      type="email"
+                      value={subscriberEmail}
+                      onChange={e => setSubscriberEmail(e.target.value.trim())}
+                      placeholder="e.g. subscriber@example.com"
+                      className={`pl-9 ${subscriberEmail && !isEmailValid ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                      required
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Required for sending beneficiary verification link, plan activation instructions, and official GST invoice.
+                  </p>
+                </div>
+
                 {/* Extra fields: only shown for New mode (Case 2) */}
                 {enrollingMode === 'new' && (
                   <>
-                    <div className="space-y-1 col-span-2">
-                      <Label htmlFor="sub-email">Email Address</Label>
-                      <div className="relative">
-                        <Mail className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-                        <Input
-                          id="sub-email"
-                          value={subscriberEmail}
-                          onChange={e => setSubscriberEmail(e.target.value)}
-                          placeholder="your@email.com"
-                          className="pl-9"
-                        />
-                      </div>
-                    </div>
 
                     <div className="space-y-1 col-span-2 sm:col-span-1">
                       <Label htmlFor="sub-address">Permanent Address</Label>

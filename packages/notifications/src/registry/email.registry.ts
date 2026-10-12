@@ -27,6 +27,10 @@ export const EmailRegistry: Record<string, EmailTemplateConfig> = {
     template: 'MaiHoonNa_BeneficiaryProfileCreated',
     variables: ['beneficiary_name', 'subscriber_name'],
   },
+  VERIFY_BENEFICIARY_ACTIVATE_PACKAGE: {
+    template: 'MaiHoonNa_VerifyBeneficiaryAndActivatePackage',
+    variables: ['subscriber_name', 'subscriber_phone', 'beneficiary_name', 'package_name'],
+  },
 
   // ─── 3. Subscriptions & Billing ────────────────────────────────────────────
   SUBSCRIPTION_REQUEST_SUBMITTED: {
