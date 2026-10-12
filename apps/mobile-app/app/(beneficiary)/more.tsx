@@ -13,6 +13,7 @@ import { useSafeBack } from '@/hooks/useSafeBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import CareSupportModal from '@/components/shared/CareSupportModal';
 
 interface MenuItemProps {
     icon: React.ReactNode;
@@ -43,6 +44,7 @@ export default function MoreOptionsScreen() {
     const deleteAccountWithConfirm = useDeleteAccountWithConfirm();
     const { user, availableRoles, isSwitchingRole, switchRole } = useAuth();
     const isDualRole = availableRoles.includes('subscriber') && availableRoles.includes('beneficiary');
+    const [supportModalVisible, setSupportModalVisible] = useState(false);
 
     const profileName = user?.name || 'Margaret Williams';
     const profilePhoto = user?.photo || user?.profilePhoto || null;
@@ -92,6 +94,12 @@ export default function MoreOptionsScreen() {
             label: 'Legacy Circle',
             iconBg: '#FEF3C7',
             onPress: () => router.push('/(beneficiary)/legacy-circle'),
+        },
+        {
+            icon: <Ionicons name="help-circle-outline" size={20} color="#3B82F6" />,
+            label: 'Help & Support',
+            iconBg: '#EFF6FF',
+            onPress: () => setSupportModalVisible(true),
         },
     ];
 
@@ -190,6 +198,13 @@ export default function MoreOptionsScreen() {
 
                 <View style={{ height: Platform.OS === 'ios' ? 120 : 100 }} />
             </ScrollView>
+
+            {/* Care Support Modal */}
+            <CareSupportModal
+                visible={supportModalVisible}
+                onClose={() => setSupportModalVisible(false)}
+                emailSubject="MaiHoonNa Beneficiary Support"
+            />
         </SafeAreaView>
     );
 }
