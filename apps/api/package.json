@@ -5,7 +5,7 @@
   "main": "dist/run.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only app/run.ts",
-    "build": "npm --prefix ../../packages/notifications run build && prisma generate --schema=../../packages/database/prisma/schema.prisma && tsc",
+    "build": "npm --prefix ../../packages/billing run build && npm --prefix ../../packages/notifications run build && prisma generate --schema=../../packages/database/prisma/schema.prisma && tsc",
     "start": "node dist/app/run.js",
     "postinstall": "prisma generate --schema=../../packages/database/prisma/schema.prisma",
     "seed:test": "ts-node --transpile-only prisma/seed_test.ts",
