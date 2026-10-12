@@ -105,6 +105,24 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
   `;
   }).join('');
 
+  const baseAmount = Number(data.baseAmount || 0);
+  const cgstAmount = Number(data.cgstAmount || 0);
+  const sgstAmount = Number(data.sgstAmount || 0);
+  const igstAmount = Number(data.igstAmount || 0);
+  const totalTax = Number(data.taxAmount || (cgstAmount + sgstAmount + igstAmount) || 0);
+
+  // Predefined tenure/duration discounts are already baked into the package price (priceThreeMonths, etc.).
+  // In the discount section, ONLY applied coupon and Saathi discounts are calculated.
+  const couponDiscount = Number(data.discountAmount || 0);
+  const saathiDiscount = Number(data.saathiDiscountAmount || 0);
+  const totalDiscount = Math.round((couponDiscount + saathiDiscount) * 100) / 100;
+
+  // Gross before applied coupon / saathi discount:
+  const grossBeforeDiscount = Math.round((baseAmount + totalTax) * 100) / 100;
+  const payableAmount = Number(data.totalAmount !== undefined && data.totalAmount !== null
+    ? data.totalAmount
+    : Math.max(0, Math.round((grossBeforeDiscount - totalDiscount) * 100) / 100));
+
   const html = `
     <!DOCTYPE html>
     <html lang="en">
@@ -276,40 +294,35 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
         <table class="totals-table">
           <tr>
             <td>Total Amount</td>
-            <td>₹${(data.baseAmount + (data.cgstAmount || 0) + (data.sgstAmount || 0) + (data.igstAmount || 0)).toFixed(2)}</td>
+            <td>₹${grossBeforeDiscount.toFixed(2)}</td>
           </tr>
-          ${data.discountAmount > 0 ? `
+          ${couponDiscount > 0 ? `
           <tr>
             <td>Discount</td>
-            <td>-₹${data.discountAmount.toFixed(2)}</td>
+            <td>-₹${couponDiscount.toFixed(2)}</td>
           </tr>
           ` : ''}
-          ${(data.saathiDiscountAmount || 0) > 0 ? `
+          ${saathiDiscount > 0 ? `
           <tr>
             <td>Saathi Discount</td>
-            <td>-₹${(data.saathiDiscountAmount || 0).toFixed(2)}</td>
+            <td>-₹${saathiDiscount.toFixed(2)}</td>
           </tr>
           ` : ''}
-          ${(data.discountAmount > 0 && (data.saathiDiscountAmount || 0) > 0) ? `
+          ${(couponDiscount > 0 && saathiDiscount > 0) ? `
           <tr>
             <td style="font-weight: 600;">Total Discount</td>
-            <td style="font-weight: 600;">-₹${(data.discountAmount + (data.saathiDiscountAmount || 0)).toFixed(2)}</td>
-          </tr>
-          ` : (data.discountAmount > 0 || (data.saathiDiscountAmount || 0) > 0) ? `
-          <tr>
-            <td>Total Discount</td>
-            <td>-₹${(data.discountAmount + (data.saathiDiscountAmount || 0)).toFixed(2)}</td>
+            <td style="font-weight: 600;">-₹${totalDiscount.toFixed(2)}</td>
           </tr>
           ` : ''}
           <tr class="bold">
             <td>Total Payable Amount</td>
-            <td>₹${data.totalAmount.toFixed(2)}</td>
+            <td>₹${payableAmount.toFixed(2)}</td>
           </tr>
         </table>
       </div>
 
       <div class="amount-words">
-        Total Amount (in words): ${numberToWords(Math.round(data.totalAmount))} Rupees Only
+        Total Amount (in words): ${numberToWords(Math.round(payableAmount))} Rupees Only
       </div>
 
       <div class="footer-details">
