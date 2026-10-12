@@ -23,32 +23,6 @@ const paymentLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// ─── GST rate used everywhere in checkout (server-side source of truth) ───────
-const GST_RATE = 0.18; // 18% fallback
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper to resolve multi-month package price
-// ─────────────────────────────────────────────────────────────────────────────
-function getMultiMonthPackagePrice(pkg: any, monthlyBase: number, months: number): number {
-  if (months === 3) {
-    if (pkg.priceThreeMonths) return Number(pkg.priceThreeMonths);
-    const disc = Number(pkg.discountThreeMonths ?? 5);
-    return Math.round(monthlyBase * 3 * (1 - disc / 100));
-  }
-  if (months === 6) {
-    if (pkg.priceSixMonths) return Number(pkg.priceSixMonths);
-    const disc = Number(pkg.discountSixMonths ?? 10);
-    return Math.round(monthlyBase * 6 * (1 - disc / 100));
-  }
-  if (months >= 12) {
-    if (pkg.priceTwelveMonths) return Number(pkg.priceTwelveMonths);
-    const disc = Number(pkg.discountAnnual ?? 20);
-    return Math.round(monthlyBase * 12 * (1 - disc / 100));
-  }
-  // Default: 1 month = monthly base
-  return monthlyBase;
-}
-
 function formatUnitType(unitLabel: string | null | undefined, units: number = 1): string {
   if (!unitLabel) return units === 1 ? 'Unit' : 'Units';
   const clean = String(unitLabel).replace(/^per\s+/i, '').trim().toLowerCase();
@@ -100,9 +74,20 @@ async function calculatePricing(
   const months = isTrialPkg ? 1 : Math.max(1, Math.floor(Number(durationMonths) || 1));
   const baseMonthlyRate = Number(pkg.basePrice) || 0;
 
+  let overridePrice: number | null = null;
+  if (!isTrialPkg) {
+    if (months === 3 && (pkg as any).priceThreeMonths !== undefined && (pkg as any).priceThreeMonths !== null) {
+      overridePrice = Number((pkg as any).priceThreeMonths);
+    } else if (months === 6 && (pkg as any).priceSixMonths !== undefined && (pkg as any).priceSixMonths !== null) {
+      overridePrice = Number((pkg as any).priceSixMonths);
+    } else if (months >= 12 && (pkg as any).priceTwelveMonths !== undefined && (pkg as any).priceTwelveMonths !== null) {
+      overridePrice = Number((pkg as any).priceTwelveMonths);
+    }
+  }
+
   // Tenure / duration discount percentage (0% for trials — flat pricing only)
   let durationDiscountPct = 0;
-  if (!isTrialPkg) {
+  if (!isTrialPkg && overridePrice === null) {
     if (months === 3) durationDiscountPct = Number(pkg.discountThreeMonths ?? 5);
     else if (months === 6) durationDiscountPct = Number(pkg.discountSixMonths ?? 10);
     else if (months >= 12) durationDiscountPct = Number(pkg.discountAnnual ?? 20);
@@ -139,7 +124,19 @@ async function calculatePricing(
         benefitMonthlyBase = baseMonthlyRate / packageBenefits.length;
       }
 
-      const benefitTermBase = Math.round(benefitMonthlyBase * months * 100) / 100;
+      let benefitTermBase = 0;
+      if (overridePrice !== null) {
+        if (catalogTotal > 0) {
+          benefitTermBase = Math.round(((overridePrice * lineCatalog) / catalogTotal) * 100) / 100;
+        } else {
+          benefitTermBase = Math.round((overridePrice / packageBenefits.length) * 100) / 100;
+        }
+      } else {
+        const preDiscountBase = Math.round(benefitMonthlyBase * months * 100) / 100;
+        const discountAmount = durationDiscountPct > 0 ? Math.round((preDiscountBase * durationDiscountPct) / 100 * 100) / 100 : 0;
+        benefitTermBase = Math.max(0, preDiscountBase - discountAmount);
+      }
+      
       const gstRate = b.isGstExempt ? 0 : Number(b.gstRate !== null && b.gstRate !== undefined ? b.gstRate : 18);
       const gstAmount = Math.round((benefitTermBase * gstRate) / 100 * 100) / 100;
       const finalPrice = Math.round((benefitTermBase + gstAmount) * 100) / 100;
@@ -157,6 +154,7 @@ async function calculatePricing(
         unitLabel: b.unitLabel || 'units',
         unitType,
         unitDisplay: `Units: ${count} ${unitType}`,
+        unitPrice: count > 0 ? Math.round((benefitTermBase / count) * 100) / 100 : 0,
         price: benefitTermBase,
         gstRate,
         gstAmount,
@@ -167,7 +165,9 @@ async function calculatePricing(
     });
   } else {
     const gstRate = Number(pkg.gstRate ?? 18);
-    const benefitTermBase = Math.round(baseMonthlyRate * months * 100) / 100;
+    const preDiscountBase = Math.round(baseMonthlyRate * months * 100) / 100;
+    const calcDiscount = durationDiscountPct > 0 ? Math.round((preDiscountBase * durationDiscountPct) / 100 * 100) / 100 : 0;
+    const benefitTermBase = Math.max(0, preDiscountBase - calcDiscount);
     const gstAmount = Math.round((benefitTermBase * gstRate) / 100 * 100) / 100;
     const finalPrice = benefitTermBase + gstAmount;
 
@@ -180,6 +180,7 @@ async function calculatePricing(
       unitLabel: 'package',
       unitType: 'Package',
       unitDisplay: 'Units: 1 Package',
+      unitPrice: benefitTermBase,
       price: benefitTermBase,
       gstRate,
       gstAmount,
@@ -193,9 +194,10 @@ async function calculatePricing(
   totalPackageTax = Math.round(totalPackageTax * 100) / 100;
   const packageGrossPrice = Math.round((totalPackageBase + totalPackageTax) * 100) / 100;
 
-  // Tenure / duration discount on gross price (e.g. 10% on 17400 -> 1740)
-  const durationDiscount = Math.round((packageGrossPrice * durationDiscountPct) / 100 * 100) / 100;
-  const packageFinalPayable = Math.round((packageGrossPrice - durationDiscount) * 100) / 100;
+  // Tenure / duration discount is now baked into the base price for explicit overrides.
+  // We still need to handle proportional percentage discounts if override is not used.
+  // Actually, we baked proportional percentage discounts into benefitTermBase above, so packageGrossPrice is final!
+  const packageFinalPayable = packageGrossPrice;
 
   // 2. Add-ons breakdown
   let addonsTotalPrice = 0;
@@ -314,7 +316,7 @@ async function calculatePricing(
     pkg,
     durationMonths: months,
     durationDiscountPct,
-    durationDiscount,
+    durationDiscount: 0,
     packageBasePrice: totalPackageBase,
     packageGrossPrice,
     packageFinalPayable,
@@ -1176,7 +1178,7 @@ router.post('/addon/preview', authenticate, async (req: AuthRequest, res: Respon
         originalPrice: p.originalPrice,
         basePrice: p.basePrice,
         hasDiscount: p.hasDiscount,
-        gstRate: GST_RATE,
+        gstRate: p.taxRate,
         tax: p.tax,
         total: p.total,
       }

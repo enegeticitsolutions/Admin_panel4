@@ -634,16 +634,26 @@ export default function EnrollmentWizardPage() {
         paymentMethod,
         paymentNote,
         couponCode: appliedCoupon?.code,
+        // Pass server-computed discount breakdown so backend does not have to infer
+        // from amountPaid subtraction (which breaks when addons are included).
+        packageDiscount: serverPricing?.packageDiscount ?? 0,
+        couponDiscount: serverPricing?.couponDiscount ?? appliedCoupon?.discount ?? 0,
         csaMode: true, // Always true for Admin enrollment to require subscriber activation
+        addons: selectedAddons.map(a => ({
+          benefitId: a.benefit.id,
+          units: a.units,
+          totalAmount: a.totalAmount,
+          name: a.benefit.name,
+        })),
       });
-      // Allocate any selected add-ons
+      // Allocate any selected add-ons if needed (amountPaid: 0 since already paid in consolidated invoice)
       const subId = result?.subscription?.id || (result as any)?.id || (result as any)?.data?.subscription?.id;
       if (subId && selectedAddons.length > 0) {
         for (const addon of selectedAddons) {
           await subscriptionApi.allocateAddon(subId, {
             benefitId: addon.benefit.id,
             units: addon.units,
-            amountPaid: addon.totalAmount,
+            amountPaid: 0,
             paymentMethod,
             paymentNote: `Enrollment Add-on: ${addon.benefit.name}`,
           }).catch(e => console.warn('Addon allocation warning on enroll:', e));
@@ -1798,6 +1808,164 @@ export default function EnrollmentWizardPage() {
                 </div>
               </div>
 
+              {/* Package Duration & Plan Type - MOVED UP */}
+              <div className="space-y-3 pt-1 pb-4 border-b border-dashed border-gray-200">
+                <div className="flex items-center justify-between">
+                  <Label className="font-semibold text-sm">Package Duration & Plan Type</Label>
+                  <span className="text-[11px] text-muted-foreground font-mono font-medium">
+                    Current: {pricing.durationLabel || duration.replace('_', ' ')}
+                  </span>
+                </div>
+
+                {/* If selected package is a configured Trial Package (from /subscriptions route) */}
+                {Boolean(selectedPackage?.isFreeTrial || selectedPackage?.trialDurationDays) ? (
+                  <div className="bg-purple-50/80 border border-purple-200/90 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🧪</span>
+                        <div>
+                          <p className="font-semibold text-sm text-purple-950">
+                            {Number(selectedPackage?.basePrice) === 0 ? 'Free Trial Package' : 'Trial Package'} Duration ({selectedPackage?.trialDurationDays || 7} Days Configured)
+                          </p>
+                          <p className="text-[11px] text-purple-700">
+                            Validity configured on package definition in /subscriptions. Price: {Number(selectedPackage?.basePrice) === 0 ? 'Free (₹0)' : `₹${selectedPackage?.basePrice} for ${selectedPackage?.trialDurationDays || 7} days`}.
+                          </p>
+                        </div>
+                      </div>
+                      <Badge className="bg-purple-600 text-white hover:bg-purple-600 font-bold">
+                        {selectedPackage?.trialDurationDays || 7} Days Default
+                      </Badge>
+                    </div>
+
+                    {/* Dynamic Days Input */}
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      <Label htmlFor="custom-trial-days" className="text-xs text-purple-950 font-semibold shrink-0">
+                        Trial Duration (Days):
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="custom-trial-days"
+                          type="number"
+                          min={1}
+                          max={90}
+                          value={duration.match(/^(\d+)_days$/)?.[1] || selectedPackage?.trialDurationDays || 7}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setDuration(`${val}_days`);
+                            }
+                          }}
+                          className="h-9 w-24 text-center font-mono font-bold text-sm bg-white border-purple-300"
+                        />
+                        <span className="text-xs text-purple-900 font-medium">days</span>
+                      </div>
+
+                      {selectedPackage?.trialDurationDays && duration !== `${selectedPackage?.trialDurationDays}_days` && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDuration(`${selectedPackage?.trialDurationDays}_days`)}
+                          className="h-8 text-xs border-purple-300 text-purple-800 hover:bg-purple-100"
+                        >
+                          Reset to Package Config ({selectedPackage?.trialDurationDays} Days)
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard Multi-Month Packages with optional Custom/Trial Day Sale */
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <span className="text-xs font-medium text-slate-600 block">Monthly & Multi-Month Tenures:</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {DURATION_OPTIONS.map((d) => (
+                          <Button
+                            key={d.value}
+                            type="button"
+                            variant={duration === d.value ? 'default' : 'outline'}
+                            onClick={() => setDuration(d.value)}
+                            className={`h-9 text-xs font-semibold ${
+                              duration === d.value ? 'bg-primary text-white shadow-sm' : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            {d.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Optional Custom Day / Trial Sale for a standard package */}
+                    <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                          Or Sell as Custom / Short Trial (Prorated Daily):
+                        </span>
+                        <span className="text-[11px] text-muted-foreground block">
+                          Enter custom days (e.g. 2, 3, 10 days) to prorate daily rate
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={60}
+                          placeholder="Days"
+                          value={duration.match(/^(\d+)_days$/)?.[1] || ''}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (!isNaN(val) && val > 0) {
+                              setDuration(`${val}_days`);
+                            } else if (e.target.value === '') {
+                              setDuration('monthly');
+                            }
+                          }}
+                          className="h-8 w-20 text-center font-mono text-xs bg-white"
+                        />
+                        <span className="text-xs text-muted-foreground font-medium">days</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="start-date" className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-primary" /> Estimated Start Date
+                    </Label>
+                    <Input 
+                      id="start-date" 
+                      type="date" 
+                      value={startDate} 
+                      onChange={e => setStartDate(e.target.value)} 
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="flex items-center gap-1 text-slate-700">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" /> Predicted End Date (Post-Activation)
+                    </Label>
+                    <div className="h-10 px-3 border border-amber-200 bg-amber-50/60 text-amber-900 rounded-md text-xs flex items-center font-mono font-bold">
+                      ~ {getSuggestedEndDate(startDate, duration) || 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-950 mt-4">
+                  <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-amber-900">Mobile App Activation Notice</p>
+                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                      The end date shown above is <strong>predicted</strong> based on estimated enrollment. 
+                      Because actual service commences when the subscriber activates the package on the mobile app, 
+                      the official validity clock (<strong>{pricing.durationLabel || duration.replace('_', ' ')}</strong>) 
+                      begins upon mobile app activation.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 gap-3 pt-2">
                 <Label>Choose Package</Label>
                 {packages.filter(p => p.isActive).length === 0 && (
@@ -1865,9 +2033,10 @@ export default function EnrollmentWizardPage() {
                               ) : (
                                 <span className="font-semibold text-slate-800">₹{pkg.basePrice} for {trialDays} days</span>
                               )
-                            ) : (
-                              `₹${pkg.basePrice} / month`
-                            )}
+                            ) : (() => {
+                               const p = calculateWizardPricing(pkg, duration);
+                               return `₹${p.packageBasePrice} for ${p.durationLabel}`;
+                            })()}
                           </p>
                         </div>
                         {selectedPackageId === pkg.id && <Check className="w-5 h-5 text-primary" />}
@@ -1879,162 +2048,6 @@ export default function EnrollmentWizardPage() {
 
               {selectedPackageId && selectedPackage && (
                 <>
-                  <div className="space-y-3 pt-1">
-                    <div className="flex items-center justify-between">
-                      <Label className="font-semibold text-sm">Package Duration & Plan Type</Label>
-                      <span className="text-[11px] text-muted-foreground font-mono font-medium">
-                        Current: {pricing.durationLabel || duration.replace('_', ' ')}
-                      </span>
-                    </div>
-
-                    {/* If selected package is a configured Trial Package (from /subscriptions route) */}
-                    {Boolean(selectedPackage.isFreeTrial || selectedPackage.trialDurationDays) ? (
-                      <div className="bg-purple-50/80 border border-purple-200/90 rounded-xl p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🧪</span>
-                            <div>
-                              <p className="font-semibold text-sm text-purple-950">
-                                {Number(selectedPackage.basePrice) === 0 ? 'Free Trial Package' : 'Trial Package'} Duration ({selectedPackage.trialDurationDays || 7} Days Configured)
-                              </p>
-                              <p className="text-[11px] text-purple-700">
-                                Validity configured on package definition in /subscriptions. Price: {Number(selectedPackage.basePrice) === 0 ? 'Free (₹0)' : `₹${selectedPackage.basePrice} for ${selectedPackage.trialDurationDays || 7} days`}.
-                              </p>
-                            </div>
-                          </div>
-                          <Badge className="bg-purple-600 text-white hover:bg-purple-600 font-bold">
-                            {selectedPackage.trialDurationDays || 7} Days Default
-                          </Badge>
-                        </div>
-
-                        {/* Dynamic Days Input */}
-                        <div className="flex flex-wrap items-center gap-3 pt-1">
-                          <Label htmlFor="custom-trial-days" className="text-xs text-purple-950 font-semibold shrink-0">
-                            Trial Duration (Days):
-                          </Label>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              id="custom-trial-days"
-                              type="number"
-                              min={1}
-                              max={90}
-                              value={duration.match(/^(\d+)_days$/)?.[1] || selectedPackage.trialDurationDays || 7}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (!isNaN(val) && val > 0) {
-                                  setDuration(`${val}_days`);
-                                }
-                              }}
-                              className="h-9 w-24 text-center font-mono font-bold text-sm bg-white border-purple-300"
-                            />
-                            <span className="text-xs text-purple-900 font-medium">days</span>
-                          </div>
-
-                          {selectedPackage.trialDurationDays && duration !== `${selectedPackage.trialDurationDays}_days` && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setDuration(`${selectedPackage.trialDurationDays}_days`)}
-                              className="h-8 text-xs border-purple-300 text-purple-800 hover:bg-purple-100"
-                            >
-                              Reset to Package Config ({selectedPackage.trialDurationDays} Days)
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      /* Standard Multi-Month Packages with optional Custom/Trial Day Sale */
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <span className="text-xs font-medium text-slate-600 block">Monthly & Multi-Month Tenures:</span>
-                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                            {DURATION_OPTIONS.map((d) => (
-                              <Button
-                                key={d.value}
-                                type="button"
-                                variant={duration === d.value ? 'default' : 'outline'}
-                                onClick={() => setDuration(d.value)}
-                                className={`h-9 text-xs font-semibold ${
-                                  duration === d.value ? 'bg-primary text-white shadow-sm' : 'hover:bg-slate-50'
-                                }`}
-                              >
-                                {d.label}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Optional Custom Day / Trial Sale for a standard package */}
-                        <div className="bg-slate-50/80 rounded-xl p-3 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                              Or Sell as Custom / Short Trial (Prorated Daily):
-                            </span>
-                            <span className="text-[11px] text-muted-foreground block">
-                              Enter custom days (e.g. 2, 3, 10 days) to prorate daily rate
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              min={1}
-                              max={60}
-                              placeholder="Days"
-                              value={duration.match(/^(\d+)_days$/)?.[1] || ''}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (!isNaN(val) && val > 0) {
-                                  setDuration(`${val}_days`);
-                                } else if (e.target.value === '') {
-                                  setDuration('monthly');
-                                }
-                              }}
-                              className="h-8 w-20 text-center font-mono text-xs bg-white"
-                            />
-                            <span className="text-xs text-muted-foreground font-medium">days</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="start-date" className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-primary" /> Estimated Start Date
-                      </Label>
-                      <Input 
-                        id="start-date" 
-                        type="date" 
-                        value={startDate} 
-                        onChange={e => setStartDate(e.target.value)} 
-                        className="w-full"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="flex items-center gap-1 text-slate-700">
-                        <Clock className="w-3.5 h-3.5 text-amber-600" /> Predicted End Date (Post-Activation)
-                      </Label>
-                      <div className="h-10 px-3 border border-amber-200 bg-amber-50/60 text-amber-900 rounded-md text-xs flex items-center font-mono font-bold">
-                        ~ {getSuggestedEndDate(startDate, duration) || 'N/A'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200/80 flex items-start gap-2.5 text-xs text-amber-950">
-                    <Info className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-semibold text-amber-900">Mobile App Activation Notice</p>
-                      <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                        The end date shown above is <strong>predicted</strong> based on estimated enrollment. 
-                        Because actual service commences when the subscriber activates the package on the mobile app, 
-                        the official validity clock (<strong>{pricing.durationLabel || duration.replace('_', ' ')}</strong>) 
-                        begins upon mobile app activation.
-                      </p>
-                    </div>
-                  </div>
 
                   {/* ── Add-on Benefits Picker ── */}
                   <div className="pt-4 border-t border-dashed space-y-3">
@@ -2111,113 +2124,85 @@ export default function EnrollmentWizardPage() {
                     )}
                   </div>
 
-                  {/* ── Benefit-by-Benefit Price & GST Breakdown (Excel Model) ── */}
-                  {pricing.benefitsBreakdown && pricing.benefitsBreakdown.length > 0 && (
+                  {/* ── Simplified Invoice Model (One row for package, separate rows for addons) ── */}
+                  {pricing && (
                     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
                       <table className="w-full text-left text-xs">
                         <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                           <tr>
-                            <th className="py-2.5 px-3">Benefit Name</th>
+                            <th className="py-2.5 px-3">Name</th>
+                            <th className="py-2.5 px-3 text-center">Unit</th>
                             <th className="py-2.5 px-3 text-right">Price</th>
-                            <th className="py-2.5 px-3 text-center">GST %</th>
-                            <th className="py-2.5 px-3 text-right">GST Amount</th>
-                            <th className="py-2.5 px-3 text-right font-bold">Final Price</th>
+                            <th className="py-2.5 px-3 text-center">Tax %</th>
+                            <th className="py-2.5 px-3 text-right">Tax Amount</th>
+                            <th className="py-2.5 px-3 text-right font-bold">Total Price</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-slate-800">
-                          {pricing.benefitsBreakdown.map((b: any, idx: number) => (
-                            <tr key={idx} className="hover:bg-slate-50/50">
-                              <td className="py-2 px-3">
-                                <span className="font-semibold text-slate-900">{b.name}</span>
-                                {b.units > 0 && (
-                                  <span className="text-[11px] text-muted-foreground ml-1.5 font-normal">
-                                    ({b.unitDisplay || `Units: ${b.units} ${b.unitType || b.unitLabel}`})
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono">₹{b.price?.toLocaleString('en-IN')}</td>
-                              <td className="py-2 px-3 text-center">
-                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  b.isGstExempt || b.gstRate === 0
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-blue-50 text-blue-700 border border-blue-200'
-                                }`}>
-                                  {b.isGstExempt ? '0% (Exempt)' : `${b.gstRate}%`}
-                                </span>
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono text-blue-900">
-                                ₹{b.gstAmount?.toLocaleString('en-IN')}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                                ₹{b.finalPrice?.toLocaleString('en-IN')}
-                              </td>
-                            </tr>
-                          ))}
+                          {/* 1. Main Package Row */}
+                          <tr className="hover:bg-slate-50/50">
+                            <td className="py-2 px-3 font-semibold text-slate-900">
+                              <div>{pricing.packageName || selectedPackage?.name}</div>
+                            </td>
+                            <td className="py-2 px-3 text-center">1</td>
+                            <td className="py-2 px-3 text-right font-mono">₹{pricing.totalPackageBase?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                            <td className="py-2 px-3 text-center">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                18%
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-blue-900">
+                              ₹{pricing.totalPackageTax?.toLocaleString('en-IN', {minimumFractionDigits: 2})}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                              ₹{pricing.packageGrossPrice?.toLocaleString('en-IN', {minimumFractionDigits: 2})}
+                            </td>
+                          </tr>
 
-                          {/* Addons if any */}
+                          {/* 2. Addons if any */}
                           {pricing.addonsBreakdown && pricing.addonsBreakdown.length > 0 && (
                             <>
                               <tr className="bg-orange-50/50 font-semibold border-t border-orange-200">
-                                <td colSpan={5} className="py-1 px-3 text-[10px] uppercase tracking-wider text-[#FF7A00]">
+                                <td colSpan={6} className="py-1 px-3 text-[10px] uppercase tracking-wider text-[#FF7A00]">
                                   Selected Add-on Benefits
                                 </td>
                               </tr>
                               {pricing.addonsBreakdown.map((ao: any, idx: number) => (
                                 <tr key={`addon-${idx}`} className="bg-orange-50/20 hover:bg-orange-50/40">
                                   <td className="py-2 px-3 font-medium text-orange-900">
-                                    + {ao.name} ({ao.units} {ao.unitLabel})
+                                    + {ao.name}
                                   </td>
-                                  <td className="py-2 px-3 text-right font-mono">₹{ao.price?.toLocaleString('en-IN')}</td>
+                                  <td className="py-2 px-3 text-center text-orange-900">{ao.units}</td>
+                                  <td className="py-2 px-3 text-right font-mono text-orange-900">₹{ao.price?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                                   <td className="py-2 px-3 text-center">
                                     <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
                                       {ao.isGstExempt ? '0%' : `${ao.gstRate}%`}
                                     </span>
                                   </td>
-                                  <td className="py-2 px-3 text-right font-mono text-orange-900">₹{ao.gstAmount?.toLocaleString('en-IN')}</td>
-                                  <td className="py-2 px-3 text-right font-mono font-bold text-orange-950">₹{ao.finalPrice?.toLocaleString('en-IN')}</td>
+                                  <td className="py-2 px-3 text-right font-mono text-orange-900">₹{ao.gstAmount?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                                  <td className="py-2 px-3 text-right font-mono font-bold text-orange-950">₹{ao.finalPrice?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                                 </tr>
                               ))}
                             </>
                           )}
                         </tbody>
                         <tfoot className="bg-slate-50/90 font-medium border-t-2 border-slate-300 text-slate-800">
-                          <tr>
-                            <td colSpan={4} className="py-2 px-3 text-slate-700 font-semibold">
-                              Package Gross Price (Sum of Benefit Final Prices)
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-950">
-                              ₹{(pricing.packageGrossPrice + (pricing.addonsFinalTotal || 0))?.toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                          {pricing.discountPercent > 0 && (
+                          {pricing.couponDiscount > 0 && (
                             <tr className="text-emerald-700 bg-emerald-50/30">
-                              <td colSpan={4} className="py-1.5 px-3">
-                                Tenure Discount ({pricing.discountPercent}% off for {pricing.months} months)
+                              <td colSpan={5} className="py-1.5 px-3">
+                                Coupon Discount ({pricing.couponCode || 'PROMO'})
                               </td>
                               <td className="py-1.5 px-3 text-right font-mono font-bold">
-                                - ₹{pricing.packageDiscount?.toLocaleString('en-IN')}
+                                - ₹{pricing.couponDiscount?.toLocaleString('en-IN', {minimumFractionDigits: 2})}
                               </td>
                             </tr>
                           )}
-                          {(pricing.couponDiscount > 0 || (appliedCoupon && appliedCoupon.discount > 0)) && (
-                            <tr className="text-emerald-700 bg-emerald-50/50">
-                              <td colSpan={4} className="py-1.5 px-3 font-semibold">
-                                <span className="inline-flex items-center gap-1.5">
-                                  <Tag className="w-3.5 h-3.5 text-emerald-600" />
-                                  Coupon Discount ({serverPricing?.couponCode || appliedCoupon?.code})
-                                </span>
-                              </td>
-                              <td className="py-1.5 px-3 text-right font-mono font-bold text-emerald-700">
-                                - ₹{(pricing.couponDiscount || appliedCoupon?.discount)?.toLocaleString('en-IN')}
-                              </td>
-                            </tr>
-                          )}
-                          <tr className="border-t-2 border-slate-300 bg-emerald-50/80 font-bold text-emerald-950 text-sm">
-                            <td colSpan={4} className="py-2.5 px-3">
-                              Final Payable Total (Sum after discount)
+                          <tr className="bg-slate-100 border-t-2 border-slate-300 text-base">
+                            <td colSpan={5} className="py-3 px-3 font-bold text-slate-900">
+                              Total Payable Amount
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-lg text-emerald-700">
-                              ₹{pricing.finalTotalAmount?.toLocaleString('en-IN')}
+                            <td className="py-3 px-3 text-right font-mono font-bold text-slate-900">
+                              ₹{pricing.finalTotalAmount?.toLocaleString('en-IN', {minimumFractionDigits: 2})}
                             </td>
                           </tr>
                         </tfoot>

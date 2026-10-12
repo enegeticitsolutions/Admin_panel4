@@ -22,9 +22,21 @@ export interface InvoiceItem {
   hsnSacCode: string;
   quantity: number;
   unitPrice: number;
+  /** Gross pre-discount amount (unitPrice * quantity) */
+  grossAmount?: number;
+  /** Allocated discount amount on this line */
+  discountAmount?: number;
+  /** Post-discount net taxable value */
+  taxableAmount?: number;
   taxRate: number;
+  /** Statutory GST on this line */
+  taxAmount?: number;
+  /** Line grand total (taxableAmount + taxAmount) */
+  totalAmount?: number;
+
+  // Legacy backward-compatibility aliases
   tax?: number;
-  amount: number;
+  amount?: number;
 }
 
 export interface InvoiceData {
@@ -63,18 +75,35 @@ export interface InvoiceData {
 }
 
 export const generateInvoicePDF = async (data: InvoiceData) => {
-const itemsHtml = data.items.map((item, index) => `
+  const itemsHtml = data.items.map((item, index) => {
+    const qty = Number(item.quantity || 1);
+    const unitPrice = Number(item.unitPrice || 0);
+    const grossAmount = item.grossAmount !== undefined ? item.grossAmount : (unitPrice * qty);
+    const discountAmount = item.discountAmount !== undefined ? item.discountAmount : 0;
+    const taxableAmount = item.taxableAmount !== undefined
+      ? item.taxableAmount
+      : (item.amount !== undefined ? item.amount : Math.max(0, grossAmount - discountAmount));
+    const taxRate = Number(item.taxRate || 0);
+    const taxAmount = item.taxAmount !== undefined
+      ? item.taxAmount
+      : (item.tax !== undefined ? item.tax : Math.round(taxableAmount * taxRate) / 100);
+    const lineTotal = item.totalAmount !== undefined
+      ? item.totalAmount
+      : Math.round((taxableAmount + taxAmount) * 100) / 100;
+
+    return `
     <tr>
       <td>${index + 1}</td>
       <td>${item.description}</td>
       <td>${item.hsnSacCode}</td>
-      <td>${item.quantity}</td>
-      <td>₹${item.unitPrice.toFixed(2)}</td>
-      <td>${item.taxRate}%</td>
-      <td>₹${(item.tax || 0).toFixed(2)}</td>
-      <td>₹${((item.unitPrice * item.quantity) + (item.tax || 0)).toFixed(2)}</td>
+      <td>${qty}</td>
+      <td>₹${unitPrice.toFixed(2)}</td>
+      <td>${taxRate}%</td>
+      <td>₹${taxAmount.toFixed(2)}</td>
+      <td>₹${lineTotal.toFixed(2)}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   const html = `
     <!DOCTYPE html>
@@ -232,7 +261,7 @@ const itemsHtml = data.items.map((item, index) => `
             <th>Name</th>
             <th>HSN/SAC</th>
             <th>Quantity</th>
-            <th>Price</th>
+            <th>Unit Price</th>
             <th>Tax %</th>
             <th>Tax Amount</th>
             <th>Amount</th>

@@ -9,7 +9,6 @@ export interface DurationOption {
 // Standard multi-month billing tenures
 export const DURATION_OPTIONS: DurationOption[] = [
   { value: 'monthly', label: '1 Month', months: 1 },
-  { value: 'two_months', label: '2 Months', months: 2 },
   { value: 'three_months', label: '3 Months', months: 3 },
   { value: 'six_months', label: '6 Months', months: 6 },
   { value: 'annual', label: '12 Months (Annual)', months: 12 },
@@ -42,6 +41,9 @@ export interface WizardPricingBreakdown {
   igstAmount: number;
   couponCode?: string | null;
   couponDiscount?: number;
+  totalPackageBase?: number;
+  totalPackageTax?: number;
+  packageGrossPrice?: number;
   finalTotalAmount: number;
   benefitsBreakdown?: any[];
 }
@@ -160,13 +162,13 @@ export function calculateWizardPricing(
   let undiscountedPackageTotal = 0;
   let packageBasePrice = 0;
   let discountPercent = 0;
+  let packageDiscount = 0;
 
   if (isFree) {
     undiscountedPackageTotal = 0;
     packageBasePrice = 0;
     discountPercent = 0;
   } else if (isDays && days) {
-    // If the package is configured for fixed trial days and days match, charge base rate directly!
     if (pkg.trialDurationDays && days === pkg.trialDurationDays) {
       undiscountedPackageTotal = baseRate;
       packageBasePrice = baseRate;
@@ -175,55 +177,145 @@ export function calculateWizardPricing(
       undiscountedPackageTotal = Math.round(dailyRate * days);
       packageBasePrice = undiscountedPackageTotal;
     } else {
-      // Standard monthly package prorated by 30 days
       const dailyRate = baseRate / 30;
       undiscountedPackageTotal = Math.round(dailyRate * days);
       packageBasePrice = undiscountedPackageTotal;
     }
     discountPercent = 0;
   } else {
-    // Multi-month duration (1, 2, 3, 6, 12 months)
-    undiscountedPackageTotal = baseRate * months;
-    if (months === 3) {
-      discountPercent = Number(pkg.discountThreeMonths ?? 5);
-      packageBasePrice = pkg.priceThreeMonths ? Number(pkg.priceThreeMonths) : Math.round(undiscountedPackageTotal * (1 - discountPercent / 100));
-    } else if (months === 6) {
-      discountPercent = Number(pkg.discountSixMonths ?? 10);
-      packageBasePrice = pkg.priceSixMonths ? Number(pkg.priceSixMonths) : Math.round(undiscountedPackageTotal * (1 - discountPercent / 100));
-    } else if (months >= 12) {
-      discountPercent = Number(pkg.discountAnnual ?? 20);
-      packageBasePrice = pkg.priceTwelveMonths ? Number(pkg.priceTwelveMonths) : Math.round(undiscountedPackageTotal * (1 - discountPercent / 100));
-    } else if (months === 2) {
-      packageBasePrice = undiscountedPackageTotal;
+    // Check for explicit override prices first
+    if (months === 3 && pkg.priceThreeMonths !== undefined && pkg.priceThreeMonths !== null) {
+      undiscountedPackageTotal = Number(pkg.priceThreeMonths);
+      discountPercent = 0;
+    } else if (months === 6 && pkg.priceSixMonths !== undefined && pkg.priceSixMonths !== null) {
+      undiscountedPackageTotal = Number(pkg.priceSixMonths);
+      discountPercent = 0;
+    } else if (months >= 12 && pkg.priceTwelveMonths !== undefined && pkg.priceTwelveMonths !== null) {
+      undiscountedPackageTotal = Number(pkg.priceTwelveMonths);
       discountPercent = 0;
     } else {
-      packageBasePrice = baseRate;
-      discountPercent = 0;
+      // Fallback to proportional calculation with percentage discount
+      const proportionalBase = baseRate * months;
+      if (months === 3) {
+        discountPercent = Number(pkg.discountThreeMonths ?? 5);
+      } else if (months === 6) {
+        discountPercent = Number(pkg.discountSixMonths ?? 10);
+      } else if (months >= 12) {
+        discountPercent = Number(pkg.discountAnnual ?? 20);
+      } else {
+        discountPercent = 0;
+      }
+      
+      const calculatedDiscount = discountPercent > 0 ? Math.round((proportionalBase * discountPercent / 100) * 100) / 100 : 0;
+      undiscountedPackageTotal = proportionalBase - calculatedDiscount;
+      discountPercent = 0; // Baked into total
     }
+  // No separate duration discount applied
+    packageDiscount = 0;
+    packageBasePrice = undiscountedPackageTotal;
   }
-
-  const packageDiscount = Math.max(0, undiscountedPackageTotal - packageBasePrice);
-  const addonsBasePrice = (addons || []).reduce((sum, a) => sum + (Number(a.totalAmount) || 0), 0);
-  const totalBaseAmount = packageBasePrice + addonsBasePrice;
-
+  
   // Inter-state determination (Haryana is company POS)
   const isInterState = Boolean(customerState) && (customerState || '').trim().toLowerCase() !== (companyState || 'Haryana').trim().toLowerCase();
-  const pkgGstRate = isFree ? 0 : Number(pkg.gstRate ?? 18);
-  const packageTax = isFree ? 0 : Math.round((packageBasePrice * pkgGstRate) / 100);
 
-  let addonsTax = 0;
-  for (const a of (addons || [])) {
-    const rate = (a.benefit?.isGstExempt || a.benefit?.gstRate === 0) ? 0 : Number(a.benefit?.gstRate ?? 18);
-    addonsTax += Math.round(((Number(a.totalAmount) || 0) * rate) / 100);
+  // Benefit-level tax calculation (supports mixed tax brackets within the same package)
+  const packageBenefits: any[] = pkg.packageBenefits || pkg.benefits || [];
+  let packageTax = 0;
+  const benefitsBreakdown: any[] = [];
+
+  if (packageBenefits.length > 0 && !isFree) {
+    const totalWeight = packageBenefits.reduce((sum, pb) => {
+      const uCost = pb.benefit?.isChargeable !== false ? (Number(pb.benefit?.unitCost) || 100) : 0;
+      const count = (pb.unitsIncluded || 1) * (isDays ? 1 : months);
+      return sum + (uCost * count);
+    }, 0) || 1;
+
+    let remainingBase = packageBasePrice;
+    packageBenefits.forEach((pb, idx) => {
+      const b = pb.benefit || pb;
+      const count = (pb.unitsIncluded || 1) * (isDays ? 1 : months);
+      const uCost = b.isChargeable !== false ? (Number(b.unitCost) || 100) : 0;
+      const lineWeight = uCost * count;
+
+      let allocatedBase = 0;
+      if (idx === packageBenefits.length - 1) {
+        allocatedBase = remainingBase;
+      } else {
+        allocatedBase = Math.round(((lineWeight / totalWeight) * packageBasePrice) * 100) / 100;
+        remainingBase -= allocatedBase;
+      }
+
+      const isExempt = Boolean(b.isGstExempt);
+      const rate = isExempt ? 0 : Number(b.gstRate !== null && b.gstRate !== undefined ? b.gstRate : (pkg.gstRate ?? 18));
+      const lineTax = isExempt ? 0 : Math.round((allocatedBase * rate) / 100 * 100) / 100;
+      const unitPrice = count > 0 ? Math.round((allocatedBase / count) * 100) / 100 : 0;
+
+      packageTax += lineTax;
+      benefitsBreakdown.push({
+        benefitId: b.id,
+        name: b.name,
+        units: count,
+        unitLabel: b.unitLabel || 'units',
+        unitPrice,
+        price: allocatedBase,
+        gstRate: rate,
+        gstAmount: lineTax,
+        finalPrice: Math.round((allocatedBase + lineTax) * 100) / 100,
+        isGstExempt: isExempt,
+        hsnSacCode: b.hsnSacCode || (isExempt ? '999312' : '998399'),
+      });
+    });
+  } else {
+    const pkgGstRate = isFree ? 0 : Number(pkg.gstRate ?? 18);
+    packageTax = isFree ? 0 : Math.round((packageBasePrice * pkgGstRate) / 100);
   }
 
-  const totalTaxAmount = packageTax + addonsTax;
-  const cgstAmount = isInterState ? 0 : Math.round(totalTaxAmount / 2);
-  const sgstAmount = isInterState ? 0 : Math.round(totalTaxAmount / 2);
-  const igstAmount = isInterState ? totalTaxAmount : 0;
-  const finalTotalAmount = Math.max(0, totalBaseAmount + totalTaxAmount - couponDiscount);
+  let addonsBasePrice = 0;
+  let addonsTax = 0;
+  const addonsBreakdown: any[] = [];
+  
+  for (const a of (addons || [])) {
+    const rate = (a.benefit?.isGstExempt || a.benefit?.gstRate === 0) ? 0 : Number(a.benefit?.gstRate ?? 18);
+    // If a.totalAmount is the post-tax amount from the modal, we need to extract the base amount
+    // Wait, the modal gives us post-tax. Base = Post / (1 + Rate / 100).
+    const postTaxAmount = Number(a.totalAmount) || 0;
+    const baseAmount = Math.round((postTaxAmount / (1 + rate / 100)) * 100) / 100;
+    const taxAmount = Math.round((postTaxAmount - baseAmount) * 100) / 100;
+    
+    addonsBasePrice += baseAmount;
+    addonsTax += taxAmount;
+    
+    addonsBreakdown.push({
+      benefitId: a.benefit?.id,
+      name: a.benefit?.name,
+      units: a.units || 1,
+      unitLabel: a.benefit?.unitLabel || 'units',
+      price: baseAmount,
+      gstRate: rate,
+      gstAmount: taxAmount,
+      finalPrice: postTaxAmount,
+      isGstExempt: a.benefit?.isGstExempt || false,
+    });
+  }
 
-  const taxLabel = isInterState ? `IGST (${pkgGstRate}%)` : `CGST (${pkgGstRate / 2}%) + SGST (${pkgGstRate / 2}%)`;
+  const totalBaseAmount = packageBasePrice + addonsBasePrice;
+  const totalTaxAmount = Math.round((packageTax + addonsTax) * 100) / 100;
+  
+  const packageGrossPrice = Math.round((packageBasePrice + packageTax) * 100) / 100;
+  const packageFinalPayable = packageGrossPrice;
+
+  const addonsFinalTotal = Math.round((addonsBasePrice + addonsTax) * 100) / 100;
+
+  const cgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
+  const sgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
+  const igstAmount = isInterState ? totalTaxAmount : 0;
+  
+  let finalTotalAmount = Math.round((packageFinalPayable + addonsFinalTotal) * 100) / 100;
+  // Deduct all discounts post-tax
+  finalTotalAmount = Math.max(0, finalTotalAmount - packageDiscount - couponDiscount);
+
+  const dominantRate = pkg.gstRate ?? 18;
+  const taxLabel = isInterState ? `IGST` : `CGST + SGST`;
 
   return {
     months: isDays ? 1 : months,
@@ -241,7 +333,7 @@ export function calculateWizardPricing(
     totalBaseAmount,
     isInterState,
     customerState,
-    gstRate: pkgGstRate,
+    gstRate: dominantRate,
     taxLabel,
     packageTax,
     totalTaxAmount,
@@ -250,5 +342,11 @@ export function calculateWizardPricing(
     igstAmount,
     couponDiscount,
     finalTotalAmount,
+    benefitsBreakdown,
+    addonsBreakdown,
+    totalPackageBase: packageBasePrice,
+    totalPackageTax: packageTax,
+    packageGrossPrice,
+    addonsFinalTotal,
   };
 }

@@ -586,17 +586,27 @@ export default function RenewalWizardPage() {
           paymentMethod,
           transactionId,
           paymentNote,
+          // Pass server-computed discount breakdown so backend does not have to infer
+          // from amountPaid subtraction (which breaks when addons are included).
+          packageDiscount: serverPricing?.packageDiscount ?? 0,
+          couponDiscount: serverPricing?.couponDiscount ?? 0,
         },
+        addons: selectedAddons.map(a => ({
+          benefitId: a.benefit.id,
+          units: a.units,
+          totalAmount: a.totalAmount,
+          name: a.benefit.name,
+        })),
       });
 
-      // Allocate any selected add-ons
+      // Allocate any selected add-ons if needed (amountPaid: 0 since already paid in renewal invoice)
       const newSubId = result?.newSubscription?.id || (result as any)?.subscription?.id || (result as any)?.id || (result as any)?.data?.newSubscription?.id;
       if (newSubId && selectedAddons.length > 0) {
         for (const addon of selectedAddons) {
           await subscriptionApi.allocateAddon(newSubId, {
             benefitId: addon.benefit.id,
             units: addon.units,
-            amountPaid: addon.totalAmount,
+            amountPaid: 0,
             paymentMethod,
             paymentNote: `Renewal Add-on: ${addon.benefit.name}`,
           }).catch(e => console.warn('Addon allocation warning on renew:', e));
@@ -1548,7 +1558,12 @@ export default function RenewalWizardPage() {
                             {pkg.isGlobal ? 'Global' : pkg.regions && pkg.regions.length > 0 ? 'Region Based' : 'Private'}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">₹{pkg.basePrice} / month</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {(() => {
+                            const p = calculateWizardPricing(pkg, duration);
+                            return `₹${p.packageBasePrice} for ${p.durationLabel}`;
+                          })()}
+                        </p>
                       </div>
                       {selectedPackageId === pkg.id && <Check className="w-5 h-5 text-primary" />}
                     </div>
@@ -1670,100 +1685,87 @@ export default function RenewalWizardPage() {
                     )}
                   </div>
 
-                  {/* ── Benefit-by-Benefit Price & GST Breakdown (Excel Model) ── */}
-                  {pricing.benefitsBreakdown && pricing.benefitsBreakdown.length > 0 && (
+                  {/* ── Simplified Invoice Model (One row for package, separate rows for addons) ── */}
+                  {pricing && (
                     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
                       <table className="w-full text-left text-xs">
                         <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
                           <tr>
-                            <th className="py-2.5 px-3">Benefit Name</th>
+                            <th className="py-2.5 px-3">Name</th>
+                            <th className="py-2.5 px-3 text-center">Unit</th>
                             <th className="py-2.5 px-3 text-right">Price</th>
-                            <th className="py-2.5 px-3 text-center">GST %</th>
-                            <th className="py-2.5 px-3 text-right">GST Amount</th>
-                            <th className="py-2.5 px-3 text-right font-bold">Final Price</th>
+                            <th className="py-2.5 px-3 text-center">Tax %</th>
+                            <th className="py-2.5 px-3 text-right">Tax Amount</th>
+                            <th className="py-2.5 px-3 text-right font-bold">Total Price</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-slate-800">
-                          {pricing.benefitsBreakdown.map((b: any, idx: number) => (
-                            <tr key={idx} className="hover:bg-slate-50/50">
-                              <td className="py-2 px-3">
-                                <span className="font-semibold text-slate-900">{b.name}</span>
-                                {b.units > 0 && (
-                                  <span className="text-[11px] text-muted-foreground ml-1.5 font-normal">
-                                    ({b.unitDisplay || `Units: ${b.units} ${b.unitType || b.unitLabel}`})
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono">₹{b.price?.toLocaleString('en-IN')}</td>
-                              <td className="py-2 px-3 text-center">
-                                <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                  b.isGstExempt || b.gstRate === 0
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : 'bg-blue-50 text-blue-700 border border-blue-200'
-                                }`}>
-                                  {b.isGstExempt ? '0% (Exempt)' : `${b.gstRate}%`}
-                                </span>
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono text-blue-900">
-                                ₹{b.gstAmount?.toLocaleString('en-IN')}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                                ₹{b.finalPrice?.toLocaleString('en-IN')}
-                              </td>
-                            </tr>
-                          ))}
+                          {/* 1. Main Package Row */}
+                          <tr className="hover:bg-slate-50/50">
+                            <td className="py-2 px-3 font-semibold text-slate-900">
+                              <div>{pricing.packageName || selectedPackage?.name}</div>
+                            </td>
+                            <td className="py-2 px-3 text-center">1</td>
+                            <td className="py-2 px-3 text-right font-mono">₹{pricing.totalPackageBase?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                            <td className="py-2 px-3 text-center">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                {pricing.gstRate ?? 18}%
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-blue-900">
+                              ₹{pricing.totalPackageTax?.toLocaleString('en-IN', {minimumFractionDigits: 2})}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                              ₹{pricing.packageGrossPrice?.toLocaleString('en-IN', {minimumFractionDigits: 2})}
+                            </td>
+                          </tr>
 
-                          {/* Addons if any */}
+                          {/* 2. Addons if any */}
                           {pricing.addonsBreakdown && pricing.addonsBreakdown.length > 0 && (
                             <>
                               <tr className="bg-orange-50/50 font-semibold border-t border-orange-200">
-                                <td colSpan={5} className="py-1 px-3 text-[10px] uppercase tracking-wider text-[#FF7A00]">
+                                <td colSpan={6} className="py-1 px-3 text-[10px] uppercase tracking-wider text-[#FF7A00]">
                                   Selected Add-on Benefits
                                 </td>
                               </tr>
                               {pricing.addonsBreakdown.map((ao: any, idx: number) => (
                                 <tr key={`addon-${idx}`} className="bg-orange-50/20 hover:bg-orange-50/40">
                                   <td className="py-2 px-3 font-medium text-orange-900">
-                                    + {ao.name} ({ao.units} {ao.unitLabel})
+                                    + {ao.name}
                                   </td>
-                                  <td className="py-2 px-3 text-right font-mono">₹{ao.price?.toLocaleString('en-IN')}</td>
+                                  <td className="py-2 px-3 text-center text-orange-900">{ao.units}</td>
+                                  <td className="py-2 px-3 text-right font-mono text-orange-900">₹{ao.price?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                                   <td className="py-2 px-3 text-center">
                                     <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
                                       {ao.isGstExempt ? '0%' : `${ao.gstRate}%`}
                                     </span>
                                   </td>
-                                  <td className="py-2 px-3 text-right font-mono text-orange-900">₹{ao.gstAmount?.toLocaleString('en-IN')}</td>
-                                  <td className="py-2 px-3 text-right font-mono font-bold text-orange-950">₹{ao.finalPrice?.toLocaleString('en-IN')}</td>
+                                  <td className="py-2 px-3 text-right font-mono text-orange-900">
+                                    ₹{Math.round(ao.finalPrice - ao.price).toLocaleString('en-IN', {minimumFractionDigits: 2})}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono font-bold text-orange-950">₹{ao.finalPrice?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                                 </tr>
                               ))}
                             </>
                           )}
                         </tbody>
                         <tfoot className="bg-slate-50/90 font-medium border-t-2 border-slate-300 text-slate-800">
-                          <tr>
-                            <td colSpan={4} className="py-2 px-3 text-slate-700 font-semibold">
-                              Package Gross Price (Sum of Benefit Final Prices)
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-950">
-                              ₹{(pricing.packageGrossPrice + (pricing.addonsFinalTotal || 0))?.toLocaleString('en-IN')}
-                            </td>
-                          </tr>
-                          {pricing.discountPercent > 0 && (
+                          {pricing.couponDiscount > 0 && (
                             <tr className="text-emerald-700 bg-emerald-50/30">
-                              <td colSpan={4} className="py-1.5 px-3">
-                                Tenure Discount ({pricing.discountPercent}% off for {pricing.months} months)
+                              <td colSpan={5} className="py-1.5 px-3">
+                                Coupon Discount ({pricing.couponCode || 'PROMO'})
                               </td>
                               <td className="py-1.5 px-3 text-right font-mono font-bold">
-                                - ₹{pricing.packageDiscount?.toLocaleString('en-IN')}
+                                - ₹{pricing.couponDiscount?.toLocaleString('en-IN', {minimumFractionDigits: 2})}
                               </td>
                             </tr>
                           )}
-                          <tr className="border-t-2 border-slate-300 bg-emerald-50/80 font-bold text-emerald-950 text-sm">
-                            <td colSpan={4} className="py-2.5 px-3">
-                              Final Payable Total (Sum after discount)
+                          <tr className="bg-slate-100 border-t-2 border-slate-300 text-base">
+                            <td colSpan={5} className="py-3 px-3 font-bold text-slate-900">
+                              Total Payable Amount
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono text-lg text-emerald-700">
-                              ₹{pricing.finalTotalAmount?.toLocaleString('en-IN')}
+                            <td className="py-3 px-3 text-right font-mono font-bold text-slate-900">
+                              ₹{pricing.finalTotalAmount?.toLocaleString('en-IN', {minimumFractionDigits: 2})}
                             </td>
                           </tr>
                         </tfoot>

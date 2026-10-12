@@ -15,36 +15,7 @@
 // All three produce an identical visual output from the same Invoice DB record.
 // ────────────────────────────────────────────────────────────────────────────────
 
-/**
- * Converts a number to its Indian English word representation.
- * e.g. 1050 → "One Thousand Fifty"
- */
-function numberToWords(num) {
-  if (num === 0) return 'Zero';
-
-  const a = [
-    '', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ',
-    'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ',
-    'Seventeen ', 'Eighteen ', 'Nineteen ',
-  ];
-  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-  const inWords = (n) => {
-    let str = '';
-    if (n > 99) { str += a[Math.floor(n / 100)] + 'Hundred '; n %= 100; }
-    if (n > 19) { str += b[Math.floor(n / 10)] + ' '; n %= 10; }
-    if (n > 0)  { str += a[n]; }
-    return str;
-  };
-
-  let word = '';
-  if (Math.floor(num / 10000000) > 0) { word += inWords(Math.floor(num / 10000000)) + 'Crore ';    num %= 10000000; }
-  if (Math.floor(num / 100000)   > 0) { word += inWords(Math.floor(num / 100000))   + 'Lakh ';     num %= 100000;   }
-  if (Math.floor(num / 1000)     > 0) { word += inWords(Math.floor(num / 1000))     + 'Thousand '; num %= 1000;     }
-  if (num > 0)                         { word += inWords(Math.floor(num)); }
-
-  return word.trim();
-}
+const { numberToWords } = require('@maihoonna/billing');
 
 /**
  * Simple HTML escaping — prevents XSS from subscriber names / addresses in the invoice.
@@ -86,30 +57,31 @@ function render(invoice, company = {}) {
   // ── Line items ──────────────────────────────────────────────────────────────
   const items     = invoice.items || [];
   const itemsHtml = items.map((item, index) => {
-    const price     = Number(item.unitPrice || 0);
     const qty       = Number(item.quantity  || 1);
+    const unitPrice = Number(item.unitPrice || 0);
+    const grossAmount = item.grossAmount !== undefined ? item.grossAmount : (unitPrice * qty);
+    const discountAmount = item.discountAmount !== undefined ? item.discountAmount : 0;
+    const taxableAmount = item.taxableAmount !== undefined
+      ? item.taxableAmount
+      : (item.amount !== undefined ? item.amount : Math.max(0, grossAmount - discountAmount));
     const taxRate   = Number(item.taxRate   || 0);
     const taxAmount = Number(
       item.taxAmount !== undefined ? item.taxAmount
       : item.tax     !== undefined ? item.tax
-      : price * qty * (taxRate / 100)
+      : Math.round(taxableAmount * taxRate) / 100
     );
-    // Line item Amount column = gross per-line (unitPrice × qty + tax on that line).
-    // This matches InvoiceGenerator.ts: `(item.unitPrice * item.quantity) + (item.tax || 0)`.
-    // Do NOT use item.amount directly — that field stores the post-discount taxable value,
-    // which produces a lower number that confuses readers.
-    const lineGross = (price * qty) + taxAmount;
+    const lineTotal = item.totalAmount !== undefined
+      ? item.totalAmount
+      : Math.round((taxableAmount + taxAmount) * 100) / 100;
 
     return `
     <tr>
-      <td>${index + 1}</td>
       <td>${esc(item.description || item.name || 'Service')}</td>
-      <td>${esc(item.hsnSacCode  || '998399')}</td>
       <td>${qty}</td>
-      <td>₹${price.toFixed(2)}</td>
+      <td>₹${unitPrice.toFixed(2)}</td>
       <td>${taxRate}%</td>
       <td>₹${taxAmount.toFixed(2)}</td>
-      <td>₹${lineGross.toFixed(2)}</td>
+      <td>₹${lineTotal.toFixed(2)}</td>
     </tr>`;
   }).join('');
 
@@ -132,7 +104,6 @@ function render(invoice, company = {}) {
   const amountInWords       = numberToWords(Math.round(totalAmount));
 
   // ── Discount rows (matches InvoiceGenerator.ts exactly) ────────────────────
-  const bothDiscounts = discountAmount > 0 && saathiDiscountAmount > 0;
   const discountRows = `
     ${discountAmount > 0 ? `
     <tr>
@@ -144,7 +115,7 @@ function render(invoice, company = {}) {
       <td>Saathi Discount</td>
       <td>-₹${saathiDiscountAmount.toFixed(2)}</td>
     </tr>` : ''}
-    ${bothDiscounts ? `
+    ${(discountAmount > 0 && saathiDiscountAmount > 0) ? `
     <tr>
       <td style="font-weight: 600;">Total Discount</td>
       <td style="font-weight: 600;">-₹${(discountAmount + saathiDiscountAmount).toFixed(2)}</td>
@@ -255,14 +226,12 @@ function render(invoice, company = {}) {
   <table>
     <thead>
       <tr>
-        <th>#</th>
         <th>Name</th>
-        <th>HSN/SAC</th>
-        <th>Quantity</th>
+        <th>Unit</th>
         <th>Price</th>
-        <th>Tax %</th>
+        <th>Tax</th>
         <th>Tax Amount</th>
-        <th>Amount</th>
+        <th>Price</th>
       </tr>
     </thead>
     <tbody>

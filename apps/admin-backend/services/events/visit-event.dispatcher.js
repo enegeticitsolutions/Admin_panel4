@@ -66,10 +66,10 @@ async function fetchFullVisit(visitOrId) {
           subscriberId: true,
           address: true,
           subscriber: {
-            select: { id: true, name: true, phone: true }
+            select: { id: true, name: true, phone: true, email: true }
           },
           user: {
-            select: { id: true, name: true, phone: true }
+            select: { id: true, name: true, phone: true, email: true }
           }
         }
       },
@@ -79,7 +79,7 @@ async function fetchFullVisit(visitOrId) {
           name: true,
           userId: true,
           user: {
-            select: { id: true, name: true, phone: true }
+            select: { id: true, name: true, phone: true, email: true }
           }
         }
       }
@@ -377,6 +377,21 @@ async function dispatchVisitStarted(visitOrId, checkInTime = new Date()) {
         }
       }).catch(err => console.error('[VisitDispatcher] Visit Started WhatsApp Error:', err.message));
     }
+
+    // AWS SES Email Notification to Subscriber
+    const subscriberEmail = visit.beneficiary?.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'VISIT_STARTED',
+        to: subscriberEmail,
+        variables: {
+          cc_name: ccName,
+          beneficiary_name: beneficiaryName,
+          checkin_time: formattedCheckIn,
+        }
+      }).catch(err => console.error('[VisitDispatcher] Visit Started Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[VisitDispatcher] dispatchVisitStarted Exception:', err.message);
   }
@@ -430,6 +445,21 @@ async function dispatchVisitCompleted(visitOrId, durationMinutes = 60) {
           duration: durationText,
         }
       }).catch(err => console.error('[VisitDispatcher] Visit Completed WhatsApp Error:', err.message));
+    }
+
+    // AWS SES Email Notification to Subscriber
+    const subscriberEmail = visit.beneficiary?.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'VISIT_COMPLETED',
+        to: subscriberEmail,
+        variables: {
+          cc_name: ccName,
+          beneficiary_name: beneficiaryName,
+          duration: durationText,
+        }
+      }).catch(err => console.error('[VisitDispatcher] Visit Completed Email Error:', err.message));
     }
   } catch (err) {
     console.error('[VisitDispatcher] dispatchVisitCompleted Exception:', err.message);
@@ -543,6 +573,22 @@ async function dispatchDailyVisitSummary({ visitId, mood, notes }) {
         variables: { subscriberName, beneficiaryName, mood, notes }
       }).catch(err => console.error('[VisitDispatcher] Summary WhatsApp Error:', err.message));
     }
+
+    // AWS SES Email Notification
+    const subscriberEmail = visit.beneficiary?.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'DAILY_VISIT_SUMMARY_DIGEST',
+        to: subscriberEmail,
+        variables: {
+          subscriber_name: subscriberName,
+          beneficiary_name: beneficiaryName,
+          mood: mood || 'Good',
+          visit_notes: notes || 'Visit completed smoothly',
+        }
+      }).catch(err => console.error('[VisitDispatcher] Summary Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[VisitDispatcher] dispatchDailyVisitSummary Exception:', err.message);
   }
@@ -578,6 +624,18 @@ async function dispatchMissedVisit({ visitId, fmUserId, fmPhone }) {
         to: subscriberPhone,
         variables: { beneficiaryName }
       }).catch(err => console.error('[VisitDispatcher] Subscriber Missed WhatsApp Error:', err.message));
+    }
+
+    const subscriberEmail = visit.beneficiary?.subscriber?.email;
+    if (subscriberEmail && subscriberEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'MISSED_VISIT',
+        to: subscriberEmail,
+        variables: {
+          beneficiary_name: beneficiaryName,
+        }
+      }).catch(err => console.error('[VisitDispatcher] Missed Visit Email Error:', err.message));
     }
 
     // Notify Field Manager (WhatsApp only or Push if needed)

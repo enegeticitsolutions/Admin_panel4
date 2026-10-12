@@ -27,7 +27,7 @@ async function dispatchSubscriberAccountCreated({ subscriberId }) {
   try {
     const subscriber = await prisma.user.findUnique({
       where: { id: subscriberId },
-      select: { id: true, name: true, phone: true }
+      select: { id: true, name: true, phone: true, email: true }
     });
 
     if (!subscriber) return;
@@ -52,6 +52,16 @@ async function dispatchSubscriberAccountCreated({ subscriberId }) {
         variables: { subscriberName }
       }).catch(err => console.error('[AccountDispatcher] WhatsApp Error:', err.message));
     }
+
+    // C. AWS SES Email Notification
+    if (subscriber.email && subscriber.email.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SUBSCRIBER_ACCOUNT_CREATED',
+        to: subscriber.email,
+        variables: { subscriber_name: subscriberName }
+      }).catch(err => console.error('[AccountDispatcher] SES Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[AccountDispatcher] dispatchSubscriberAccountCreated Exception:', err.message);
   }
@@ -64,7 +74,7 @@ async function dispatchSubscriptionRequestSubmitted({ subscriberId, beneficiaryN
   try {
     const subscriber = await prisma.user.findUnique({
       where: { id: subscriberId },
-      select: { id: true, name: true, phone: true }
+      select: { id: true, name: true, phone: true, email: true }
     });
 
     if (!subscriber) return;
@@ -89,6 +99,16 @@ async function dispatchSubscriptionRequestSubmitted({ subscriberId, beneficiaryN
         variables: { subscriberName, beneficiaryName, packageName }
       }).catch(err => console.error('[AccountDispatcher] WhatsApp Error:', err.message));
     }
+
+    // C. AWS SES Email Notification
+    if (subscriber.email && subscriber.email.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'SUBSCRIPTION_REQUEST_SUBMITTED',
+        to: subscriber.email,
+        variables: { subscriber_name: subscriberName, beneficiary_name: beneficiaryName, package_name: packageName }
+      }).catch(err => console.error('[AccountDispatcher] SES Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[AccountDispatcher] dispatchSubscriptionRequestSubmitted Exception:', err.message);
   }
@@ -97,11 +117,11 @@ async function dispatchSubscriptionRequestSubmitted({ subscriberId, beneficiaryN
 /**
  * 3. Dispatch BENEF_PROFILE_CREATED (NT-005)
  */
-async function dispatchBeneficiaryProfileCreated({ beneficiaryUserId, beneficiaryName, subscriberName }) {
+async function dispatchBeneficiaryProfileCreated({ beneficiaryUserId, beneficiaryName, subscriberName, subscriberEmail }) {
   try {
     const beneficiaryUser = await prisma.user.findUnique({
       where: { id: beneficiaryUserId },
-      select: { id: true, phone: true }
+      select: { id: true, phone: true, email: true }
     });
 
     if (!beneficiaryUser) return;
@@ -125,6 +145,17 @@ async function dispatchBeneficiaryProfileCreated({ beneficiaryUserId, beneficiar
         variables: { beneficiaryName, subscriberName }
       }).catch(err => console.error('[AccountDispatcher] WhatsApp Error:', err.message));
     }
+
+    // C. AWS SES Email Notification (To Subscriber or Beneficiary)
+    const targetEmail = subscriberEmail || beneficiaryUser.email;
+    if (targetEmail && targetEmail.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'BENEFICIARY_PROFILE_CREATED',
+        to: targetEmail,
+        variables: { beneficiary_name: beneficiaryName, subscriber_name: subscriberName }
+      }).catch(err => console.error('[AccountDispatcher] SES Email Error:', err.message));
+    }
   } catch (err) {
     console.error('[AccountDispatcher] dispatchBeneficiaryProfileCreated Exception:', err.message);
   }
@@ -137,7 +168,7 @@ async function dispatchCMOnboardingCleared({ ccUserId, ccName, fmName }) {
   try {
     const ccUser = await prisma.user.findUnique({
       where: { id: ccUserId },
-      select: { id: true, phone: true }
+      select: { id: true, phone: true, email: true }
     });
 
     if (!ccUser) return;
@@ -160,6 +191,16 @@ async function dispatchCMOnboardingCleared({ ccUserId, ccName, fmName }) {
         to: ccPhone,
         variables: { ccName, fmName }
       }).catch(err => console.error('[AccountDispatcher] WhatsApp Error:', err.message));
+    }
+
+    // C. AWS SES Email Notification
+    if (ccUser.email && ccUser.email.includes('@')) {
+      notificationService.send({
+        channel: 'email',
+        event: 'CARE_MITRA_ONBOARDING_APPROVED',
+        to: ccUser.email,
+        variables: { cc_name: ccName }
+      }).catch(err => console.error('[AccountDispatcher] SES Email Error:', err.message));
     }
   } catch (err) {
     console.error('[AccountDispatcher] dispatchCMOnboardingCleared Exception:', err.message);

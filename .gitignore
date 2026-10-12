@@ -6,6 +6,8 @@ sync-app.ps1
 /scripts
 .claude
 scratch/
+.agents/mcp_config.json
+.agents/mcp*
 
 setup_hosts_maihoonna.bat
 # Backend seed/scratch files

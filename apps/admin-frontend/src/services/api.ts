@@ -31,6 +31,8 @@ import type {
   SupportTicket,
   ActivityLog,
   Partner,
+  PartnerCategory,
+  PartnerStatus,
   Volunteer,
   Benefit,
   SubscriptionPackage,
@@ -762,21 +764,138 @@ export const activityLogApi = {
   },
 };
 
-// ============================================================================
-// PARTNER API
-// ============================================================================
+// ==========================================
+// PARTNER API (CONNECTED TO REAL DB & ZOHO CRM)
+// ==========================================
 
 export const partnerApi = {
-  async getAll(): Promise<Partner[]> {
-    await delay();
-    return [...mockPartners];
+  async getAll(params?: {
+    search?: string;
+    status?: string;
+    categoryId?: string;
+    isPublished?: string | boolean;
+    source?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<Partner[]> {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.status && params.status !== 'ALL') query.append('status', params.status);
+    if (params?.categoryId && params.categoryId !== 'ALL') query.append('categoryId', params.categoryId);
+    if (params?.isPublished !== undefined && params.isPublished !== 'ALL' && params.isPublished !== '') {
+      query.append('isPublished', String(params.isPublished));
+    }
+    if (params?.source && params.source !== 'ALL') query.append('source', params.source);
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+
+    const qs = query.toString();
+    return apiJson<Partner[]>(`/partners${qs ? `?${qs}` : ''}`);
   },
 
-  async getById(id: string): Promise<Partner | undefined> {
-    await delay();
-    return mockPartners.find(p => p.id === id);
+  async getById(id: string): Promise<Partner> {
+    return apiJson<Partner>(`/partners/${id}`);
+  },
+
+  async getStats(): Promise<{
+    total: number;
+    pending: number;
+    inReview: number;
+    approved: number;
+    published: number;
+    zohoSynced: number;
+    totalCategories: number;
+  }> {
+    return apiJson<{
+      total: number;
+      pending: number;
+      inReview: number;
+      approved: number;
+      published: number;
+      zohoSynced: number;
+      totalCategories: number;
+    }>('/partners/stats');
+  },
+
+  async create(data: Partial<Partner>): Promise<Partner> {
+    return apiJson<Partner>('/partners', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(id: string, data: Partial<Partner>): Promise<Partner> {
+    return apiJson<Partner>(`/partners/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateStatus(id: string, status: PartnerStatus, adminNotes?: string): Promise<Partner> {
+    return apiJson<Partner>(`/partners/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, adminNotes }),
+    });
+  },
+
+  async togglePublish(id: string): Promise<Partner> {
+    return apiJson<Partner>(`/partners/${id}/toggle-publish`, {
+      method: 'PATCH',
+    });
+  },
+
+  async delete(id: string): Promise<{ success: boolean; message: string }> {
+    return apiJson<{ success: boolean; message: string }>(`/partners/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async uploadPhoto(file: File): Promise<{ url: string; previewUrl?: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const result = await apiJson<any>('/partners/upload-photo', {
+      method: 'POST',
+      body: formData,
+    });
+    return result?.data || result || {};
+  },
+
+  async uploadDocument(file: File): Promise<{ name: string; url: string; previewUrl?: string; mimeType?: string; fileSizeBytes?: number; uploadedAt?: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const result = await apiJson<any>('/partners/upload-document', {
+      method: 'POST',
+      body: formData,
+    });
+    return result?.data || result || {};
+  },
+
+  // Dynamic Categories CRUD
+  async getCategories(): Promise<PartnerCategory[]> {
+    return apiJson<PartnerCategory[]>('/partners/categories');
+  },
+
+  async createCategory(data: Partial<PartnerCategory>): Promise<PartnerCategory> {
+    return apiJson<PartnerCategory>('/partners/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateCategory(id: string, data: Partial<PartnerCategory>): Promise<PartnerCategory> {
+    return apiJson<PartnerCategory>(`/partners/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteCategory(id: string): Promise<{ success: boolean; message: string }> {
+    return apiJson<{ success: boolean; message: string }>(`/partners/categories/${id}`, {
+      method: 'DELETE',
+    });
   },
 };
+
 
 // ============================================================================
 // VOLUNTEER API
@@ -1132,7 +1251,10 @@ export const subscriptionApi = {
       paymentMethod?: string;
       transactionId?: string;
       paymentNote?: string;
+      packageDiscount?: number;
+      couponDiscount?: number;
     };
+    addons?: any[];
   }): Promise<{
     newSubscription: any;
     invoiceNumber: string;
@@ -1525,8 +1647,11 @@ export const enrollmentApi = {
     paymentMethod: string;
     paymentNote?: string;
     couponCode?: string;
+    packageDiscount?: number;
+    couponDiscount?: number;
     csaMode?: boolean;
     subscriberPassword?: string;
+    addons?: any[];
   }): Promise<{
     subscription: any;
     subscriber: { id: string; name: string; phone: string };

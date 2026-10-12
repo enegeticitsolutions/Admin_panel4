@@ -17,11 +17,14 @@ class InvoiceService {
     subPackage,
     packageVersion,
     durationMonths = 1,
+    packageTotalBasePrice,
     customerState = '',
     discountAmount = 0,
+    amountPaid,
     subscriberId,
     beneficiaryId = null,
     status = 'PAID',
+    addons = [],
   }) {
     const months = Math.max(1, parseInt(durationMonths, 10) || 1);
     const taxItems = [];
@@ -31,57 +34,58 @@ class InvoiceService {
     const versionLabel = packageVersion?.version ? ` v${packageVersion.version}` : '';
     const durationLabel = months > 1 ? ` (${months} Months)` : '';
 
-    // 1. Resolve tax for each benefit in the package version (live DB records = source of truth)
-    if (packageVersion && Array.isArray(packageVersion.versionBenefits) && packageVersion.versionBenefits.length > 0) {
-      for (const vb of packageVersion.versionBenefits) {
-        // Always load the live benefit for unit cost and tax resolution
-        const benefit = vb.benefit || (await tx.benefit.findUnique({ where: { id: vb.benefitId } }));
-        const taxMeta = await this.taxResolver.resolveBenefitTax(benefit || vb.benefitId, tx);
+    const targetPackagePrice = packageTotalBasePrice !== undefined
+      ? packageTotalBasePrice
+      : (packageVersion?.basePrice || subPackage?.basePrice || 0) * months;
 
-        // Unit cost: prefer benefit.unitCost → benefit.cost → proportional split of package price
-        const unitCost =
-          benefit?.unitCost ||
-          benefit?.cost ||
-          Math.round((packageVersion.basePrice / packageVersion.versionBenefits.length) * 100) / 100;
+    const pkgTaxMeta = await this.taxResolver.resolvePackageTax(subPackage, tx);
 
-        // Use snapshotName (frozen at subscription time) for legal accuracy;
-        // fall back to live benefit name only as last resort
-        const benefitLabel = vb.snapshotName || benefit?.name || 'Included Benefit';
+    // 1. Add the main package as a single line item
+    taxItems.push({
+      benefitId: null,
+      name: `${packageLabel}${versionLabel}${durationLabel}`,
+      quantity: 1,
+      unitPrice: targetPackagePrice,
+      nominalCost: targetPackagePrice,
+      gstRate: pkgTaxMeta.gstRate,
+      hsnSacCode: pkgTaxMeta.hsnSacCode,
+      isExempt: pkgTaxMeta.isExempt,
+    });
 
+    // 2. Add any addon items
+    if (Array.isArray(addons) && addons.length > 0) {
+      for (const addon of addons) {
+        const unitPrice = addon.units > 0 ? (addon.price / addon.units) : addon.price;
+        const rawName = addon.name || 'Care Service';
+        const displayName = rawName.startsWith('Add-on') ? rawName : `Add-on: ${rawName}`;
         taxItems.push({
-          benefitId: vb.benefitId,
-          // Description carries package + version + benefit — all from DB, never hardcoded
-          name: `${packageLabel}${versionLabel} — ${benefitLabel}${durationLabel}`,
-          quantity: (vb.unitsIncluded || 1) * months,
-          unitPrice: Math.round(unitCost * 100) / 100,
-          gstRate: taxMeta.gstRate,
-          hsnSacCode: taxMeta.hsnSacCode,
-          isExempt: taxMeta.isExempt,
+          benefitId: addon.benefitId || null,
+          name: displayName,
+          quantity: addon.units || 1,
+          unitPrice: unitPrice,
+          nominalCost: unitPrice,
+          gstRate: addon.gstRate ?? 18,
+          hsnSacCode: addon.hsnSacCode || '998399',
+          isExempt: Boolean(addon.isExempt ?? addon.isGstExempt),
         });
       }
     }
 
-    // Fallback: package has no itemized version benefits — treat entire package as single line
-    if (taxItems.length === 0) {
-      const pkgTaxMeta = await this.taxResolver.resolvePackageTax(subPackage, tx);
-      taxItems.push({
-        benefitId: null,
-        name: `${packageLabel}${versionLabel}${durationLabel}`,
-        quantity: 1,
-        unitPrice: packageVersion?.basePrice || subPackage?.basePrice || 0,
-        gstRate: pkgTaxMeta.gstRate,
-        hsnSacCode: pkgTaxMeta.hsnSacCode,
-        isExempt: pkgTaxMeta.isExempt,
-      });
-    }
-
-    // 2. Compute GST & proportional discounts (pure math, no DB)
+    // 2. Compute GST, pro-rata package base price allocation, and proportional discounts via @maihoonna/billing
     const calculationResult = InvoiceCalculator.calculate({
       items: taxItems,
-      totalDiscount: discountAmount,
+      totalDiscount: discountAmount, // Properly allocate the pre-tax discount
       customerState,
       companyState: process.env.COMPANY_STATE || 'Haryana',
     });
+
+    // 2b. We no longer apply Post-Tax Discount manually.
+    // The exact discount is already allocated proportionally to the pre-tax line items by the calculator.
+    // However, if there's a tiny 1 paisa rounding mismatch between the calculated total and `amountPaid`, 
+    // we can strictly sync the final total amount for reconciliation.
+    if (amountPaid !== undefined && amountPaid !== null && Math.abs(calculationResult.totalAmount - amountPaid) <= 0.1) {
+      calculationResult.totalAmount = amountPaid;
+    }
 
     // 3. Persist Invoice + Line Items atomically in DB
     return await this.engine.createInvoiceRecord(tx, {
@@ -166,22 +170,28 @@ class InvoiceService {
     pkg,
     packageVersion,
     durationMonths = 1,
+    packageTotalBasePrice,
     customerState = '',
     discountAmount = 0,
+    amountPaid,
     subscriberId,
     beneficiaryId = null,
     status = 'PAID',
+    addons = [],
   }) {
     return await this.generateSubscriptionInvoice(tx, {
       subscription: newSubscription,
       subPackage: pkg,
       packageVersion,
       durationMonths,
+      packageTotalBasePrice,
       customerState,
       discountAmount,
+      amountPaid,
       subscriberId,
       beneficiaryId,
       status,
+      addons,
     });
   }
 
@@ -219,7 +229,7 @@ class InvoiceService {
         if (rawNotes.addonItems) {
           try {
             addonItems = typeof rawNotes.addonItems === 'string' ? JSON.parse(rawNotes.addonItems) : rawNotes.addonItems;
-          } catch (_) {}
+          } catch (_) { }
         }
 
         if (Array.isArray(addonItems) && addonItems.length > 0) {

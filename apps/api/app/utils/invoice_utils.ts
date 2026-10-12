@@ -12,46 +12,10 @@
 
 import { Prisma } from '@prisma/client';
 
-// ─── Financial Year ─────────────────────────────────────────────────────────
-
-/**
- * Computes the Indian Financial Year string from the current date.
- * FY runs April 1 – March 31. Never hardcoded.
- *
- * @param date - Reference date (defaults to now)
- * @returns e.g. "2026-27"
- */
-export function currentIndianFinancialYear(date: Date = new Date()): string {
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1; // 1-indexed
-  const fyStart = month >= 4 ? year : year - 1;
-  const fyEnd = (fyStart + 1).toString().slice(-2);
-  return `${fyStart}-${fyEnd}`;
-}
-
-// ─── Invoice Number Generator ────────────────────────────────────────────────
-
-/**
- * Generates the next sequential invoice number using atomic DB upsert.
- * Financial year is ALWAYS computed from the current date — never passed as string.
- *
- * Format: MHN/INV/2026-27/00001
- */
-export const generateInvoiceNumber = async (
-  tx: Prisma.TransactionClient,
-  forDate: Date = new Date()
-): Promise<string> => {
-  const financialYear = currentIndianFinancialYear(forDate);
-
-  const counter = await tx.invoiceCounter.upsert({
-    where: { financialYear },
-    update: { lastCount: { increment: 1 } },
-    create: { financialYear, lastCount: 1 },
-  });
-
-  const countStr = counter.lastCount.toString().padStart(5, '0');
-  return `MHN/INV/${financialYear}/${countStr}`;
-};
+export {
+  currentIndianFinancialYear,
+  generateInvoiceNumber,
+} from '@maihoonna/billing';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -88,72 +52,65 @@ export interface TaxCalculationResult {
   }>;
 }
 
+import {
+  BillingCalculator,
+  BillingCalculationInput,
+  BenefitInputItem,
+} from '@maihoonna/billing';
+
 // ─── Calculator ──────────────────────────────────────────────────────────────
 
 /**
  * Calculates itemized GST across multiple line items.
- * Pure math — no DB dependency.
- * Mirrors InvoiceCalculator.calculate() from the JS engine for TypeScript callers.
+ * Powered by canonical @maihoonna/billing engine.
  */
 export function calculateItemizedInvoice(
   items: BenefitTaxItem[],
   totalDiscount: number = 0,
   customerState: string = '',
-  companyState: string = process.env.COMPANY_STATE || 'Haryana'
+  companyState: string = process.env.COMPANY_STATE || 'Haryana',
+  packageTotalBasePrice?: number
 ): TaxCalculationResult {
-  const isInterState =
-    Boolean(customerState) &&
-    customerState.trim().toLowerCase() !== companyState.trim().toLowerCase();
+  const billingItems: BenefitInputItem[] = items.map((item) => ({
+    benefitId: item.benefitId,
+    name: item.name,
+    description: item.name,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    nominalCost: item.unitPrice,
+    gstRate: item.gstRate,
+    hsnSacCode: item.hsnSacCode || undefined,
+    isGstExempt: item.isGstExempt,
+  }));
 
-  const rawBaseAmount = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
-  const discountRatio = rawBaseAmount > 0 ? Math.min(1, totalDiscount / rawBaseAmount) : 0;
-
-  let totalTaxAmount = 0;
-  let totalTaxableAmount = 0;
-
-  const processedItems = items.map((item) => {
-    const rawLineTotal = item.unitPrice * item.quantity;
-    const lineDiscount = Math.round(rawLineTotal * discountRatio * 100) / 100;
-    const taxableAmount = Math.max(0, rawLineTotal - lineDiscount);
-
-    const rate = item.isGstExempt ? 0 : (item.gstRate ?? 18);
-    const lineTax = item.isGstExempt
-      ? 0
-      : Math.round((taxableAmount * rate / 100) * 100) / 100;
-
-    totalTaxableAmount += taxableAmount;
-    totalTaxAmount += lineTax;
-
-    return {
-      benefitId: item.benefitId,
-      description: item.name,
-      hsnSacCode: item.hsnSacCode || (item.isGstExempt ? '999312' : '998399'),
-      taxRate: rate,
-      isGstExempt: item.isGstExempt,
-      quantity: item.quantity,
-      unitPrice: Math.round(item.unitPrice * 100) / 100,
-      amount: Math.round(taxableAmount * 100) / 100,
-      tax: Math.round(lineTax * 100) / 100,
-    };
+  const result = BillingCalculator.calculate({
+    items: billingItems,
+    couponDiscountAmount: totalDiscount,
+    customerState,
+    companyState,
+    packageTotalBasePrice,
   });
 
-  totalTaxAmount = Math.round(totalTaxAmount * 100) / 100;
-  totalTaxableAmount = Math.round(totalTaxableAmount * 100) / 100;
-
-  const cgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
-  const sgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
-  const igstAmount = isInterState ? totalTaxAmount : 0;
-
   return {
-    baseAmount: Math.round(rawBaseAmount * 100) / 100,
-    discountAmount: Math.round(totalDiscount * 100) / 100,
-    taxableAmount: totalTaxableAmount,
-    taxAmount: totalTaxAmount,
-    cgstAmount,
-    sgstAmount,
-    igstAmount,
-    totalAmount: Math.round((totalTaxableAmount + totalTaxAmount) * 100) / 100,
-    placeOfSupply: customerState,
-    items: processedItems,
+    baseAmount: result.baseAmount,
+    discountAmount: result.discountAmount,
+    taxableAmount: result.taxableAmount,
+    taxAmount: result.taxAmount,
+    cgstAmount: result.cgstAmount,
+    sgstAmount: result.sgstAmount,
+    igstAmount: result.igstAmount,
+    totalAmount: result.totalAmount,
+    placeOfSupply: result.placeOfSupply,
+    items: result.items.map((it) => ({
+      benefitId: it.benefitId || undefined,
+      description: it.description,
+      hsnSacCode: it.hsnSacCode,
+      taxRate: it.taxRate,
+      isGstExempt: it.isGstExempt,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      amount: it.amount,
+      tax: it.tax,
+    })),
   };
 }

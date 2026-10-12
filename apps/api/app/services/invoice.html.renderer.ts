@@ -1,11 +1,7 @@
 import escapeHtml from 'escape-html';
+import { numberToWords } from '@maihoonna/billing';
 
-// ─── InvoiceHtmlRenderer ───────────────────────────────────────────────────────
-//
-// Pure class responsible for rendering a GST Tax Invoice matching the mobile app
-// standard template (apps/mobile-app/components/invoice/InvoiceGenerator.ts).
-// Reusable across apps/api, apps/website, and apps/admin-backend.
-//
+export { numberToWords };
 
 export interface CompanyDetails {
   name: string;
@@ -19,48 +15,6 @@ export interface CompanyDetails {
   bankAccount?: string;
   bankIfsc?: string;
   upiId?: string;
-}
-
-export function numberToWords(num: number): string {
-  if (num === 0) return 'Zero';
-
-  const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
-  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-  const inWords = (n: number): string => {
-    let str = '';
-    if (n > 99) {
-      str += a[Math.floor(n / 100)] + 'Hundred ';
-      n %= 100;
-    }
-    if (n > 19) {
-      str += b[Math.floor(n / 10)] + ' ';
-      n %= 10;
-    }
-    if (n > 0) {
-      str += a[n];
-    }
-    return str;
-  };
-
-  let word = '';
-  if (Math.floor(num / 10000000) > 0) {
-    word += inWords(Math.floor(num / 10000000)) + 'Crore ';
-    num %= 10000000;
-  }
-  if (Math.floor(num / 100000) > 0) {
-    word += inWords(Math.floor(num / 100000)) + 'Lakh ';
-    num %= 100000;
-  }
-  if (Math.floor(num / 1000) > 0) {
-    word += inWords(Math.floor(num / 1000)) + 'Thousand ';
-    num %= 1000;
-  }
-  if (num > 0) {
-    word += inWords(Math.floor(num));
-  }
-
-  return word.trim();
 }
 
 export class InvoiceHtmlRenderer {
@@ -96,20 +50,24 @@ export class InvoiceHtmlRenderer {
 
     const items = invoice.items || [];
     const itemsHtml = items.map((item: any, index: number) => {
-      const price = Number(item.unitPrice || 0);
       const qty = Number(item.quantity || 1);
+      const unitPrice = Number(item.unitPrice || 0);
+      const grossAmount = item.grossAmount !== undefined ? item.grossAmount : (unitPrice * qty);
+      const discountAmount = item.discountAmount !== undefined ? item.discountAmount : 0;
+      const taxableAmount = item.taxableAmount !== undefined
+        ? item.taxableAmount
+        : (item.amount !== undefined ? item.amount : Math.max(0, grossAmount - discountAmount));
       const taxRate = Number(item.taxRate || 0);
       const taxAmount = Number(
         item.taxAmount !== undefined
           ? item.taxAmount
           : item.tax !== undefined
           ? item.tax
-          : price * qty * (taxRate / 100)
+          : Math.round(taxableAmount * taxRate) / 100
       );
-      // Line item Amount = gross per-line (unitPrice × qty + tax).
-      // Matches InvoiceGenerator.ts: `(item.unitPrice * item.quantity) + (item.tax || 0)`.
-      // Do NOT use item.amount — that stores post-discount taxable value, not gross.
-      const lineGross = (price * qty) + taxAmount;
+      const lineTotal = item.totalAmount !== undefined
+        ? item.totalAmount
+        : Math.round((taxableAmount + taxAmount) * 100) / 100;
 
       return `
     <tr>
@@ -117,10 +75,10 @@ export class InvoiceHtmlRenderer {
       <td>${escapeHtml(item.description || item.name || 'Service')}</td>
       <td>${escapeHtml(item.hsnSacCode || '998399')}</td>
       <td>${qty}</td>
-      <td>₹${price.toFixed(2)}</td>
+      <td>₹${unitPrice.toFixed(2)}</td>
       <td>${taxRate}%</td>
       <td>₹${taxAmount.toFixed(2)}</td>
-      <td>₹${lineGross.toFixed(2)}</td>
+      <td>₹${lineTotal.toFixed(2)}</td>
     </tr>`;
     }).join('');
 
@@ -320,7 +278,7 @@ export class InvoiceHtmlRenderer {
         <th>Name</th>
         <th>HSN/SAC</th>
         <th>Quantity</th>
-        <th>Price</th>
+        <th>Unit Price</th>
         <th>Tax %</th>
         <th>Tax Amount</th>
         <th>Amount</th>
