@@ -23,6 +23,19 @@ function extractStorageKey(keyOrUrl) {
     const configuredBucket = process.env.STORAGE_BUCKET;
     if (configuredBucket && pathname.startsWith(configuredBucket + '/')) {
       pathname = pathname.substring(configuredBucket.length + 1);
+    } else {
+      const parts = pathname.split('/');
+      if (
+        parts[0] &&
+        (parts[0].includes('maihoonna') ||
+          parts[0].includes('staging') ||
+          parts[0].includes('production') ||
+          parts[0].includes('media') ||
+          parts[0].includes('staff'))
+      ) {
+        parts.shift();
+        pathname = parts.join('/');
+      }
     }
 
     // Strip any residual query-string fragments that URL.pathname may have missed
@@ -50,9 +63,11 @@ async function resolveFileUrl(keyOrUrl, ttlSeconds = 1800) {
     return trimmed;
   }
 
+  // Defend against ttlSeconds being 0 or non-number (e.g. when passed from Array.prototype.map)
+  const safeTtl = (typeof ttlSeconds === 'number' && ttlSeconds > 0) ? ttlSeconds : 1800;
+
   try {
-    console.log('[urlResolver] Presigning key:', key.substring(0, 60));
-    const url = await storageService.getPresignedUrl(key, ttlSeconds);
+    const url = await storageService.getPresignedUrl(key, safeTtl);
     return url;
   } catch (error) {
     console.warn(`[urlResolver] Failed to presign URL for key "${key}":`, error.message);
@@ -60,7 +75,39 @@ async function resolveFileUrl(keyOrUrl, ttlSeconds = 1800) {
   }
 }
 
+/**
+ * Resolves a list of storage keys or URLs (from array or JSON string) to presigned URLs.
+ * Always passes the explicit ttlSeconds to resolveFileUrl so array index is never used as TTL.
+ */
+async function resolveFileUrls(rawList, ttlSeconds = 1800) {
+  if (!rawList) return [];
+  let items = [];
+  if (Array.isArray(rawList)) {
+    items = rawList.filter(item => typeof item === 'string' && item.trim().length > 0);
+  } else if (typeof rawList === 'string') {
+    const trimmed = rawList.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          items = parsed.filter(item => typeof item === 'string' && item.trim().length > 0);
+        }
+      } catch {
+        items = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    } else {
+      items = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+
+  if (items.length === 0) return [];
+  const safeTtl = (typeof ttlSeconds === 'number' && ttlSeconds > 0) ? ttlSeconds : 1800;
+  const resolved = await Promise.all(items.map(item => resolveFileUrl(item, safeTtl)));
+  return resolved.filter(Boolean);
+}
+
 module.exports = {
   extractStorageKey,
-  resolveFileUrl
+  resolveFileUrl,
+  resolveFileUrls,
 };

@@ -80,9 +80,10 @@ class SupabaseStorage extends StorageService {
   async getPresignedUrl(path, ttlSeconds = 900) {
     if (!this.supabase) throw new Error('Supabase client is not initialized');
 
+    const safeTtl = (typeof ttlSeconds === 'number' && ttlSeconds > 0) ? ttlSeconds : 900;
     const { data, error } = await this.supabase.storage
       .from(this.bucketName)
-      .createSignedUrl(path, ttlSeconds);
+      .createSignedUrl(path, safeTtl);
 
     if (error || !data?.signedUrl) {
       throw new Error(`[SupabaseStorage] Presigned URL failed: ${error?.message ?? 'no URL returned'}`);
