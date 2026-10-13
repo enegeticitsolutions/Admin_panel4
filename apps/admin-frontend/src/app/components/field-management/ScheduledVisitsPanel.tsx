@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { CalendarClock, User, UserCheck, AlertCircle, RefreshCw, Trash2, Edit3, ChevronDown, X, Clock, Loader2, MapPin, ShieldCheck, ShieldAlert, AlertTriangle, Eye } from 'lucide-react';
+import { CalendarClock, User, UserCheck, AlertCircle, RefreshCw, Trash2, Edit3, ChevronDown, X, Clock, Loader2, MapPin, ShieldCheck, ShieldAlert, AlertTriangle, Eye, Lock } from 'lucide-react';
 import { visitApi, fieldManagerApi } from '../../../services/api';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -559,6 +559,27 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
                         {visit.durationMinutes || '—'} Min
                       </span>
                     </div>
+
+                    {/* Assigned Benefit Badge */}
+                    {visit.benefit && (
+                      <div className="mb-3 px-3 py-1.5 rounded-xl bg-[#FFF5EE] border border-[#FFE0C7] flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs">🎯</span>
+                          <span className="text-xs font-bold text-gray-800 truncate" title={visit.benefit.name}>
+                            {visit.benefit.name}
+                          </span>
+                        </div>
+                        {visit.status === 'scheduled' ? (
+                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-200/80 text-amber-900 shrink-0 flex items-center gap-0.5">
+                            <Lock size={9} /> Locked
+                          </span>
+                        ) : visit.status === 'completed' ? (
+                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0">
+                            Deducted
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
 
                     {/* Beneficiary + CC */}
                     <div className="space-y-3">

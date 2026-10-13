@@ -161,8 +161,8 @@ app.use('/api/location', staffOnly, require('./routes/location'));
 app.use('/api/config', mastersOnly, require('./routes/config'));
 // Saathi guides — all can view; write enforced in handler
 app.use('/api/saathi-guide', staffOnly, require('./routes/saathi-guide'));
-// Website CMS — admins only
-app.use('/api/website-content', adminsOnly, require('./routes/website-content'));
+// Website CMS — public read (/home), admins only for mutations
+app.use('/api/website-content', require('./routes/website-content'));
 // Legacy circle — saathi + admins
 app.use('/api/legacy-circle', staffOnly, require('./routes/legacy-circle'));
 app.use('/api/payments', require('./routes/payments'));
