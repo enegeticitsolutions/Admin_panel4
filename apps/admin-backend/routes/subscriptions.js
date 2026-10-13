@@ -1691,16 +1691,46 @@ router.post('/:id/addons/allocate', async (req, res) => {
         });
       }
 
-      // 2. Record Invoice and Payment if amountPaid > 0
+      // 2. Record Statutory Invoice and Payment if amountPaid > 0
       const numericAmount = parseFloat(amountPaid);
       let invoice = null;
       if (numericAmount > 0) {
         const customerState = subscription.beneficiary?.state || subscription.subscriber?.state || '';
+        const qty = Number(units) || 1;
+
+        // Resolve statutory tax info
+        const taxMeta = await invoiceService.taxResolver.resolveBenefitTax(benefit, tx);
+        const effectiveGstRate = taxMeta?.isExempt ? 0 : (taxMeta?.gstRate ?? 18);
+        const configuredBasePrice = Number(benefit.addonDiscountPrice || benefit.addonPrice || 0);
+
+        // Pre-tax unit price determination:
+        let resolvedUnitPrice;
+        if (req.body.unitPrice !== undefined && req.body.unitPrice !== null && Number(req.body.unitPrice) > 0) {
+          const sentPrice = Number(req.body.unitPrice);
+          // If caller mistakenly passed gross price instead of pre-tax unit price
+          if (configuredBasePrice > 0 && effectiveGstRate > 0 && Math.abs(sentPrice - (configuredBasePrice * (1 + effectiveGstRate / 100))) < 0.05) {
+            resolvedUnitPrice = configuredBasePrice;
+          } else {
+            resolvedUnitPrice = sentPrice;
+          }
+        } else if (configuredBasePrice > 0) {
+          const expectedGrossTotal = configuredBasePrice * (1 + effectiveGstRate / 100) * qty;
+          if (Math.abs(expectedGrossTotal - numericAmount) <= 1.0) {
+            resolvedUnitPrice = configuredBasePrice;
+          } else {
+            // Admin entered custom gross amountPaid (inclusive of GST)
+            resolvedUnitPrice = (numericAmount / qty) / (1 + effectiveGstRate / 100);
+          }
+        } else {
+          // Reverse-calculate pre-tax base price from total amount paid
+          resolvedUnitPrice = (numericAmount / qty) / (1 + effectiveGstRate / 100);
+        }
+
         invoice = await invoiceService.generateAddonInvoice(tx, {
           subscriptionId,
           benefit,
-          units: Number(units) || 1,
-          unitPrice: numericAmount / (Number(units) || 1),
+          units: qty,
+          unitPrice: resolvedUnitPrice,
           customerState,
           subscriberId: subscription.subscriberId,
           beneficiaryId: subscription.beneficiaryId || undefined,
@@ -1715,8 +1745,9 @@ router.post('/:id/addons/allocate', async (req, res) => {
             subscriberId: subscription.subscriberId,
             beneficiaryId: subscription.beneficiaryId || undefined,
             packageType: subscription.packageType || 'addon',
-            baseAmount: numericAmount,
-            amountPaid: numericAmount,
+            baseAmount: invoice.baseAmount || (resolvedUnitPrice * qty),
+            taxAmount: invoice.taxAmount || 0,
+            amountPaid: invoice.totalAmount || numericAmount,
             paymentMethod: paymentMethod || 'Cash',
             paymentStatus: 'success',
             paidAt: new Date(),
@@ -1724,7 +1755,7 @@ router.post('/:id/addons/allocate', async (req, res) => {
             planEndDate: subscription.endDate || new Date(),
             transactionId: transactionId || `ADDON-TXN-${Date.now()}`,
             gatewayName: 'admin_addon',
-            failureReason: paymentNote || `Add-on Purchase: ${benefit.name} (${units} units)`,
+            failureReason: paymentNote || `Add-on Purchase: ${benefit.name} (${qty} units)`,
             isSubscriptionActive: true,
           },
         }).catch(err => {

@@ -553,7 +553,7 @@ export const mockActivityLogs: ActivityLog[] = [
 // PARTNERS
 // ============================================================================
 
-export const mockPartners: Partner[] = [
+export const mockPartners: (Partial<Partner> & Record<string, any>)[] = [
   {
     id: 'PTR001',
     name: 'Apollo Pharmacy',

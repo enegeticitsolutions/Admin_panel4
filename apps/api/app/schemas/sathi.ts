@@ -56,3 +56,7 @@ export const volunteerRedeemSchema = Joi.object({
   redeemType: Joi.string().valid('GIFT_CARD', 'DISCOUNT_COUPON', 'UPI_TRANSFER').required(),
   details: Joi.object().optional().default({}),
 });
+
+export const volunteerAmazonRedeemSchema = Joi.object({
+  amount: Joi.number().integer().min(10).max(10000).required(),
+});

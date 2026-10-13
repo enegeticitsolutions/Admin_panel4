@@ -120,11 +120,19 @@ class InvoiceService {
       for (const item of inputItems) {
         const itemBenefit = item.benefit || (item.benefitId ? await tx.benefit.findUnique({ where: { id: item.benefitId } }) : null);
         const taxMeta = itemBenefit ? await this.taxResolver.resolveBenefitTax(itemBenefit, tx) : { gstRate: 18, hsnSacCode: '998311', isExempt: false };
+        const effectiveGstRate = taxMeta?.isExempt ? 0 : (taxMeta?.gstRate ?? 18);
+        const configuredPrice = Number(itemBenefit?.addonDiscountPrice ?? itemBenefit?.addonPrice ?? 0);
+
+        let resolvedItemPrice = item.unitPrice !== undefined && item.unitPrice !== null ? Number(item.unitPrice) : configuredPrice;
+        if (configuredPrice > 0 && effectiveGstRate > 0 && Math.abs(resolvedItemPrice - (configuredPrice * (1 + effectiveGstRate / 100))) < 0.05) {
+          resolvedItemPrice = configuredPrice;
+        }
+
         taxItems.push({
           benefitId: itemBenefit?.id || item.benefitId || null,
           name: `Add-on: ${item.name || itemBenefit?.name || 'Care Service'}`,
           quantity: Math.max(1, parseInt(item.units, 10) || 1),
-          unitPrice: item.unitPrice !== undefined ? Number(item.unitPrice) : (itemBenefit?.addonDiscountPrice ?? itemBenefit?.addonPrice ?? 0),
+          unitPrice: resolvedItemPrice,
           gstRate: taxMeta.gstRate,
           hsnSacCode: taxMeta.hsnSacCode,
           isExempt: taxMeta.isExempt,
@@ -132,13 +140,20 @@ class InvoiceService {
       }
     } else if (benefit) {
       const taxMeta = await this.taxResolver.resolveBenefitTax(benefit, tx);
+      const effectiveGstRate = taxMeta?.isExempt ? 0 : (taxMeta?.gstRate ?? 18);
+      const configuredPrice = Number(benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0);
       const qty = Math.max(1, parseInt(units, 10) || 1);
-      const price = unitPrice !== undefined ? unitPrice : (benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0);
+
+      let resolvedPrice = unitPrice !== undefined && unitPrice !== null ? Number(unitPrice) : configuredPrice;
+      if (configuredPrice > 0 && effectiveGstRate > 0 && Math.abs(resolvedPrice - (configuredPrice * (1 + effectiveGstRate / 100))) < 0.05) {
+        resolvedPrice = configuredPrice;
+      }
+
       taxItems.push({
         benefitId: benefit.id,
         name: `Add-on: ${benefit.name}`,
         quantity: qty,
-        unitPrice: price,
+        unitPrice: resolvedPrice,
         gstRate: taxMeta.gstRate,
         hsnSacCode: taxMeta.hsnSacCode,
         isExempt: taxMeta.isExempt,
@@ -269,15 +284,21 @@ class InvoiceService {
         if (benefit) {
           let units = parseInt(rawNotes.units, 10);
           const totalPaid = Number(payment.amountPaid || payment.baseAmount || 0);
+          const taxMeta = await this.taxResolver.resolveBenefitTax(benefit, tx);
+          const effectiveGstRate = taxMeta?.isExempt ? 0 : (taxMeta?.gstRate ?? 18);
+          const configuredPrice = Number(benefit.addonDiscountPrice || benefit.addonPrice || 0);
+
           if (!units || isNaN(units) || units <= 0) {
-            const unitPrice = benefit.addonDiscountPrice || benefit.addonPrice || 0;
-            if (unitPrice > 0 && totalPaid > 0) {
-              units = Math.max(1, Math.round(totalPaid / unitPrice));
+            if (configuredPrice > 0 && totalPaid > 0) {
+              const grossPerUnit = configuredPrice * (1 + effectiveGstRate / 100);
+              units = Math.max(1, Math.round(totalPaid / grossPerUnit));
             } else {
               units = benefit.addonIncludedUnits || 1;
             }
           }
-          const unitPrice = units > 0 ? (totalPaid / units) : totalPaid;
+          const unitPrice = configuredPrice > 0
+            ? configuredPrice
+            : (units > 0 ? ((totalPaid / units) / (1 + effectiveGstRate / 100)) : totalPaid);
 
           const invoice = await this.generateAddonInvoice(tx, {
             subscriptionId: sub?.id || payment.subscriptionId || null,

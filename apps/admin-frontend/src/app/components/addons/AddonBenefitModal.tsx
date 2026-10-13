@@ -271,6 +271,7 @@ export const AddonBenefitModal: React.FC<AddonBenefitModalProps> = ({
           benefitId: addon.id,
           units: p.totalUnits,
           amountPaid: p.totalAmount,
+          unitPrice: p.finalUnitPrice,
           paymentMethod: completedPaymentDetails?.paymentMethod || (paymentMode === 'online_link' ? 'Razorpay Online' : offlineMethod),
           transactionId: completedPaymentDetails?.orderId || transactionId || undefined,
           paymentNote: paymentNote || `Add-on: ${addon.name} (${p.totalUnits} ${addon.unitLabel || 'units'})`,
@@ -603,7 +604,7 @@ export const AddonBenefitModal: React.FC<AddonBenefitModalProps> = ({
                           name: addon?.name || 'Add-on Benefit',
                           units,
                           amount: pricing?.totalAmount || 0,
-                          unitPrice: pricing?.unitPrice || (addon?.addonPrice || 0),
+                          unitPrice: pricing?.finalUnitPrice || (addon?.addonDiscountPrice || addon?.addonPrice || 0),
                         };
                       });
 

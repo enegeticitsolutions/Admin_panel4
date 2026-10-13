@@ -315,6 +315,7 @@ export interface Partner {
   address?: string;
   isActive?: boolean;
   onboardedDate?: string;
+  servicesOffered?: string[];
 }
 
 
@@ -355,6 +356,20 @@ export interface Volunteer {
   verifiedAt?: string | null;
   verifiedById?: string | null;
   rejectionReason?: string | null;
+  razorpayContactId?: string | null;
+  redemptions?: {
+    id: string;
+    volunteerId: string;
+    type: string;
+    amount: number;
+    creditsUsed: number;
+    currency: string;
+    status: string;
+    razorpayPayoutId?: string | null;
+    failureReason?: string | null;
+    createdAt: string;
+    completedAt?: string | null;
+  }[];
   createdAt?: string;
   updatedAt?: string;
   assignments?: {

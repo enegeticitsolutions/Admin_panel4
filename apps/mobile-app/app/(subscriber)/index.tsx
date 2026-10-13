@@ -485,7 +485,7 @@ export default function SubscriberDashboardScreen() {
 
                                 <View style={styles.queuedBodyRow}>
                                     <View style={{ flex: 1, marginRight: scale(10) }}>
-                                        <Text style={styles.queuedTitle}>{qSub.package?.name || qSub.packageType}</Text>
+                                        <Text style={styles.queuedTitle}>{qSub.packageName || qSub.package?.name || qSub.packageType || 'Care Plan'}</Text>
                                         <Text style={styles.queuedSubtitle}>
                                             Queued behind active plan. Activates automatically on expiry, or activate now to use both plans together.
                                         </Text>
@@ -673,7 +673,7 @@ export default function SubscriberDashboardScreen() {
                             style={styles.whatsappBtn}
                             iconSize={scale(30)}
                             iconColor="#25D366"
-                            message="Hello! I need assistance regarding my MaiHoonNa account."
+                            message="Hello! I would like to know more about MaiHoonNa elder care services."
                         />
                     </View>
                 </View>
@@ -776,7 +776,7 @@ export default function SubscriberDashboardScreen() {
                         </View>
 
                         <Text style={styles.modalSubtitle}>
-                            Activate <Text style={{ fontWeight: '700', color: '#111827' }}>{selectedQueuedSub?.package?.name || selectedQueuedSub?.packageType}</Text> for <Text style={{ fontWeight: '700', color: '#111827' }}>{selectedQueuedSub?.beneficiaryName}</Text> now?
+                            Activate <Text style={{ fontWeight: '700', color: '#111827' }}>{selectedQueuedSub?.packageName || selectedQueuedSub?.package?.name || selectedQueuedSub?.packageType || 'Care Plan'}</Text> for <Text style={{ fontWeight: '700', color: '#111827' }}>{selectedQueuedSub?.beneficiaryName}</Text> now?
                         </Text>
 
                         <View style={styles.activationInfoBox}>

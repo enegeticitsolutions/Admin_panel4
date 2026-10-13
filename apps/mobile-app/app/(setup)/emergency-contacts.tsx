@@ -14,6 +14,13 @@ import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import NotificationBell from '@/components/shared/NotificationBell';
+import { API_URL } from '@/constants/api';
+
+const cleanPhone = (phone?: string) => {
+    if (!phone) return '';
+    const digits = phone.replace(/\D/g, '');
+    return digits.length > 10 ? digits.slice(-10) : digits;
+};
 
 export default function EmergencyContactsScreen() {
     const router = useRouter();
@@ -35,42 +42,6 @@ export default function EmergencyContactsScreen() {
     const beneficiaryId = params.beneficiaryId as string;
     const pendingDetailsRaw = params.pendingDetails as string;
 
-    useEffect(() => {
-        AsyncStorage.getItem('userData').then(data => {
-            if (data) setUserData(JSON.parse(data));
-        });
-
-        // Pre-fill emergency contact details in verification flow
-        if (isVerificationFlow && pendingDetailsRaw) {
-            try {
-                const b = JSON.parse(pendingDetailsRaw);
-                if (b.emergencyContacts && Array.isArray(b.emergencyContacts)) {
-                    const primary = b.emergencyContacts.find((c: any) => c.isPrimary) || b.emergencyContacts[0];
-                    const secondary = b.emergencyContacts.find((c: any) => !c.isPrimary) || b.emergencyContacts[1];
-
-                    setForm({
-                        primaryName: primary?.name || '',
-                        primaryPhone: primary?.phone || '',
-                        primaryEmail: primary?.email || '',
-                        secondaryName: secondary?.name || '',
-                        secondaryPhone: secondary?.phone || '',
-                        secondaryEmail: secondary?.email || ''
-                    });
-                }
-            } catch (err) {
-                console.error('Error parsing pending details in emergency-contacts:', err);
-            }
-        }
-    }, [isVerificationFlow, pendingDetailsRaw]);
-
-    const openDrawer = () => {
-        setDrawerOpen(true);
-        Animated.timing(drawerAnim, { toValue: 0, duration: 280, useNativeDriver: true }).start();
-    };
-    const closeDrawer = () => {
-        Animated.timing(drawerAnim, { toValue: DRAWER_WIDTH, duration: 240, useNativeDriver: true }).start(() => setDrawerOpen(false));
-    };
-
     const [form, setForm] = useState({
         primaryName: '',
         primaryPhone: '',
@@ -84,6 +55,101 @@ export default function EmergencyContactsScreen() {
     const [primaryEmailError, setPrimaryEmailError] = useState('');
     const [secondaryPhoneError, setSecondaryPhoneError] = useState('');
     const [secondaryEmailError, setSecondaryEmailError] = useState('');
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const loadSubscriberAndEmergencyData = async () => {
+            let currentUser: any = null;
+            try {
+                const stored = await AsyncStorage.getItem('userData');
+                if (stored) {
+                    currentUser = JSON.parse(stored);
+                    if (isMounted) setUserData(currentUser);
+                }
+            } catch (e) {}
+
+            let subDataFromParams: any = null;
+            if (params.subscriberData) {
+                try {
+                    subDataFromParams = JSON.parse(params.subscriberData as string);
+                } catch (e) {}
+            }
+
+            // 1. Pre-fill emergency contact details in verification flow if existing
+            if (isVerificationFlow && pendingDetailsRaw) {
+                try {
+                    const b = JSON.parse(pendingDetailsRaw);
+                    if (b.emergencyContacts && Array.isArray(b.emergencyContacts) && b.emergencyContacts.length > 0) {
+                        const primary = b.emergencyContacts.find((c: any) => c.isPrimary) || b.emergencyContacts[0];
+                        const secondary = b.emergencyContacts.find((c: any) => !c.isPrimary) || b.emergencyContacts[1];
+
+                        // If primary contact was saved in verification flow, prefill from it
+                        if (primary?.name || primary?.phone) {
+                            if (isMounted) {
+                                setForm({
+                                    primaryName: primary?.name || '',
+                                    primaryPhone: cleanPhone(primary?.phone),
+                                    primaryEmail: primary?.email || '',
+                                    secondaryName: secondary?.name || '',
+                                    secondaryPhone: cleanPhone(secondary?.phone),
+                                    secondaryEmail: secondary?.email || ''
+                                });
+                            }
+                            return;
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error parsing pending details in emergency-contacts:', err);
+                }
+            }
+
+            // 2. Fetch fresh profile if email or name is missing from local storage/params
+            let fetchedProfile: any = null;
+            if (!currentUser?.email && !subDataFromParams?.email) {
+                try {
+                    const token = await AsyncStorage.getItem('userToken');
+                    if (token) {
+                        const res = await fetch(`${API_URL}/subscriber/profile`, {
+                            headers: { Authorization: `Bearer ${token}` }
+                        });
+                        const resData = await res.json();
+                        if (resData?.success && resData?.data) {
+                            fetchedProfile = resData.data.user || resData.data;
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            const subscriberName = subDataFromParams?.fullName || subDataFromParams?.name || currentUser?.name || currentUser?.fullName || fetchedProfile?.name || '';
+            const rawPhone = subDataFromParams?.phone || currentUser?.phone || fetchedProfile?.phone || '';
+            const subscriberPhone = cleanPhone(rawPhone);
+            const subscriberEmail = subDataFromParams?.email || currentUser?.email || fetchedProfile?.email || '';
+
+            if (isMounted) {
+                setForm(prev => ({
+                    ...prev,
+                    primaryName: prev.primaryName || subscriberName,
+                    primaryPhone: prev.primaryPhone || subscriberPhone,
+                    primaryEmail: prev.primaryEmail || subscriberEmail,
+                }));
+            }
+        };
+
+        loadSubscriberAndEmergencyData();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [isVerificationFlow, pendingDetailsRaw, params.subscriberData]);
+
+    const openDrawer = () => {
+        setDrawerOpen(true);
+        Animated.timing(drawerAnim, { toValue: 0, duration: 280, useNativeDriver: true }).start();
+    };
+    const closeDrawer = () => {
+        Animated.timing(drawerAnim, { toValue: DRAWER_WIDTH, duration: 240, useNativeDriver: true }).start(() => setDrawerOpen(false));
+    };
 
     const handleNext = () => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

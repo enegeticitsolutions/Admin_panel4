@@ -1964,6 +1964,8 @@ model Volunteer {
   sathiVisitRequests SathiVisitRequest[]
   rewardCoupons      VolunteerRewardCoupon[]
   reviews            VolunteerReview[]
+  razorpayContactId  String?                      // Cached RazorpayX Contact ID
+  redemptions        VolunteerRedemption[]
 
   @@index([latitude, longitude])
   @@map("volunteers")
@@ -2074,6 +2076,33 @@ model VolunteerRewardCoupon {
   rewardOption    VolunteerRewardOption? @relation(fields: [rewardOptionId], references: [id])
 
   @@map("volunteer_reward_coupons")
+}
+
+model VolunteerRedemption {
+  id                    String    @id @default(uuid())
+  volunteerId           String
+  type                  String    @default("AMAZON_PAY_GIFT_CARD")
+  amount                Float
+  creditsUsed           Float
+  currency              String    @default("INR")
+  status                String    @default("PENDING") // 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED'
+
+  razorpayContactId     String?
+  razorpayFundAccountId String?
+  razorpayPayoutId      String?
+  razorpayEventId       String?   @unique
+  idempotencyKey        String?   @unique
+  failureReason         String?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  completedAt           DateTime?
+
+  volunteer             Volunteer @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
+
+  @@index([volunteerId, status])
+  @@index([razorpayPayoutId])
+  @@map("volunteer_redemptions")
 }
 
 // ─── Enums ──────────────────────────────────────────────────────────────────

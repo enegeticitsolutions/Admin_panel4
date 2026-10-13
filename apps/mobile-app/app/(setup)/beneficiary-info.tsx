@@ -551,7 +551,7 @@ export default function BeneficiaryInfoScreen() {
         const packageIdToPass = params.packageId || (pendingData?.subscriptions?.[0]?.packageType || '');
         push('/(setup)/medical-info', {
             packageId: packageIdToPass,
-            subscriberData: params.subscriberData,
+            subscriberData: params.subscriberData || (subscriberProfile ? JSON.stringify(subscriberProfile) : (userData ? JSON.stringify(userData) : undefined)),
             isVerificationFlow: params.isVerificationFlow,
             beneficiaryId: params.beneficiaryId,
             beneficiaryData: JSON.stringify({
