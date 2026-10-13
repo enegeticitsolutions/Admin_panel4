@@ -99,6 +99,11 @@ export default function PackageUtilizationScreen() {
   const [checkingLocation, setCheckingLocation] = useState<boolean>(false);
   const [mapModalVisible, setMapModalVisible] = useState<boolean>(false);
 
+  // ── Activate Plan Modal state ─────────────────────────────────────────────
+  const [activateModalVisible, setActivateModalVisible] = useState(false);
+  const [selectedPlanToActivate, setSelectedPlanToActivate] = useState<{ id: string; name: string } | null>(null);
+  const [isActivatingPlan, setIsActivatingPlan] = useState(false);
+
   const promptExhaustedMessage = (benefitName?: string) => {
     const msg = `Benefit ${benefitName ? `"${benefitName}" ` : ''}is exhausted. Please connect with support team to renew or upgrade your package.`;
     if (Platform.OS === 'web') {
@@ -540,31 +545,15 @@ export default function PackageUtilizationScreen() {
   };
 
   const handleActivatePlan = (queuedPlanId: string, packageName: string) => {
-    const benName = detailData?.beneficiaryName || 'beneficiary';
-    const confirmMessage = `Activate ${packageName} for ${benName} now?\n\n• Both current and new packages will run simultaneously.\n• Remaining benefits from your current package remain accessible till the extended end date.\n• New package cycle starts today.`;
-
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Activate Care Plan\n\n${confirmMessage}`)) {
-        executePlanActivation(queuedPlanId);
-      }
-    } else {
-      Alert.alert(
-        'Activate Care Plan',
-        confirmMessage,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Confirm & Activate', 
-            style: 'default',
-            onPress: () => executePlanActivation(queuedPlanId) 
-          }
-        ]
-      );
-    }
+    const validPlanName = (packageName && packageName !== 'undefined')
+      ? packageName
+      : (detailData?.queuedPlan?.packageName || 'Care Plan');
+    setSelectedPlanToActivate({ id: queuedPlanId, name: validPlanName });
+    setActivateModalVisible(true);
   };
 
   const executePlanActivation = async (queuedPlanId: string) => {
-    setLoading(true);
+    setIsActivatingPlan(true);
     try {
       const token = await AsyncStorage.getItem('userToken');
       const res = await fetch(`${API_URL}/subscriber/subscriptions/${queuedPlanId}/activate-plan`, {
@@ -576,6 +565,8 @@ export default function PackageUtilizationScreen() {
       });
       const data = await res.json();
       if (data.success) {
+        setActivateModalVisible(false);
+        setSelectedPlanToActivate(null);
         if (Platform.OS === 'web') {
           window.alert(data.message || 'Plan activated successfully!');
         } else {
@@ -597,7 +588,7 @@ export default function PackageUtilizationScreen() {
         Alert.alert('Error', 'An error occurred while activating plan');
       }
     } finally {
-      setLoading(false);
+      setIsActivatingPlan(false);
     }
   };
 
@@ -934,6 +925,92 @@ export default function PackageUtilizationScreen() {
           />
         </Modal>
       )}
+
+      {/* ── Modal for Activating Queued Plan ── */}
+      <Modal
+        visible={activateModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isActivatingPlan) {
+            setActivateModalVisible(false);
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.activateModalCard}>
+            {/* Header */}
+            <View style={styles.activateModalHeader}>
+              <View style={styles.activateIconCircle}>
+                <Ionicons name="flash" size={20} color="#FF6900" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.activateModalHeading}>Activate Care Plan</Text>
+                <Text style={styles.activateModalSubheading}>Early Queue Activation</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setActivateModalVisible(false)}
+                disabled={isActivatingPlan}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.activateModalCloseBtn}
+              >
+                <Ionicons name="close" size={22} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Prompt */}
+            <Text style={styles.activatePromptText}>
+              Activate <Text style={styles.highlightText}>{selectedPlanToActivate?.name || 'Care Plan'}</Text> for <Text style={styles.highlightText}>{detailData?.beneficiaryName || 'beneficiary'}</Text> now?
+            </Text>
+
+            {/* Information Points */}
+            <View style={styles.activationInfoBox}>
+              <View style={styles.activationInfoRow}>
+                <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginRight: 10, marginTop: 1 }} />
+                <Text style={styles.activationInfoText}>Both current and new packages will run simultaneously.</Text>
+              </View>
+              <View style={styles.activationInfoRow}>
+                <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginRight: 10, marginTop: 1 }} />
+                <Text style={styles.activationInfoText}>Remaining benefits from your current package remain accessible till the extended end date.</Text>
+              </View>
+              <View style={styles.activationInfoRow}>
+                <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginRight: 10, marginTop: 1 }} />
+                <Text style={styles.activationInfoText}>New package cycle starts today.</Text>
+              </View>
+            </View>
+
+            {/* Actions */}
+            <TouchableOpacity
+              style={[styles.confirmActivateBtn, isActivatingPlan && { opacity: 0.75 }]}
+              disabled={isActivatingPlan}
+              onPress={() => {
+                if (selectedPlanToActivate) {
+                  executePlanActivation(selectedPlanToActivate.id);
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              {isActivatingPlan ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons name="flash" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.confirmActivateBtnText}>Confirm & Activate Now</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelActivateBtn}
+              disabled={isActivatingPlan}
+              onPress={() => setActivateModalVisible(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.cancelActivateBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1342,5 +1419,112 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     textDecorationLine: 'line-through',
+  },
+
+  // ── Queued Plan Activation Modal Styles ──
+  activateModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 22,
+    width: '100%',
+    maxWidth: 420,
+    ...Platform.select({
+      ios: { shadowColor: '#000000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20 },
+      android: { elevation: 8 },
+    }),
+  },
+  activateModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  activateIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF2E8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  activateModalHeading: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  activateModalSubheading: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  activateModalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activatePromptText: {
+    fontSize: 15,
+    color: '#374151',
+    lineHeight: 22,
+    marginVertical: 16,
+  },
+  highlightText: {
+    fontWeight: '700',
+    color: '#111827',
+  },
+  activationInfoBox: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginBottom: 20,
+    gap: 12,
+  },
+  activationInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  activationInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#15803D',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  confirmActivateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF6900',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginBottom: 10,
+    ...Platform.select({
+      ios: { shadowColor: '#FF6900', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5 },
+      android: { elevation: 4 },
+    }),
+  },
+  confirmActivateBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cancelActivateBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+  },
+  cancelActivateBtnText: {
+    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

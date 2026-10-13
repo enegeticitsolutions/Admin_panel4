@@ -13,7 +13,7 @@ import {
   Modal,
   Platform,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,6 +52,10 @@ export default function SathiCreditsScreen() {
   const [upiPoints, setUpiPoints] = useState('10');
   const [upiId, setUpiId] = useState('');
 
+  // Amazon Pay form state
+  const [amazonAmount, setAmazonAmount] = useState('100');
+  const [payouts, setPayouts] = useState<any[]>([]);
+
   // Premium Success Modal state
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successModalData, setSuccessModalData] = useState<{ code?: string; points: number; valueRs: number; type: string; message?: string } | null>(null);
@@ -60,7 +64,7 @@ export default function SathiCreditsScreen() {
 
   // Premium Confirm Modal state
   const [confirmModalVisible, setConfirmModalVisible] = useState(false);
-  const [confirmModalData, setConfirmModalData] = useState<{ points: number; valueRs: number; type: 'GIFT_CARD' | 'UPI_TRANSFER'; details: any } | null>(null);
+  const [confirmModalData, setConfirmModalData] = useState<{ points: number; valueRs: number; type: 'GIFT_CARD' | 'UPI_TRANSFER' | 'AMAZON_PAY'; details: any } | null>(null);
 
   // Premium Alert Modal state
   const [alertModalVisible, setAlertModalVisible] = useState(false);
@@ -115,11 +119,65 @@ export default function SathiCreditsScreen() {
     }
   };
 
+  const fetchRedemptions = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) return;
+
+      const res = await fetch(`${API_URL}/sathi/redemptions`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setPayouts(data.data || []);
+      }
+    } catch (err) {
+      console.log('Error fetching redemptions:', err);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchCreditsSummary();
+      fetchRedemptions();
     }, [])
   );
+
+  const handleAmazonRedeem = () => {
+    const amt = parseInt(amazonAmount || '0', 10);
+    if (isNaN(amt) || amt < 10) {
+      showAlert('Invalid Amount', 'Please enter a valid amount of at least ₹10.');
+      return;
+    }
+    if (amt > 10000) {
+      showAlert('Limit Exceeded', 'Maximum Amazon Pay redemption per transaction is ₹10,000.');
+      return;
+    }
+
+    const conversionRate = summary?.conversionRate || 10;
+    const pointsNeeded = Math.ceil(amt / conversionRate);
+    const available = Number(summary?.availableCredits || 0);
+
+    if (available < pointsNeeded) {
+      showAlert(
+        'Insufficient Credits',
+        `You need ${pointsNeeded} credits for ₹${amt} Amazon Pay Gift Card, but have only ${formatPts(available)} credits available.`
+      );
+      return;
+    }
+
+    setConfirmModalData({
+      points: pointsNeeded,
+      valueRs: amt,
+      type: 'AMAZON_PAY',
+      details: {},
+    });
+    setConfirmModalVisible(true);
+  };
 
   const handleRedeem = async (redeemType: 'GIFT_CARD' | 'UPI_TRANSFER') => {
     let pointsToRedeem = 0;
@@ -188,6 +246,37 @@ export default function SathiCreditsScreen() {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) return;
 
+      if (confirmModalData.type === 'AMAZON_PAY') {
+        const res = await fetch(`${API_URL}/sathi/redemptions/amazon`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: confirmModalData.valueRs,
+          }),
+        });
+
+        const resData = await res.json();
+        if (res.ok && (resData.success || resData.statusCode === 201 || resData.statusCode === 200)) {
+          await fetchCreditsSummary();
+          await fetchRedemptions();
+          setSuccessModalData({
+            points: confirmModalData.points,
+            valueRs: confirmModalData.valueRs,
+            type: 'AMAZON_PAY',
+            message: resData.message || `₹${confirmModalData.valueRs} Amazon Pay Gift Card payout initiated to your registered mobile number.`,
+          });
+          setCodeCopied(false);
+          setSuccessModalVisible(true);
+          setAmazonAmount('100');
+        } else {
+          showAlert('Payout Failed', resData.message || resData.error || 'Could not initiate Amazon Pay redemption.');
+        }
+        return;
+      }
+
       const res = await fetch(`${API_URL}/sathi/credits/redeem`, {
         method: 'POST',
         headers: {
@@ -203,6 +292,7 @@ export default function SathiCreditsScreen() {
 
       const resData = await res.json();
       if (res.ok || resData.success) {
+        await fetchCreditsSummary();
         const generatedCode = resData.coupon?.code;
         if (generatedCode) {
           setSuccessModalData({
@@ -384,8 +474,84 @@ export default function SathiCreditsScreen() {
         {activeTab === 'REDEEM' && (
           <View style={styles.tabContent}>
 
+            {/* Option 1: Amazon Pay Gift Card (RazorpayX Payout) */}
+            <View style={styles.rewardCard}>
+              <View style={styles.rewardHeader}>
+                <View style={[styles.rewardIconBox, { backgroundColor: '#FFF7ED' }]}>
+                  <FontAwesome5 name="amazon-pay" size={28} color="#FF9900" />
+                </View>
+                <View style={styles.rewardHeaderText}>
+                  <Text style={styles.rewardTitle}>Amazon Pay Gift Card</Text>
+                  <Text style={styles.rewardDesc}>
+                    Direct payout into your Amazon Pay wallet linked to your registered mobile number.
+                  </Text>
+                </View>
+              </View>
 
-            {/* Option 1: Gift Card (MHN Gift Card Only - Stored in DB) */}
+              <Text style={styles.fieldLabel}>Select Payout Amount:</Text>
+              <View style={styles.quickAmountRow}>
+                {[50, 100, 250, 500, 1000].map((amt) => {
+                  const isSelected = amazonAmount === amt.toString();
+                  return (
+                    <TouchableOpacity
+                      key={amt}
+                      style={[
+                        styles.quickAmountBtn,
+                        isSelected && styles.quickAmountBtnActive,
+                      ]}
+                      onPress={() => setAmazonAmount(amt.toString())}
+                    >
+                      <Text
+                        style={[
+                          styles.quickAmountText,
+                          isSelected && styles.quickAmountTextActive,
+                        ]}
+                      >
+                        ₹{amt}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.fieldLabel}>Or Enter Custom Amount (₹):</Text>
+              <TextInput
+                style={styles.inputField}
+                placeholder="e.g. 150"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="numeric"
+                value={amazonAmount}
+                onChangeText={setAmazonAmount}
+              />
+
+              <View style={styles.conversionInfoBox}>
+                <Ionicons name="information-circle-outline" size={16} color="#B45309" />
+                <Text style={styles.conversionInfoText}>
+                  Credits needed: <Text style={{ fontWeight: '700' }}>{Math.ceil(parseInt(amazonAmount || '0', 10) / (summary?.conversionRate || 10))} pts</Text> (1 pt = ₹{summary?.conversionRate || 10})
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.actionBtn,
+                  { backgroundColor: '#FF9900' },
+                  redeeming && { opacity: 0.7 },
+                ]}
+                onPress={handleAmazonRedeem}
+                disabled={redeeming}
+                activeOpacity={0.8}
+              >
+                {redeeming ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.actionBtnText}>
+                    Redeem ₹{parseInt(amazonAmount || '0', 10) || 0} Amazon Pay ({Math.ceil((parseInt(amazonAmount || '0', 10) || 0) / (summary?.conversionRate || 10))} Credits)
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Option 2: Gift Card (MHN Gift Card Only - Stored in DB) */}
             <View style={styles.rewardCard}>
               <View style={styles.rewardHeader}>
                 <View style={[styles.rewardIconBox, { backgroundColor: '#FEE2E2' }]}>
@@ -570,7 +736,82 @@ export default function SathiCreditsScreen() {
         {/* Tab Content: HISTORY */}
         {activeTab === 'HISTORY' && (
           <View style={styles.tabContent}>
-            <Text style={styles.historySectionTitle}>All Credit Ledger History</Text>
+            {/* Amazon Pay Payouts History */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.historySectionTitle}>Amazon Pay Payouts</Text>
+              <Text style={styles.sectionBadgeText}>{payouts.length} Total</Text>
+            </View>
+
+            {payouts && payouts.length > 0 ? (
+              payouts.map((payout: any) => {
+                const isSuccess = payout.status === 'SUCCESS';
+                const isFailed = payout.status === 'FAILED';
+                const badgeBg = isSuccess ? '#D1FAE5' : isFailed ? '#FEE2E2' : '#FEF3C7';
+                const badgeColor = isSuccess ? '#059669' : isFailed ? '#DC2626' : '#D97706';
+
+                return (
+                  <View key={payout.id} style={styles.payoutCard}>
+                    <View style={styles.payoutTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={[styles.rewardIconBox, { width: 36, height: 36, backgroundColor: '#FFF7ED', marginRight: 10 }]}>
+                          <FontAwesome5 name="amazon-pay" size={20} color="#FF9900" />
+                        </View>
+                        <View>
+                          <Text style={styles.payoutTitle}>Amazon Pay Gift Card</Text>
+                          <Text style={styles.historyDate}>
+                            {new Date(payout.createdAt).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: badgeBg }]}>
+                        <Text style={[styles.statusBadgeLabel, { color: badgeColor }]}>
+                          {payout.status}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.couponDivider} />
+
+                    <View style={styles.couponBottomRow}>
+                      <View>
+                        <Text style={styles.couponValueLabel}>Amount Transferred</Text>
+                        <Text style={styles.couponValueRs}>₹{payout.amount}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.couponValueLabel}>Credits Deducted</Text>
+                        <Text style={[styles.historyDelta, { color: '#EF4444' }]}>
+                          -{formatPts(payout.creditsUsed)} pts
+                        </Text>
+                      </View>
+                    </View>
+
+                    {isFailed && payout.failureReason && (
+                      <Text style={styles.failureReasonText}>
+                        Reason: {payout.failureReason}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })
+            ) : (
+              <View style={[styles.emptyContainer, { marginBottom: 20 }]}>
+                <FontAwesome5 name="amazon-pay" size={36} color="#D1D5DB" />
+                <Text style={styles.emptyTitle}>No Amazon Pay Redemptions</Text>
+                <Text style={styles.emptySubtitle}>
+                  When you redeem credits for Amazon Pay Gift Cards, your payout statuses will appear here.
+                </Text>
+              </View>
+            )}
+
+            <View style={[styles.sectionHeaderRow, { marginTop: 16 }]}>
+              <Text style={styles.historySectionTitle}>All Credit Ledger History</Text>
+            </View>
             {summary?.transactions && summary.transactions.length > 0 ? (
               summary.transactions.map((tx: any, index: number) => {
                 const isEarned = tx.type === 'earned' || tx.pointsDelta > 0;
@@ -742,7 +983,11 @@ export default function SathiCreditsScreen() {
             <Text style={styles.modalSubtitle}>
               Redeem <Text style={{ fontWeight: '700', color: '#111827' }}>{confirmModalData?.points} credits</Text>
               {' '}(Worth <Text style={{ fontWeight: '700', color: '#059669' }}>₹{confirmModalData?.valueRs}</Text>) for{' '}
-              {confirmModalData?.type === 'GIFT_CARD' ? 'MHN Gift Card' : 'Direct UPI Transfer'}?
+              {confirmModalData?.type === 'AMAZON_PAY'
+                ? 'Amazon Pay Gift Card'
+                : confirmModalData?.type === 'GIFT_CARD'
+                ? 'MHN Gift Card'
+                : 'Direct UPI Transfer'}?
             </Text>
 
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 10 }}>
@@ -1418,5 +1663,75 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#4B5563',
+  },
+  quickAmountRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+    flexWrap: 'wrap',
+  },
+  quickAmountBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  quickAmountBtnActive: {
+    backgroundColor: 'rgba(255, 153, 0, 0.12)',
+    borderColor: '#FF9900',
+  },
+  quickAmountText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  quickAmountTextActive: {
+    color: '#D97706',
+    fontWeight: '700',
+  },
+  conversionInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 6,
+  },
+  conversionInfoText: {
+    fontSize: 12,
+    color: '#92400E',
+  },
+  payoutCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  payoutTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  payoutTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  failureReasonText: {
+    marginTop: 8,
+    fontSize: 11,
+    color: '#DC2626',
+    fontStyle: 'italic',
   },
 });

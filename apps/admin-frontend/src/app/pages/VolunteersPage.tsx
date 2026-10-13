@@ -1143,6 +1143,85 @@ export default function VolunteersPage() {
                   )}
                 </div>
               </div>
+
+              {/* Amazon Pay Redemptions */}
+              <div>
+                <h4 className="font-bold text-sm mb-2 flex items-center justify-between">
+                  <span>Amazon Pay Payout Redemptions</span>
+                  {detailedVolunteer.redemptions?.length > 0 && (
+                    <span className="text-[11px] bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full">
+                      {detailedVolunteer.redemptions.length} requests
+                    </span>
+                  )}
+                </h4>
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <div className="max-h-[220px] overflow-y-auto">
+                    <table className="w-full text-left text-sm relative">
+                      <thead className="bg-secondary text-xs uppercase sticky top-0 z-10">
+                        <tr>
+                          <th className="p-3">Date</th>
+                          <th className="p-3">Amount</th>
+                          <th className="p-3">Credits</th>
+                          <th className="p-3">Status</th>
+                          <th className="p-3">Payout ID</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {detailedVolunteer.redemptions?.length > 0 ? (
+                          detailedVolunteer.redemptions.map((r: any) => {
+                            const isSuccess = r.status === 'SUCCESS';
+                            const isFailed = r.status === 'FAILED';
+                            return (
+                              <tr key={r.id}>
+                                <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">
+                                  {new Date(r.createdAt).toLocaleDateString('en-IN', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  })}
+                                </td>
+                                <td className="p-3 font-bold text-sm text-gray-900">₹{r.amount}</td>
+                                <td className="p-3 text-xs font-semibold text-primary">{r.creditsUsed} pts</td>
+                                <td className="p-3">
+                                  <span
+                                    className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                                      isSuccess
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : isFailed
+                                        ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                                    }`}
+                                  >
+                                    {r.status}
+                                  </span>
+                                  {r.failureReason && (
+                                    <p className="text-[10px] text-rose-600 mt-0.5 max-w-[160px] truncate" title={r.failureReason}>
+                                      {r.failureReason}
+                                    </p>
+                                  )}
+                                </td>
+                                <td className="p-3 text-xs font-mono text-muted-foreground">
+                                  {r.razorpayPayoutId ? (
+                                    <span title={r.razorpayPayoutId}>{r.razorpayPayoutId.slice(0, 14)}...</span>
+                                  ) : (
+                                    '—'
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="p-4 text-center text-muted-foreground text-xs italic">
+                              No Amazon Pay redemptions recorded for this volunteer.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

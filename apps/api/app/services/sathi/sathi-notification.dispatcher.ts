@@ -448,3 +448,32 @@ export async function dispatchCoordinatorVolunteerInactiveAlert(
 ) {
   return dispatchSathiNotification('COORDINATOR_VOLUNTEER_INACTIVE_30D', { userId: coordinatorUserId }, data);
 }
+
+/** ST-033: Amazon Pay gift card payout processed */
+export async function dispatchSaathiAmazonPayoutSuccess(
+  volunteerId: string,
+  data: { amount: string | number; credits: string | number; recipientContact: string; payoutId?: string }
+) {
+  return dispatchSaathiGiftCardDelivered(volunteerId, {
+    amount: data.amount,
+    giftCardBrand: 'Amazon Pay',
+    recipientContact: data.recipientContact,
+    code: data.payoutId ? `Payout ID: ${data.payoutId}` : 'Credited directly to Amazon Pay Wallet',
+  });
+}
+
+/** ST-034: Amazon Pay gift card payout failed */
+export async function dispatchSaathiAmazonPayoutFailed(
+  volunteerId: string,
+  data: { amount: string | number; credits: string | number; reason?: string }
+) {
+  return dispatchSathiNotification(
+    'SAATHI_REDEMPTION_REQUESTED',
+    { volunteerId },
+    {
+      volunteerName: 'Saathi',
+      credits: data.credits,
+      giftCardBrand: `Amazon Pay (Refunded: ${data.reason || 'Payout Unsuccessful'})`,
+    }
+  );
+}

@@ -93,6 +93,7 @@ function render(invoice, company = {}) {
   const totalTax            = Number(invoice.taxAmount           || (cgstAmount + sgstAmount + igstAmount) || 0);
   const discountAmount      = Number(invoice.discountAmount      || 0);
   const payableAmount        = Number(invoice.totalAmount || 0);
+  const totalAmount          = payableAmount;
 
   // Total gross amount before discount = baseAmount + taxes
   const totalBeforeDiscount  = baseAmount + cgstAmount + sgstAmount + igstAmount;
@@ -226,10 +227,10 @@ function render(invoice, company = {}) {
       <tr>
         <th>Name</th>
         <th>Unit</th>
-        <th>Price</th>
+        <th>Unit Price</th>
         <th>Tax</th>
         <th>Tax Amount</th>
-        <th>Price</th>
+        <th>Total</th>
       </tr>
     </thead>
     <tbody>
@@ -246,13 +247,13 @@ function render(invoice, company = {}) {
       ${discountRows}
       <tr class="bold">
         <td>Total Payable Amount</td>
-        <td>₹${totalAmount.toFixed(2)}</td>
+        <td>₹${payableAmount.toFixed(2)}</td>
       </tr>
     </table>
   </div>
 
   <div class="amount-words">
-    Total Amount (in words): ${amountInWords} Rupees Only
+    Total Amount (in words): ${amountInWords.endsWith('Rupees Only') ? amountInWords : `${amountInWords} Rupees Only`}
   </div>
 
   <div class="footer-details">

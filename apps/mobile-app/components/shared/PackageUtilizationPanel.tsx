@@ -59,11 +59,14 @@ export interface DetailedUtilization {
   hasQueuedPlan?: boolean;
   queuedPlan?: {
     id: string;
+    packageName?: string;
     package?: {
       name: string;
     };
-    packageType: string;
-    durationMonths: number;
+    packageType?: string;
+    durationMonths?: number;
+    startDate?: string;
+    endDate?: string;
   } | null;
 }
 
@@ -93,39 +96,52 @@ export default function PackageUtilizationPanel({ data, selectedBenefitId, onSel
   return (
     <View style={styles.container}>
       {/* Queued Care Plan Banner (Jio-like Plan Queue) */}
-      {data.hasQueuedPlan && data.queuedPlan && (
-        <View style={styles.queuedPlanCard}>
-          <View style={styles.queuedPlanHeader}>
-            <View style={styles.queuedBadge}>
-              <Ionicons name="time-outline" size={13} color="#D97706" style={{ marginRight: 4 }} />
-              <Text style={styles.queuedBadgeText}>NEXT PLAN IN QUEUE</Text>
-            </View>
-            <Text style={styles.queuedPlanDuration}>
-              {data.queuedPlan.durationMonths} {data.queuedPlan.durationMonths === 1 ? 'Month' : 'Months'} Plan
-            </Text>
-          </View>
+      {data.hasQueuedPlan && data.queuedPlan && (() => {
+        const queuedPlanName = data.queuedPlan.packageName || data.queuedPlan.package?.name || data.queuedPlan.packageType || 'Care Plan';
+        let durationText = '';
+        if (data.queuedPlan.durationMonths) {
+          durationText = `${data.queuedPlan.durationMonths} ${data.queuedPlan.durationMonths === 1 ? 'Month' : 'Months'} Plan`;
+        } else if (data.queuedPlan.startDate && data.queuedPlan.endDate) {
+          const start = new Date(data.queuedPlan.startDate).getTime();
+          const end = new Date(data.queuedPlan.endDate).getTime();
+          const months = Math.max(1, Math.round((end - start) / (30 * 24 * 60 * 60 * 1000)));
+          durationText = `${months} ${months === 1 ? 'Month' : 'Months'} Plan`;
+        }
 
-          <View style={styles.queuedPlanBody}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <Text style={styles.queuedPlanTitle}>
-                {data.queuedPlan.package?.name || data.queuedPlan.packageType}
-              </Text>
-              <Text style={styles.queuedPlanSubtitle}>
-                Queued behind active plan. Activates automatically on expiry, or activate now to use both plans together.
-              </Text>
+        return (
+          <View style={styles.queuedPlanCard}>
+            <View style={styles.queuedPlanHeader}>
+              <View style={styles.queuedBadge}>
+                <Ionicons name="time-outline" size={13} color="#D97706" style={{ marginRight: 4 }} />
+                <Text style={styles.queuedBadgeText}>NEXT PLAN IN QUEUE</Text>
+              </View>
+              {durationText ? (
+                <Text style={styles.queuedPlanDuration}>{durationText}</Text>
+              ) : null}
             </View>
-            {onActivatePlan && (
-              <TouchableOpacity
-                style={styles.activatePlanBtn}
-                onPress={() => onActivatePlan(data.queuedPlan!.id, data.queuedPlan!.package?.name || data.queuedPlan!.packageType)}
-              >
-                <Ionicons name="flash" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <Text style={styles.activatePlanBtnText}>Activate</Text>
-              </TouchableOpacity>
-            )}
+
+            <View style={styles.queuedPlanBody}>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={styles.queuedPlanTitle}>
+                  {queuedPlanName}
+                </Text>
+                <Text style={styles.queuedPlanSubtitle}>
+                  Queued behind active plan. Activates automatically on expiry, or activate now to use both plans together.
+                </Text>
+              </View>
+              {onActivatePlan && (
+                <TouchableOpacity
+                  style={styles.activatePlanBtn}
+                  onPress={() => onActivatePlan(data.queuedPlan!.id, queuedPlanName)}
+                >
+                  <Ionicons name="flash" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.activatePlanBtnText}>Activate</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        </View>
-      )}
+        );
+      })()}
 
       {/* Monthly Cycle Progress Card */}
       {periodInfo && (

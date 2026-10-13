@@ -71,6 +71,10 @@ router.get('/:id', async (req, res) => {
         creditTransactions: {
           orderBy: { createdAt: 'desc' },
           take: 50
+        },
+        redemptions: {
+          orderBy: { createdAt: 'desc' },
+          take: 50
         }
       }
     });
