@@ -93,13 +93,38 @@ router.get('/content/home', async (_req: Request, res: Response) => {
     });
 
     if (!content) {
-      return res.status(404).json({ success: false, message: 'Home page content not found' });
+      return res.status(200).json({
+        success: true,
+        data: {
+          content: { testimonials: [] },
+        },
+      });
+    }
+
+    const contentData = content.content || {};
+    if (Array.isArray(contentData.testimonials)) {
+      contentData.testimonials = await Promise.all(
+        contentData.testimonials.map(async (t: any) => {
+          let resolvedImage = t.image;
+          if (t.image && typeof t.image === 'string') {
+            try {
+              resolvedImage = await resolveFileUrl(t.image, 86400 * 7);
+            } catch (err: any) {
+              console.warn('[WebsiteContent] Failed resolving testimonial image:', err.message);
+            }
+          }
+          return {
+            ...t,
+            image: resolvedImage || t.image,
+          };
+        })
+      );
     }
 
     return res.status(200).json({
       success: true,
       data: {
-        content: content.content,
+        content: contentData,
       },
     });
   } catch (error: any) {

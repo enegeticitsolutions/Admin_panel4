@@ -440,53 +440,123 @@ export const purchaseSubscription = async (
     let beneficiary: any = null;
 
     if (beneficiaryData && newBeneficiaryUser) {
-      // 1b. Create Beneficiary record (only if beneficiary data was provided)
-      beneficiary = await tx.beneficiary.create({
-        data: {
-          id: generateUUID(),
-          userId: newBeneficiaryUser.id,
-          subscriberId: userId,
-          name: beneficiaryData.name,
-          age: parseInt(String(beneficiaryData.age || 65), 10),
-          dateOfBirth: dobDate,
-          gender: (String(beneficiaryData.gender).toLowerCase().includes('male') && !String(beneficiaryData.gender).toLowerCase().includes('female')) ? 'male' : String(beneficiaryData.gender).toLowerCase().includes('female') ? 'female' : 'prefer_not_to_say',
-          address: beneficiaryData.address || "Not provided",
-          flatPlot: beneficiaryData.flatPlot || null,
-          streetArea: beneficiaryData.streetArea || null,
-          landmark: beneficiaryData.landmark || null,
-          city: beneficiaryData.city || null,
-          state: beneficiaryData.state || null,
-          pincode: beneficiaryData.pincode || null,
-          latitude: beneficiaryData.latitude || null,
-          longitude: beneficiaryData.longitude || null,
-          relationship: beneficiaryData.relationship || null,
-          
-          // Hook up parsed medical fields
-          primaryPhysicianName: medicalData?.physicianName || null,
-          primaryPhysicianPhone: medicalData?.physicianPhone || null,
-          hobbiesInterests: medicalData?.hobbies || [],
+      // 1b. Check if Beneficiary record already exists for this user
+      const existingBeneficiary = await tx.beneficiary.findUnique({
+        where: { userId: newBeneficiaryUser.id },
+      });
 
-          emergencyContacts: {
-            create: finalEmergencyContacts.map((c: any) => ({
-              id: generateUUID(),
-              name: c.name,
-              phone: c.phone,
-              relationship: c.relation || 'Emergency',
-              email: c.email || '',
-            })),
-          },
-          conditions: conditionIds.length > 0 ? {
-              create: conditionIds.map(cid => ({
+      if (existingBeneficiary) {
+        beneficiary = await tx.beneficiary.update({
+          where: { id: existingBeneficiary.id },
+          data: {
+            name: beneficiaryData.name || existingBeneficiary.name,
+            age: parseInt(String(beneficiaryData.age || existingBeneficiary.age || 65), 10),
+            dateOfBirth: dobDate || existingBeneficiary.dateOfBirth,
+            gender: (String(beneficiaryData.gender).toLowerCase().includes('male') && !String(beneficiaryData.gender).toLowerCase().includes('female')) ? 'male' : String(beneficiaryData.gender).toLowerCase().includes('female') ? 'female' : existingBeneficiary.gender,
+            address: beneficiaryData.address || existingBeneficiary.address,
+            flatPlot: beneficiaryData.flatPlot || existingBeneficiary.flatPlot,
+            streetArea: beneficiaryData.streetArea || existingBeneficiary.streetArea,
+            landmark: beneficiaryData.landmark || existingBeneficiary.landmark,
+            city: beneficiaryData.city || existingBeneficiary.city,
+            state: beneficiaryData.state || existingBeneficiary.state,
+            pincode: beneficiaryData.pincode || existingBeneficiary.pincode,
+            latitude: beneficiaryData.latitude || existingBeneficiary.latitude,
+            longitude: beneficiaryData.longitude || existingBeneficiary.longitude,
+            relationship: beneficiaryData.relationship || existingBeneficiary.relationship,
+            primaryPhysicianName: medicalData?.physicianName || existingBeneficiary.primaryPhysicianName,
+            primaryPhysicianPhone: medicalData?.physicianPhone || existingBeneficiary.primaryPhysicianPhone,
+            hobbiesInterests: (medicalData?.hobbies && medicalData.hobbies.length > 0) ? medicalData.hobbies : existingBeneficiary.hobbiesInterests,
+          }
+        });
+
+        // Add any missing emergency contacts
+        if (finalEmergencyContacts.length > 0) {
+          for (const c of finalEmergencyContacts) {
+            const ecExists = await tx.emergencyContact.findFirst({
+              where: { beneficiaryId: beneficiary.id, phone: c.phone }
+            });
+            if (!ecExists) {
+              await tx.emergencyContact.create({
+                data: {
                   id: generateUUID(),
+                  beneficiaryId: beneficiary.id,
+                  name: c.name,
+                  phone: c.phone,
+                  relationship: c.relation || 'Emergency',
+                  email: c.email || '',
+                }
+              });
+            }
+          }
+        }
+
+        // Add any new conditions
+        if (conditionIds.length > 0) {
+          for (const cid of conditionIds) {
+            const condExists = await tx.beneficiaryCondition.findFirst({
+              where: { beneficiaryId: beneficiary.id, conditionId: cid }
+            });
+            if (!condExists) {
+              await tx.beneficiaryCondition.create({
+                data: {
+                  id: generateUUID(),
+                  beneficiaryId: beneficiary.id,
                   conditionId: cid,
                   severity: 'moderate' as any
-              }))
-          } : undefined,
-          medicationList: mappedMedications.length > 0 ? {
-              create: mappedMedications
-          } : undefined
+                }
+              });
+            }
+          }
         }
-      });
+      } else {
+        // 1b. Create Beneficiary record (only if beneficiary data was provided)
+        beneficiary = await tx.beneficiary.create({
+          data: {
+            id: generateUUID(),
+            userId: newBeneficiaryUser.id,
+            subscriberId: userId,
+            name: beneficiaryData.name,
+            age: parseInt(String(beneficiaryData.age || 65), 10),
+            dateOfBirth: dobDate,
+            gender: (String(beneficiaryData.gender).toLowerCase().includes('male') && !String(beneficiaryData.gender).toLowerCase().includes('female')) ? 'male' : String(beneficiaryData.gender).toLowerCase().includes('female') ? 'female' : 'prefer_not_to_say',
+            address: beneficiaryData.address || "Not provided",
+            flatPlot: beneficiaryData.flatPlot || null,
+            streetArea: beneficiaryData.streetArea || null,
+            landmark: beneficiaryData.landmark || null,
+            city: beneficiaryData.city || null,
+            state: beneficiaryData.state || null,
+            pincode: beneficiaryData.pincode || null,
+            latitude: beneficiaryData.latitude || null,
+            longitude: beneficiaryData.longitude || null,
+            relationship: beneficiaryData.relationship || null,
+            
+            // Hook up parsed medical fields
+            primaryPhysicianName: medicalData?.physicianName || null,
+            primaryPhysicianPhone: medicalData?.physicianPhone || null,
+            hobbiesInterests: medicalData?.hobbies || [],
+
+            emergencyContacts: {
+              create: finalEmergencyContacts.map((c: any) => ({
+                id: generateUUID(),
+                name: c.name,
+                phone: c.phone,
+                relationship: c.relation || 'Emergency',
+                email: c.email || '',
+              })),
+            },
+            conditions: conditionIds.length > 0 ? {
+                create: conditionIds.map(cid => ({
+                    id: generateUUID(),
+                    conditionId: cid,
+                    severity: 'moderate' as any
+                }))
+            } : undefined,
+            medicationList: mappedMedications.length > 0 ? {
+                create: mappedMedications
+            } : undefined
+          }
+        });
+      }
 
       // 1c. Upsert BeneficiaryVitalConfigs
       const checkedVitalCodes = Object.entries(vitalsInput)
@@ -1066,7 +1136,7 @@ export const linkBeneficiaryToSubscription = async (
     const subscriberUser = await prisma.user.findUnique({ where: { id: userId } });
     finalEmergencyContacts.push({
       name: subscriberUser?.name || 'Subscriber',
-      phone: subscriberUser?.phone || '0000000000',
+      phone: subscriberUser?.phone ,
       relation: beneficiaryData.relationship || 'Subscriber',
     });
   }

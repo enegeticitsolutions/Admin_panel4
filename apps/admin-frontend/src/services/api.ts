@@ -1232,10 +1232,21 @@ export const subscriptionApi = {
       description: string | null;
       totalUnits: number;
       usedUnits: number;
+      reservedUnits?: number;
+      availableUnits?: number;
       remainingUnits: number;
       usagePercent: number;
       isLowBalance: boolean;
       isExhausted: boolean;
+      lockedVisits?: Array<{
+        reservationId: string;
+        visitId: string;
+        visitCode: string | null;
+        scheduledTime: string | null;
+        status: string;
+        careCompanion: string;
+        units: number;
+      }>;
     }>;
     recentLogs: any[];
   }> {
@@ -1257,6 +1268,10 @@ export const subscriptionApi = {
   /** Initialize/backfill missing benefit balances for a subscription */
   async initializeBalances(subscriptionId: string): Promise<{ created: number; message: string; benefits: any[] }> {
     return apiJson(`/subscriptions/${subscriptionId}/initialize-balances`, { method: 'POST' });
+  },
+  /** Activate a queued subscription immediately */
+  async activateQueuedSubscription(subscriptionId: string): Promise<{ success: boolean; message: string; data: any }> {
+    return apiJson(`/subscriptions/${subscriptionId}/activate-queued`, { method: 'POST' });
   },
   /** Get expiring subscriptions for worklist */
   async getExpiringSubscriptions(days: number = 30): Promise<any[]> {

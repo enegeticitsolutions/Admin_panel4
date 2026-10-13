@@ -1817,6 +1817,16 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
               benefitType: { select: { name: true } },
             },
           },
+          reservations: {
+            where: { status: 'HELD' },
+            select: {
+              id: true,
+              units: true,
+              status: true,
+              visitId: true,
+              createdAt: true,
+            },
+          },
         },
       },
       payments: {
@@ -1871,6 +1881,7 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
         startDate: true,
         endDate: true,
         isActive: true,
+        isQueued: true,
         cancelledAt: true,
         cancellationNote: true,
         hoursTotal: true,
@@ -1890,8 +1901,9 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
     const now = new Date();
     const allSubscriptions = allSubsRaw.map((s) => {
       const sEnd = new Date(s.endDate);
-      const isExpired = sEnd < now;
-      const status = s.cancelledAt ? 'cancelled' : (!s.isActive || isExpired) ? 'expired' : 'active';
+      const isQueued = Boolean(s.isQueued || s.cancellationNote === 'QUEUED');
+      const isExpired = !isQueued && sEnd < now;
+      const status = s.cancelledAt ? 'cancelled' : isQueued ? 'queued' : (!s.isActive || isExpired) ? 'expired' : 'active';
       return {
         id: s.id,
         packageName: s.packageVersion?.name || s.package?.name || s.packageType,
@@ -1900,6 +1912,7 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
         startDate: s.startDate,
         endDate: s.endDate,
         isActive: s.isActive,
+        isQueued,
         status,
         isExpired,
         hoursTotal: s.hoursTotal,
@@ -1947,14 +1960,55 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
     let totalAllocatedUnits = 0;
     let totalUsedUnits = 0;
 
+    // Gather all HELD reservation visit IDs across all balances to batch-fetch visit details
+    const heldVisitIds = [];
+    (subscription.benefitBalances || []).forEach((b) => {
+      (b.reservations || []).forEach((r) => {
+        if (r.visitId) heldVisitIds.push(r.visitId);
+      });
+    });
+
+    const visitMap = {};
+    if (heldVisitIds.length > 0) {
+      const heldVisits = await prisma.visit.findMany({
+        where: { id: { in: heldVisitIds } },
+        select: {
+          id: true,
+          visitCode: true,
+          scheduledTime: true,
+          status: true,
+          is3rdParty: true,
+          careCompanion: { select: { name: true } },
+        },
+      });
+      heldVisits.forEach((v) => {
+        visitMap[v.id] = v;
+      });
+    }
+
     const benefits = subscription.benefitBalances.map((b) => {
+      const reservedUnits = b.reservedUnits || 0;
+      const availableUnits = b.availableUnits != null ? b.availableUnits : Math.max(0, b.totalUnits - b.usedUnits - reservedUnits);
       const remainingUnits = Math.max(0, b.totalUnits - b.usedUnits);
       const usagePercent = b.totalUnits > 0 ? Math.round((b.usedUnits / b.totalUnits) * 100) : 0;
-      const isLowBalance = b.totalUnits > 0 && remainingUnits / b.totalUnits < 0.2;
-      const isExhausted = b.totalUnits > 0 && remainingUnits === 0;
+      const isLowBalance = b.totalUnits > 0 && availableUnits / b.totalUnits < 0.2;
+      const isExhausted = b.totalUnits > 0 && availableUnits <= 0;
 
       totalAllocatedUnits += (b.totalUnits || 0);
       totalUsedUnits += (b.usedUnits || 0);
+
+      const lockedVisits = (b.reservations || []).map((r) => {
+        const v = visitMap[r.visitId];
+        return {
+          reservationId: r.id,
+          visitId: r.visitId,
+          visitCode: v?.visitCode || null,
+          scheduledTime: v?.scheduledTime || null,
+          status: v?.status || 'scheduled',
+          careCompanion: v?.is3rdParty ? '3rd Party' : v?.careCompanion?.name || 'Assigned CC',
+          units: r.units,
+        };
+      });
 
       return {
         balanceId: b.id,
@@ -1965,10 +2019,13 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
         description: b.benefit?.description || null,
         totalUnits: b.totalUnits,
         usedUnits: b.usedUnits,
+        reservedUnits,
+        availableUnits,
         remainingUnits,
         usagePercent,
         isLowBalance,
         isExhausted,
+        lockedVisits,
       };
     });
 
@@ -1980,10 +2037,11 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
 
     const subStart = new Date(subscription.startDate);
     const subEnd = new Date(subscription.endDate);
-    const isExpired = subEnd < now;
-    const status = subscription.cancelledAt ? 'cancelled' : (!subscription.isActive || isExpired) ? 'expired' : 'active';
+    const isQueued = Boolean(subscription.isQueued || subscription.cancellationNote === 'QUEUED');
+    const isExpired = !isQueued && subEnd < now;
+    const status = subscription.cancelledAt ? 'cancelled' : isQueued ? 'queued' : (!subscription.isActive || isExpired) ? 'expired' : 'active';
     const durationDays = Math.max(1, Math.round((subEnd.getTime() - subStart.getTime()) / (1000 * 60 * 60 * 24)));
-    const daysRemaining = !isExpired ? Math.max(0, Math.ceil((subEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+    const daysRemaining = !isExpired && !isQueued ? Math.max(0, Math.ceil((subEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
     const expiredDaysAgo = isExpired ? Math.floor((now.getTime() - subEnd.getTime()) / (1000 * 60 * 60 * 24)) : 0;
 
     const logs = recentLogs.map((l) => ({
@@ -2060,6 +2118,7 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
           startDate: subscription.startDate,
           endDate: subscription.endDate,
           isActive: subscription.isActive,
+          isQueued,
           status,
           isExpired,
           durationDays,
@@ -2235,6 +2294,107 @@ router.post('/:id/terminate', async (req, res) => {
   } catch (err) {
     console.error('POST /subscriptions/:id/terminate error:', err);
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── POST /api/subscriptions/:id/activate-queued ─────────────────────────────
+// Activates a queued subscription immediately, setting startDate to now,
+// updating endDate based on package duration, and superseding any prior active plan.
+router.post('/:id/activate-queued', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const sub = await prisma.subscription.findUnique({
+      where: { id },
+      include: {
+        package: true,
+        packageVersion: true,
+        benefitBalances: true,
+      },
+    });
+
+    if (!sub) {
+      return res.status(404).json({ success: false, message: 'Subscription not found' });
+    }
+
+    const isQueued = Boolean(sub.isQueued || sub.cancellationNote === 'QUEUED' || (!sub.isActive && new Date(sub.endDate) > new Date()));
+    if (!isQueued && sub.isActive) {
+      return res.status(400).json({ success: false, message: 'Subscription is already active' });
+    }
+
+    const now = new Date();
+    // Calculate new end date based on duration
+    const originalDurationDays = sub.startDate && sub.endDate
+      ? Math.max(1, Math.round((new Date(sub.endDate).getTime() - new Date(sub.startDate).getTime()) / (1000 * 60 * 60 * 24)))
+      : 30;
+    const newEndDate = new Date(now.getTime() + originalDurationDays * 24 * 60 * 60 * 1000);
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Activate the queued subscription
+      const updatedSub = await tx.subscription.update({
+        where: { id: sub.id },
+        data: {
+          isActive: true,
+          isQueued: false,
+          startDate: now,
+          endDate: newEndDate,
+          cancellationNote: null,
+        },
+      });
+
+      // 3. Update discrete BenefitPeriods if present
+      await tx.benefitPeriod.updateMany({
+        where: { subscriptionId: sub.id, periodNumber: 1 },
+        data: {
+          status: 'ACTIVE',
+          startDate: now,
+          endDate: newEndDate,
+        },
+      });
+
+      // 4. Update payment plan dates if any
+      await tx.payment.updateMany({
+        where: { subscriptionId: sub.id },
+        data: {
+          planStartDate: now,
+          planEndDate: newEndDate,
+          isSubscriptionActive: true,
+        },
+      });
+
+      // 5. Activity log
+      await tx.activityLog.create({
+        data: {
+          userId: sub.subscriberId,
+          type: 'SUBSCRIPTION',
+          action: 'QUEUED_ACTIVATED_EARLY',
+          details: {
+            entity: 'subscription',
+            entityId: sub.id,
+            previousStartDate: sub.startDate,
+            previousEndDate: sub.endDate,
+            newStartDate: now,
+            newEndDate: newEndDate,
+            activatedBy: req.user?.name || 'Admin',
+          },
+        },
+      });
+
+      return updatedSub;
+    });
+
+    return res.json({
+      success: true,
+      message: `Package "${sub.packageVersion?.name || sub.package?.name || sub.packageType}" activated successfully!`,
+      data: result,
+    });
+  } catch (err) {
+    console.error('POST /subscriptions/:id/activate-queued error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to activate queued subscription',
+      error: err.message,
+    });
   }
 });
 

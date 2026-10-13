@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import {
   X, CalendarClock, User, UserCheck, Activity, Brain, Image as ImageIcon,
   CheckCircle, XCircle, MapPin, Loader2, Pill, Clock, Edit3, Save, RotateCcw,
-  AlertTriangle, ChevronRight, Trash2, Plus, Upload, Star, AlertCircle
+  AlertTriangle, ChevronRight, Trash2, Plus, Upload, Star, AlertCircle, Sparkles, Lock
 } from 'lucide-react';
 import { visitApi } from '../../../services/api';
 import { toast } from 'sonner';
@@ -410,6 +410,39 @@ export default function VisitDetailsModal({ visitId, onClose }: VisitDetailsModa
                   </div>
                   <ChevronRight size={16} className="text-[#1D4ED8] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                 </button>
+              </div>
+
+              {/* Assigned Benefit & Quota Info */}
+              <div>
+                <h4 className="text-sm font-black text-gray-800 mb-3 flex items-center gap-2">
+                  <Sparkles size={16} className="text-[#FF7A00]" /> Assigned Benefit & Quota
+                </h4>
+                <div className="bg-[#FAF8F5] border border-[#E7DED6] rounded-2xl p-4">
+                  {visit.benefit ? (
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Benefit Name</p>
+                        <p className="text-base font-black text-gray-900 mt-0.5">{visit.benefit.name}</p>
+                        <p className="text-xs text-gray-500 font-medium mt-1">
+                          Unit: {visit.benefit.unitLabel || 'Session/Hour'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                          visit.status === 'scheduled'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                            : visit.status === 'completed'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {visit.status === 'scheduled' ? <><Lock size={10} /> 1 Unit Locked</> : visit.status === 'completed' ? '✓ Deducted' : 'Released'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs font-bold text-gray-400 italic">No package benefit assigned to this visit.</p>
+                  )}
+                </div>
               </div>
 
               {/* Time & Duration */}

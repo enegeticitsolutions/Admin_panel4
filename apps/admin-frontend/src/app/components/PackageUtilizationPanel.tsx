@@ -18,7 +18,9 @@ import {
   Layers,
   ChevronDown,
   SlidersHorizontal,
-  FileText
+  FileText,
+  Lock,
+  Play
 } from 'lucide-react';
 import { subscriptionApi } from '../../services/api';
 import { toast } from 'sonner';
@@ -34,10 +36,21 @@ interface BenefitBalance {
   description: string | null;
   totalUnits: number;
   usedUnits: number;
+  reservedUnits?: number;
+  availableUnits?: number;
   remainingUnits: number;
   usagePercent: number;
   isLowBalance: boolean;
   isExhausted: boolean;
+  lockedVisits?: Array<{
+    reservationId: string;
+    visitId: string;
+    visitCode: string | null;
+    scheduledTime: string | null;
+    status: string;
+    careCompanion: string;
+    units: number;
+  }>;
 }
 
 interface LogEntry {
@@ -66,7 +79,8 @@ interface SubscriptionSummary {
   startDate: string;
   endDate: string;
   isActive: boolean;
-  status: 'active' | 'expired' | 'cancelled';
+  isQueued?: boolean;
+  status: 'active' | 'expired' | 'cancelled' | 'queued';
   isExpired: boolean;
   durationDays: number;
   daysRemaining: number;
@@ -89,7 +103,8 @@ interface SubscriptionHistoryItem {
   startDate: string;
   endDate: string;
   isActive: boolean;
-  status: 'active' | 'expired' | 'cancelled';
+  isQueued?: boolean;
+  status: 'active' | 'expired' | 'cancelled' | 'queued';
   isExpired: boolean;
   hoursTotal: number;
   hoursUsed: number;
@@ -157,6 +172,7 @@ function CircleRing({
   unit,
   isExhausted,
   isLow,
+  reservedUnits,
   isSelected,
   isSelectable,
   onClick,
@@ -170,6 +186,7 @@ function CircleRing({
   unit: string;
   isExhausted: boolean;
   isLow: boolean;
+  reservedUnits?: number;
   isSelected?: boolean;
   isSelectable?: boolean;
   onClick?: () => void;
@@ -247,6 +264,11 @@ function CircleRing({
         {!isSelected && !isExhausted && !isLow && (
           <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wider">{percent}%</span>
         )}
+        {reservedUnits != null && reservedUnits > 0 && (
+          <span className="text-[8px] font-black text-amber-600 bg-amber-50 px-1 py-0.2 rounded border border-amber-200 uppercase tracking-wider block mt-0.5">
+            🔒 {reservedUnits} locked
+          </span>
+        )}
       </div>
     </div>
   );
@@ -271,9 +293,29 @@ export function PackageUtilizationPanel({
   const [error, setError] = useState<string | null>(null);
   const [showAllLogs, setShowAllLogs] = useState(false);
   const [initializing, setInitializing] = useState(false);
+  const [activating, setActivating] = useState(false);
   const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [selectedBalanceForAdjust, setSelectedBalanceForAdjust] = useState<BenefitBalanceForAdjustment | null>(null);
+
+  const handleActivateQueued = async () => {
+    if (!subscription?.id) return;
+    const confirm = window.confirm(
+      `Activate "${subscription.packageName}" immediately?\n\nThis will start the plan today, make its benefits immediately usable, and supersede any previous plan.`
+    );
+    if (!confirm) return;
+
+    setActivating(true);
+    try {
+      const res = await subscriptionApi.activateQueuedSubscription(subscription.id);
+      toast.success(res.message || 'Queued package activated successfully!');
+      await load(subscription.id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to activate queued package');
+    } finally {
+      setActivating(false);
+    }
+  };
 
   const load = async (subId?: string) => {
     setLoading(true);
@@ -343,9 +385,10 @@ export function PackageUtilizationPanel({
   const hasWarnings = benefits.some((b) => b.isLowBalance || b.isExhausted);
   const isSelectable = !!onBenefitSelect;
 
-  const isExpired = subscription.status === 'expired' || subscription.isExpired;
+  const isQueued = subscription.status === 'queued' || Boolean(subscription.isQueued);
+  const isExpired = !isQueued && (subscription.status === 'expired' || subscription.isExpired);
   const isCancelled = subscription.status === 'cancelled';
-  const isActive = subscription.status === 'active' && !isExpired && !isCancelled;
+  const isActive = (subscription.status === 'active' || subscription.isActive) && !isExpired && !isCancelled && !isQueued;
 
   return (
     <div className="space-y-6">
@@ -365,7 +408,8 @@ export function PackageUtilizationPanel({
           <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-thin">
             {allSubscriptions.map((sub, idx) => {
               const isCurrent = sub.id === subscription.id;
-              const subIsExpired = sub.status === 'expired' || sub.isExpired;
+              const subIsQueued = sub.status === 'queued' || Boolean(sub.isQueued);
+              const subIsExpired = !subIsQueued && (sub.status === 'expired' || sub.isExpired);
               return (
                 <button
                   key={sub.id}
@@ -383,14 +427,16 @@ export function PackageUtilizationPanel({
                   <span>{sub.packageName}</span>
                   <span
                     className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${
-                      sub.status === 'active' && !subIsExpired
+                      subIsQueued
+                        ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                        : sub.status === 'active' && !subIsExpired
                         ? 'bg-emerald-100 text-emerald-800'
                         : sub.status === 'cancelled'
                         ? 'bg-rose-100 text-rose-800'
                         : 'bg-amber-100 text-amber-800'
                     }`}
                   >
-                    {sub.status === 'active' && !subIsExpired ? 'Active' : sub.status === 'cancelled' ? 'Cancelled' : 'Expired'}
+                    {subIsQueued ? 'Queued' : sub.status === 'active' && !subIsExpired ? 'Active' : sub.status === 'cancelled' ? 'Cancelled' : 'Expired'}
                   </span>
                 </button>
               );
@@ -409,6 +455,11 @@ export function PackageUtilizationPanel({
               <h3 className="text-xl font-black text-gray-900">{subscription.packageName}</h3>
 
               {/* Status Badge */}
+              {isQueued && (
+                <span className="bg-purple-100 text-purple-900 border border-purple-200 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+                  <Clock size={12} className="text-purple-700" /> Queued Package
+                </span>
+              )}
               {isActive && (
                 <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5">
                   <CheckCircle2 size={12} className="text-emerald-600" /> Active Subscription
@@ -430,7 +481,7 @@ export function PackageUtilizationPanel({
             <div className="flex items-center gap-2 text-xs font-bold text-gray-600 flex-wrap">
               <span className="flex items-center gap-1 text-gray-400">
                 <Calendar size={13} />
-                Active from:
+                {isQueued ? 'Scheduled for:' : 'Active from:'}
               </span>
               <span className="font-black text-gray-800">
                 {new Date(subscription.startDate).toLocaleDateString('en-IN', {
@@ -452,6 +503,11 @@ export function PackageUtilizationPanel({
                 {subscription.durationDays} Days Duration
               </span>
 
+              {isQueued && (
+                <span className="text-purple-700 text-[11px] font-bold">
+                  (Starts after current plan)
+                </span>
+              )}
               {isExpired && subscription.expiredDaysAgo > 0 && (
                 <span className="text-amber-700 text-[11px] font-bold">
                   (Expired {subscription.expiredDaysAgo} days ago)
@@ -466,6 +522,17 @@ export function PackageUtilizationPanel({
           </div>
 
           <div className="flex items-center gap-3">
+            {isQueued && (
+              <button
+                type="button"
+                onClick={handleActivateQueued}
+                disabled={activating}
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-2xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Play size={13} className="fill-current" />
+                {activating ? 'Activating...' : 'Activate Package Now'}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setIsAddonModalOpen(true)}
@@ -482,6 +549,32 @@ export function PackageUtilizationPanel({
             </button>
           </div>
         </div>
+
+        {/* Queued info banner */}
+        {isQueued && (
+          <div className="flex items-center justify-between gap-3 p-4 bg-purple-50/90 border border-purple-200 rounded-2xl mt-5 text-xs text-purple-950 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Clock size={18} className="text-purple-600 shrink-0" />
+              <div>
+                <span className="font-black text-purple-900">Queued Subscription: </span>
+                This package is currently queued and scheduled to start on{' '}
+                <span className="font-bold">
+                  {new Date(subscription.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>{' '}
+                once the currently active plan ends.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleActivateQueued}
+              disabled={activating}
+              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Play size={13} className="fill-current" />
+              {activating ? 'Activating...' : 'Activate Package Now'}
+            </button>
+          </div>
+        )}
 
         {/* Expired info banner */}
         {isExpired && (
@@ -677,6 +770,7 @@ export function PackageUtilizationPanel({
                 unit={`/ ${b.totalUnits} ${b.unitLabel}`}
                 isExhausted={b.isExhausted}
                 isLow={b.isLowBalance}
+                reservedUnits={b.reservedUnits}
                 isSelected={selectedBenefitId === b.benefitId}
                 isSelectable={isSelectable}
                 onClick={() => onBenefitSelect?.(b.benefitId, b.benefitName, b.unitLabel)}
@@ -810,9 +904,41 @@ export function PackageUtilizationPanel({
                         <strong className="text-gray-900">{b.usedUnits}</strong> of {b.totalUnits} {b.unitLabel} used
                       </span>
                       <span className="font-bold text-gray-400">
-                        {b.remainingUnits} left
+                        {b.availableUnits != null ? `${b.availableUnits} available` : `${b.remainingUnits} left`}
                       </span>
                     </div>
+
+                    {/* Locked / Reserved Banner */}
+                    {b.reservedUnits != null && b.reservedUnits > 0 && (
+                      <div className="mt-2.5 p-2 rounded-xl bg-amber-50/90 border border-amber-200">
+                        <div className="flex items-center justify-between text-[10px] font-black text-amber-800 uppercase tracking-wider">
+                          <span className="flex items-center gap-1">
+                            <Lock size={11} className="text-amber-600" />
+                            {b.reservedUnits} {b.unitLabel} Locked / Reserved
+                          </span>
+                          <span className="text-[9px] bg-amber-200/80 px-1.5 py-0.5 rounded text-amber-900 font-bold">
+                            {b.availableUnits ?? 0} Avail
+                          </span>
+                        </div>
+                        {b.lockedVisits && b.lockedVisits.length > 0 && (
+                          <div className="mt-1.5 space-y-1">
+                            {b.lockedVisits.map((lv, lIdx) => (
+                              <div key={lIdx} className="flex items-center justify-between text-[9px] font-bold bg-white/90 px-2 py-1 rounded border border-amber-100">
+                                <span className="font-mono text-[#FF7A00] font-black">
+                                  #{lv.visitCode || 'VISIT'}
+                                </span>
+                                <span className="text-gray-500">
+                                  {lv.scheduledTime ? new Date(lv.scheduledTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Scheduled'}
+                                </span>
+                                <span className="text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded text-[8px] font-black uppercase">
+                                  {lv.careCompanion}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Adjust Quota Action Button */}
                     <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between">
