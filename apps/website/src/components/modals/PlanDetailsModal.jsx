@@ -200,14 +200,10 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
 
             return (
               <div key={catConfig.id} className="plan-modal-category-group" style={{ marginBottom: "26px" }}>
-                {/* Category Header with Hover (i) Info Tooltip */}
+                {/* Category Header with Pure CSS Hover (i) Info Tooltip */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <div
-                    style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
-                    onMouseEnter={() => setHoveredCategory(catConfig.id)}
-                    onMouseLeave={() => setHoveredCategory(null)}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "help" }}>
+                  <div className="plan-category-wrapper">
+                    <div className="plan-category-trigger">
                       <span
                         style={{
                           width: "8px",
@@ -219,83 +215,33 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
                       />
                       <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: "#111827", display: "flex", alignItems: "center", gap: "6px" }}>
                         {catConfig.label}
-                        <span
-                          style={{
-                            background: hoveredCategory === catConfig.id ? catConfig.badgeBg : "transparent",
-                            border: hoveredCategory === catConfig.id ? `1px solid ${catConfig.badgeBorder}` : "none",
-                            borderRadius: "50%",
-                            padding: "3px",
-                            color: hoveredCategory === catConfig.id ? catConfig.badgeText : "#9CA3AF",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            transition: "all 0.15s ease",
-                          }}
-                          aria-label={`About ${catConfig.label}`}
-                        >
-                          <Info size={16} />
+                        <span className="plan-category-info-btn" aria-label={`About ${catConfig.label}`}>
+                          <Info size={15} />
                         </span>
                       </h3>
                     </div>
 
-                    {/* Floating Hover Tooltip: Positioned downwards so it is NEVER cut off by the modal top */}
-                    {hoveredCategory === catConfig.id && (
-                      <div
-                        role="tooltip"
-                        style={{
-                          position: "absolute",
-                          top: "calc(100% + 8px)",
-                          left: "0",
-                          zIndex: 100,
-                          backgroundColor: "#111827",
-                          color: "#F9FAFB",
-                          padding: "10px 14px",
-                          borderRadius: "8px",
-                          fontSize: "12.5px",
-                          lineHeight: "1.45",
-                          fontWeight: "500",
-                          width: "max-content",
-                          maxWidth: "320px",
-                          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.35), 0 8px 10px -6px rgba(0, 0, 0, 0.25)",
-                          border: "1px solid #374151",
-                          pointerEvents: "none",
-                          whiteSpace: "normal",
-                          textAlign: "left",
-                        }}
-                      >
-                        {/* Caret pointing up to the header */}
-                        <div
+                    {/* Pure CSS Hover Tooltip with invisible bridge & zero layout shift */}
+                    <div className="plan-category-tooltip" role="tooltip">
+                      <div className="plan-category-tooltip-caret" />
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                        <span
                           style={{
-                            position: "absolute",
-                            top: "-5px",
-                            left: "24px",
-                            width: "8px",
-                            height: "8px",
-                            backgroundColor: "#111827",
-                            borderLeft: "1px solid #374151",
-                            borderTop: "1px solid #374151",
-                            transform: "rotate(45deg)",
+                            width: "7px",
+                            height: "7px",
+                            borderRadius: "50%",
+                            backgroundColor: catConfig.dotBg,
+                            display: "inline-block",
                           }}
                         />
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-                          <span
-                            style={{
-                              width: "7px",
-                              height: "7px",
-                              borderRadius: "50%",
-                              backgroundColor: catConfig.dotBg,
-                              display: "inline-block",
-                            }}
-                          />
-                          <span style={{ fontWeight: "700", color: "#FFFFFF", fontSize: "12px" }}>
-                            {catConfig.label}
-                          </span>
-                        </div>
-                        <span style={{ color: "#E5E7EB", fontSize: "12px", display: "block" }}>
-                          {catConfig.explanation}
+                        <span style={{ fontWeight: "700", color: "#FFFFFF", fontSize: "12px" }}>
+                          {catConfig.label}
                         </span>
                       </div>
-                    )}
+                      <span style={{ color: "#E5E7EB", fontSize: "12px", display: "block" }}>
+                        {catConfig.explanation}
+                      </span>
+                    </div>
                   </div>
 
                   <span

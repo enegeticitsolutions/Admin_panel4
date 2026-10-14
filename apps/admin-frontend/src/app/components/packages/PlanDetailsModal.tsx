@@ -31,7 +31,6 @@ export default function PlanDetailsModal({
   selectedCycle = "3",
   onSelectPackage,
 }: PlanDetailsModalProps) {
-  const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -215,14 +214,10 @@ export default function PlanDetailsModal({
 
             return (
               <div key={catConfig.id} className="plan-modal-category-group" style={{ marginBottom: "26px" }}>
-                {/* Category Header with Hover (i) Info Tooltip */}
+                {/* Category Header with Pure CSS Group Hover (i) Info Tooltip */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <div
-                    style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
-                    onMouseEnter={() => setHoveredCategory(catConfig.id)}
-                    onMouseLeave={() => setHoveredCategory(null)}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "help" }}>
+                  <div className="group relative inline-flex items-center">
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "help", userSelect: "none" }}>
                       <span
                         style={{
                           width: "8px",
@@ -234,83 +229,39 @@ export default function PlanDetailsModal({
                       />
                       <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: "#111827", display: "flex", alignItems: "center", gap: "6px" }}>
                         {catConfig.label}
-                        <span
-                          style={{
-                            background: hoveredCategory === catConfig.id ? (catConfig.id === "included" ? "#ECFDF5" : catConfig.id === "addon" ? "#EFF6FF" : "#FAF5FF") : "transparent",
-                            border: hoveredCategory === catConfig.id ? `1px solid ${catConfig.id === "included" ? "#A7F3D0" : catConfig.id === "addon" ? "#BFDBFE" : "#E9D5FF"}` : "none",
-                            borderRadius: "50%",
-                            padding: "3px",
-                            color: hoveredCategory === catConfig.id ? (catConfig.id === "included" ? "#065F46" : catConfig.id === "addon" ? "#1E40AF" : "#6B21A8") : "#9CA3AF",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            transition: "all 0.15s ease",
-                          }}
-                          aria-label={`About ${catConfig.label}`}
-                        >
-                          <Info size={16} />
+                        <span className="w-[22px] h-[22px] inline-flex items-center justify-center rounded-full border border-transparent text-gray-400 group-hover:text-gray-900 group-hover:bg-gray-100 group-hover:border-gray-200 transition-colors shrink-0">
+                          <Info size={15} />
                         </span>
                       </h3>
                     </div>
 
-                    {/* Floating Hover Tooltip: Positioned downwards so it is NEVER cut off by the modal top */}
-                    {hoveredCategory === catConfig.id && (
-                      <div
-                        role="tooltip"
-                        style={{
-                          position: "absolute",
-                          top: "calc(100% + 8px)",
-                          left: "0",
-                          zIndex: 100,
-                          backgroundColor: "#111827",
-                          color: "#F9FAFB",
-                          padding: "10px 14px",
-                          borderRadius: "8px",
-                          fontSize: "12.5px",
-                          lineHeight: "1.45",
-                          fontWeight: "500",
-                          width: "max-content",
-                          maxWidth: "320px",
-                          boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.35), 0 8px 10px -6px rgba(0, 0, 0, 0.25)",
-                          border: "1px solid #374151",
-                          pointerEvents: "none",
-                          whiteSpace: "normal",
-                          textAlign: "left",
-                        }}
-                      >
-                        {/* Caret pointing up to the header */}
-                        <div
+                    {/* Pure CSS Hover Tooltip with invisible bridge & zero layout shift */}
+                    <div
+                      role="tooltip"
+                      className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 absolute top-[calc(100%+8px)] left-0 z-50 bg-[#111827] text-[#F9FAFB] px-3.5 py-2.5 rounded-lg text-[12.5px] leading-relaxed font-medium w-max max-w-[320px] shadow-2xl border border-gray-800 text-left pointer-events-none group-hover:pointer-events-auto"
+                    >
+                      {/* Invisible hover bridge so moving mouse to tooltip never breaks hover */}
+                      <div className="absolute -top-2.5 left-0 right-0 h-2.5" />
+                      {/* Upward Caret */}
+                      <div className="absolute -top-1 left-6 w-2 h-2 bg-[#111827] border-l border-t border-gray-800 rotate-45" />
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                        <span
                           style={{
-                            position: "absolute",
-                            top: "-5px",
-                            left: "24px",
-                            width: "8px",
-                            height: "8px",
-                            backgroundColor: "#111827",
-                            borderLeft: "1px solid #374151",
-                            borderTop: "1px solid #374151",
-                            transform: "rotate(45deg)",
+                            width: "7px",
+                            height: "7px",
+                            borderRadius: "50%",
+                            backgroundColor: catConfig.id === "included" ? "#10B981" : catConfig.id === "addon" ? "#3B82F6" : "#A855F7",
+                            display: "inline-block",
                           }}
                         />
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-                          <span
-                            style={{
-                              width: "7px",
-                              height: "7px",
-                              borderRadius: "50%",
-                              backgroundColor: catConfig.id === "included" ? "#10B981" : catConfig.id === "addon" ? "#3B82F6" : "#A855F7",
-                              display: "inline-block",
-                            }}
-                          />
-                          <span style={{ fontWeight: "700", color: "#FFFFFF", fontSize: "12px" }}>
-                            {catConfig.label}
-                          </span>
-                        </div>
-                        <span style={{ color: "#E5E7EB", fontSize: "12px", display: "block" }}>
-                          {catConfig.explanation}
+                        <span style={{ fontWeight: "700", color: "#FFFFFF", fontSize: "12px" }}>
+                          {catConfig.label}
                         </span>
                       </div>
-                    )}
+                      <span style={{ color: "#E5E7EB", fontSize: "12px", display: "block" }}>
+                        {catConfig.explanation}
+                      </span>
+                    </div>
                   </div>
 
                   <span
