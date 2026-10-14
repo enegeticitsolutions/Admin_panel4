@@ -24,6 +24,7 @@ const globalLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   skip: (req) => {
     // Skip rate limiting for authenticated staff/admin users
     const authHeader = req.headers['authorization'];
@@ -45,7 +46,11 @@ const loginLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
+
+// Trust reverse proxy (Nginx / Cloudflare / AWS ALB)
+app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(globalLimiter);
