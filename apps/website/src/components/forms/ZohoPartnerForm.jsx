@@ -29,10 +29,13 @@ const ZohoPartnerForm = () => {
     let isMounted = true;
     const fetchCategories = async () => {
       const urls = [
+        import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/website/partners` : null,
+        "/api/website/partners",
         import.meta.env.VITE_ADMIN_API_URL ? `${import.meta.env.VITE_ADMIN_API_URL}/api/partners/public` : null,
-        "http://localhost:3001/api/partners/public",
-        "http://127.0.0.1:3001/api/partners/public",
         "/api/partners/public",
+        ...(window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+          ? ["http://localhost:3001/api/partners/public"]
+          : []),
       ].filter(Boolean);
 
       for (const url of urls) {
@@ -102,17 +105,19 @@ const ZohoPartnerForm = () => {
       source: "WEBSITE",
     };
 
-    const adminEndpoints = [
+    const endpoints = [
+      import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/website/partner-application` : null,
+      "/api/website/partner-application",
       import.meta.env.VITE_ADMIN_API_URL ? `${import.meta.env.VITE_ADMIN_API_URL}/api/partners/apply` : null,
-      "http://localhost:3001/api/partners/apply",
-      "http://127.0.0.1:3001/api/partners/apply",
       "/api/partners/apply",
-      "http://localhost:3001/api/partners/webhook/zoho",
+      ...(window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+        ? ["http://localhost:3001/api/partners/apply", "http://127.0.0.1:3001/api/partners/apply"]
+        : []),
     ].filter(Boolean);
 
     let isSuccess = false;
 
-    for (const endpoint of adminEndpoints) {
+    for (const endpoint of endpoints) {
       try {
         const res = await fetch(endpoint, {
           method: "POST",
@@ -127,7 +132,7 @@ const ZohoPartnerForm = () => {
           }
         }
       } catch (dbErr) {
-        console.warn(`Admin DB endpoint ${endpoint} attempt note:`, dbErr);
+        console.warn(`Partner endpoint ${endpoint} attempt note:`, dbErr);
       }
     }
 
