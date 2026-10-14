@@ -95,12 +95,17 @@ const ZohoPartnerForm = () => {
 
     const backendPayload = {
       organization_name: formData.name.trim(),
+      organizationName: formData.name.trim(),
+      name: formData.name.trim(),
       category: formData.category,
       description: formData.description.trim(),
+      serviceDetails: formData.description.trim(),
       primary_contact_name: formData.primaryContactName.trim(),
+      contactName: formData.primaryContactName.trim(),
       email: formData.email.trim(),
       phone: formData.phone.trim(),
       city: formData.city.trim(),
+      operatingCity: formData.city.trim(),
       state: formData.state.trim(),
       source: "WEBSITE",
     };
