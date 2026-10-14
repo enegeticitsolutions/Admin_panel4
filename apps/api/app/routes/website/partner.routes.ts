@@ -30,7 +30,53 @@ router.post('/partner-application', async (req: Request, res: Response) => {
 
     const submittedOn = formatISTTimestamp();
 
-    // 1. Save to MarketingLead with Partner tag
+    // 1. Save to Partner Ecosystem table (powers Admin Panel Partners page)
+    try {
+      const categorySlug = category.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+      let partnerCategory = await (prisma as any).partnerCategory.findFirst({
+        where: {
+          OR: [
+            { name: { equals: category, mode: 'insensitive' } },
+            { slug: categorySlug },
+            { code: category.toUpperCase() },
+          ],
+        },
+      });
+
+      if (!partnerCategory) {
+        partnerCategory = await (prisma as any).partnerCategory.create({
+          data: {
+            name: category,
+            slug: categorySlug,
+            code: category.toUpperCase().replace(/[^A-Z0-9_]+/g, '_'),
+            isActive: true,
+          },
+        });
+      }
+
+      await (prisma as any).partner.create({
+        data: {
+          organizationName,
+          primaryContactName: contactName,
+          email,
+          phone,
+          city: operatingCity || null,
+          state: (req.body.state || '').trim() || null,
+          description: serviceDetails || 'Website Application',
+          categoryId: partnerCategory.id,
+          status: 'PENDING',
+          source: 'WEBSITE',
+          isPublished: false,
+          zohoDataPayload: req.body,
+          zohoSyncedAt: new Date(),
+        },
+      });
+      console.log(`✅ [Partner Application] Saved to Partner ecosystem table: ${organizationName}`);
+    } catch (partnerErr: any) {
+      console.error('⚠️ [Partner Application] Partner table insert error:', partnerErr.message);
+    }
+
+    // 2. Also save to MarketingLead (for CRM / Marketing tracking)
     try {
       await (prisma as any).marketingLead.create({
         data: {
@@ -48,9 +94,9 @@ Operating City: ${operatingCity ? operatingCity.trim() : 'Not provided'}
 Service Details: ${serviceDetails ? serviceDetails.trim() : 'None provided'}`,
         },
       });
-      console.log(`✅ [Partner Application] Saved to DB: ${organizationName} - ${contactName}`);
+      console.log(`✅ [Partner Application] Saved to MarketingLead: ${organizationName}`);
     } catch (dbErr: any) {
-      console.error('⚠️ [Partner Application] DB insert error:', dbErr.message);
+      console.error('⚠️ [Partner Application] MarketingLead insert error:', dbErr.message);
     }
 
     // 2. Dispatch internal notification email
