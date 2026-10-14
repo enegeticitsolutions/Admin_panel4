@@ -11,6 +11,7 @@ const ZohoPartnerForm = () => {
   const [formData, setFormData] = useState({
     name: "",
     category: "-None-",
+    customCategory: "",
     description: "",
     primaryContactName: "",
     email: "",
@@ -61,7 +62,32 @@ const ZohoPartnerForm = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    let sanitizedValue = value;
+
+    if (name === "phone") {
+      // Strictly digits only, max 10 digits (Standard Indian Mobile format)
+      sanitizedValue = value.replace(/\D/g, "").slice(0, 10);
+    } else if (name === "primaryContactName") {
+      // Strictly letters, spaces, dots (Dr./Mr.), and hyphens only (no digits or symbols)
+      sanitizedValue = value.replace(/[^a-zA-Z\s.-]/g, "").slice(0, 60);
+    } else if (name === "city" || name === "state") {
+      // Strictly letters, spaces, and hyphens only (no numbers)
+      sanitizedValue = value.replace(/[^a-zA-Z\s-]/g, "").slice(0, 50);
+    } else if (name === "email") {
+      // Prevent spaces in email, max 100 characters
+      sanitizedValue = value.replace(/\s/g, "").slice(0, 100);
+    } else if (name === "name") {
+      // Organisation Name: letters, numbers, spaces, and standard business punctuation (&, ., -, ,, ', /, (, ))
+      sanitizedValue = value.replace(/[^a-zA-Z0-9\s.&,\-/'()]/g, "").slice(0, 120);
+    } else if (name === "customCategory") {
+      // Custom category: letters, numbers, spaces, and company chars (&, ., -, /)
+      sanitizedValue = value.replace(/[^a-zA-Z0-9\s.&,\-/'()]/g, "").slice(0, 60);
+    } else if (name === "description") {
+      // Brief description: max 1000 chars
+      sanitizedValue = value.slice(0, 1000);
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: sanitizedValue }));
     if (errorMsg) setErrorMsg("");
   };
 
@@ -69,26 +95,76 @@ const ZohoPartnerForm = () => {
     e.preventDefault();
     setErrorMsg("");
 
-    // Validation checks
+    // 1. Organisation Name
     if (!formData.name.trim()) {
-      setErrorMsg("Organisation Name cannot be empty.");
+      setErrorMsg("Organisation Name is required.");
       return;
     }
+    if (formData.name.trim().length < 2) {
+      setErrorMsg("Please enter a valid Organisation Name (at least 2 characters).");
+      return;
+    }
+
+    // 2. Partner Category (Supports both existing categories and custom "Other" categories)
     if (!formData.category || formData.category === "-None-") {
       setErrorMsg("Please select a Partner Category.");
       return;
     }
+    if (formData.category === "Other") {
+      if (!formData.customCategory.trim()) {
+        setErrorMsg("Please specify your category or service.");
+        return;
+      }
+      if (formData.customCategory.trim().length < 2) {
+        setErrorMsg("Please enter a valid category name (at least 2 characters).");
+        return;
+      }
+    }
+
+    const effectiveCategory = formData.category === "Other"
+      ? formData.customCategory.trim()
+      : formData.category;
+
+    // 3. Description
     if (!formData.description.trim()) {
-      setErrorMsg("Brief Description cannot be empty.");
+      setErrorMsg("Brief Description of the organization is required.");
+      return;
+    }
+    if (formData.description.trim().length < 15) {
+      setErrorMsg("Please provide a bit more detail in the description (at least 15 characters).");
       return;
     }
 
-    if (formData.email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.email.trim())) {
-        setErrorMsg("Please enter a valid email address.");
-        return;
-      }
+    // 4. Primary Contact Name
+    if (!formData.primaryContactName.trim()) {
+      setErrorMsg("Primary Contact Name is required.");
+      return;
+    }
+    if (formData.primaryContactName.trim().length < 2) {
+      setErrorMsg("Please enter a valid Primary Contact Name.");
+      return;
+    }
+
+    // 5. Email
+    if (!formData.email.trim()) {
+      setErrorMsg("Email address is required.");
+      return;
+    }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(formData.email.trim())) {
+      setErrorMsg("Please enter a valid email address (e.g. partner@example.com).");
+      return;
+    }
+
+    // 6. Phone
+    if (!formData.phone.trim()) {
+      setErrorMsg("Phone number is required.");
+      return;
+    }
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(formData.phone.trim())) {
+      setErrorMsg("Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.");
+      return;
     }
 
     setIsSubmitting(true);
@@ -97,12 +173,13 @@ const ZohoPartnerForm = () => {
       organization_name: formData.name.trim(),
       organizationName: formData.name.trim(),
       name: formData.name.trim(),
-      category: formData.category,
+      category: effectiveCategory,
+      categoryName: effectiveCategory,
       description: formData.description.trim(),
       serviceDetails: formData.description.trim(),
       primary_contact_name: formData.primaryContactName.trim(),
       contactName: formData.primaryContactName.trim(),
-      email: formData.email.trim(),
+      email: formData.email.trim().toLowerCase(),
       phone: formData.phone.trim(),
       city: formData.city.trim(),
       operatingCity: formData.city.trim(),
@@ -148,6 +225,7 @@ const ZohoPartnerForm = () => {
       setFormData({
         name: "",
         category: "-None-",
+        customCategory: "",
         description: "",
         primaryContactName: "",
         email: "",
@@ -212,7 +290,7 @@ const ZohoPartnerForm = () => {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ width: "100%", textAlign: "left" }}>
+    <form onSubmit={handleSubmit} style={{ width: "100%", textAlign: "left" }} noValidate>
       {errorMsg && (
         <div style={{
           background: "#FEF2F2",
@@ -227,15 +305,18 @@ const ZohoPartnerForm = () => {
           gap: "8px"
         }}>
           <AlertCircle style={{ width: "16px", height: "16px", flexShrink: 0 }} />
-          <span>{errorMsg}</span>
+          <span style={{ fontWeight: "500" }}>{errorMsg}</span>
         </div>
       )}
 
       {/* Organisation Name */}
       <div style={{ marginBottom: "14px" }}>
-        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "5px" }}>
-          Organisation Name <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
-        </label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
+          <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+            Organisation Name <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
+          </label>
+          <span style={{ fontSize: "11px", color: "#9CA3AF" }}>Max 120 chars</span>
+        </div>
         <input
           type="text"
           name="name"
@@ -260,9 +341,12 @@ const ZohoPartnerForm = () => {
 
       {/* Partner Category */}
       <div style={{ marginBottom: "14px" }}>
-        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "5px" }}>
-          Partner Category <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
-        </label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
+          <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+            Partner Category <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
+          </label>
+          <span style={{ fontSize: "11px", color: "#9CA3AF" }}>Select or choose Other</span>
+        </div>
         <select
           name="category"
           required
@@ -273,7 +357,7 @@ const ZohoPartnerForm = () => {
             boxSizing: "border-box",
             padding: "10px 14px",
             fontSize: "13.5px",
-            color: "#111827",
+            color: formData.category === "-None-" ? "#6B7280" : "#111827",
             background: "#F9FAFB",
             border: "1.5px solid #E5E7EB",
             borderRadius: "8px",
@@ -283,35 +367,78 @@ const ZohoPartnerForm = () => {
         >
           <option value="-None-">- Select Category -</option>
           {categories.length > 0 ? (
-            categories.map((cat) => (
-              <option key={cat.id || cat.name} value={cat.name}>
-                {cat.name}
-              </option>
-            ))
+            categories
+              .filter((cat) => cat.name?.toLowerCase() !== "other")
+              .map((cat) => (
+                <option key={cat.id || cat.name} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))
           ) : (
             <>
-              <option value="Ambulance and Emergency">Ambulance and Emergency</option>
-              <option value="Pharmacy">Pharmacy</option>
+              <option value="Ambulance & Emergency">Ambulance & Emergency</option>
+              <option value="Pharmacy Partners">Pharmacy Partners</option>
               <option value="Diagnostic Labs">Diagnostic Labs</option>
               <option value="Care Providers">Care Providers</option>
-              <option value="Hospitals and Clinics">Hospitals and Clinics</option>
+              <option value="Hospitals & Clinics">Hospitals & Clinics</option>
               <option value="Corporate & B2B">Corporate & B2B</option>
               <option value="Tele-medicine">Tele-medicine</option>
-              <option value="RWA & Housing Socities">RWA & Housing Socities</option>
+              <option value="RWA & Housing Societies">RWA & Housing Societies</option>
             </>
           )}
+          <option value="Other">Other (Specify your category)</option>
         </select>
+
+        {/* Dynamic Custom Category Input when 'Other' is selected */}
+        {formData.category === "Other" && (
+          <div style={{ marginTop: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
+              <label style={{ fontSize: "12.5px", fontWeight: "600", color: "#FE6700" }}>
+                Specify Your Category / Service <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
+              </label>
+              <span style={{ fontSize: "11px", color: "#9CA3AF" }}>Max 60 chars</span>
+            </div>
+            <input
+              type="text"
+              name="customCategory"
+              required
+              maxLength={60}
+              value={formData.customCategory}
+              onChange={handleChange}
+              placeholder="e.g. Medical Equipment, Nutritionist, Senior Wellness..."
+              autoFocus
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 14px",
+                fontSize: "13.5px",
+                color: "#111827",
+                background: "#FFFFFF",
+                border: "1.5px solid #FE6700",
+                borderRadius: "8px",
+                outline: "none",
+                boxShadow: "0 0 0 3px rgba(254, 103, 0, 0.12)"
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Brief Description */}
       <div style={{ marginBottom: "14px" }}>
-        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "5px" }}>
-          Brief Description of the org <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
-        </label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
+          <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+            Brief Description of the org <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
+          </label>
+          <span style={{ fontSize: "11px", color: formData.description.length >= 950 ? "#EF4444" : "#9CA3AF" }}>
+            {formData.description.length}/1000
+          </span>
+        </div>
         <textarea
           name="description"
           required
           rows={3}
+          maxLength={1000}
           value={formData.description}
           onChange={handleChange}
           placeholder="Briefly describe your services, specialized care, and cities served..."
@@ -330,15 +457,19 @@ const ZohoPartnerForm = () => {
         />
       </div>
 
-      {/* Primary Contact Name */}
+      {/* Primary Contact Name (Locked: Letters only) */}
       <div style={{ marginBottom: "14px" }}>
-        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "5px" }}>
-          Primary Contact Name
-        </label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
+          <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+            Primary Contact Name <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
+          </label>
+          <span style={{ fontSize: "11px", color: "#9CA3AF" }}>Letters only</span>
+        </div>
         <input
           type="text"
           name="primaryContactName"
-          maxLength={255}
+          required
+          maxLength={60}
           value={formData.primaryContactName}
           onChange={handleChange}
           placeholder="e.g. Dr. Rajesh Sharma"
@@ -356,18 +487,23 @@ const ZohoPartnerForm = () => {
         />
       </div>
 
-      {/* Email */}
+      {/* Email (Locked: Email format, no spaces) */}
       <div style={{ marginBottom: "14px" }}>
-        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "5px" }}>
-          Email
-        </label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
+          <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+            Email <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
+          </label>
+          <span style={{ fontSize: "11px", color: "#9CA3AF" }}>Valid email</span>
+        </div>
         <input
           type="email"
           name="email"
+          required
           maxLength={100}
           value={formData.email}
           onChange={handleChange}
           placeholder="e.g. partner@example.com"
+          autoComplete="email"
           style={{
             width: "100%",
             boxSizing: "border-box",
@@ -382,42 +518,65 @@ const ZohoPartnerForm = () => {
         />
       </div>
 
-      {/* Phone */}
+      {/* Phone (Locked: Numbers only, exactly 10 digits with +91 badge) */}
       <div style={{ marginBottom: "14px" }}>
-        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "5px" }}>
-          Phone
-        </label>
-        <input
-          type="tel"
-          name="phone"
-          maxLength={30}
-          value={formData.phone}
-          onChange={handleChange}
-          placeholder="e.g. +91 98765 43210"
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
+          <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+            Phone Number <span style={{ color: "#FE6700", fontWeight: "bold" }}>*</span>
+          </label>
+          <span style={{ fontSize: "11px", color: "#9CA3AF" }}>10 digits (digits only)</span>
+        </div>
+        <div
           style={{
+            display: "flex",
+            alignItems: "center",
             width: "100%",
             boxSizing: "border-box",
-            padding: "10px 14px",
-            fontSize: "13.5px",
-            color: "#111827",
             background: "#F9FAFB",
             border: "1.5px solid #E5E7EB",
             borderRadius: "8px",
-            outline: "none"
+            padding: "0 14px",
+            overflow: "hidden"
           }}
-        />
+        >
+          <span style={{ fontSize: "13.5px", fontWeight: "600", color: "#6B7280", marginRight: "10px", userSelect: "none" }}>
+            +91
+          </span>
+          <input
+            type="tel"
+            name="phone"
+            required
+            maxLength={10}
+            inputMode="numeric"
+            value={formData.phone}
+            onChange={handleChange}
+            placeholder="98765 43210"
+            style={{
+              width: "100%",
+              border: "none",
+              background: "transparent",
+              outline: "none",
+              padding: "10px 0",
+              fontSize: "13.5px",
+              color: "#111827"
+            }}
+          />
+        </div>
       </div>
 
-      {/* City & State Grid */}
+      {/* City & State Grid (Locked: Letters only) */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "18px" }}>
         <div>
-          <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "5px" }}>
-            City
-          </label>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
+            <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+              City
+            </label>
+            <span style={{ fontSize: "10.5px", color: "#9CA3AF" }}>Letters only</span>
+          </div>
           <input
             type="text"
             name="city"
-            maxLength={255}
+            maxLength={50}
             value={formData.city}
             onChange={handleChange}
             placeholder="e.g. Gurugram"
@@ -435,13 +594,16 @@ const ZohoPartnerForm = () => {
           />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "5px" }}>
-            State
-          </label>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
+            <label style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+              State
+            </label>
+            <span style={{ fontSize: "10.5px", color: "#9CA3AF" }}>Letters only</span>
+          </div>
           <input
             type="text"
             name="state"
-            maxLength={255}
+            maxLength={50}
             value={formData.state}
             onChange={handleChange}
             placeholder="e.g. Haryana"
