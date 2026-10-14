@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../core/database';
 import { createTransporter, isEmailConfigured, formatISTTimestamp } from './utils/mailer';
+import { ZohoCrmService } from '../../services/crm/zoho_crm_service';
 
 const router = Router();
 
@@ -12,20 +13,18 @@ router.post('/partner-application', async (req: Request, res: Response) => {
   console.log('🤝 [Partner Application] Received payload:', req.body);
 
   try {
-    const {
-      organizationName,
-      category,
-      contactName,
-      phone,
-      email,
-      operatingCity,
-      serviceDetails,
-    } = req.body;
+    const organizationName = (req.body.organizationName || req.body.organization_name || req.body.name || '').trim();
+    const category = (req.body.category || '').trim();
+    const contactName = (req.body.contactName || req.body.primary_contact_name || req.body.primaryContactName || organizationName).trim();
+    const phone = (req.body.phone || '').trim();
+    const email = (req.body.email || '').trim();
+    const operatingCity = (req.body.operatingCity || req.body.city || '').trim();
+    const serviceDetails = (req.body.serviceDetails || req.body.description || '').trim();
 
-    if (!organizationName || !category || !contactName || !phone || !email) {
+    if (!organizationName || !category || !phone || !email) {
       return res.status(400).json({
         success: false,
-        message: 'Organization name, category, contact person, phone, and email are required.',
+        message: 'Organization name, category, phone, and email are required.',
       });
     }
 
@@ -135,6 +134,22 @@ Service Details: ${serviceDetails ? serviceDetails.trim() : 'None provided'}`,
         console.error('⚠️ [Partner Application] Email dispatch error:', mailErr.message);
       }
     }
+
+    // 3. Forward to Zoho CRM Web-to-Lead
+    const nameParts = (contactName || organizationName || 'Partner').trim().split(' ');
+    const firstName = nameParts.length > 1 ? nameParts[0] : '';
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
+
+    ZohoCrmService.createLead({
+      firstName,
+      lastName,
+      email,
+      phone,
+      company: organizationName,
+      description: `Partner Application [Category: ${category}] | City: ${operatingCity || 'Not specified'}\nDetails: ${serviceDetails || 'None provided'}`,
+    }).catch((zohoErr: any) =>
+      console.error('⚠️ [Partner Application] Zoho CRM sync error:', zohoErr.message)
+    );
 
     return res.status(200).json({
       success: true,

@@ -12,17 +12,33 @@ const { dispatchPartnerEnrolmentRequest, dispatchPartnerEnrolmentApproved } = re
  */
 async function syncPartnerToZohoCrm(data) {
   try {
+    const xnQsjsdp = process.env.ZOHO_CRM_XNQSJSDP;
+    const xmIwtLD = process.env.ZOHO_CRM_XMIWTLD;
+    const actionType = process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=';
+    const returnURL = process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you';
+
+    if (!xnQsjsdp || !xmIwtLD) {
+      console.warn('[Zoho CRM Sync] Missing ZOHO_CRM_XNQSJSDP or ZOHO_CRM_XMIWTLD in environment variables. Skipping sync.');
+      return { success: false, error: 'Zoho CRM credentials not configured in environment' };
+    }
+
     const zohoParams = new URLSearchParams({
-      xnQsjsdp: 'a5e62960e1af5b50449f290933d99d6ee6a3d676fbd4f567c17b40f3766b484f',
+      xnQsjsdp,
       zc_gad: '',
-      xmIwtLD: 'bbe7b2f69b3fb4f8d2c83581c560ad1cecb4ead8fd2fe46d56fb91a48fd635dee9133caaa828df77edca61e708cdd62f',
-      actionType: 'Q3VzdG9tTW9kdWxlMw==',
-      returnURL: 'null',
+      xmIwtLD,
+      actionType,
+      returnURL,
+      // Standard Leads format (actionType = TGVhZHM=)
+      'Last Name': data.primaryContactName || data.organizationName || data.name || 'Partner',
+      'Company': data.organizationName || data.name || 'Partner Lead',
+      'Email': data.email || '',
+      'Phone': data.phone || '',
+      'Description': `Partner Application [${data.categoryName || data.category || 'General'}] | City: ${data.city || 'N/A'}\n${data.description || ''}`,
+      // CustomModule3 fallback fields (if actionType is CustomModule3)
       NAME: data.organizationName || data.name || 'Partner',
       COBJ3CF5: data.categoryName || data.category || '-None-',
       COBJ3CF7: data.description || '',
       COBJ3CF1: data.primaryContactName || '',
-      Email: data.email || '',
       COBJ3CF2: data.phone || '',
       COBJ3CF4: data.city || '',
       COBJ3CF3: data.state || '',

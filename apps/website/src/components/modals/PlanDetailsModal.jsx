@@ -1,6 +1,7 @@
-import React, { useEffect } from "react";
-import { X, Check } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { X, Check, Info } from "lucide-react";
 import { getPackageDisplayPrice } from "../packages/PackageCard";
+import { BENEFIT_CATEGORIES_CONFIG, detectDefaultBenefitCategory } from "../../constants/benefitCategories";
 
 // Comprehensive care inclusions matching eldercare standards and user reference design
 const STANDARD_INCLUSIONS = [
@@ -50,10 +51,13 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
   const fullTermCost = basePrice * durNum;
   const savings = isTrial ? 0 : (durNum > 1 ? Math.max(0, fullTermCost - displayPrice) : 0);
 
-  // Build the complete feature checklist
+  // Build the complete feature checklist categorized into Included, Add-on, and We arrange it
   const featuresList = (() => {
     if (Array.isArray(plan.allFormattedBenefits) && plan.allFormattedBenefits.length > 0) {
-      return plan.allFormattedBenefits;
+      return plan.allFormattedBenefits.map((item) => ({
+        ...item,
+        category: item.category || (item.benefit ? detectDefaultBenefitCategory(item.benefit) : detectDefaultBenefitCategory({ name: item.text })),
+      }));
     }
 
     const list = [];
@@ -79,19 +83,25 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
           displayText = `${pb.unitsIncluded} ${rawLabel || "visits"}/month ${benefitName}`;
         }
 
+        const cat = pb.category || (pb.benefit ? detectDefaultBenefitCategory(pb.benefit) : 'included');
+
         list.push({
           id: pb.id || `pb-${idx}`,
           text: displayText,
           rollover: pb.allowRollover,
+          category: cat,
+          benefit: pb.benefit,
         });
       });
     } else if (Array.isArray(plan.features) && plan.features.length > 0) {
       plan.features.forEach((feat, idx) => {
         if (!feat || feat.toLowerCase().trim() === "included benefit") return;
+        const cat = detectDefaultBenefitCategory({ name: feat });
         list.push({
           id: `feat-${idx}`,
           text: feat,
           rollover: false,
+          category: cat,
         });
       });
     }
@@ -182,31 +192,98 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
 
         {/* Modal Scrollable Body */}
         <div className="plan-modal-body">
-          {/* Features Included Section (matching reference design) */}
-          <div className="plan-modal-features-section">
-            <h3 className="plan-modal-features-heading">Features included</h3>
-            <div className="plan-modal-features-divider" />
+          {BENEFIT_CATEGORIES_CONFIG.map((catConfig) => {
+            const groupItems = featuresList.filter(
+              (item) => (item.category || "included") === catConfig.id
+            );
+            if (groupItems.length === 0) return null;
 
-            <ul className="plan-modal-checklist">
-              {featuresList.map((item, idx) => (
-                <li key={item.id || idx} className="plan-modal-checklist-item">
-                  <Check
-                    size={18}
-                    strokeWidth={2.8}
-                    className="plan-modal-checklist-check"
-                  />
-                  <span className="plan-modal-checklist-text">
-                    {renderFeatureText(item.text)}
-                    {item.rollover && (
-                      <span className="plan-modal-rollover-tag">
-                        Rollover Included
+            return (
+              <div key={catConfig.id} className="plan-modal-category-group" style={{ marginBottom: "26px" }}>
+                {/* Category Header with Pure CSS Hover (i) Info Tooltip */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <div className="plan-category-wrapper">
+                    <div className="plan-category-trigger">
+                      <span
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          backgroundColor: catConfig.dotBg,
+                          display: "inline-block",
+                        }}
+                      />
+                      <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: "#111827", display: "flex", alignItems: "center", gap: "6px" }}>
+                        {catConfig.label}
+                        <span className="plan-category-info-btn" aria-label={`About ${catConfig.label}`}>
+                          <Info size={15} />
+                        </span>
+                      </h3>
+                    </div>
+
+                    {/* Pure CSS Hover Tooltip with invisible bridge & zero layout shift */}
+                    <div className="plan-category-tooltip" role="tooltip">
+                      <div className="plan-category-tooltip-caret" />
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                        <span
+                          style={{
+                            width: "7px",
+                            height: "7px",
+                            borderRadius: "50%",
+                            backgroundColor: catConfig.dotBg,
+                            display: "inline-block",
+                          }}
+                        />
+                        <span style={{ fontWeight: "700", color: "#FFFFFF", fontSize: "12px" }}>
+                          {catConfig.label}
+                        </span>
+                      </div>
+                      <span style={{ color: "#E5E7EB", fontSize: "12px", display: "block" }}>
+                        {catConfig.explanation}
                       </span>
-                    )}
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      padding: "2px 8px",
+                      borderRadius: "999px",
+                      backgroundColor: catConfig.badgeBg,
+                      color: catConfig.badgeText,
+                      border: `1px solid ${catConfig.badgeBorder}`,
+                    }}
+                  >
+                    {groupItems.length} {groupItems.length === 1 ? "benefit" : "benefits"}
                   </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+                </div>
+
+                <div className="plan-modal-features-divider" style={{ margin: "4px 0 14px 0" }} />
+
+                <ul className="plan-modal-checklist">
+                  {groupItems.map((item, idx) => (
+                    <li key={item.id || idx} className="plan-modal-checklist-item">
+                      <Check
+                        size={17}
+                        strokeWidth={2.8}
+                        className="plan-modal-checklist-check"
+                        style={{ color: catConfig.id === "included" ? "#059669" : "#374151" }}
+                      />
+                      <span className="plan-modal-checklist-text">
+                        {renderFeatureText(item.text)}
+                        {item.rollover && (
+                          <span className="plan-modal-rollover-tag">
+                            Rollover Included
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
 
         {/* Modal Footer Actions */}

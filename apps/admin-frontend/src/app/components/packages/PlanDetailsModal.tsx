@@ -1,6 +1,7 @@
-import React, { useEffect } from "react";
-import { X, Check } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { X, Check, Info } from "lucide-react";
 import { getPackageDisplayPrice } from "./PackageCard";
+import { BENEFIT_CATEGORIES_CONFIG, detectDefaultBenefitCategory } from "./wizard/wizardTypes";
 
 // Comprehensive care inclusions matching eldercare standards and user reference design
 const STANDARD_INCLUSIONS = [
@@ -64,10 +65,13 @@ export default function PlanDetailsModal({
   const fullTermCost = basePrice * durNum;
   const savings = isTrial ? 0 : (durNum > 1 ? Math.max(0, fullTermCost - displayPrice) : 0);
 
-  // Build the complete feature checklist
+  // Build the complete feature checklist categorized into Included, Add-on, and We arrange it
   const featuresList = (() => {
     if (Array.isArray(plan.allFormattedBenefits) && plan.allFormattedBenefits.length > 0) {
-      return plan.allFormattedBenefits;
+      return plan.allFormattedBenefits.map((item: any) => ({
+        ...item,
+        category: item.category || (item.benefit ? detectDefaultBenefitCategory(item.benefit) : detectDefaultBenefitCategory({ name: item.text })),
+      }));
     }
 
     const list: any[] = [];
@@ -93,19 +97,25 @@ export default function PlanDetailsModal({
           displayText = `${pb.unitsIncluded} ${rawLabel || "visits"}/month ${benefitName}`;
         }
 
+        const cat = pb.category || (pb.benefit ? detectDefaultBenefitCategory(pb.benefit) : 'included');
+
         list.push({
           id: pb.id || `pb-${idx}`,
           text: displayText,
           rollover: pb.allowRollover,
+          category: cat,
+          benefit: pb.benefit,
         });
       });
     } else if (Array.isArray(plan.features) && plan.features.length > 0) {
       plan.features.forEach((feat: string, idx: number) => {
         if (!feat || feat.toLowerCase().trim() === "included benefit") return;
+        const cat = detectDefaultBenefitCategory({ name: feat });
         list.push({
           id: `feat-${idx}`,
           text: feat,
           rollover: false,
+          category: cat,
         });
       });
     }
@@ -196,31 +206,104 @@ export default function PlanDetailsModal({
 
         {/* Modal Scrollable Body */}
         <div className="plan-modal-body">
-          {/* Features Included Section (matching reference design) */}
-          <div className="plan-modal-features-section">
-            <h3 className="plan-modal-features-heading">Features included</h3>
-            <div className="plan-modal-features-divider" />
+          {BENEFIT_CATEGORIES_CONFIG.map((catConfig) => {
+            const groupItems = featuresList.filter(
+              (item) => (item.category || "included") === catConfig.id
+            );
+            if (groupItems.length === 0) return null;
 
-            <ul className="plan-modal-checklist">
-              {featuresList.map((item, idx) => (
-                <li key={item.id || idx} className="plan-modal-checklist-item">
-                  <Check
-                    size={18}
-                    strokeWidth={2.8}
-                    className="plan-modal-checklist-check"
-                  />
-                  <span className="plan-modal-checklist-text">
-                    {renderFeatureText(item.text)}
-                    {item.rollover && (
-                      <span className="plan-modal-rollover-tag">
-                        Rollover Included
+            return (
+              <div key={catConfig.id} className="plan-modal-category-group" style={{ marginBottom: "26px" }}>
+                {/* Category Header with Pure CSS Group Hover (i) Info Tooltip */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <div className="group relative inline-flex items-center">
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "help", userSelect: "none" }}>
+                      <span
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          backgroundColor: catConfig.id === "included" ? "#10B981" : catConfig.id === "addon" ? "#3B82F6" : "#A855F7",
+                          display: "inline-block",
+                        }}
+                      />
+                      <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: "#111827", display: "flex", alignItems: "center", gap: "6px" }}>
+                        {catConfig.label}
+                        <span className="w-[22px] h-[22px] inline-flex items-center justify-center rounded-full border border-transparent text-gray-400 group-hover:text-gray-900 group-hover:bg-gray-100 group-hover:border-gray-200 transition-colors shrink-0">
+                          <Info size={15} />
+                        </span>
+                      </h3>
+                    </div>
+
+                    {/* Pure CSS Hover Tooltip with invisible bridge & zero layout shift */}
+                    <div
+                      role="tooltip"
+                      className="invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-all duration-150 absolute top-[calc(100%+8px)] left-0 z-50 bg-[#111827] text-[#F9FAFB] px-3.5 py-2.5 rounded-lg text-[12.5px] leading-relaxed font-medium w-max max-w-[320px] shadow-2xl border border-gray-800 text-left pointer-events-none group-hover:pointer-events-auto"
+                    >
+                      {/* Invisible hover bridge so moving mouse to tooltip never breaks hover */}
+                      <div className="absolute -top-2.5 left-0 right-0 h-2.5" />
+                      {/* Upward Caret */}
+                      <div className="absolute -top-1 left-6 w-2 h-2 bg-[#111827] border-l border-t border-gray-800 rotate-45" />
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                        <span
+                          style={{
+                            width: "7px",
+                            height: "7px",
+                            borderRadius: "50%",
+                            backgroundColor: catConfig.id === "included" ? "#10B981" : catConfig.id === "addon" ? "#3B82F6" : "#A855F7",
+                            display: "inline-block",
+                          }}
+                        />
+                        <span style={{ fontWeight: "700", color: "#FFFFFF", fontSize: "12px" }}>
+                          {catConfig.label}
+                        </span>
+                      </div>
+                      <span style={{ color: "#E5E7EB", fontSize: "12px", display: "block" }}>
+                        {catConfig.explanation}
                       </span>
-                    )}
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      padding: "2px 8px",
+                      borderRadius: "999px",
+                      backgroundColor: catConfig.id === "included" ? "#ECFDF5" : catConfig.id === "addon" ? "#EFF6FF" : "#FAF5FF",
+                      color: catConfig.id === "included" ? "#065F46" : catConfig.id === "addon" ? "#1E40AF" : "#6B21A8",
+                      border: `1px solid ${catConfig.id === "included" ? "#A7F3D0" : catConfig.id === "addon" ? "#BFDBFE" : "#E9D5FF"}`,
+                    }}
+                  >
+                    {groupItems.length} {groupItems.length === 1 ? "benefit" : "benefits"}
                   </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+                </div>
+
+                <div className="plan-modal-features-divider" style={{ margin: "4px 0 14px 0" }} />
+
+                <ul className="plan-modal-checklist">
+                  {groupItems.map((item, idx) => (
+                    <li key={item.id || idx} className="plan-modal-checklist-item">
+                      <Check
+                        size={17}
+                        strokeWidth={2.8}
+                        className="plan-modal-checklist-check"
+                        style={{ color: catConfig.id === "included" ? "#059669" : "#374151" }}
+                      />
+                      <span className="plan-modal-checklist-text">
+                        {renderFeatureText(item.text)}
+                        {item.rollover && (
+                          <span className="plan-modal-rollover-tag">
+                            Rollover Included
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
 
         {/* Modal Footer Actions */}

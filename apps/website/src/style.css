@@ -3823,6 +3823,97 @@ a {
   margin: 14px 0 20px 0;
 }
 
+/* Category Header & Pure CSS Hover Tooltip */
+.plan-category-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.plan-category-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: help;
+  user-select: none;
+}
+
+.plan-category-info-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  box-sizing: border-box;
+  color: #9ca3af;
+  background: transparent;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.plan-category-wrapper:hover .plan-category-info-btn {
+  color: #111827;
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+}
+
+.plan-category-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 100;
+  background-color: #111827;
+  color: #f9fafb;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-weight: 500;
+  width: max-content;
+  max-width: 320px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
+  border: 1px solid #374151;
+  white-space: normal;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  pointer-events: none;
+}
+
+/* Invisible bridge so mouse can seamlessly move to tooltip without losing hover or shaking */
+.plan-category-tooltip::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+}
+
+/* Upward Caret */
+.plan-category-tooltip-caret {
+  position: absolute;
+  top: -5px;
+  left: 24px;
+  width: 8px;
+  height: 8px;
+  background-color: #111827;
+  border-left: 1px solid #374151;
+  border-top: 1px solid #374151;
+  transform: rotate(45deg);
+}
+
+.plan-category-wrapper:hover .plan-category-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
 .plan-modal-checklist {
   list-style: none;
   padding: 0;
