@@ -626,6 +626,7 @@ model PackageBenefit {
   unit                  String?
   isUnlimited           Boolean             @default(false)
   showUnit              Boolean             @default(true)
+  category              String?             @default("included") // "included" | "addon" | "arranged"
   allowRollover         Boolean             @default(false)
   maxRolloverUnits      Int?
   displayOrder          Int                 @default(0)
@@ -715,6 +716,7 @@ model PackageVersionBenefit {
   minSubscriptionMonths Int?                         @default(1)
   isUnlimited           Boolean                      @default(false)
   showUnit              Boolean                      @default(true)
+  category              String?                      @default("included")
   allowRollover         Boolean                      @default(false)
   maxRolloverUnits      Int?
   displayOrder          Int                          @default(0)

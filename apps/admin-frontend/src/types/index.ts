@@ -433,6 +433,8 @@ export interface PackageBenefit {
   allowRollover?: boolean;
   maxRolloverUnits?: number;
   isUnlimited?: boolean;
+  showUnit?: boolean;
+  category?: 'included' | 'addon' | 'arranged' | string;
   benefit?: Benefit;
 }
 

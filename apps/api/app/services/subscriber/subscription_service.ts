@@ -1917,6 +1917,7 @@ export const getSubscriptionPackages = async (regionId?: string) => {
         benefitId: pb.benefitId,
         monthlyUnits: pb.unitsIncluded,
         unitsIncluded: pb.unitsIncluded,
+        category: pb.category || 'included',
       })) || [],
   }));
 

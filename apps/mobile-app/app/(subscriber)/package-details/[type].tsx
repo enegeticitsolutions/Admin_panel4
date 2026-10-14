@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -11,6 +11,66 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { scale } from '@/utils/responsive';
+
+const BENEFIT_CATEGORIES = [
+    {
+        id: 'included',
+        label: 'Included',
+        explanation: 'Part of your plan, up to the limits shown.',
+        dotColor: '#10B981',
+        badgeBg: '#ECFDF5',
+        badgeBorder: '#A7F3D0',
+        badgeText: '#065F46',
+    },
+    {
+        id: 'addon',
+        label: 'Add-on · Member rate',
+        explanation: 'Available whenever you need it, at a lower rate for MaiHoonNa members.',
+        dotColor: '#3B82F6',
+        badgeBg: '#EFF6FF',
+        badgeBorder: '#BFDBFE',
+        badgeText: '#1E40AF',
+    },
+    {
+        id: 'arranged',
+        label: 'We arrange it · Partner discount',
+        explanation: 'We book and coordinate with trusted partners. You pay the partner directly, at a discounted member price.',
+        dotColor: '#A855F7',
+        badgeBg: '#FAF5FF',
+        badgeBorder: '#E9D5FF',
+        badgeText: '#6B21A8',
+    },
+];
+
+function getCategoryForBenefit(pb: any): string {
+    if (pb?.category) return pb.category;
+    const name = (pb?.benefit?.name || pb?.name || (typeof pb === 'string' ? pb : '')).toLowerCase();
+    const desc = (pb?.benefit?.description || pb?.description || '').toLowerCase();
+    if (
+        name.includes('facilitation') ||
+        name.includes('coordination') ||
+        name.includes('referral') ||
+        name.includes('dentist home visit') ||
+        name.includes('doctor at home') ||
+        name.includes('ambulance support') ||
+        name.includes('pharmacy assist') ||
+        name.includes('travel made easy') ||
+        desc.includes('facilitation') ||
+        desc.includes('trusted partners')
+    ) {
+        return 'arranged';
+    }
+    if (
+        name.includes('add-on') ||
+        name.includes('addon') ||
+        name.includes('member rate') ||
+        name.includes('on-demand') ||
+        pb?.benefit?.isAddon
+    ) {
+        return 'addon';
+    }
+    return 'included';
+}
 
 export default function PackageDetailScreen() {
     const router = useRouter();
@@ -190,49 +250,84 @@ export default function PackageDetailScreen() {
                         <Text style={styles.descriptionText}>{pkg.description}</Text>
                     </View>
 
-                    {/* Features/Benefits — quantities scaled to selected cycle */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Plan Inclusions</Text>
-                        <Text style={{ fontSize: scale(12), color: '#9CA3AF', marginBottom: scale(12), marginTop: scale(-8) }}>
-                            Shown for {cycleLabel} plan
-                        </Text>
-                        <View style={styles.benefitList}>
-                            {pkg.packageBenefits && pkg.packageBenefits.length > 0 ? (
-                                pkg.packageBenefits.map((pb: any, i: number) => {
-                                    const unitsDisplay = getBenefitUnits(pb);
-                                    return (
-                                        <View key={i} style={styles.benefitItem}>
-                                            <View style={styles.checkIcon}>
-                                                <Ionicons name="checkmark" size={scale(16)} color="#059669" />
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.benefitText}>
-                                                    {pb.showUnit !== false ? (
-                                                        <><Text style={{ fontWeight: '700' }}>{unitsDisplay}</Text>{' '}• </>
-                                                    ) : null}
-                                                    {pb.benefit?.name}
-                                                </Text>
-                                                {pb.benefit?.description ? (
-                                                    <Text style={{ fontSize: scale(13), color: '#6B7280', marginTop: scale(4) }}>
-                                                        {pb.benefit.description}
-                                                    </Text>
-                                                ) : null}
-                                            </View>
-                                        </View>
-                                    );
-                                })
-                            ) : (
-                                (pkg.features || []).map((feature: string, i: number) => (
-                                    <View key={i} style={styles.benefitItem}>
-                                        <View style={styles.checkIcon}>
-                                            <Ionicons name="checkmark" size={scale(16)} color="#059669" />
-                                        </View>
-                                        <Text style={styles.benefitText}>{feature}</Text>
+                    {/* Features/Benefits Categorized into Included, Add-on, and We arrange it */}
+                    {BENEFIT_CATEGORIES.map((catConfig) => {
+                        const rawItems = (pkg.packageBenefits && pkg.packageBenefits.length > 0)
+                            ? pkg.packageBenefits.filter((pb: any) => getCategoryForBenefit(pb) === catConfig.id)
+                            : (pkg.features || []).filter((feat: string) => getCategoryForBenefit(feat) === catConfig.id);
+
+                        if (!rawItems || rawItems.length === 0) return null;
+
+                        return (
+                            <View key={catConfig.id} style={[styles.section, { marginBottom: scale(16) }]}>
+                                {/* Category Header Row with (i) Info Button */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: scale(4) }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                                        <View style={{ width: scale(8), height: scale(8), borderRadius: scale(4), backgroundColor: catConfig.dotColor }} />
+                                        <Text style={styles.sectionTitle}>{catConfig.label}</Text>
+                                        <TouchableOpacity
+                                            onPress={() => Alert.alert(catConfig.label, catConfig.explanation)}
+                                            style={{ padding: scale(4) }}
+                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                        >
+                                            <Ionicons name="information-circle-outline" size={scale(18)} color="#9CA3AF" />
+                                        </TouchableOpacity>
                                     </View>
-                                ))
-                            )}
-                        </View>
-                    </View>
+                                    <View
+                                        style={{
+                                            paddingHorizontal: scale(8),
+                                            paddingVertical: scale(2),
+                                            borderRadius: scale(999),
+                                            backgroundColor: catConfig.badgeBg,
+                                            borderWidth: 1,
+                                            borderColor: catConfig.badgeBorder,
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: scale(10), fontWeight: '700', color: catConfig.badgeText }}>
+                                            {rawItems.length} {rawItems.length === 1 ? 'item' : 'items'}
+                                        </Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.benefitList}>
+                                    {pkg.packageBenefits && pkg.packageBenefits.length > 0 ? (
+                                        rawItems.map((pb: any, i: number) => {
+                                            const unitsDisplay = getBenefitUnits(pb);
+                                            return (
+                                                <View key={i} style={styles.benefitItem}>
+                                                    <View style={styles.checkIcon}>
+                                                        <Ionicons name="checkmark" size={scale(16)} color="#059669" />
+                                                    </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={styles.benefitText}>
+                                                            {pb.showUnit !== false ? (
+                                                                <><Text style={{ fontWeight: '700' }}>{unitsDisplay}</Text>{' '}• </>
+                                                            ) : null}
+                                                            {pb.benefit?.name}
+                                                        </Text>
+                                                        {pb.benefit?.description ? (
+                                                            <Text style={{ fontSize: scale(13), color: '#6B7280', marginTop: scale(4) }}>
+                                                                {pb.benefit.description}
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+                                                </View>
+                                            );
+                                        })
+                                    ) : (
+                                        rawItems.map((feature: string, i: number) => (
+                                            <View key={i} style={styles.benefitItem}>
+                                                <View style={styles.checkIcon}>
+                                                    <Ionicons name="checkmark" size={scale(16)} color="#059669" />
+                                                </View>
+                                                <Text style={styles.benefitText}>{feature}</Text>
+                                            </View>
+                                        ))
+                                    )}
+                                </View>
+                            </View>
+                        );
+                    })}
 
                     {/* Disclaimer */}
                     <View style={styles.disclaimerBox}>

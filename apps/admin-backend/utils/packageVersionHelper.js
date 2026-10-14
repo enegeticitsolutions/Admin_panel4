@@ -71,7 +71,8 @@ async function publishPackageVersion(tx, packageId, options = {}) {
           c.allowRollover !== p.allowRollover ||
           c.maxRolloverUnits !== p.maxRolloverUnits ||
           c.isUnlimited !== p.isUnlimited ||
-          c.showUnit !== p.showUnit
+          c.showUnit !== p.showUnit ||
+          c.category !== p.category
         ) {
           benefitsChanged = true;
           break;
@@ -186,6 +187,7 @@ async function publishPackageVersion(tx, packageId, options = {}) {
         maxRolloverUnits: pb.maxRolloverUnits || null,
         isUnlimited: pb.isUnlimited,
         showUnit: pb.showUnit !== undefined ? pb.showUnit : true,
+        category: pb.category || 'included',
         displayOrder: pb.displayOrder,
         notes: pb.notes,
       })),

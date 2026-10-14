@@ -594,7 +594,13 @@ export default function SubscriptionPackagesScreen() {
                             </View>
 
                             <View style={styles.featureList}>
-                                {(pkg.packageBenefits || []).map((pb: any, fIdx: number) => {
+                                {[...(pkg.packageBenefits || [])].sort((a: any, b: any) => {
+                                    const getPri = (x: any) => {
+                                        const cat = x.category || ((x.benefit?.name || '').toLowerCase().includes('facilitation') || (x.benefit?.name || '').toLowerCase().includes('coordination') ? 'arranged' : 'included');
+                                        return cat === 'included' ? 1 : cat === 'addon' ? 2 : 3;
+                                    };
+                                    return getPri(a) - getPri(b);
+                                }).map((pb: any, fIdx: number) => {
                                     const rawLabel = (pb.benefit?.unitLabel || '').replace(/^per\s+/i, '').trim();
                                     const formattedLabel = rawLabel ? ' ' + rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1).toLowerCase() + (pb.unitsIncluded > 1 && !rawLabel.toLowerCase().endsWith('s') ? 's' : '') : '';
                                     

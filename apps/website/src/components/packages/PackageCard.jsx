@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { detectDefaultBenefitCategory } from "../../constants/benefitCategories";
 
 export function getPackageDisplayPrice(plan, selectedCycle = "3") {
   if (!plan) return 0;
@@ -105,21 +106,33 @@ export default function PackageCard({
           displayText = `${baseUnits}${unitText}${periodText} • ${benefitName}`;
         }
 
+        const cat = pb.category || (pb.benefit ? detectDefaultBenefitCategory(pb.benefit) : 'included');
         list.push({
           id: pb.id || `pb-${idx}`,
           text: displayText,
           rollover: pb.allowRollover,
+          category: cat,
+          benefit: pb.benefit,
         });
       });
+
+      // Sort so 'included' benefits appear first, ensuring core features are never hidden below
+      const priority = { included: 1, addon: 2, arranged: 3 };
+      list.sort((a, b) => (priority[a.category] || 1) - (priority[b.category] || 1));
     } else if (Array.isArray(plan.features) && plan.features.length > 0) {
       plan.features.forEach((feat, i) => {
         if (!feat || feat.toLowerCase().trim() === "included benefit") return;
+        const cat = detectDefaultBenefitCategory({ name: feat });
         list.push({
           id: `feat-${i}`,
           text: feat,
           rollover: false,
+          category: cat,
         });
       });
+
+      const priority = { included: 1, addon: 2, arranged: 3 };
+      list.sort((a, b) => (priority[a.category] || 1) - (priority[b.category] || 1));
     }
 
     return list;
