@@ -24,8 +24,8 @@ const BENEFIT_CATEGORIES = [
     },
     {
         id: 'addon',
-        label: 'Add-on · Member rate',
-        explanation: 'Available whenever you need it, at a lower rate for MaiHoonNa members.',
+        label: 'Member Rate / On-Demand',
+        explanation: 'Available whenever you need it, at member-discounted rates for MaiHoonNa subscribers.',
         dotColor: '#3B82F6',
         badgeBg: '#EFF6FF',
         badgeBorder: '#BFDBFE',
@@ -61,11 +61,8 @@ function getCategoryForBenefit(pb: any): string {
         return 'arranged';
     }
     if (
-        name.includes('add-on') ||
-        name.includes('addon') ||
         name.includes('member rate') ||
-        name.includes('on-demand') ||
-        pb?.benefit?.isAddon
+        name.includes('on-demand')
     ) {
         return 'addon';
     }

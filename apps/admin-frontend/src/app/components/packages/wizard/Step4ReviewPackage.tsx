@@ -554,7 +554,7 @@ export function Step4ReviewPackage({
             Categorized Benefits &amp; Allowances:
           </h4>
           <span className="text-xs text-muted-foreground">
-            Grouped into Included, Add-ons, and Facilitated Partner Services
+            Grouped into Included, Member Rate / On-Demand, and Facilitated Partner Services
           </span>
         </div>
 

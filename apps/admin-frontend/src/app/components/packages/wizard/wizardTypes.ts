@@ -42,9 +42,9 @@ export const BENEFIT_CATEGORIES_CONFIG: CategoryConfig[] = [
   },
   {
     id: 'addon',
-    label: 'Add-on · Member rate',
+    label: 'Member Rate / On-Demand',
     tagline: 'On-Demand Member Perk',
-    explanation: 'Available whenever you need it, at a lower rate for MaiHoonNa members.',
+    explanation: 'Available whenever you need it, at member-discounted rates for MaiHoonNa subscribers.',
     badgeBg: 'bg-blue-50',
     badgeBorder: 'border-blue-200',
     badgeText: 'text-blue-800',
@@ -86,19 +86,14 @@ export function detectDefaultBenefitCategory(benefit?: Partial<Benefit> | null):
     return 'arranged';
   }
 
-  // "Add-on · Member rate" keywords
+  // Explicit member rate keywords
   if (
-    name.includes('add-on') ||
-    name.includes('addon') ||
     name.includes('member rate') ||
-    name.includes('on-demand') ||
-    name.includes('discount on medicines') ||
-    name.includes('lab test discount') ||
-    (benefit as any).isAddon === true
+    name.includes('on-demand')
   ) {
     return 'addon';
   }
 
-  // Default core plan inclusion
+  // Default core plan inclusion (completely independent of Add-ons management)
   return 'included';
 }

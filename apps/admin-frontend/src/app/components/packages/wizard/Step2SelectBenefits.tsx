@@ -187,6 +187,7 @@ export function Step2SelectBenefits({
             const categoryId = activeCfg?.category || detectDefaultBenefitCategory(benefit);
             const catConfig =
               BENEFIT_CATEGORIES_CONFIG.find((c) => c.id === categoryId) || BENEFIT_CATEGORIES_CONFIG[0];
+            const benefitTypeName = benefit.benefitType?.name || (benefit as any).type;
 
             return (
               <div
@@ -212,12 +213,18 @@ export function Step2SelectBenefits({
                           {benefit.code}
                         </span>
                       )}
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${catConfig.badgeBg} ${catConfig.badgeText} border ${catConfig.badgeBorder}`}
-                        title={catConfig.explanation}
-                      >
-                        {catConfig.label}
-                      </span>
+                      {isSelected ? (
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${catConfig.badgeBg} ${catConfig.badgeText} border ${catConfig.badgeBorder}`}
+                          title={`Package Tier: ${catConfig.explanation}`}
+                        >
+                          {catConfig.label}
+                        </span>
+                      ) : benefitTypeName ? (
+                        <span className="text-[10px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full border border-slate-200">
+                          {benefitTypeName}
+                        </span>
+                      ) : null}
                     </div>
 
                     {benefit.description && (

@@ -43,7 +43,7 @@ export function Step3ConfigureUnits({
         <div>
           <h2 className="text-xl font-semibold mb-1">Set Allowances &amp; Categories</h2>
           <p className="text-sm text-muted-foreground">
-            Configure quantity, cadence, plan tier category (Included, Add-on, or We arrange it), and rollover rules.
+            Configure quantity, cadence, plan tier category (Included, Member Rate / On-Demand, or We arrange it), and rollover rules.
           </p>
         </div>
 
@@ -64,6 +64,7 @@ export function Step3ConfigureUnits({
             const count = selectedBenefitIds.filter(
               (id) => (benefitConfigs[id]?.category || 'included') === cat.id
             ).length;
+            const tabName = cat.id === 'addon' ? 'Member Rate' : cat.label.split('·')[0].trim();
             return (
               <button
                 key={cat.id}
@@ -76,7 +77,7 @@ export function Step3ConfigureUnits({
                 }`}
               >
                 <span className={`h-2 w-2 rounded-full ${cat.dotBg}`} />
-                <span>{cat.label.split('·')[0].trim()}</span>
+                <span>{tabName}</span>
                 <span className="text-[10px] text-gray-400">({count})</span>
               </button>
             );
