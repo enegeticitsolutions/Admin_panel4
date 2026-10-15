@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Constants from 'expo-constants';
 import CareSupportModal from '@/components/shared/CareSupportModal';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal, Dimensions, ScrollView, Platform, Image, Linking, Alert, ActivityIndicator, BackHandler } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -389,7 +390,7 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
                             <View style={styles.brandDot} />
                             <Text style={styles.brandText}>Mai-Hoonaa Care</Text>
                         </View>
-                        <Text style={styles.versionText}>v1.0.4</Text>
+                        <Text style={styles.versionText}>v{Constants.expoConfig?.version || '1.0.5'}</Text>
                     </View>
                 </View>
             </Animated.View>
