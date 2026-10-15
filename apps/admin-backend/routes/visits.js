@@ -1017,9 +1017,12 @@ router.get('/', async (req, res) => {
     const where = {};
     if (beneficiaryId) where.beneficiaryId = beneficiaryId;
 
-    // Filter by human-readable visitCode (case-insensitive partial match)
+    // Filter by human-readable visitCode (case-insensitive partial match, ignoring leading #)
     if (visitCode) {
-      where.visitCode = { contains: String(visitCode).toUpperCase(), mode: 'insensitive' };
+      const cleanCode = String(visitCode).replace(/^#/, '').trim().toUpperCase();
+      if (cleanCode) {
+        where.visitCode = { contains: cleanCode, mode: 'insensitive' };
+      }
     }
     if (date) {
       if (date === 'next_7') {

@@ -2632,7 +2632,7 @@ router.post('/reservations/:id/release', async (req, res) => {
   try {
     const reservation = await prisma.benefitReservation.findUnique({
       where: { id },
-      include: { balance: true, visit: true },
+      include: { balance: true },
     });
 
     if (!reservation) {
@@ -2710,13 +2710,32 @@ router.post('/beneficiary/:beneficiaryId/reconcile-reservations', async (req, re
         include: {
           benefitBalances: {
             include: {
-              reservations: {
-                include: { visit: true }
-              }
+              reservations: true,
             }
           }
         }
       });
+
+      // Gather all HELD visitIds to batch-fetch visit statuses
+      const heldVisitIds = [];
+      for (const sub of subs) {
+        for (const bal of sub.benefitBalances) {
+          for (const res of bal.reservations) {
+            if (res.status === 'HELD' && res.visitId) {
+              heldVisitIds.push(res.visitId);
+            }
+          }
+        }
+      }
+
+      const visitMap = {};
+      if (heldVisitIds.length > 0) {
+        const visits = await tx.visit.findMany({
+          where: { id: { in: heldVisitIds } },
+          select: { id: true, visitCode: true, status: true }
+        });
+        visits.forEach(v => { visitMap[v.id] = v; });
+      }
 
       const releasedReservations = [];
       const correctedBalances = [];
@@ -2727,7 +2746,7 @@ router.post('/beneficiary/:beneficiaryId/reconcile-reservations', async (req, re
 
           for (const res of bal.reservations) {
             if (res.status === 'HELD') {
-              const v = res.visit;
+              const v = res.visitId ? visitMap[res.visitId] : null;
               const isOrphaned = !res.visitId || !v || ['completed', 'cancelled', 'missed'].includes(v.status);
 
               if (isOrphaned) {

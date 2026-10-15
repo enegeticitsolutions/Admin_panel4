@@ -436,9 +436,9 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
               <input
                 type="text"
                 value={visitCodeFilter}
-                onChange={e => setVisitCodeFilter(e.target.value.toUpperCase())}
+                onChange={e => setVisitCodeFilter(e.target.value.replace(/^#/, '').trim().toUpperCase())}
                 placeholder="e.g. VK7XM4RP"
-                maxLength={9}
+                maxLength={15}
                 className={`w-full pl-4 pr-8 py-2.5 rounded-xl border font-mono font-bold text-sm tracking-wider transition-colors focus:outline-none ${
                   visitCodeFilter
                     ? 'border-[#FF7A00] bg-[#FFF5EE] text-[#FF7A00]'
@@ -543,7 +543,11 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
             <CalendarClock size={32} className="mx-auto text-gray-300 mb-3" />
             <p className="text-sm font-bold text-gray-600">No visits found.</p>
             <p className="text-xs text-gray-400 mt-1">
-              {selectedFmUserId || hideFmSelector ? 'Try changing your filters or schedule a visit from the Beneficiaries tab.' : 'Select a Field Manager to see their scheduled visits.'}
+              {visitCodeFilter
+                ? `No visit found matching code "${visitCodeFilter}". Try checking the code or clear the search.`
+                : selectedFmUserId || hideFmSelector
+                ? 'Try changing your filters or schedule a visit from the Beneficiaries tab.'
+                : 'Select a Field Manager to see their scheduled visits.'}
             </p>
           </div>
         ) : (
