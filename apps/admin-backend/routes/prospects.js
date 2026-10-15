@@ -71,7 +71,6 @@ router.get('/', async (req, res) => {
         skip,
         take: limitNum,
         orderBy: [
-          { lastLoginAt: 'desc' },
           { createdAt: 'desc' },
         ],
         select: {
@@ -79,14 +78,22 @@ router.get('/', async (req, res) => {
           name: true,
           phone: true,
           email: true,
-          profilePhoto: true,
+          age: true,
+          dateOfBirth: true,
+          location: true,
+          flatPlot: true,
+          streetArea: true,
+          landmark: true,
           city: true,
           state: true,
           pincode: true,
+          profilePhoto: true,
           fcmToken: true,
           lastLoginAt: true,
           createdAt: true,
           role: true,
+          status: true,
+          isActive: true,
           subscriberBeneficiaries: {
             select: {
               id: true,
@@ -95,15 +102,23 @@ router.get('/', async (req, res) => {
               age: true,
               gender: true,
               city: true,
+              address: true,
+              flatPlot: true,
+              streetArea: true,
+              landmark: true,
+              state: true,
+              pincode: true,
             },
           },
           subscriberCallbackRequests: {
-            take: 1,
+            take: 5,
             orderBy: { createdAt: 'desc' },
             select: {
               id: true,
               status: true,
               notes: true,
+              scheduledAt: true,
+              calledAt: true,
               createdAt: true,
             },
           },
@@ -136,11 +151,14 @@ router.get('/', async (req, res) => {
         },
       }),
 
-      // KPI Metric 3: Active Mobile App (Device Token Registered)
+      // KPI Metric 3: Active Mobile App (Device Token Registered or Logged in)
       prisma.user.count({
         where: {
           ...baseWhere,
-          fcmToken: { not: null },
+          OR: [
+            { fcmToken: { not: null } },
+            { lastLoginAt: { not: null } },
+          ],
         },
       }),
     ]);
@@ -150,23 +168,30 @@ router.get('/', async (req, res) => {
       prospects.map(async (p) => {
         const hasBeneficiary = (p.subscriberBeneficiaries?.length || 0) > 0;
         const latestCallback = p.subscriberCallbackRequests?.[0] || null;
+        const fullAddress = [p.flatPlot, p.streetArea, p.landmark, p.city, p.pincode].filter(Boolean).join(', ') || p.location || null;
 
         return {
           id: p.id,
           name: p.name || 'Unnamed App User',
           phone: p.phone,
           email: p.email || null,
+          age: p.age || null,
+          dateOfBirth: p.dateOfBirth || null,
           city: p.city || null,
           state: p.state || null,
           pincode: p.pincode || null,
+          address: fullAddress,
           profilePhoto: p.profilePhoto ? await resolveFileUrl(p.profilePhoto) : null,
-          isAppInstalled: !!p.fcmToken,
+          isAppInstalled: !!p.fcmToken || !!p.lastLoginAt,
           lastLoginAt: p.lastLoginAt,
           signupDate: p.createdAt,
-          intentLevel: hasBeneficiary ? 'HIGH' : 'MEDIUM',
+          intentLevel: hasBeneficiary ? 'HIGH' : (p.lastLoginAt ? 'ACTIVE' : 'MEDIUM'),
           beneficiaryCount: p.subscriberBeneficiaries?.length || 0,
           beneficiaries: p.subscriberBeneficiaries || [],
           couponAttempts: p._count.couponAttemptLogs || 0,
+          role: p.role,
+          status: p.status,
+          callbacks: p.subscriberCallbackRequests || [],
           latestCallback: latestCallback
             ? {
                 id: latestCallback.id,
@@ -179,8 +204,7 @@ router.get('/', async (req, res) => {
       })
     );
 
-    res.json({
-      success: true,
+    const responsePayload = {
       data: formatted,
       pagination: {
         page: pageNum,
@@ -194,6 +218,13 @@ router.get('/', async (req, res) => {
         withBeneficiaryCount: totalWithBeneficiary,
         appActive: totalAppActive,
       },
+    };
+
+    res.json({
+      success: true,
+      data: responsePayload,
+      pagination: responsePayload.pagination,
+      stats: responsePayload.stats,
     });
   } catch (err) {
     console.error('GET /api/prospects error:', err);
