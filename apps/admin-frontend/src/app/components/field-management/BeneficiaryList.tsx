@@ -41,6 +41,7 @@ export interface BeneficiaryItem {
   subscriberName?: string | null;
   hasUnreadRequests?: boolean;
   hasActivePackage?: boolean;
+  isPackagePending?: boolean;
   isPackageExpired?: boolean;
   packageEndDate?: string | null;
   lastPackageName?: string | null;
@@ -51,7 +52,7 @@ interface Props {
   team: CCMember[];
   loading: boolean;
   submittingId: string | null;
-  onScheduleVisit: (beneficiaryId: string, ccId: string, scheduledTime: string, durationMinutes: number, benefitId?: string) => Promise<void>;
+  onScheduleVisit: (beneficiaryId: string, ccId: string, scheduledTime: string, durationMinutes: number, benefitId?: string, subscriptionId?: string) => Promise<void>;
   onRefresh?: () => void;
 }
 
@@ -75,6 +76,7 @@ export default function BeneficiaryList({
     benefitId: string;
     benefitLabel: string;
     benefitUnit: string;
+    subscriptionId?: string;
   }>>({});
 
   const [ccSlotAvailability, setCcSlotAvailability] = useState<Record<string, {
@@ -256,6 +258,7 @@ export default function BeneficiaryList({
       scheduledTime,
       state.duration,
       state.benefitId || undefined,
+      state.subscriptionId
     );
 
     // Clear selection on success
@@ -279,14 +282,14 @@ export default function BeneficiaryList({
   };
 
   /** Called when admin clicks a benefit card in the utilization panel */
-  const handleBenefitSelect = (benId: string, benefitId: string, benefitName: string, unitLabel: string) => {
+  const handleBenefitSelect = (benId: string, benefitId: string, benefitName: string, unitLabel: string, subscriptionId?: string) => {
     setScheduleState(prev => {
-      const current = prev[benId] || { ccId: '', date: '', time: '', duration: 60, benefitId: '', benefitLabel: '', benefitUnit: '' };
+      const current = prev[benId] || { ccId: '', date: '', time: '', duration: 60, benefitId: '', benefitLabel: '', benefitUnit: '', subscriptionId: undefined };
       // Toggle off if same benefit clicked again
       if (current.benefitId === benefitId) {
-        return { ...prev, [benId]: { ...current, benefitId: '', benefitLabel: '', benefitUnit: '' } };
+        return { ...prev, [benId]: { ...current, benefitId: '', benefitLabel: '', benefitUnit: '', subscriptionId: undefined } };
       }
-      return { ...prev, [benId]: { ...current, benefitId, benefitLabel: benefitName, benefitUnit: unitLabel } };
+      return { ...prev, [benId]: { ...current, benefitId, benefitLabel: benefitName, benefitUnit: unitLabel, subscriptionId } };
     });
   };
 
@@ -683,6 +686,10 @@ export default function BeneficiaryList({
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100">
                           {ben.activePackage}
                         </span>
+                      ) : ben.isPackagePending ? (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          Pending: {ben.activePackage || ben.lastPackageName}
+                        </span>
                       ) : ben.lastPackageName ? (
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                           Expired: {ben.lastPackageName}
@@ -1009,8 +1016,8 @@ export default function BeneficiaryList({
                         <PackageUtilizationPanel
                           beneficiaryId={ben.id}
                           beneficiaryName={ben.name}
-                          onBenefitSelect={(benefitId, benefitName, unitLabel) =>
-                            handleBenefitSelect(ben.id, benefitId, benefitName, unitLabel)
+                          onBenefitSelect={(benefitId, benefitName, unitLabel, subscriptionId) =>
+                            handleBenefitSelect(ben.id, benefitId, benefitName, unitLabel, subscriptionId)
                           }
                           selectedBenefitId={state.benefitId || undefined}
                         />

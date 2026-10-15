@@ -285,11 +285,16 @@ router.get('/beneficiaries', async (req, res) => {
       const activeSub = (b.subscriptions || []).find(
         (s) => s.isActive && new Date(s.endDate) >= now && !s.cancelledAt
       );
+      // Find pending/inactive unexpired subscription
+      const pendingSub = (b.subscriptions || []).find(
+        (s) => !s.isActive && new Date(s.endDate) >= now && !s.cancelledAt
+      );
       // Latest subscription regardless of expiry
       const latestSub = (b.subscriptions || [])[0] || null;
 
       const hasActivePackage = Boolean(activeSub);
-      const isPackageExpired = Boolean(!activeSub && latestSub);
+      const isPackagePending = Boolean(!activeSub && pendingSub);
+      const isPackageExpired = Boolean(!activeSub && !pendingSub && latestSub && new Date(latestSub.endDate) < now);
 
       return {
         id: b.id,
@@ -307,11 +312,12 @@ router.get('/beneficiaries', async (req, res) => {
         secondaryCcUserId: b.secondaryCC?.userId || null,
         secondaryCcName: b.secondaryCC?.name || null,
         teamId: b.teamId,
-        activePackage: activeSub?.package?.name || null,
-        subscriptionId: activeSub?.id || null,
-        packageEndDate: activeSub?.endDate || latestSub?.endDate || null,
+        activePackage: activeSub?.package?.name || pendingSub?.package?.name || null,
+        subscriptionId: activeSub?.id || pendingSub?.id || null,
+        packageEndDate: activeSub?.endDate || pendingSub?.endDate || latestSub?.endDate || null,
         lastPackageName: latestSub?.package?.name || null,
         hasActivePackage,
+        isPackagePending,
         isPackageExpired,
         hasUnreadRequests: (b.serviceRequests || []).length > 0,
       };

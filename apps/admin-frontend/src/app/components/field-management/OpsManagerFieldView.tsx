@@ -116,7 +116,7 @@ export default function OpsManagerFieldView() {
 
 
   // ── Schedule Visit for beneficiary ──────────────────────────────────────────
-  const handleScheduleVisit = async (beneficiaryId: string, ccId: string, scheduledTime: string, durationMinutes: number, benefitId?: string) => {
+  const handleScheduleVisit = async (beneficiaryId: string, ccId: string, scheduledTime: string, durationMinutes: number, benefitId?: string, subscriptionId?: string) => {
     setSubmittingId(beneficiaryId);
     try {
       await visitApi.create({
@@ -126,6 +126,7 @@ export default function OpsManagerFieldView() {
         scheduledTime,
         durationMinutes,
         benefitId,
+        subscriptionId,
       });
       toast.success(`✅ Visit scheduled successfully!`);
     } catch (e: any) {

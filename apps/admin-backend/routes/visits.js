@@ -184,6 +184,7 @@ router.post('/', async (req, res) => {
     scheduledTime,
     durationMinutes,
     benefitId,
+    subscriptionId,
     is3rdParty,
     thirdPartyNotes,
   } = req.body;
@@ -232,24 +233,33 @@ router.post('/', async (req, res) => {
       // B. Create a HELD BenefitReservation in the double-entry ledger so units are reserved
       //    The unit is converted to CONSUMED at checkout, or RELEASED if cancelled/missed.
       if (benefitId) {
-        let activeSub = await tx.subscription.findFirst({
-          where: {
-            beneficiaryId,
-            isActive: true,
-            endDate: { gte: new Date() },
-            benefitBalances: {
-              some: {
-                benefitId,
-                availableUnits: { gt: 0 }
-              }
-            }
-          },
-          include: { benefitBalances: { where: { benefitId } } },
-          orderBy: { createdAt: 'desc' }
-        });
+        let bal = null;
+        let selectedSub = null;
 
-        if (!activeSub) {
-          activeSub = await tx.subscription.findFirst({
+        // 1. If explicit subscriptionId was provided, check if it has available balance
+        if (subscriptionId) {
+          const explicitSub = await tx.subscription.findFirst({
+            where: {
+              id: subscriptionId,
+              beneficiaryId,
+              isActive: true,
+            },
+            include: { benefitBalances: { where: { benefitId } } }
+          });
+          if (explicitSub && explicitSub.benefitBalances && explicitSub.benefitBalances.length > 0) {
+            const candidateBal = explicitSub.benefitBalances[0];
+            const candidateAvail = candidateBal.totalUnits === -1 ? 999999 : (candidateBal.totalUnits - candidateBal.reservedUnits - candidateBal.usedUnits);
+            if (candidateAvail > 0) {
+              bal = candidateBal;
+              selectedSub = explicitSub;
+            }
+          }
+        }
+
+        // 2. If no subscriptionId provided or that package was exhausted, find any active subscription with availableUnits > 0
+        //    Order by earliest endDate so expiring packages are consumed first (FIFO)
+        if (!bal) {
+          const candidateSubs = await tx.subscription.findMany({
             where: {
               beneficiaryId,
               isActive: true,
@@ -259,58 +269,65 @@ router.post('/', async (req, res) => {
               }
             },
             include: { benefitBalances: { where: { benefitId } } },
-            orderBy: { createdAt: 'desc' }
+            orderBy: [{ endDate: 'asc' }, { createdAt: 'desc' }]
           });
-        }
 
-        if (activeSub && activeSub.benefitBalances && activeSub.benefitBalances.length > 0) {
-          const bal = activeSub.benefitBalances[0];
-          const available = Math.max(0, bal.totalUnits - bal.reservedUnits - bal.usedUnits);
-
-          if (bal.totalUnits > 0 && available <= 0) {
-            throw new Error('Insufficient benefit balance available for this visit');
+          for (const sub of candidateSubs) {
+            const candidateBal = sub.benefitBalances[0];
+            if (candidateBal) {
+              const candidateAvail = candidateBal.totalUnits === -1 ? 999999 : (candidateBal.totalUnits - candidateBal.reservedUnits - candidateBal.usedUnits);
+              if (candidateAvail > 0) {
+                bal = candidateBal;
+                selectedSub = sub;
+                break;
+              }
+            }
           }
-
-          const reservedBefore = bal.reservedUnits;
-          const usedBefore = bal.usedUnits;
-          const totalBefore = bal.totalUnits;
-          const availableBefore = available;
-
-          const reservedAfter = reservedBefore + 1;
-          const availableAfter = availableBefore - 1;
-
-          const resHold = await tx.benefitReservation.create({
-            data: {
-              balanceId: bal.id,
-              beneficiaryId,
-              units: 1,
-              status: 'HELD',
-              visitId: visit.id,
-            }
-          });
-
-          await tx.benefitTransaction.create({
-            data: {
-              balanceId: bal.id,
-              reservationId: resHold.id,
-              transactionType: 'RESERVED',
-              units: -1,
-              totalBefore, totalAfter: totalBefore,
-              reservedBefore, reservedAfter,
-              usedBefore, usedAfter: usedBefore,
-              availableBefore, availableAfter,
-              reason: `Visit Scheduled Encounter: ${visit.encounterId}`,
-              performedByUserId: req.user?.id || null
-            }
-          });
-
-          await tx.subscriptionBenefitBalance.update({
-            where: { id: bal.id },
-            data: { reservedUnits: reservedAfter, availableUnits: availableAfter }
-          });
-
-          console.log(`[VISIT SCHEDULE] Reserved 1 unit (HELD reservation ${resHold.id}) for visit ${visit.id}`);
         }
+
+        if (!bal) {
+          throw new Error('Insufficient benefit balance available for this visit across active packages');
+        }
+
+        const reservedBefore = bal.reservedUnits;
+        const usedBefore = bal.usedUnits;
+        const totalBefore = bal.totalUnits;
+        const availableBefore = bal.totalUnits === -1 ? 999999 : Math.max(0, bal.totalUnits - bal.reservedUnits - bal.usedUnits);
+
+        const reservedAfter = reservedBefore + 1;
+        const availableAfter = bal.totalUnits === -1 ? 999999 : Math.max(0, availableBefore - 1);
+
+        const resHold = await tx.benefitReservation.create({
+          data: {
+            balanceId: bal.id,
+            beneficiaryId,
+            units: 1,
+            status: 'HELD',
+            visitId: visit.id,
+          }
+        });
+
+        await tx.benefitTransaction.create({
+          data: {
+            balanceId: bal.id,
+            reservationId: resHold.id,
+            transactionType: 'RESERVED',
+            units: -1,
+            totalBefore, totalAfter: totalBefore,
+            reservedBefore, reservedAfter,
+            usedBefore, usedAfter: usedBefore,
+            availableBefore, availableAfter,
+            reason: `Visit Scheduled Encounter: ${visit.encounterId} (Plan: ${selectedSub?.packageType || selectedSub?.id || 'Active'})`,
+            performedByUserId: req.user?.id || null
+          }
+        });
+
+        await tx.subscriptionBenefitBalance.update({
+          where: { id: bal.id },
+          data: { reservedUnits: reservedAfter, availableUnits: availableAfter }
+        });
+
+        console.log(`[VISIT SCHEDULE] Reserved 1 unit (HELD reservation ${resHold.id} on sub ${bal.subscriptionId}) for visit ${visit.id}`);
       }
 
 
@@ -445,15 +462,21 @@ router.patch('/:id/complete', async (req, res) => {
           }
 
           if (!subscription) {
-            subscription = await tx.subscription.findFirst({
+            const activeSubs = await tx.subscription.findMany({
               where: {
                 beneficiaryId: visit.beneficiaryId,
                 isActive: true,
                 endDate: { gte: new Date() },
                 benefitBalances: { some: { benefitId: hoursBenefitId } }
               },
-              orderBy: { createdAt: 'desc' }
+              include: { benefitBalances: { where: { benefitId: hoursBenefitId } } },
+              orderBy: [{ endDate: 'asc' }, { createdAt: 'desc' }]
             });
+
+            subscription = activeSubs.find(s => {
+              const b = s.benefitBalances[0];
+              return b && (b.totalUnits === -1 || (b.usedUnits + 1) <= b.totalUnits);
+            }) || activeSubs[0] || null;
           }
 
           if (!subscription) {
@@ -993,7 +1016,7 @@ router.get('/', async (req, res) => {
     }
     const where = {};
     if (beneficiaryId) where.beneficiaryId = beneficiaryId;
-    if (careCompanionId) where.careCompanionId = careCompanionId;
+
     // Filter by human-readable visitCode (case-insensitive partial match)
     if (visitCode) {
       where.visitCode = { contains: String(visitCode).toUpperCase(), mode: 'insensitive' };
@@ -1021,10 +1044,55 @@ router.get('/', async (req, res) => {
     const roleFilter = await getVisitFilter(req.user);
     Object.assign(where, roleFilter);
 
+    // Filter by Field Manager and/or Care Companion
     if (fmUserId) {
-      where.careCompanion = {
-        team: { fieldManager: { userId: fmUserId } },
+      const fmScopeCondition = {
+        OR: [
+          {
+            careCompanion: {
+              team: { fieldManager: { userId: fmUserId } },
+            },
+          },
+          {
+            beneficiary: {
+              OR: [
+                { team: { fieldManager: { userId: fmUserId } } },
+                { primaryCC: { team: { fieldManager: { userId: fmUserId } } } },
+                { secondaryCC: { team: { fieldManager: { userId: fmUserId } } } },
+              ],
+            },
+          },
+        ],
       };
+
+      if (careCompanionId === 'THIRD_PARTY' || careCompanionId === 'null') {
+        where.AND = [
+          ...(where.AND || []),
+          fmScopeCondition,
+          {
+            OR: [
+              { is3rdParty: true },
+              { careCompanionId: null },
+            ],
+          },
+        ];
+      } else if (careCompanionId) {
+        where.careCompanionId = careCompanionId;
+      } else {
+        where.AND = [
+          ...(where.AND || []),
+          fmScopeCondition,
+        ];
+      }
+    } else {
+      if (careCompanionId === 'THIRD_PARTY' || careCompanionId === 'null') {
+        where.OR = [
+          { is3rdParty: true },
+          { careCompanionId: null },
+        ];
+      } else if (careCompanionId) {
+        where.careCompanionId = careCompanionId;
+      }
     }
 
     const visits = await prisma.visit.findMany({
@@ -1080,10 +1148,15 @@ router.get('/', async (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DELETE /api/visits/:id - Cancel a scheduled visit
+// DELETE /api/visits/:id - Cancel or delete a scheduled visit and release quota
 // ─────────────────────────────────────────────────────────────────────────────
-router.delete('/:id', requirePermission('visits.delete'), async (req, res) => {
+router.delete('/:id', async (req, res) => {
   const { id } = req.params;
+  const { can } = require('../utils/rbac');
+  if (!can(req.user, 'visits.delete') && !can(req.user, 'visits.cancel_status')) {
+    return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions to cancel/delete visits' });
+  }
+
   try {
     const visit = await prisma.visit.findUnique({
       where: { id },
@@ -1095,29 +1168,41 @@ router.delete('/:id', requirePermission('visits.delete'), async (req, res) => {
 
     if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
     if (visit.status === 'completed') {
-      return res.status(400).json({ success: false, message: 'Cannot cancel a completed visit' });
+      return res.status(400).json({ success: false, message: 'Cannot cancel or delete a completed visit' });
     }
 
+    const isPermanent = req.query.permanent === 'true';
+
     await prisma.$transaction(async (tx) => {
-      await tx.visit.update({ where: { id }, data: { status: 'cancelled' } });
-
       // Release any HELD benefit reservation so senior quota is restored
-      await releaseVisitBenefitReservation(tx, id, 'Visit cancelled via admin');
+      await releaseVisitBenefitReservation(tx, id, isPermanent ? 'Visit permanently deleted' : 'Visit cancelled via admin');
 
-      // Idempotency safety: if somehow a log exists (e.g. completed then re-cancelled), remove it.
-      const log = await tx.packageHoursLog.findUnique({ where: { visitId: id } });
-      if (log) {
-        console.warn(`[CANCEL VISIT] Found unexpected log for visit ${id} — removing orphan log.`);
-        await tx.packageHoursLog.delete({ where: { id: log.id } });
+      if (isPermanent) {
+        // Cascade delete reservations, transactions link, and package logs
+        await tx.benefitReservation.deleteMany({ where: { visitId: id } });
+        await tx.packageHoursLog.deleteMany({ where: { visitId: id } });
+        await tx.visit.delete({ where: { id } });
+        console.log(`[DELETE VISIT] Visit ${id} permanently removed from database.`);
+      } else {
+        await tx.visit.update({ where: { id }, data: { status: 'cancelled' } });
+
+        // Idempotency safety: if somehow a log exists, remove it.
+        const log = await tx.packageHoursLog.findUnique({ where: { visitId: id } });
+        if (log) {
+          console.warn(`[CANCEL VISIT] Found unexpected log for visit ${id} — removing orphan log.`);
+          await tx.packageHoursLog.delete({ where: { id: log.id } });
+        }
+        console.log(`[CANCEL VISIT] Visit ${id} cancelled and reserved benefit released.`);
       }
-
-      console.log(`[CANCEL VISIT] Visit ${id} cancelled and reserved benefit released.`);
     });
 
     // Trigger VISIT_CANCELLED event notification (Push + WhatsApp)
     visitEventDispatcher.dispatchVisitCancelled(visit);
 
-    res.json({ success: true, message: 'Visit cancelled successfully' });
+    res.json({
+      success: true,
+      message: isPermanent ? 'Visit deleted permanently and quota released' : 'Visit cancelled successfully and quota released'
+    });
   } catch (err) {
     console.error('DELETE /visits/:id error:', err);
     res.status(500).json({ success: false, message: err.message });
@@ -1131,8 +1216,8 @@ router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { careCompanionId, scheduledTime, durationMinutes } = req.body;
 
-  if (!careCompanionId || !scheduledTime || !durationMinutes) {
-    return res.status(400).json({ success: false, message: 'Missing required fields' });
+  if (!scheduledTime || !durationMinutes) {
+    return res.status(400).json({ success: false, message: 'Missing required fields (scheduledTime, durationMinutes)' });
   }
 
   try {
@@ -1145,8 +1230,8 @@ router.put('/:id', async (req, res) => {
     });
 
     if (!existingVisit) return res.status(404).json({ success: false, message: 'Visit not found' });
-    if (existingVisit.status !== 'scheduled') {
-      return res.status(400).json({ success: false, message: 'Only scheduled visits can be modified' });
+    if (!['scheduled', 'missed'].includes(existingVisit.status)) {
+      return res.status(400).json({ success: false, message: 'Only scheduled or missed visits can be modified or rescheduled' });
     }
 
     const startTime = new Date(scheduledTime);
@@ -1155,21 +1240,112 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Cannot reschedule a visit to a past date/time' });
     }
 
-    if (
-      careCompanionId !== existingVisit.careCompanionId ||
-      startTime.getTime() !== new Date(existingVisit.scheduledTime).getTime() ||
-      durationMinutes !== existingVisit.durationMinutes
-    ) {
-      const availability = await checkCCAvailability(careCompanionId, startTime, durationMinutes, id);
-      if (!availability.isAvailable) {
-        return res.status(409).json({ success: false, message: availability.reason });
+    const isThirdParty = careCompanionId === 'THIRD_PARTY' || (!careCompanionId && existingVisit.is3rdParty);
+    const targetCcId = isThirdParty ? null : (careCompanionId || existingVisit.careCompanionId);
+
+    if (!isThirdParty && targetCcId) {
+      if (
+        targetCcId !== existingVisit.careCompanionId ||
+        startTime.getTime() !== new Date(existingVisit.scheduledTime).getTime() ||
+        durationMinutes !== existingVisit.durationMinutes
+      ) {
+        const availability = await checkCCAvailability(targetCcId, startTime, durationMinutes, id);
+        if (!availability.isAvailable) {
+          return res.status(409).json({ success: false, message: availability.reason });
+        }
       }
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // If visit was previously missed, we re-reserve quota if a benefit is linked
+      if (existingVisit.status === 'missed' && existingVisit.benefitId) {
+        const benefitId = existingVisit.benefitId;
+        const beneficiaryId = existingVisit.beneficiaryId;
+
+        // Check if there is already a HELD reservation
+        let existingRes = await tx.benefitReservation.findFirst({
+          where: { visitId: id, status: 'HELD' }
+        });
+
+        if (!existingRes) {
+          // Find active subscription with balance
+          const candidateSubs = await tx.subscription.findMany({
+            where: {
+              beneficiaryId,
+              isActive: true,
+              endDate: { gte: new Date() },
+              benefitBalances: { some: { benefitId } }
+            },
+            include: { benefitBalances: { where: { benefitId } } },
+            orderBy: [{ endDate: 'asc' }, { createdAt: 'desc' }]
+          });
+
+          let targetBal = null;
+          for (const sub of candidateSubs) {
+            const b = sub.benefitBalances[0];
+            if (b) {
+              const avail = b.totalUnits === -1 ? 999999 : (b.totalUnits - b.reservedUnits - b.usedUnits);
+              if (avail > 0) {
+                targetBal = b;
+                break;
+              }
+            }
+          }
+
+          if (!targetBal) {
+            throw new Error('Cannot reschedule missed visit: Insufficient benefit balance in active packages');
+          }
+
+          const reservedBefore = targetBal.reservedUnits;
+          const availableBefore = targetBal.totalUnits === -1 ? 999999 : Math.max(0, targetBal.totalUnits - targetBal.reservedUnits - targetBal.usedUnits);
+          const reservedAfter = reservedBefore + 1;
+          const availableAfter = targetBal.totalUnits === -1 ? 999999 : Math.max(0, availableBefore - 1);
+
+          const newRes = await tx.benefitReservation.create({
+            data: {
+              balanceId: targetBal.id,
+              beneficiaryId,
+              units: 1,
+              status: 'HELD',
+              visitId: id,
+            }
+          });
+
+          await tx.benefitTransaction.create({
+            data: {
+              balanceId: targetBal.id,
+              reservationId: newRes.id,
+              transactionType: 'RESERVED',
+              units: -1,
+              totalBefore: targetBal.totalUnits,
+              totalAfter: targetBal.totalUnits,
+              reservedBefore,
+              reservedAfter,
+              usedBefore: targetBal.usedUnits,
+              usedAfter: targetBal.usedUnits,
+              availableBefore,
+              availableAfter,
+              reason: `Rescheduled Missed Visit: ${existingVisit.visitCode || id}`,
+              performedByUserId: req.user?.id || null,
+            }
+          });
+
+          await tx.subscriptionBenefitBalance.update({
+            where: { id: targetBal.id },
+            data: { reservedUnits: reservedAfter, availableUnits: availableAfter }
+          });
+        }
+      }
+
       const updatedVisit = await tx.visit.update({
         where: { id },
-        data: { careCompanionId, scheduledTime: startTime, durationMinutes },
+        data: {
+          status: 'scheduled',
+          careCompanionId: targetCcId,
+          is3rdParty: isThirdParty,
+          scheduledTime: startTime,
+          durationMinutes
+        },
         include: {
           beneficiary: { select: { name: true, userId: true, subscriberId: true } },
           careCompanion: { select: { name: true, userId: true } },
@@ -1266,14 +1442,56 @@ router.patch('/:id/status', async (req, res) => {
           if (benefit) {
             const unitLabelLower = (benefit.unitLabel || '').toLowerCase();
             const isHourBased = unitLabelLower.includes('hour') || unitLabelLower.includes('hr');
-            const activeSub = await tx.subscription.findFirst({
-              where: { beneficiaryId: visit.beneficiaryId, isActive: true },
+            const units = parseFloat(hoursConsumed) || 1;
+
+            // 1. Check if this visit has a HELD reservation in the double-entry ledger
+            const existingReservation = await tx.benefitReservation.findFirst({
+              where: { visitId: id, status: 'HELD' },
+              include: { balance: true }
             });
 
-            if (activeSub) {
-              const units = parseFloat(hoursConsumed) || 1;
+            let targetSubscriptionId = existingReservation?.balance?.subscriptionId || null;
+
+            // 2. If no HELD reservation, find the best active subscription that has available balance for this benefit
+            if (!targetSubscriptionId) {
+              const activeSubsWithBalance = await tx.subscription.findMany({
+                where: {
+                  beneficiaryId: visit.beneficiaryId,
+                  isActive: true,
+                  endDate: { gte: new Date() },
+                  benefitBalances: {
+                    some: { benefitId: hoursBenefitId }
+                  }
+                },
+                include: {
+                  benefitBalances: {
+                    where: { benefitId: hoursBenefitId }
+                  }
+                },
+                orderBy: [
+                  { endDate: 'asc' },
+                  { createdAt: 'desc' }
+                ]
+              });
+
+              // Select the first subscription that actually has enough balance
+              const subWithUnits = activeSubsWithBalance.find(s => {
+                const b = s.benefitBalances[0];
+                if (!b) return false;
+                if (b.totalUnits === -1) return true;
+                return (b.usedUnits + units) <= b.totalUnits;
+              });
+
+              if (subWithUnits) {
+                targetSubscriptionId = subWithUnits.id;
+              } else if (activeSubsWithBalance.length > 0) {
+                targetSubscriptionId = activeSubsWithBalance[0].id;
+              }
+            }
+
+            if (targetSubscriptionId) {
               await deductBenefitBalance(tx, {
-                subscriptionId: activeSub.id,
+                subscriptionId: targetSubscriptionId,
                 beneficiaryId: visit.beneficiaryId,
                 benefitId: hoursBenefitId,
                 visitId: id,
@@ -1284,15 +1502,17 @@ router.patch('/:id/status', async (req, res) => {
 
               if (isHourBased) {
                 await tx.subscription.update({
-                  where: { id: activeSub.id },
+                  where: { id: targetSubscriptionId },
                   data: { hoursUsed: { increment: units } },
                 });
               } else {
                 await tx.subscription.update({
-                  where: { id: activeSub.id },
+                  where: { id: targetSubscriptionId },
                   data: { visitsCompleted: { increment: 1 } },
                 });
               }
+            } else {
+              console.warn(`[COMPLETE STATUS] No matching subscription with benefit ${hoursBenefitId} found for beneficiary ${visit.beneficiaryId}`);
             }
           }
         }

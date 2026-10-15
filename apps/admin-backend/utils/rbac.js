@@ -392,18 +392,44 @@ async function getVisitFilter(user) {
   if (user.role === 'operations_manager') {
     const zoneIds = await getOmZoneIds(user.id);
     return {
-      careCompanion: {
-        team: { zoneId: { in: zoneIds } },
-      },
+      OR: [
+        {
+          careCompanion: {
+            team: { zoneId: { in: zoneIds } },
+          },
+        },
+        {
+          beneficiary: {
+            OR: [
+              { team: { zoneId: { in: zoneIds } } },
+              { primaryCC: { team: { zoneId: { in: zoneIds } } } },
+              { secondaryCC: { team: { zoneId: { in: zoneIds } } } },
+            ],
+          },
+        },
+      ],
     };
   }
 
   if (user.role === 'field_manager') {
     const teamIds = await getFmTeamIds(user.id);
     return {
-      careCompanion: {
-        teamId: { in: teamIds },
-      },
+      OR: [
+        {
+          careCompanion: {
+            teamId: { in: teamIds },
+          },
+        },
+        {
+          beneficiary: {
+            OR: [
+              { teamId: { in: teamIds } },
+              { primaryCC: { teamId: { in: teamIds } } },
+              { secondaryCC: { teamId: { in: teamIds } } },
+            ],
+          },
+        },
+      ],
     };
   }
 

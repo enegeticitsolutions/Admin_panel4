@@ -167,13 +167,17 @@ router.get('/', async (req, res) => {
 
     let mapped = await Promise.all(allBeneficiaries.map(async (b) => {
       const benSubs = subMap[b.id] || [];
-      const activeSubs = benSubs.filter((s) => s.isActive && new Date(s.endDate) > now);
+      const activeSubs = benSubs.filter((s) => s.isActive && new Date(s.endDate) > now && !s.cancelledAt);
       const activeSub = activeSubs[0] || null;
-      const expiredSub = benSubs.find((s) => new Date(s.endDate) <= now || !s.isActive);
+      const unexpiredSubs = benSubs.filter((s) => new Date(s.endDate) > now && !s.cancelledAt);
+      const pendingSub = unexpiredSubs.find((s) => !s.isActive);
+      const expiredSub = benSubs.find((s) => new Date(s.endDate) <= now && !s.cancelledAt);
 
-      let packageStatus = 'none'; // 'active' | 'expired' | 'none'
+      let packageStatus = 'none'; // 'active' | 'pending' | 'expired' | 'none'
       if (activeSub) {
         packageStatus = 'active';
+      } else if (pendingSub) {
+        packageStatus = 'pending';
       } else if (expiredSub || benSubs.length > 0) {
         packageStatus = 'expired';
       }
@@ -246,10 +250,10 @@ router.get('/', async (req, res) => {
         careCompanionZone: b.primaryCC?.zone || null,
         secondaryCareCompanion: b.secondaryCC?.name || null,
         teamName: b.team?.name || null,
-        activePackage: activeSub?.package?.name || null,
+        activePackage: activeSub?.package?.name || pendingSub?.package?.name || null,
         packageStatus,
         isPackageExpired: packageStatus === 'expired',
-        subscriptionEndDate: activeSub?.endDate || expiredSub?.endDate || null,
+        subscriptionEndDate: activeSub?.endDate || pendingSub?.endDate || expiredSub?.endDate || null,
         isActive: b.isActive,
         createdAt: b.createdAt,
         distance: minDistance ? parseFloat(minDistance.toFixed(2)) : null,

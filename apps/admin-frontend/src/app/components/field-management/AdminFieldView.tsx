@@ -331,9 +331,17 @@ export default function AdminFieldView() {
                   team={detailData.team}
                   loading={detailLoading}
                   submittingId={null}
-                  onScheduleVisit={async (benId, ccId, time, dur, benefitId) => {
+                  onScheduleVisit={async (benId, ccId, time, dur, benefitId, subscriptionId) => {
                      try {
-                       await visitApi.create({ beneficiaryId: benId, careCompanionId: ccId, scheduledTime: time, durationMinutes: dur, benefitId });
+                       await visitApi.create({
+                         beneficiaryId: benId,
+                         careCompanionId: ccId === 'THIRD_PARTY' ? null : ccId,
+                         is3rdParty: ccId === 'THIRD_PARTY',
+                         scheduledTime: time,
+                         durationMinutes: dur,
+                         benefitId,
+                         subscriptionId,
+                       });
                        toast.success('Visit scheduled successfully!');
                      } catch (e: any) {
                        toast.error(e.message || 'Failed to schedule visit');

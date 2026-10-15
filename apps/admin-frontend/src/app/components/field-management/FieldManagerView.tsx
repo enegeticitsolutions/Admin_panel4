@@ -128,7 +128,7 @@ export default function FieldManagerView() {
           team={team}
           loading={benLoading}
           submittingId={null}
-          onScheduleVisit={async (benId, ccId, time, dur, benefitId) => {
+          onScheduleVisit={async (benId, ccId, time, dur, benefitId, subscriptionId) => {
             try {
               await visitApi.create({
                 beneficiaryId: benId,
@@ -137,6 +137,7 @@ export default function FieldManagerView() {
                 scheduledTime: time,
                 durationMinutes: dur,
                 benefitId,
+                subscriptionId,
               });
               toast.success('Visit scheduled successfully!');
             } catch (e: any) {

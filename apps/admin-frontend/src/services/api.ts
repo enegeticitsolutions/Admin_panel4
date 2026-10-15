@@ -1173,7 +1173,7 @@ export const subscriptionApi = {
       startDate: string;
       endDate: string;
       isActive: boolean;
-      status: 'active' | 'expired' | 'cancelled';
+      status: 'active' | 'expired' | 'cancelled' | 'queued' | 'inactive';
       isExpired: boolean;
       durationDays: number;
       daysRemaining: number;
@@ -1195,7 +1195,7 @@ export const subscriptionApi = {
       startDate: string;
       endDate: string;
       isActive: boolean;
-      status: 'active' | 'expired' | 'cancelled';
+      status: 'active' | 'expired' | 'cancelled' | 'queued' | 'inactive';
       isExpired: boolean;
       hoursTotal: number;
       hoursUsed: number;
@@ -1269,9 +1269,26 @@ export const subscriptionApi = {
   async initializeBalances(subscriptionId: string): Promise<{ created: number; message: string; benefits: any[] }> {
     return apiJson(`/subscriptions/${subscriptionId}/initialize-balances`, { method: 'POST' });
   },
+  /** Activate an inactive or queued subscription immediately */
+  async activateSubscription(subscriptionId: string): Promise<{ success: boolean; message: string; data: any }> {
+    return apiJson(`/subscriptions/${subscriptionId}/activate`, { method: 'POST' });
+  },
   /** Activate a queued subscription immediately */
   async activateQueuedSubscription(subscriptionId: string): Promise<{ success: boolean; message: string; data: any }> {
     return apiJson(`/subscriptions/${subscriptionId}/activate-queued`, { method: 'POST' });
+  },
+  /** Manually release a stuck or orphaned reservation and restore locked quota */
+  async releaseReservation(reservationId: string, reason?: string): Promise<{ success: boolean; message: string; data: any }> {
+    return apiJson(`/subscriptions/reservations/${reservationId}/release`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+  /** Auto-reconcile all reservations for a beneficiary and resync balance counters */
+  async reconcileReservations(beneficiaryId: string): Promise<{ success: boolean; message: string; report: any }> {
+    return apiJson(`/subscriptions/beneficiary/${beneficiaryId}/reconcile-reservations`, {
+      method: 'POST',
+    });
   },
   /** Get expiring subscriptions for worklist */
   async getExpiringSubscriptions(days: number = 30): Promise<any[]> {
@@ -1429,7 +1446,7 @@ export const visitApi = {
       body: formData,
     });
   },
-  async create(data: { beneficiaryId: string; careCompanionId?: string | null; is3rdParty?: boolean; thirdPartyNotes?: string; scheduledTime: string; durationMinutes: number; benefitId?: string }): Promise<any> {
+  async create(data: { beneficiaryId: string; careCompanionId?: string | null; is3rdParty?: boolean; thirdPartyNotes?: string; scheduledTime: string; durationMinutes: number; benefitId?: string; subscriptionId?: string }): Promise<any> {
     return apiJson('/visits', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -1441,8 +1458,8 @@ export const visitApi = {
       body: JSON.stringify({ status, note, hoursConsumed })
     });
   },
-  async cancel(id: string): Promise<any> {
-    return apiJson(`/visits/${id}`, { method: 'DELETE' });
+  async cancel(id: string, permanent: boolean = false): Promise<any> {
+    return apiJson(`/visits/${id}${permanent ? '?permanent=true' : ''}`, { method: 'DELETE' });
   },
   async update(id: string, data: { careCompanionId: string; scheduledTime: string; durationMinutes: number }): Promise<any> {
     return apiJson(`/visits/${id}`, {

@@ -1004,6 +1004,30 @@ export const autoUpdateMissedVisits = async () => {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   try {
+    const expiredVisits = await prisma.visit.findMany({
+      where: {
+        status: 'scheduled',
+        scheduledTime: { lt: startOfToday },
+      },
+      select: { id: true },
+    });
+
+    for (const ev of expiredVisits) {
+      const reservation = await prisma.benefitReservation.findUnique({
+        where: { visitId: ev.id },
+      });
+      if (reservation && reservation.status === 'HELD') {
+        try {
+          await benefitLedgerService.releaseReservation({
+            reservationId: reservation.id,
+            reason: 'Auto-marked missed by system schedule check',
+          });
+        } catch (rErr: any) {
+          console.error(`[autoUpdateMissedVisits] Failed to release reservation for visit ${ev.id}:`, rErr.message);
+        }
+      }
+    }
+
     await prisma.visit.updateMany({
       where: {
         status: 'scheduled',

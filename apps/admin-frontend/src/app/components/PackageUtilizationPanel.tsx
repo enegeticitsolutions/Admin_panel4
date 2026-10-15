@@ -20,12 +20,19 @@ import {
   SlidersHorizontal,
   FileText,
   Lock,
-  Play
+  Play,
+  Eye,
+  Trash2,
+  Unlock,
+  RotateCw,
+  AlertCircle,
+  X
 } from 'lucide-react';
-import { subscriptionApi } from '../../services/api';
+import { subscriptionApi, visitApi } from '../../services/api';
 import { toast } from 'sonner';
 import { AddonBenefitModal } from './addons/AddonBenefitModal';
 import { AdjustBenefitQuotaModal, BenefitBalanceForAdjustment } from './beneficiary/AdjustBenefitQuotaModal';
+import VisitDetailsModal from './field-management/VisitDetailsModal';
 
 interface BenefitBalance {
   balanceId?: string;
@@ -48,8 +55,10 @@ interface BenefitBalance {
     visitCode: string | null;
     scheduledTime: string | null;
     status: string;
+    isStuck?: boolean;
     careCompanion: string;
     units: number;
+    createdAt?: string;
   }>;
 }
 
@@ -80,7 +89,7 @@ interface SubscriptionSummary {
   endDate: string;
   isActive: boolean;
   isQueued?: boolean;
-  status: 'active' | 'expired' | 'cancelled' | 'queued';
+  status: 'active' | 'expired' | 'cancelled' | 'queued' | 'inactive';
   isExpired: boolean;
   durationDays: number;
   daysRemaining: number;
@@ -104,7 +113,7 @@ interface SubscriptionHistoryItem {
   endDate: string;
   isActive: boolean;
   isQueued?: boolean;
-  status: 'active' | 'expired' | 'cancelled' | 'queued';
+  status: 'active' | 'expired' | 'cancelled' | 'queued' | 'inactive';
   isExpired: boolean;
   hoursTotal: number;
   hoursUsed: number;
@@ -156,7 +165,7 @@ interface Props {
   subscriberEmail?: string;
   defaultPincode?: string;
   /** When provided, renders benefit cards as selectable buttons */
-  onBenefitSelect?: (benefitId: string, benefitName: string, unitLabel: string) => void;
+  onBenefitSelect?: (benefitId: string, benefitName: string, unitLabel: string, subscriptionId?: string) => void;
   /** Currently selected benefit ID (for highlighted state) */
   selectedBenefitId?: string;
 }
@@ -297,25 +306,133 @@ export function PackageUtilizationPanel({
   const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [selectedBalanceForAdjust, setSelectedBalanceForAdjust] = useState<BenefitBalanceForAdjustment | null>(null);
+  const [viewingVisitId, setViewingVisitId] = useState<string | null>(null);
+  const [reconciling, setReconciling] = useState(false);
+  const [releasingId, setReleasingId] = useState<string | null>(null);
+  const [cancellingVisitId, setCancellingVisitId] = useState<string | null>(null);
+  const [reschedulingVisit, setReschedulingVisit] = useState<{
+    open: boolean;
+    visitId: string;
+    visitCode: string;
+    currentTime: string;
+    newDate: string;
+    newTime: string;
+    durationMinutes: number;
+    submitting: boolean;
+  }>({
+    open: false,
+    visitId: '',
+    visitCode: '',
+    currentTime: '',
+    newDate: '',
+    newTime: '',
+    durationMinutes: 60,
+    submitting: false,
+  });
 
-  const handleActivateQueued = async () => {
+  const handleReconcileLocks = async () => {
+    setReconciling(true);
+    try {
+      const res = await subscriptionApi.reconcileReservations(beneficiaryId);
+      toast.success(res.message || 'Reconciliation completed!');
+      await load(subscription?.id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reconcile reservations');
+    } finally {
+      setReconciling(false);
+    }
+  };
+
+  const handleReleaseStuckLock = async (reservationId: string, visitCode?: string | null) => {
+    const confirm = window.confirm(`Release this locked quota${visitCode ? ` for visit #${visitCode}` : ''}?\n\nThis will restore the 1 locked unit back to available quota immediately.`);
+    if (!confirm) return;
+
+    setReleasingId(reservationId);
+    try {
+      const res = await subscriptionApi.releaseReservation(reservationId, 'Manual lock release from panel');
+      toast.success(res.message || 'Locked quota released successfully!');
+      await load(subscription?.id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to release lock');
+    } finally {
+      setReleasingId(null);
+    }
+  };
+
+  const handleCancelLockedVisit = async (visitId: string, visitCode?: string | null) => {
+    const confirm = window.confirm(`Cancel visit #${visitCode || 'VISIT'}?\n\nThis will cancel the scheduled visit and restore the 1 locked unit back to available quota immediately.`);
+    if (!confirm) return;
+
+    setCancellingVisitId(visitId);
+    try {
+      await visitApi.cancel(visitId);
+      toast.success(`Visit #${visitCode || 'VISIT'} cancelled and quota restored!`);
+      await load(subscription?.id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to cancel visit');
+    } finally {
+      setCancellingVisitId(null);
+    }
+  };
+
+  const openRescheduleModal = (lv: any) => {
+    const d = lv.scheduledTime ? new Date(lv.scheduledTime) : new Date();
+    const dateStr = !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : '';
+    const timeStr = !isNaN(d.getTime()) ? d.toTimeString().substring(0, 5) : '10:00';
+    setReschedulingVisit({
+      open: true,
+      visitId: lv.visitId,
+      visitCode: lv.visitCode || 'VISIT',
+      currentTime: lv.scheduledTime || '',
+      newDate: dateStr,
+      newTime: timeStr,
+      durationMinutes: 60,
+      submitting: false,
+    });
+  };
+
+  const submitReschedule = async () => {
+    if (!reschedulingVisit.newDate || !reschedulingVisit.newTime) {
+      toast.error('Please pick a date and time');
+      return;
+    }
+    const scheduledTime = new Date(`${reschedulingVisit.newDate}T${reschedulingVisit.newTime}`).toISOString();
+    setReschedulingVisit(prev => ({ ...prev, submitting: true }));
+    try {
+      await visitApi.update(reschedulingVisit.visitId, {
+        careCompanionId: 'THIRD_PARTY',
+        scheduledTime,
+        durationMinutes: reschedulingVisit.durationMinutes,
+      });
+      toast.success(`Visit #${reschedulingVisit.visitCode} rescheduled successfully!`);
+      setReschedulingVisit(prev => ({ ...prev, open: false }));
+      await load(subscription?.id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reschedule visit');
+      setReschedulingVisit(prev => ({ ...prev, submitting: false }));
+    }
+  };
+
+  const handleActivateSubscription = async () => {
     if (!subscription?.id) return;
     const confirm = window.confirm(
-      `Activate "${subscription.packageName}" immediately?\n\nThis will start the plan today, make its benefits immediately usable, and supersede any previous plan.`
+      `Activate "${subscription.packageName}" immediately?\n\nThis will start the plan today, allocate all package benefit balances, and make visits bookable immediately.`
     );
     if (!confirm) return;
 
     setActivating(true);
     try {
-      const res = await subscriptionApi.activateQueuedSubscription(subscription.id);
-      toast.success(res.message || 'Queued package activated successfully!');
+      const res = await subscriptionApi.activateSubscription(subscription.id);
+      toast.success(res.message || 'Package activated successfully!');
       await load(subscription.id);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to activate queued package');
+      toast.error(err.message || 'Failed to activate package');
     } finally {
       setActivating(false);
     }
   };
+
+  const handleActivateQueued = handleActivateSubscription;
 
   const load = async (subId?: string) => {
     setLoading(true);
@@ -385,10 +502,12 @@ export function PackageUtilizationPanel({
   const hasWarnings = benefits.some((b) => b.isLowBalance || b.isExhausted);
   const isSelectable = !!onBenefitSelect;
 
+  const isEndDatePast = Boolean(subscription.endDate && new Date(subscription.endDate).getTime() < Date.now());
   const isQueued = subscription.status === 'queued' || Boolean(subscription.isQueued);
-  const isExpired = !isQueued && (subscription.status === 'expired' || subscription.isExpired);
   const isCancelled = subscription.status === 'cancelled';
-  const isActive = (subscription.status === 'active' || subscription.isActive) && !isExpired && !isCancelled && !isQueued;
+  const isExpired = !isQueued && !isCancelled && isEndDatePast;
+  const isInactive = !isExpired && !isQueued && !isCancelled && (!subscription.isActive || subscription.status === 'inactive');
+  const isActive = !isExpired && !isCancelled && !isQueued && !isInactive && (subscription.isActive || subscription.status === 'active');
 
   return (
     <div className="space-y-6">
@@ -409,7 +528,9 @@ export function PackageUtilizationPanel({
             {allSubscriptions.map((sub, idx) => {
               const isCurrent = sub.id === subscription.id;
               const subIsQueued = sub.status === 'queued' || Boolean(sub.isQueued);
-              const subIsExpired = !subIsQueued && (sub.status === 'expired' || sub.isExpired);
+              const subIsEndDatePast = Boolean(sub.endDate && new Date(sub.endDate).getTime() < Date.now());
+              const subIsExpired = !subIsQueued && sub.status !== 'cancelled' && subIsEndDatePast;
+              const subIsInactive = !subIsExpired && !subIsQueued && sub.status !== 'cancelled' && (!sub.isActive || sub.status === 'inactive');
               return (
                 <button
                   key={sub.id}
@@ -429,6 +550,8 @@ export function PackageUtilizationPanel({
                     className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider ${
                       subIsQueued
                         ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                        : subIsInactive
+                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
                         : sub.status === 'active' && !subIsExpired
                         ? 'bg-emerald-100 text-emerald-800'
                         : sub.status === 'cancelled'
@@ -436,7 +559,7 @@ export function PackageUtilizationPanel({
                         : 'bg-amber-100 text-amber-800'
                     }`}
                   >
-                    {subIsQueued ? 'Queued' : sub.status === 'active' && !subIsExpired ? 'Active' : sub.status === 'cancelled' ? 'Cancelled' : 'Expired'}
+                    {subIsQueued ? 'Queued' : subIsInactive ? 'Pending' : sub.status === 'active' && !subIsExpired ? 'Active' : sub.status === 'cancelled' ? 'Cancelled' : 'Expired'}
                   </span>
                 </button>
               );
@@ -455,6 +578,11 @@ export function PackageUtilizationPanel({
               <h3 className="text-xl font-black text-gray-900">{subscription.packageName}</h3>
 
               {/* Status Badge */}
+              {isInactive && (
+                <span className="bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
+                  <Clock size={12} className="text-blue-700" /> Pending Activation
+                </span>
+              )}
               {isQueued && (
                 <span className="bg-purple-100 text-purple-900 border border-purple-200 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm">
                   <Clock size={12} className="text-purple-700" /> Queued Package
@@ -481,7 +609,7 @@ export function PackageUtilizationPanel({
             <div className="flex items-center gap-2 text-xs font-bold text-gray-600 flex-wrap">
               <span className="flex items-center gap-1 text-gray-400">
                 <Calendar size={13} />
-                {isQueued ? 'Scheduled for:' : 'Active from:'}
+                {isQueued ? 'Scheduled for:' : isInactive ? 'Valid period:' : 'Active from:'}
               </span>
               <span className="font-black text-gray-800">
                 {new Date(subscription.startDate).toLocaleDateString('en-IN', {
@@ -503,6 +631,11 @@ export function PackageUtilizationPanel({
                 {subscription.durationDays} Days Duration
               </span>
 
+              {isInactive && (
+                <span className="text-blue-700 text-[11px] font-bold">
+                  (Pending Activation)
+                </span>
+              )}
               {isQueued && (
                 <span className="text-purple-700 text-[11px] font-bold">
                   (Starts after current plan)
@@ -522,12 +655,12 @@ export function PackageUtilizationPanel({
           </div>
 
           <div className="flex items-center gap-3">
-            {isQueued && (
+            {(isQueued || isInactive) && (
               <button
                 type="button"
-                onClick={handleActivateQueued}
+                onClick={handleActivateSubscription}
                 disabled={activating}
-                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-2xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-2xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Play size={13} className="fill-current" />
                 {activating ? 'Activating...' : 'Activate Package Now'}
@@ -549,6 +682,35 @@ export function PackageUtilizationPanel({
             </button>
           </div>
         </div>
+
+        {/* Inactive / Pending Activation info banner */}
+        {isInactive && (
+          <div className="flex items-center justify-between gap-3 p-4 bg-blue-50/90 border border-blue-200 rounded-2xl mt-5 text-xs text-blue-950 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Clock size={18} className="text-blue-600 shrink-0" />
+              <div>
+                <span className="font-black text-blue-900">Package Purchased — Pending Activation: </span>
+                This subscription is currently inactive with validity from{' '}
+                <span className="font-bold">
+                  {new Date(subscription.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>{' '}
+                to{' '}
+                <span className="font-bold">
+                  {new Date(subscription.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>. Click the button to activate it immediately.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleActivateSubscription}
+              disabled={activating}
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm hover:shadow transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Play size={13} className="fill-current" />
+              {activating ? 'Activating...' : 'Activate Package Now'}
+            </button>
+          </div>
+        )}
 
         {/* Queued info banner */}
         {isQueued && (
@@ -773,7 +935,7 @@ export function PackageUtilizationPanel({
                 reservedUnits={b.reservedUnits}
                 isSelected={selectedBenefitId === b.benefitId}
                 isSelectable={isSelectable}
-                onClick={() => onBenefitSelect?.(b.benefitId, b.benefitName, b.unitLabel)}
+                onClick={() => onBenefitSelect?.(b.benefitId, b.benefitName, b.unitLabel, subscription.id)}
               />
             ))}
           </div>
@@ -910,31 +1072,131 @@ export function PackageUtilizationPanel({
 
                     {/* Locked / Reserved Banner */}
                     {b.reservedUnits != null && b.reservedUnits > 0 && (
-                      <div className="mt-2.5 p-2 rounded-xl bg-amber-50/90 border border-amber-200">
-                        <div className="flex items-center justify-between text-[10px] font-black text-amber-800 uppercase tracking-wider">
+                      <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200">
+                        <div className="flex items-center justify-between text-[10px] font-black text-amber-800 uppercase tracking-wider flex-wrap gap-2">
                           <span className="flex items-center gap-1">
                             <Lock size={11} className="text-amber-600" />
                             {b.reservedUnits} {b.unitLabel} Locked / Reserved
                           </span>
-                          <span className="text-[9px] bg-amber-200/80 px-1.5 py-0.5 rounded text-amber-900 font-bold">
-                            {b.availableUnits ?? 0} Avail
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={handleReconcileLocks}
+                              disabled={reconciling}
+                              title="Reconcile and release any stuck/orphaned locks"
+                              className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200/90 hover:bg-amber-300 text-amber-900 border border-amber-300 transition-colors cursor-pointer"
+                            >
+                              <RotateCw size={9} className={reconciling ? 'animate-spin' : ''} />
+                              {reconciling ? 'Syncing...' : 'Fix / Reconcile'}
+                            </button>
+                            <span className="text-[9px] bg-amber-200/80 px-1.5 py-0.5 rounded text-amber-900 font-bold">
+                              {b.availableUnits ?? 0} Avail
+                            </span>
+                          </div>
                         </div>
+
                         {b.lockedVisits && b.lockedVisits.length > 0 && (
-                          <div className="mt-1.5 space-y-1">
-                            {b.lockedVisits.map((lv, lIdx) => (
-                              <div key={lIdx} className="flex items-center justify-between text-[9px] font-bold bg-white/90 px-2 py-1 rounded border border-amber-100">
-                                <span className="font-mono text-[#FF7A00] font-black">
-                                  #{lv.visitCode || 'VISIT'}
-                                </span>
-                                <span className="text-gray-500">
-                                  {lv.scheduledTime ? new Date(lv.scheduledTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Scheduled'}
-                                </span>
-                                <span className="text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded text-[8px] font-black uppercase">
-                                  {lv.careCompanion}
-                                </span>
-                              </div>
-                            ))}
+                          <div className="mt-2 space-y-1.5">
+                            {b.lockedVisits.map((lv, lIdx) => {
+                              const isScheduled = lv.status === 'scheduled';
+                              const isStuck = lv.isStuck || !isScheduled;
+                              return (
+                                <div
+                                  key={lIdx}
+                                  className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-[9px] font-bold transition-all ${
+                                    isStuck
+                                      ? 'bg-rose-50/90 border-rose-200'
+                                      : 'bg-white/95 border-amber-100 hover:border-amber-300'
+                                  }`}
+                                >
+                                  {/* Left: Code, Time, Companion, Status */}
+                                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                    <span className="font-mono text-[#FF7A00] font-black select-all">
+                                      #{lv.visitCode || 'VISIT'}
+                                    </span>
+                                    <span className="text-gray-500">
+                                      {lv.scheduledTime
+                                        ? new Date(lv.scheduledTime).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })
+                                        : 'Scheduled'}
+                                    </span>
+                                    <span className="text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded text-[8px] font-black uppercase border border-purple-100">
+                                      {lv.careCompanion}
+                                    </span>
+                                    {isStuck ? (
+                                      <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-0.5">
+                                        <AlertCircle size={9} /> Stuck ({lv.status})
+                                      </span>
+                                    ) : (
+                                      <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                                        Scheduled
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Right: Actions */}
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {lv.visitId && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setViewingVisitId(lv.visitId)}
+                                        title="View Visit Encounter Details"
+                                        className="p-1 rounded bg-[#E8F0FF] text-[#1D4ED8] hover:bg-[#D1E0FF] transition-colors"
+                                      >
+                                        <Eye size={11} />
+                                      </button>
+                                    )}
+
+                                    {isScheduled && lv.visitId && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => openRescheduleModal(lv)}
+                                          title="Reschedule Visit Date/Time"
+                                          className="p-1 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                                        >
+                                          <Calendar size={11} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCancelLockedVisit(lv.visitId, lv.visitCode)}
+                                          disabled={cancellingVisitId === lv.visitId}
+                                          title="Cancel Visit & Release Locked Quota"
+                                          className="p-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+                                        >
+                                          {cancellingVisitId === lv.visitId ? (
+                                            <Loader2 size={11} className="animate-spin" />
+                                          ) : (
+                                            <Trash2 size={11} />
+                                          )}
+                                        </button>
+                                      </>
+                                    )}
+
+                                    {isStuck && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleReleaseStuckLock(lv.reservationId, lv.visitCode)}
+                                        disabled={releasingId === lv.reservationId}
+                                        title="Release Stuck Lock and Restore Quota"
+                                        className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white text-[8px] font-black uppercase tracking-wider transition-colors flex items-center gap-1 disabled:opacity-50 shadow-xs"
+                                      >
+                                        {releasingId === lv.reservationId ? (
+                                          <Loader2 size={9} className="animate-spin" />
+                                        ) : (
+                                          <Unlock size={9} />
+                                        )}
+                                        Release Lock
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -1130,6 +1392,94 @@ export function PackageUtilizationPanel({
         balance={selectedBalanceForAdjust}
         onSuccess={() => load(subscription.id)}
       />
+
+      {/* Quick Reschedule Modal */}
+      {reschedulingVisit.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-sm text-gray-800 flex items-center gap-1.5">
+                <Calendar size={15} className="text-[#FF7A00]" />
+                Reschedule Visit #{reschedulingVisit.visitCode}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReschedulingVisit(prev => ({ ...prev, open: false }))}
+                className="text-gray-400 hover:text-gray-600 p-1"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Date</label>
+                <input
+                  type="date"
+                  value={reschedulingVisit.newDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={e => setReschedulingVisit(prev => ({ ...prev, newDate: e.target.value }))}
+                  className="w-full text-xs font-bold p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#FF7A00] focus:outline-none text-gray-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Time</label>
+                <input
+                  type="time"
+                  value={reschedulingVisit.newTime}
+                  onChange={e => setReschedulingVisit(prev => ({ ...prev, newTime: e.target.value }))}
+                  className="w-full text-xs font-bold p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#FF7A00] focus:outline-none text-gray-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Duration</label>
+                <select
+                  value={reschedulingVisit.durationMinutes}
+                  onChange={e => setReschedulingVisit(prev => ({ ...prev, durationMinutes: parseInt(e.target.value, 10) }))}
+                  className="w-full text-xs font-bold p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:border-[#FF7A00] focus:outline-none text-gray-800"
+                >
+                  <option value={30}>30 mins</option>
+                  <option value={60}>60 mins (1 hour)</option>
+                  <option value={90}>90 mins (1.5 hours)</option>
+                  <option value={120}>120 mins (2 hours)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setReschedulingVisit(prev => ({ ...prev, open: false }))}
+                className="px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitReschedule}
+                disabled={reschedulingVisit.submitting}
+                className="px-4 py-2 text-xs font-black uppercase tracking-wider bg-[#FF7A00] hover:bg-[#E66E00] text-white rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+              >
+                {reschedulingVisit.submitting && <Loader2 size={12} className="animate-spin" />}
+                Confirm Reschedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Visit Details Modal */}
+      {viewingVisitId && (
+        <VisitDetailsModal
+          visitId={viewingVisitId}
+          onClose={() => {
+            setViewingVisitId(null);
+            load(subscription?.id);
+          }}
+        />
+      )}
     </div>
   );
 }

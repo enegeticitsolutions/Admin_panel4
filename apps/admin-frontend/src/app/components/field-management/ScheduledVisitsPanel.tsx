@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { CalendarClock, User, UserCheck, AlertCircle, RefreshCw, Trash2, Edit3, ChevronDown, X, Clock, Loader2, MapPin, ShieldCheck, ShieldAlert, AlertTriangle, Eye, Lock } from 'lucide-react';
+import { CalendarClock, User, UserCheck, AlertCircle, RefreshCw, Trash2, Edit3, ChevronDown, X, Clock, Loader2, MapPin, ShieldCheck, ShieldAlert, AlertTriangle, Eye, Lock, RotateCcw } from 'lucide-react';
 import { visitApi, fieldManagerApi } from '../../../services/api';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -401,9 +401,10 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
           )}
 
           {/* Care Companion filter */}
+          {/* Care Companion / Service filter */}
           <div className="flex-1 relative">
             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
-              Filter by Care Companion
+              Filter by Care Companion / Service
             </label>
             <div className="relative">
               <select
@@ -413,8 +414,11 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
                 className="w-full appearance-none pl-4 pr-8 py-2.5 rounded-xl border border-[#E7DED6] bg-white text-sm font-semibold text-gray-700 focus:outline-none focus:border-[#1D4ED8] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">
-                  {(!selectedFmUserId && !hideFmSelector) ? '— Select FM first —' : '— All Care Companions —'}
+                  {(!selectedFmUserId && !hideFmSelector) ? '— Select FM first —' : '— All Companions & 3rd Party —'}
                 </option>
+                {Boolean(selectedFmUserId || hideFmSelector) && (
+                  <option value="THIRD_PARTY">🏢 3rd Party Service</option>
+                )}
                 {ccOptions.map(cc => (
                   <option key={cc.id} value={cc.id}>{cc.name}</option>
                 ))}
@@ -615,7 +619,7 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
                     </div>
                   </div>
 
-                  {/* Quick Action Buttons — only for 3rd-party visits */}
+                  {/* Quick Action Buttons — for 3rd-party visits */}
                   {visit.status === 'scheduled' && (visit.is3rdParty || !visit.careCompanion) && (
                     <div className="mt-3 pt-3 border-t border-[#F4EAE3] flex items-center justify-between gap-2 flex-wrap">
                       <button
@@ -629,6 +633,26 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
                         className="flex-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1 shadow-xs"
                       >
                         <ShieldAlert size={12} /> Missed
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Actions for Missed 3rd-Party Visits — Allow Rescheduling or Completing if marked by mistake */}
+                  {visit.status === 'missed' && (visit.is3rdParty || !visit.careCompanion) && (
+                    <div className="mt-3 pt-3 border-t border-[#F4EAE3] flex items-center justify-between gap-2 flex-wrap">
+                      <button
+                        onClick={() => handleUpdateStatus(visit.id, 'completed', visit)}
+                        title="If this service was actually performed, mark completed and deduct package balance"
+                        className="flex-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1 shadow-xs"
+                      >
+                        <ShieldCheck size={12} /> Mark Completed
+                      </button>
+                      <button
+                        onClick={() => handleOpenEdit(visit)}
+                        title="Reschedule this missed visit to a new date/time"
+                        className="flex-1 px-2.5 py-1.5 bg-[#FF7A00] hover:bg-[#E06C00] text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1 shadow-xs"
+                      >
+                        <RotateCcw size={12} /> Reschedule
                       </button>
                     </div>
                   )}
@@ -662,29 +686,32 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
                         <Eye size={12} />
                       </button>
 
-                      {/* Edit & Cancel — only for 3rd-party visits (CC visits managed in CC app) */}
-                      {visit.status === 'scheduled' && (visit.is3rdParty || !visit.careCompanion) && (
+                      {/* Edit & Cancel — for 3rd-party visits */}
+                      {(visit.status === 'scheduled' || visit.status === 'missed') && (visit.is3rdParty || !visit.careCompanion) && (
                         <>
-                          {/* Edit button */}
+                          {/* Edit / Reschedule button */}
                           <button
                             onClick={() => handleOpenEdit(visit)}
-                            title="Edit Visit"
+                            title={visit.status === 'missed' ? 'Reschedule Missed Visit' : 'Edit Visit'}
                             className="p-1.5 rounded-lg bg-[#FFEAD8] text-[#FF7A00] hover:bg-[#FFD3B4] transition-colors"
                           >
                             <Edit3 size={12} />
                           </button>
                           
                           {/* Cancel button */}
-                          <button
-                            onClick={() => handleCancel(visit.id)}
-                            disabled={cancellingId === visit.id}
-                            title="Cancel Visit"
-                            className="p-1.5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors disabled:opacity-50"
-                          >
-                            {cancellingId === visit.id
-                              ? <RefreshCw size={12} className="animate-spin" />
-                              : <Trash2 size={12} />}
-                          </button>
+                          {visit.status === 'scheduled' && (
+                            <button
+                              onClick={() => handleCancel(visit.id)}
+                              disabled={cancellingId === visit.id}
+                              title="Cancel Visit"
+                              className="p-1.5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors disabled:opacity-50"
+                            >
+                              {cancellingId === visit.id
+                                ? <RefreshCw size={12} className="animate-spin" />
+                                : <Trash2 size={12} />
+                              }
+                            </button>
+                          )}
                         </>
                       )}
                     </div>

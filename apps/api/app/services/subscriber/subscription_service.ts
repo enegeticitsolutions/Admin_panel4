@@ -1786,6 +1786,7 @@ export const activateSubscription = async (
           snapshotBenefitName: vb.snapshotName,
           snapshotUnitLabel: vb.snapshotUnitLabel,
           totalUnits: vb.unitsIncluded,
+          availableUnits: vb.unitsIncluded,
           usedUnits: 0,
           unit: vb.snapshotUnitLabel ? normalizeUnit(vb.snapshotUnitLabel) : 'visits',
         })),

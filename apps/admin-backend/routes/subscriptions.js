@@ -1059,6 +1059,7 @@ router.post('/admin-enroll', async (req, res) => {
             snapshotBenefitName: vb.snapshotName,
             snapshotUnitLabel: vb.snapshotUnitLabel,
             totalUnits: vb.unitsIncluded,
+            availableUnits: vb.unitsIncluded,
             usedUnits: 0,
             unit: vb.snapshotUnitLabel ? normalizeUnit(vb.snapshotUnitLabel) : 'visits',
           })),
@@ -1448,6 +1449,7 @@ router.post('/:id/initialize-balances', async (req, res) => {
         subscriptionId: id,
         benefitId: pb.benefitId,
         totalUnits: pb.unitsIncluded,
+        availableUnits: pb.unitsIncluded,
         usedUnits: 0,
         unit: pb.unit || (pb.benefit?.unitLabel ? normalizeUnit(pb.benefit.unitLabel) : 'visits'),
       }));
@@ -1563,6 +1565,7 @@ router.post('/enroll', async (req, res) => {
             snapshotBenefitName: vb.snapshotName,
             snapshotUnitLabel: vb.snapshotUnitLabel,
             totalUnits: vb.unitsIncluded,
+            availableUnits: vb.unitsIncluded,
             usedUnits: 0,
             unit: vb.snapshotUnitLabel ? normalizeUnit(vb.snapshotUnitLabel) : 'visits',
           })),
@@ -1677,7 +1680,10 @@ router.post('/:id/addons/allocate', async (req, res) => {
       if (balance) {
         balance = await tx.subscriptionBenefitBalance.update({
           where: { id: balance.id },
-          data: { totalUnits: { increment: Number(units) || 1 } },
+          data: {
+            totalUnits: { increment: Number(units) || 1 },
+            availableUnits: { increment: Number(units) || 1 },
+          },
         });
       } else {
         balance = await tx.subscriptionBenefitBalance.create({
@@ -1685,6 +1691,7 @@ router.post('/:id/addons/allocate', async (req, res) => {
             subscriptionId,
             benefitId,
             totalUnits: Number(units) || 1,
+            availableUnits: Number(units) || 1,
             usedUnits: 0,
             reservedUnits: 0,
           },
@@ -1903,7 +1910,12 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
       const sEnd = new Date(s.endDate);
       const isQueued = Boolean(s.isQueued || s.cancellationNote === 'QUEUED');
       const isExpired = !isQueued && sEnd < now;
-      const status = s.cancelledAt ? 'cancelled' : isQueued ? 'queued' : (!s.isActive || isExpired) ? 'expired' : 'active';
+      let status = 'active';
+      if (s.cancelledAt) status = 'cancelled';
+      else if (isQueued) status = 'queued';
+      else if (isExpired) status = 'expired';
+      else if (!s.isActive) status = 'inactive';
+      else status = 'active';
       return {
         id: s.id,
         packageName: s.packageVersion?.name || s.package?.name || s.packageType,
@@ -1988,7 +2000,19 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
 
     const benefits = subscription.benefitBalances.map((b) => {
       const reservedUnits = b.reservedUnits || 0;
-      const availableUnits = b.availableUnits != null ? b.availableUnits : Math.max(0, b.totalUnits - b.usedUnits - reservedUnits);
+      // If availableUnits is not set, or if it is 0 while usedUnits is 0 and totalUnits > 0 (repair uninitialized balance), calculate true available
+      const rawAvailable = b.availableUnits != null ? b.availableUnits : Math.max(0, b.totalUnits - b.usedUnits - reservedUnits);
+      const availableUnits = (b.totalUnits > 0 && b.usedUnits === 0 && reservedUnits === 0 && rawAvailable === 0)
+        ? b.totalUnits
+        : rawAvailable;
+
+      // Auto-heal DB row if uninitialized
+      if (b.totalUnits > 0 && b.usedUnits === 0 && reservedUnits === 0 && (b.availableUnits === 0 || b.availableUnits == null)) {
+        prisma.subscriptionBenefitBalance.update({
+          where: { id: b.id },
+          data: { availableUnits: b.totalUnits },
+        }).catch((err) => console.warn(`[Auto-heal balance ${b.id}]`, err.message));
+      }
       const remainingUnits = Math.max(0, b.totalUnits - b.usedUnits);
       const usagePercent = b.totalUnits > 0 ? Math.round((b.usedUnits / b.totalUnits) * 100) : 0;
       const isLowBalance = b.totalUnits > 0 && availableUnits / b.totalUnits < 0.2;
@@ -1999,14 +2023,18 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
 
       const lockedVisits = (b.reservations || []).map((r) => {
         const v = visitMap[r.visitId];
+        const visitStatus = v ? v.status : (r.visitId ? 'not_found' : 'unlinked');
+        const isStuck = !v || ['completed', 'cancelled', 'missed'].includes(v.status);
         return {
           reservationId: r.id,
           visitId: r.visitId,
           visitCode: v?.visitCode || null,
           scheduledTime: v?.scheduledTime || null,
-          status: v?.status || 'scheduled',
-          careCompanion: v?.is3rdParty ? '3rd Party' : v?.careCompanion?.name || 'Assigned CC',
+          status: visitStatus,
+          isStuck,
+          careCompanion: v ? (v.is3rdParty ? '3rd Party' : v.careCompanion?.name || 'Assigned CC') : 'Orphaned',
           units: r.units,
+          createdAt: r.createdAt,
         };
       });
 
@@ -2039,7 +2067,12 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
     const subEnd = new Date(subscription.endDate);
     const isQueued = Boolean(subscription.isQueued || subscription.cancellationNote === 'QUEUED');
     const isExpired = !isQueued && subEnd < now;
-    const status = subscription.cancelledAt ? 'cancelled' : isQueued ? 'queued' : (!subscription.isActive || isExpired) ? 'expired' : 'active';
+    let status = 'active';
+    if (subscription.cancelledAt) status = 'cancelled';
+    else if (isQueued) status = 'queued';
+    else if (isExpired) status = 'expired';
+    else if (!subscription.isActive) status = 'inactive';
+    else status = 'active';
     const durationDays = Math.max(1, Math.round((subEnd.getTime() - subStart.getTime()) / (1000 * 60 * 60 * 24)));
     const daysRemaining = !isExpired && !isQueued ? Math.max(0, Math.ceil((subEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
     const expiredDaysAgo = isExpired ? Math.floor((now.getTime() - subEnd.getTime()) / (1000 * 60 * 60 * 24)) : 0;
@@ -2297,18 +2330,28 @@ router.post('/:id/terminate', async (req, res) => {
   }
 });
 
-// ── POST /api/subscriptions/:id/activate-queued ─────────────────────────────
-// Activates a queued subscription immediately, setting startDate to now,
-// updating endDate based on package duration, and superseding any prior active plan.
-router.post('/:id/activate-queued', async (req, res) => {
+// ── POST /api/subscriptions/:id/activate and /activate-queued ─────────────────────
+// Activates an inactive or queued subscription immediately, setting startDate to now,
+// updating endDate based on package duration, and initializing/repairing benefit balances.
+const handleSubscriptionActivation = async (req, res) => {
   try {
     const { id } = req.params;
 
     const sub = await prisma.subscription.findUnique({
       where: { id },
       include: {
-        package: true,
-        packageVersion: true,
+        package: {
+          include: {
+            packageBenefits: {
+              include: { benefit: true },
+            },
+          },
+        },
+        packageVersion: {
+          include: {
+            versionBenefits: true,
+          },
+        },
         benefitBalances: true,
       },
     });
@@ -2317,20 +2360,24 @@ router.post('/:id/activate-queued', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Subscription not found' });
     }
 
-    const isQueued = Boolean(sub.isQueued || sub.cancellationNote === 'QUEUED' || (!sub.isActive && new Date(sub.endDate) > new Date()));
-    if (!isQueued && sub.isActive) {
-      return res.status(400).json({ success: false, message: 'Subscription is already active' });
+    const hasUninitializedBalances = (sub.benefitBalances || []).some(
+      (b) => b.totalUnits > 0 && b.usedUnits === 0 && b.reservedUnits === 0 && (b.availableUnits === 0 || b.availableUnits == null)
+    );
+    const hasNoBalances = !sub.benefitBalances || sub.benefitBalances.length === 0;
+
+    if (sub.isActive && !hasUninitializedBalances && !hasNoBalances && !sub.isQueued && sub.cancellationNote !== 'QUEUED') {
+      return res.status(400).json({ success: false, message: 'Subscription is already active with valid balances' });
     }
 
     const now = new Date();
-    // Calculate new end date based on duration
+    // Calculate duration based on original start/end or package default (30 days)
     const originalDurationDays = sub.startDate && sub.endDate
       ? Math.max(1, Math.round((new Date(sub.endDate).getTime() - new Date(sub.startDate).getTime()) / (1000 * 60 * 60 * 24)))
       : 30;
     const newEndDate = new Date(now.getTime() + originalDurationDays * 24 * 60 * 60 * 1000);
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Activate the queued subscription
+      // 1. Activate the subscription
       const updatedSub = await tx.subscription.update({
         where: { id: sub.id },
         data: {
@@ -2341,6 +2388,51 @@ router.post('/:id/activate-queued', async (req, res) => {
           cancellationNote: null,
         },
       });
+
+      // 2. Repair or initialize benefit balances
+      if (sub.benefitBalances && sub.benefitBalances.length > 0) {
+        // If balances exist, ensure availableUnits is accurate
+        for (const bal of sub.benefitBalances) {
+          const expectedAvailable = bal.totalUnits === -1 ? 999999 : Math.max(0, bal.totalUnits - bal.usedUnits - (bal.reservedUnits || 0));
+          if (bal.availableUnits !== expectedAvailable && bal.usedUnits === 0) {
+            await tx.subscriptionBenefitBalance.update({
+              where: { id: bal.id },
+              data: { availableUnits: expectedAvailable },
+            });
+          }
+        }
+      } else if (sub.packageVersion?.versionBenefits && sub.packageVersion.versionBenefits.length > 0) {
+        // If balances don't exist at all, populate them from frozen version snapshot
+        await tx.subscriptionBenefitBalance.createMany({
+          data: sub.packageVersion.versionBenefits.map((vb) => ({
+            subscriptionId: sub.id,
+            benefitId: vb.benefitId,
+            packageVersionBenefitId: vb.id,
+            snapshotBenefitName: vb.snapshotName,
+            snapshotUnitLabel: vb.snapshotUnitLabel,
+            totalUnits: vb.unitsIncluded,
+            availableUnits: vb.unitsIncluded,
+            usedUnits: 0,
+            unit: vb.snapshotUnitLabel ? normalizeUnit(vb.snapshotUnitLabel) : 'visits',
+          })),
+          skipDuplicates: true,
+        });
+      } else if (sub.package?.packageBenefits && sub.package.packageBenefits.length > 0) {
+        // Fallback to package.packageBenefits if packageVersion is missing
+        await tx.subscriptionBenefitBalance.createMany({
+          data: sub.package.packageBenefits.map((pb) => ({
+            subscriptionId: sub.id,
+            benefitId: pb.benefitId,
+            snapshotBenefitName: pb.benefit?.name,
+            snapshotUnitLabel: pb.benefit?.unitLabel,
+            totalUnits: pb.unitsIncluded,
+            availableUnits: pb.unitsIncluded,
+            usedUnits: 0,
+            unit: pb.unit || (pb.benefit?.unitLabel ? normalizeUnit(pb.benefit.unitLabel) : 'visits'),
+          })),
+          skipDuplicates: true,
+        });
+      }
 
       // 3. Update discrete BenefitPeriods if present
       await tx.benefitPeriod.updateMany({
@@ -2367,7 +2459,7 @@ router.post('/:id/activate-queued', async (req, res) => {
         data: {
           userId: sub.subscriberId,
           type: 'SUBSCRIPTION',
-          action: 'QUEUED_ACTIVATED_EARLY',
+          action: 'SUBSCRIPTION_ACTIVATED_BY_ADMIN',
           details: {
             entity: 'subscription',
             entityId: sub.id,
@@ -2389,14 +2481,16 @@ router.post('/:id/activate-queued', async (req, res) => {
       data: result,
     });
   } catch (err) {
-    console.error('POST /subscriptions/:id/activate-queued error:', err);
+    console.error('POST /subscriptions/:id/activate error:', err);
     return res.status(500).json({
       success: false,
-      message: 'Failed to activate queued subscription',
-      error: err.message,
+      message: err.message || 'Failed to activate subscription',
     });
   }
-});
+};
+
+router.post('/:id/activate', handleSubscriptionActivation);
+router.post('/:id/activate-queued', handleSubscriptionActivation);
 
 // ── POST /api/subscriptions/balances/:balanceId/adjust ───────────────────────
 // Manually increase or decrease benefit balance count/quota with full audit trail
@@ -2526,6 +2620,189 @@ router.post('/balances/:balanceId/adjust', async (req, res) => {
     });
   } catch (err) {
     console.error('POST /subscriptions/balances/:balanceId/adjust error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── POST /api/subscriptions/reservations/:id/release ─────────────────────────
+// Manually release a stuck or orphaned reservation and restore locked quota
+router.post('/reservations/:id/release', async (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body || {};
+  try {
+    const reservation = await prisma.benefitReservation.findUnique({
+      where: { id },
+      include: { balance: true, visit: true },
+    });
+
+    if (!reservation) {
+      return res.status(404).json({ success: false, message: 'Reservation not found' });
+    }
+
+    if (reservation.status !== 'HELD') {
+      return res.status(400).json({ success: false, message: `Reservation is already in '${reservation.status}' state.` });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update reservation status to RELEASED
+      const updatedRes = await tx.benefitReservation.update({
+        where: { id },
+        data: { status: 'RELEASED' }
+      });
+
+      const bal = reservation.balance;
+      let updatedBalance = null;
+      if (bal) {
+        const reservedAfter = Math.max(0, bal.reservedUnits - reservation.units);
+        const availableAfter = bal.totalUnits === -1 ? 999999 : Math.max(0, bal.totalUnits - bal.usedUnits - reservedAfter);
+
+        updatedBalance = await tx.subscriptionBenefitBalance.update({
+          where: { id: bal.id },
+          data: {
+            reservedUnits: reservedAfter,
+            availableUnits: availableAfter,
+          }
+        });
+
+        await tx.benefitTransaction.create({
+          data: {
+            balanceId: bal.id,
+            reservationId: reservation.id,
+            transactionType: 'RELEASED',
+            units: reservation.units,
+            totalBefore: bal.totalUnits,
+            totalAfter: bal.totalUnits,
+            reservedBefore: bal.reservedUnits,
+            reservedAfter,
+            usedBefore: bal.usedUnits,
+            usedAfter: bal.usedUnits,
+            availableBefore: bal.availableUnits,
+            availableAfter,
+            reason: reason || 'Manual quota release via admin',
+            performedByUserId: req.user?.id || null,
+          }
+        });
+      }
+
+      return { updatedRes, updatedBalance };
+    });
+
+    res.json({
+      success: true,
+      message: 'Locked quota released successfully',
+      data: result
+    });
+  } catch (err) {
+    console.error('POST /subscriptions/reservations/:id/release error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── POST /api/subscriptions/beneficiary/:beneficiaryId/reconcile-reservations ──
+// Auto-reconcile all reservations for a beneficiary: releases locks for missed/cancelled/completed
+// visits and resyncs reservedUnits with true active reservations
+router.post('/beneficiary/:beneficiaryId/reconcile-reservations', async (req, res) => {
+  const { beneficiaryId } = req.params;
+  try {
+    const report = await prisma.$transaction(async (tx) => {
+      const subs = await tx.subscription.findMany({
+        where: { beneficiaryId },
+        include: {
+          benefitBalances: {
+            include: {
+              reservations: {
+                include: { visit: true }
+              }
+            }
+          }
+        }
+      });
+
+      const releasedReservations = [];
+      const correctedBalances = [];
+
+      for (const sub of subs) {
+        for (const bal of sub.benefitBalances) {
+          let trueHeldUnits = 0;
+
+          for (const res of bal.reservations) {
+            if (res.status === 'HELD') {
+              const v = res.visit;
+              const isOrphaned = !res.visitId || !v || ['completed', 'cancelled', 'missed'].includes(v.status);
+
+              if (isOrphaned) {
+                await tx.benefitReservation.update({
+                  where: { id: res.id },
+                  data: { status: 'RELEASED' }
+                });
+
+                releasedReservations.push({
+                  reservationId: res.id,
+                  visitId: res.visitId,
+                  visitCode: v?.visitCode || null,
+                  visitStatus: v?.status || 'MISSING',
+                  units: res.units,
+                  benefitId: bal.benefitId,
+                  plan: sub.packageType
+                });
+
+                await tx.benefitTransaction.create({
+                  data: {
+                    balanceId: bal.id,
+                    reservationId: res.id,
+                    transactionType: 'RELEASED',
+                    units: res.units,
+                    totalBefore: bal.totalUnits,
+                    totalAfter: bal.totalUnits,
+                    reservedBefore: bal.reservedUnits,
+                    reservedAfter: Math.max(0, bal.reservedUnits - res.units),
+                    usedBefore: bal.usedUnits,
+                    usedAfter: bal.usedUnits,
+                    availableBefore: bal.availableUnits,
+                    availableAfter: bal.totalUnits === -1 ? 999999 : Math.max(0, bal.totalUnits - bal.usedUnits - Math.max(0, bal.reservedUnits - res.units)),
+                    reason: `Auto-reconciliation: visit ${v?.visitCode || res.visitId} status is ${v?.status || 'missing'}`,
+                    performedByUserId: req.user?.id || null,
+                  }
+                });
+              } else {
+                trueHeldUnits += res.units;
+              }
+            }
+          }
+
+          const currentReserved = trueHeldUnits;
+          const currentAvailable = bal.totalUnits === -1 ? 999999 : Math.max(0, bal.totalUnits - bal.usedUnits - currentReserved);
+
+          if (bal.reservedUnits !== currentReserved || bal.availableUnits !== currentAvailable) {
+            await tx.subscriptionBenefitBalance.update({
+              where: { id: bal.id },
+              data: {
+                reservedUnits: currentReserved,
+                availableUnits: currentAvailable
+              }
+            });
+            correctedBalances.push({
+              balanceId: bal.id,
+              benefitId: bal.benefitId,
+              oldReserved: bal.reservedUnits,
+              newReserved: currentReserved,
+              oldAvailable: bal.availableUnits,
+              newAvailable: currentAvailable,
+            });
+          }
+        }
+      }
+
+      return { releasedReservations, correctedBalances };
+    });
+
+    res.json({
+      success: true,
+      message: `Reconciliation completed: ${report.releasedReservations.length} stuck lock(s) released, ${report.correctedBalances.length} balance(s) resynced.`,
+      report
+    });
+  } catch (err) {
+    console.error('POST /reconcile-reservations error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });

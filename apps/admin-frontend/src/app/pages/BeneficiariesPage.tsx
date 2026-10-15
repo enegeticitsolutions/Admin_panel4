@@ -147,6 +147,10 @@ export default function BeneficiariesPage() {
                         <span className="text-[10px] font-extrabold px-2.5 py-0.5 bg-green-100 text-green-800 border border-green-300 rounded-full">
                           Active: {ben.activePackage || 'Package'}
                         </span>
+                      ) : ben.packageStatus === 'pending' ? (
+                        <span className="text-[10px] font-extrabold px-2.5 py-0.5 bg-blue-100 text-blue-800 border border-blue-300 rounded-full">
+                          Pending Activation: {ben.activePackage || 'Package'}
+                        </span>
                       ) : ben.packageStatus === 'expired' || ben.isPackageExpired ? (
                         <span className="text-[10px] font-extrabold px-2.5 py-0.5 bg-red-100 text-red-800 border border-red-300 rounded-full">
                           Package Expired
