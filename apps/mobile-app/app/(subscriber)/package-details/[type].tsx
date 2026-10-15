@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Platform, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -148,22 +148,27 @@ export default function PackageDetailScreen() {
     const getBenefitUnits = (pb: any): string => {
         const base = pb.unitsIncluded ?? 0;
         const period = pb.unitsPeriod || 'monthly';
-        const label = (pb.benefit?.unitLabel || 'visit').replace(/^per\s+/i, '');
+        let label = (pb.benefit?.unitLabel || 'visit').replace(/^per\s+/i, '').trim();
         if (pb.isUnlimited) return 'Unlimited';
-        
+
+        // Pluralize when base > 1 and doesn't already end with 's'
+        if (base > 1 && !label.toLowerCase().endsWith('s')) {
+            label = `${label}s`;
+        }
+
         let periodText = "";
         if (period === "monthly") periodText = "/month";
         else if (period === "yearly") periodText = "/year";
         else if (period === "3_months") periodText = "/quarter";
         else if (period === "6_months") periodText = "/half-year";
         else if (period === "one_time") periodText = " (once)";
-        
+
         return `${base} ${label}${periodText}`;
     };
 
     return (
         <SafeAreaView style={styles.container}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: scale(100) }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: scale(130) }}>
                 {/* Top Section with Gradient */}
                 <LinearGradient colors={['#F97316', '#EA580C']} style={styles.heroSection}>
                     {/* Header */}
@@ -176,12 +181,7 @@ export default function PackageDetailScreen() {
                     </View>
 
                     <View style={styles.heroContent}>
-                        <View style={styles.badgeWrapper}>
-                            <View style={styles.typeBadge}>
-                                <Text style={styles.typeBadgeText}>{pkg.name}</Text>
-                            </View>
-                        </View>
-                        <Text style={styles.heroTagline}>{pkg.tagline}</Text>
+                        {pkg.tagline ? <Text style={styles.heroTagline}>{pkg.tagline}</Text> : null}
 
                         {/* Cycle-aware total price */}
                         <View style={styles.priceRow}>
@@ -229,9 +229,20 @@ export default function PackageDetailScreen() {
                                     key={item.key}
                                     onPress={() => setSelectedCycle(item.key)}
                                     style={[styles.cycleBtn, isActive && styles.cycleBtnActive]}
+                                    activeOpacity={0.8}
                                 >
-                                    <Text style={[styles.cycleBtnLabel, isActive && styles.cycleBtnLabelActive]}>{item.label}</Text>
-                                    <Text style={[styles.cycleBtnBadge, isActive && styles.cycleBtnBadgeActive]}>{item.disc || ' '}</Text>
+                                    <Text style={[styles.cycleBtnLabel, isActive && styles.cycleBtnLabelActive]}>
+                                        {item.label}
+                                    </Text>
+                                    {item.disc ? (
+                                        <Text style={[styles.cycleBtnBadge, isActive && styles.cycleBtnBadgeActive]}>
+                                            {item.disc}
+                                        </Text>
+                                    ) : (
+                                        <Text style={[styles.cycleBtnBadge, { opacity: 0 }]}>
+                                            —
+                                        </Text>
+                                    )}
                                 </TouchableOpacity>
                             );
                         })}
@@ -241,94 +252,116 @@ export default function PackageDetailScreen() {
                 {/* Main Content */}
                 <View style={styles.detailsContent}>
 
-                    {/* Description */}
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Overview</Text>
-                        <Text style={styles.descriptionText}>{pkg.description}</Text>
+                    {/* Overview Card */}
+                    <View style={styles.overviewCard}>
+                        <View style={styles.overviewHeaderRow}>
+                            <View style={styles.overviewIconWrap}>
+                                <Ionicons name="sparkles" size={scale(15)} color="#F97316" />
+                            </View>
+                            <Text style={styles.overviewTitle}>Overview</Text>
+                        </View>
+                        <Text style={styles.overviewDescription}>
+                            {pkg.description || 'Comprehensive care plan tailored for your family elders.'}
+                        </Text>
                     </View>
 
-                    {/* Features/Benefits Categorized into Included, Add-on, and We arrange it */}
-                    {BENEFIT_CATEGORIES.map((catConfig) => {
-                        const rawItems = (pkg.packageBenefits && pkg.packageBenefits.length > 0)
-                            ? pkg.packageBenefits.filter((pb: any) => getCategoryForBenefit(pb) === catConfig.id)
-                            : (pkg.features || []).filter((feat: string) => getCategoryForBenefit(feat) === catConfig.id);
+                    {/* Features/Benefits Categorized into ONE unified container */}
+                    {(() => {
+                        const activeCategories = BENEFIT_CATEGORIES.map((catConfig) => {
+                            const rawItems = (pkg.packageBenefits && pkg.packageBenefits.length > 0)
+                                ? pkg.packageBenefits.filter((pb: any) => getCategoryForBenefit(pb) === catConfig.id)
+                                : (pkg.features || []).filter((feat: string) => getCategoryForBenefit(feat) === catConfig.id);
+                            return { ...catConfig, rawItems };
+                        }).filter((c) => c.rawItems && c.rawItems.length > 0);
 
-                        if (!rawItems || rawItems.length === 0) return null;
+                        if (activeCategories.length === 0) return null;
 
                         return (
-                            <View key={catConfig.id} style={[styles.section, { marginBottom: scale(16) }]}>
-                                {/* Category Header Row with (i) Info Button */}
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: scale(4) }}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
-                                        <View style={{ width: scale(8), height: scale(8), borderRadius: scale(4), backgroundColor: catConfig.dotColor }} />
-                                        <Text style={styles.sectionTitle}>{catConfig.label}</Text>
-                                        <TouchableOpacity
-                                            onPress={() => Alert.alert(catConfig.label, catConfig.explanation)}
-                                            style={{ padding: scale(4) }}
-                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                        >
-                                            <Ionicons name="information-circle-outline" size={scale(18)} color="#9CA3AF" />
-                                        </TouchableOpacity>
-                                    </View>
-                                    <View
-                                        style={{
-                                            paddingHorizontal: scale(8),
-                                            paddingVertical: scale(2),
-                                            borderRadius: scale(999),
-                                            backgroundColor: catConfig.badgeBg,
-                                            borderWidth: 1,
-                                            borderColor: catConfig.badgeBorder,
-                                        }}
-                                    >
-                                        <Text style={{ fontSize: scale(10), fontWeight: '700', color: catConfig.badgeText }}>
-                                            {rawItems.length} {rawItems.length === 1 ? 'item' : 'items'}
-                                        </Text>
-                                    </View>
-                                </View>
+                            <View style={styles.benefitsContainerCard}>
+                                {activeCategories.map((catConfig, catIdx) => {
+                                    const isLastCategory = catIdx === activeCategories.length - 1;
 
-                                <View style={styles.benefitList}>
-                                    {pkg.packageBenefits && pkg.packageBenefits.length > 0 ? (
-                                        rawItems.map((pb: any, i: number) => {
-                                            const unitsDisplay = getBenefitUnits(pb);
-                                            return (
-                                                <View key={i} style={styles.benefitItem}>
-                                                    <View style={styles.checkIcon}>
-                                                        <Ionicons name="checkmark" size={scale(16)} color="#059669" />
-                                                    </View>
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text style={styles.benefitText}>
-                                                            {pb.showUnit !== false ? (
-                                                                <><Text style={{ fontWeight: '700' }}>{unitsDisplay}</Text>{' '}• </>
-                                                            ) : null}
-                                                            {pb.benefit?.name}
-                                                        </Text>
-                                                        {pb.benefit?.description ? (
-                                                            <Text style={{ fontSize: scale(13), color: '#6B7280', marginTop: scale(4) }}>
-                                                                {pb.benefit.description}
-                                                            </Text>
-                                                        ) : null}
-                                                    </View>
-                                                </View>
-                                            );
-                                        })
-                                    ) : (
-                                        rawItems.map((feature: string, i: number) => (
-                                            <View key={i} style={styles.benefitItem}>
-                                                <View style={styles.checkIcon}>
-                                                    <Ionicons name="checkmark" size={scale(16)} color="#059669" />
-                                                </View>
-                                                <Text style={styles.benefitText}>{feature}</Text>
+                                    return (
+                                        <View key={catConfig.id} style={styles.categorySection}>
+                                            {/* Category Header Row */}
+                                            <View style={styles.categoryHeader}>
+                                                <View style={[styles.categoryDot, { backgroundColor: catConfig.dotColor }]} />
+                                                <Text style={styles.categoryTitle}>{catConfig.label}</Text>
                                             </View>
-                                        ))
-                                    )}
-                                </View>
+
+                                            {/* Subtle explanation subtitle */}
+                                            <Text style={styles.categoryExplanation}>{catConfig.explanation}</Text>
+
+                                            {/* Benefits List */}
+                                            <View style={styles.benefitList}>
+                                                {pkg.packageBenefits && pkg.packageBenefits.length > 0 ? (
+                                                    catConfig.rawItems.map((pb: any, i: number) => {
+                                                        const unitsDisplay = getBenefitUnits(pb);
+                                                        const rawName = pb.benefit?.name || '';
+                                                        const isLastItem = i === catConfig.rawItems.length - 1;
+
+                                                        return (
+                                                            <View
+                                                                key={pb.id || i}
+                                                                style={styles.benefitItem}
+                                                            >
+                                                                {/* Black circle bullet */}
+                                                                <View style={styles.bulletDot} />
+
+                                                                {/* Text and Quota Pill */}
+                                                                <View style={styles.benefitContent}>
+                                                                    <View style={styles.benefitTopRow}>
+                                                                        <Text style={styles.benefitName} numberOfLines={2}>
+                                                                            {rawName}
+                                                                        </Text>
+                                                                        {pb.showUnit !== false && unitsDisplay ? (
+                                                                            <View
+                                                                                style={[
+                                                                                    styles.quotaBadge,
+                                                                                    {
+                                                                                        backgroundColor: catConfig.badgeBg,
+                                                                                        borderColor: catConfig.badgeBorder,
+                                                                                    }
+                                                                                ]}
+                                                                            >
+                                                                                <Text style={[styles.quotaBadgeText, { color: catConfig.badgeText }]}>
+                                                                                    {unitsDisplay}
+                                                                                </Text>
+                                                                            </View>
+                                                                        ) : null}
+                                                                    </View>
+
+                                                                    {pb.benefit?.description ? (
+                                                                        <Text style={styles.benefitDescription}>
+                                                                            {pb.benefit.description}
+                                                                        </Text>
+                                                                    ) : null}
+                                                                </View>
+                                                            </View>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    catConfig.rawItems.map((feature: string, i: number) => (
+                                                        <View key={i} style={styles.benefitItem}>
+                                                            <View style={styles.bulletDot} />
+                                                            <Text style={styles.benefitName}>{feature}</Text>
+                                                        </View>
+                                                    ))
+                                                )}
+                                            </View>
+
+                                            {/* Divider between categories inside the single box */}
+                                            {!isLastCategory && <View style={styles.categorySectionDivider} />}
+                                        </View>
+                                    );
+                                })}
                             </View>
                         );
-                    })}
+                    })()}
 
-                    {/* Disclaimer */}
+                    {/* Disclaimer Box */}
                     <View style={styles.disclaimerBox}>
-                        <Ionicons name="information-circle-outline" size={scale(20)} color="#6B7280" />
+                        <Ionicons name="information-circle" size={scale(18)} color="#D97706" style={{ marginTop: scale(1) }} />
                         <Text style={styles.disclaimerText}>
                             Actual visits and hours might vary based on Care Companion availability and your specific location in the city.
                         </Text>
@@ -358,20 +391,17 @@ export default function PackageDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FFFFFF' },
-    centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    container: { flex: 1, backgroundColor: '#F8FAFC' },
+    centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: scale(20), paddingTop: scale(10), paddingBottom: scale(20)
     },
     headerBtn: { width: scale(40), height: scale(40), borderRadius: scale(20), backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: scale(18), fontWeight: '700', color: '#FFFFFF' },
 
-    heroSection: { paddingTop: 0, paddingBottom: scale(40), borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
-    heroContent: { alignItems: 'center', paddingHorizontal: scale(30) },
-    badgeWrapper: { marginBottom: scale(12) },
-    typeBadge: { backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: scale(16), paddingVertical: scale(6), borderRadius: scale(12) },
-    typeBadgeText: { color: '#FFFFFF', fontSize: scale(13), fontWeight: '800', textTransform: 'uppercase' },
-    heroTagline: { fontSize: scale(24), fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: scale(20) },
+    heroSection: { paddingTop: 0, paddingBottom: scale(36), borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
+    heroContent: { alignItems: 'center', paddingHorizontal: scale(30), paddingTop: scale(10) },
+    heroTagline: { fontSize: scale(18), fontWeight: '700', color: '#FFFFFF', textAlign: 'center', marginBottom: scale(16) },
 
     priceRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: scale(4) },
     currency: { fontSize: scale(24), color: '#FFFFFF', fontWeight: '800', marginRight: scale(4) },
@@ -385,54 +415,238 @@ const styles = StyleSheet.create({
 
     // Cycle toggle on details page
     cycleToggle: {
-        flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 14,
-        padding: 4, marginHorizontal: scale(24), marginTop: scale(20), marginBottom: scale(4),
-        borderWidth: 1, borderColor: '#E2E8F0',
+        flexDirection: 'row',
+        backgroundColor: '#EDF2F7',
+        borderRadius: scale(16),
+        padding: scale(4),
+        marginHorizontal: scale(20),
+        marginTop: scale(16),
+        marginBottom: scale(4),
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
     },
-    cycleBtn: { flex: 1, paddingVertical: scale(10), borderRadius: 10, alignItems: 'center' },
-    cycleBtnActive: { backgroundColor: '#FE6700' },
-    cycleBtnLabel: { fontSize: scale(11), fontWeight: '800', color: '#1E293B' },
-    cycleBtnLabelActive: { color: '#FFFFFF' },
-    cycleBtnBadge: { fontSize: scale(9), color: '#64748B', marginTop: scale(2) },
-    cycleBtnBadgeActive: { color: 'rgba(255,255,255,0.85)' },
-
-    detailsContent: { paddingHorizontal: scale(24), paddingTop: scale(30) },
-    quickStats: {
-        flexDirection: 'row', backgroundColor: '#F9FAFB', borderRadius: scale(24), padding: scale(20),
-        marginBottom: scale(32), borderWidth: 1, borderColor: '#F3F4F6'
+    cycleBtn: {
+        flex: 1,
+        paddingVertical: scale(8),
+        borderRadius: scale(12),
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    statItem: { flex: 1, alignItems: 'center' },
-    statValue: { fontSize: scale(18), fontWeight: '800', color: '#111827', marginTop: scale(4) },
-    statLabel: { fontSize: scale(11), color: '#9CA3AF', marginTop: scale(2), textAlign: 'center' },
-    statDivider: { width: 1, height: '60%', backgroundColor: '#E5E7EB', alignSelf: 'center' },
-
-    section: { marginBottom: scale(32) },
-    sectionTitle: { fontSize: scale(18), fontWeight: '800', color: '#111827', marginBottom: scale(16) },
-    descriptionText: { fontSize: scale(15), color: '#4B5563', lineHeight: scale(24) },
-
-    benefitList: { gap: scale(16) },
-    benefitItem: { flexDirection: 'row', alignItems: 'flex-start' },
-    checkIcon: {
-        width: scale(24), height: scale(24), borderRadius: scale(12), backgroundColor: '#ECFDF5',
-        justifyContent: 'center', alignItems: 'center', marginRight: scale(12), marginTop: scale(2)
+    cycleBtnActive: {
+        backgroundColor: '#FE6700',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 3,
     },
-    benefitText: { fontSize: scale(15), color: '#374151', flex: 1, lineHeight: scale(22) },
+    cycleBtnLabel: {
+        fontSize: scale(12),
+        fontWeight: '700',
+        color: '#334155',
+    },
+    cycleBtnLabelActive: {
+        color: '#FFFFFF',
+    },
+    cycleBtnBadge: {
+        fontSize: scale(9),
+        fontWeight: '700',
+        color: '#EA580C',
+        marginTop: scale(2),
+    },
+    cycleBtnBadgeActive: {
+        color: 'rgba(255,255,255,0.92)',
+    },
 
+    detailsContent: {
+        paddingHorizontal: scale(20),
+        paddingTop: scale(20),
+    },
+
+    // Overview Card
+    overviewCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: scale(18),
+        padding: scale(16),
+        marginBottom: scale(16),
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    overviewHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scale(8),
+        marginBottom: scale(8),
+    },
+    overviewIconWrap: {
+        width: scale(28),
+        height: scale(28),
+        borderRadius: scale(14),
+        backgroundColor: '#FFF7ED',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    overviewTitle: {
+        fontSize: scale(16),
+        fontWeight: '800',
+        color: '#111827',
+    },
+    overviewDescription: {
+        fontSize: scale(14),
+        color: '#4B5563',
+        lineHeight: scale(22),
+    },
+
+    // Unified Benefits Container Card
+    benefitsContainerCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: scale(18),
+        padding: scale(16),
+        marginBottom: scale(16),
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    categorySection: {
+        width: '100%',
+    },
+    categoryHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    categoryDot: {
+        width: scale(9),
+        height: scale(9),
+        borderRadius: scale(4.5),
+        marginRight: scale(8),
+    },
+    categoryTitle: {
+        fontSize: scale(16),
+        fontWeight: '800',
+        color: '#111827',
+    },
+    categoryExplanation: {
+        fontSize: scale(12),
+        color: '#64748B',
+        marginTop: scale(4),
+        marginBottom: scale(8),
+        lineHeight: scale(17),
+    },
+    categorySectionDivider: {
+        height: 1,
+        backgroundColor: '#E2E8F0',
+        marginTop: scale(18),
+        marginBottom: scale(16),
+    },
+
+    // Benefit Items List
+    benefitList: {
+        gap: 0,
+    },
+    benefitItem: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        paddingVertical: scale(9),
+    },
+    bulletDot: {
+        width: scale(6),
+        height: scale(6),
+        borderRadius: scale(3),
+        backgroundColor: '#111827',
+        marginRight: scale(10),
+        marginTop: scale(7),
+    },
+    benefitContent: {
+        flex: 1,
+    },
+    benefitTopRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: scale(8),
+    },
+    benefitName: {
+        fontSize: scale(14),
+        fontWeight: '700',
+        color: '#1E293B',
+        lineHeight: scale(20),
+        flex: 1,
+    },
+    quotaBadge: {
+        paddingHorizontal: scale(8),
+        paddingVertical: scale(2),
+        borderRadius: scale(6),
+        borderWidth: 1,
+        alignSelf: 'flex-start',
+    },
+    quotaBadgeText: {
+        fontSize: scale(11),
+        fontWeight: '700',
+    },
+    benefitDescription: {
+        fontSize: scale(13),
+        color: '#64748B',
+        marginTop: scale(4),
+        lineHeight: scale(18),
+    },
+
+    // Disclaimer Box
     disclaimerBox: {
-        flexDirection: 'row', padding: scale(16), backgroundColor: '#F9FAFB',
-        borderRadius: scale(16), marginBottom: scale(20), alignItems: 'center'
+        flexDirection: 'row',
+        padding: scale(14),
+        backgroundColor: '#FFFBEB',
+        borderRadius: scale(14),
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        marginBottom: scale(20),
+        alignItems: 'flex-start',
     },
-    disclaimerText: { flex: 1, fontSize: scale(12), color: '#6B7280', marginLeft: scale(12), lineHeight: scale(18) },
+    disclaimerText: {
+        flex: 1,
+        fontSize: scale(12),
+        color: '#92400E',
+        marginLeft: scale(10),
+        lineHeight: scale(18),
+    },
 
+    // Sticky Action Footer
     footer: {
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        backgroundColor: '#FFFFFF', padding: scale(20), borderTopWidth: 1, borderTopColor: '#F3F4F6',
-        paddingBottom: Platform.OS === 'ios' ? 40 : 20
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#FFFFFF',
+        padding: scale(20),
+        borderTopWidth: 1,
+        borderTopColor: '#E2E8F0',
+        paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 8,
     },
     actionBtn: {
-        backgroundColor: '#F97316', height: scale(56), borderRadius: scale(16),
-        flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-        shadowColor: '#F97316', shadowOffset: { width: 0, height: scale(4) }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5
+        backgroundColor: '#F97316',
+        height: scale(54),
+        borderRadius: scale(16),
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#F97316',
+        shadowOffset: { width: 0, height: scale(4) },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 5,
     },
     actionBtnText: { color: '#FFFFFF', fontSize: scale(16), fontWeight: '800' },
     errorText: { fontSize: scale(16), color: '#6B7280', marginBottom: scale(20) },
