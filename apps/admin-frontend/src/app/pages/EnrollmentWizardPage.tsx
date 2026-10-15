@@ -673,7 +673,8 @@ export default function EnrollmentWizardPage() {
     }
   };
 
-  const isEmailValid = !!subscriberEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subscriberEmail.trim());
+  // Email is optional; if provided, must be a valid format
+  const isEmailValid = !subscriberEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(subscriberEmail.trim());
 
   const handleResendActivationEmail = async () => {
     const emailToUse = enrolledResult?.subscriber?.email || subscriberEmail;
@@ -702,7 +703,7 @@ export default function EnrollmentWizardPage() {
     }
   };
 
-  // In existing-subscriber mode, we need phone match + compulsory valid email; in new mode name + compulsory valid email
+  // In existing-subscriber mode, we need phone match; in new mode name (email is optional)
   const canProceedSubscriber = enrollingMode === 'existing'
     ? subscriberPhone.length >= 10 && phoneCheck?.exists === true && isEmailValid
     : subscriberPhone.length >= 10 && subscriberName.trim().length > 0 && isEmailValid;
@@ -1031,11 +1032,11 @@ export default function EnrollmentWizardPage() {
                   </div>
                 )}
 
-                {/* Subscriber Email Address — Compulsory for BOTH modes */}
+                {/* Subscriber Email Address — Optional */}
                 <div className="space-y-1 col-span-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="sub-email">
-                      Subscriber Email Address <span className="text-red-500 font-bold">*</span>
+                      Subscriber Email Address <span className="text-muted-foreground text-xs font-normal">(Optional)</span>
                     </Label>
                     {subscriberEmail && !isEmailValid && (
                       <span className="text-[11px] text-destructive font-semibold">Please enter a valid email address</span>
@@ -1050,11 +1051,10 @@ export default function EnrollmentWizardPage() {
                       onChange={e => setSubscriberEmail(e.target.value.trim())}
                       placeholder="e.g. subscriber@example.com"
                       className={`pl-9 ${subscriberEmail && !isEmailValid ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                      required
                     />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Required for sending beneficiary verification link, plan activation instructions, and official GST invoice.
+                    Optional. Used for sending beneficiary verification link, plan activation instructions, and official GST invoice.
                   </p>
                 </div>
 
