@@ -324,6 +324,8 @@ export function PackageUtilizationPanel({
     newDate: string;
     newTime: string;
     durationMinutes: number;
+    careCompanionId?: string | null;
+    is3rdParty?: boolean;
     submitting: boolean;
   }>({
     open: false,
@@ -398,6 +400,8 @@ export function PackageUtilizationPanel({
       newDate: dateStr,
       newTime: timeStr,
       durationMinutes: 60,
+      careCompanionId: lv.careCompanionId || null,
+      is3rdParty: lv.is3rdParty || false,
       submitting: false,
     });
   };
@@ -410,11 +414,16 @@ export function PackageUtilizationPanel({
     const scheduledTime = new Date(`${reschedulingVisit.newDate}T${reschedulingVisit.newTime}`).toISOString();
     setReschedulingVisit(prev => ({ ...prev, submitting: true }));
     try {
-      await visitApi.update(reschedulingVisit.visitId, {
-        careCompanionId: 'THIRD_PARTY',
+      const payload: any = {
         scheduledTime,
         durationMinutes: reschedulingVisit.durationMinutes,
-      });
+      };
+      if (reschedulingVisit.careCompanionId) {
+        payload.careCompanionId = reschedulingVisit.careCompanionId;
+      } else if (reschedulingVisit.is3rdParty) {
+        payload.careCompanionId = 'THIRD_PARTY';
+      }
+      await visitApi.update(reschedulingVisit.visitId, payload);
       toast.success(`Visit #${reschedulingVisit.visitCode} rescheduled successfully!`);
       setReschedulingVisit(prev => ({ ...prev, open: false }));
       await load(subscription?.id);
@@ -1334,6 +1343,21 @@ export function PackageUtilizationPanel({
                                                 )}
                                               </button>
                                             </>
+                                          )}
+                                          {/* Show Reschedule for orphaned or stuck visits so admin can reactivate them with a new date/time */}
+                                          {lv.visitId && (isOrphaned || isStuck) && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openRescheduleModal(lv);
+                                              }}
+                                              title="Reschedule this visit to a new date/time & reactivate it"
+                                              className="px-2 py-1 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-[8px] font-black uppercase tracking-wider transition-colors flex items-center gap-1 shadow-2xs whitespace-nowrap cursor-pointer"
+                                            >
+                                              <Calendar size={9} />
+                                              <span>Reschedule</span>
+                                            </button>
                                           )}
                                           {/* Show Release Lock for any non-scheduled visit with an orphaned HELD reservation */}
                                           {(isOrphaned || isStuck) && (

@@ -40,7 +40,7 @@ async function main() {
     ben = await prisma.beneficiary.findFirst({
       where: {
         OR: [
-          { phone: phoneArg },
+          { user: { phone: phoneArg } },
           { name: { contains: 'Pushpa', mode: 'insensitive' } }
         ]
       },

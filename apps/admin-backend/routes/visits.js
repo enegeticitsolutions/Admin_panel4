@@ -1251,8 +1251,8 @@ router.put('/:id', async (req, res) => {
     });
 
     if (!existingVisit) return res.status(404).json({ success: false, message: 'Visit not found' });
-    if (!['scheduled', 'missed'].includes(existingVisit.status)) {
-      return res.status(400).json({ success: false, message: 'Only scheduled or missed visits can be modified or rescheduled' });
+    if (!['scheduled', 'missed', 'completed', 'cancelled'].includes(existingVisit.status)) {
+      return res.status(400).json({ success: false, message: 'Only scheduled, missed, completed, or cancelled visits can be modified or rescheduled' });
     }
 
     const startTime = new Date(scheduledTime);
@@ -1278,18 +1278,73 @@ router.put('/:id', async (req, res) => {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // If visit was previously missed, we re-reserve quota if a benefit is linked
-      if (existingVisit.status === 'missed' && existingVisit.benefitId) {
+      // If the visit is being reactivated / rescheduled from a non-scheduled state ('missed', 'completed', 'cancelled')
+      if (existingVisit.status !== 'scheduled') {
         const benefitId = existingVisit.benefitId;
         const beneficiaryId = existingVisit.beneficiaryId;
 
-        // Check if there is already a HELD reservation
-        let existingRes = await tx.benefitReservation.findFirst({
+        // 1. Check if there is already a HELD reservation for this visit
+        let existingHeld = await tx.benefitReservation.findFirst({
           where: { visitId: id, status: 'HELD' }
         });
 
-        if (!existingRes) {
-          // Find active subscription with balance
+        // 2. If it was completed, check if it had a CONSUMED reservation that should be reverted back to HELD
+        if (existingVisit.status === 'completed' && !existingHeld) {
+          const consumedRes = await tx.benefitReservation.findFirst({
+            where: { visitId: id, status: 'CONSUMED' },
+            include: { balance: true }
+          });
+          if (consumedRes && consumedRes.balance) {
+            const bal = consumedRes.balance;
+            await tx.benefitReservation.update({
+              where: { id: consumedRes.id },
+              data: { status: 'HELD' }
+            });
+            const usedAfter = Math.max(0, bal.usedUnits - consumedRes.units);
+            const reservedAfter = bal.reservedUnits + consumedRes.units;
+            const availableAfter = bal.totalUnits === -1 ? 999999 : Math.max(0, bal.totalUnits - usedAfter - reservedAfter);
+            await tx.subscriptionBenefitBalance.update({
+              where: { id: bal.id },
+              data: {
+                usedUnits: usedAfter,
+                reservedUnits: reservedAfter,
+                availableUnits: availableAfter
+              }
+            });
+
+            await tx.benefitTransaction.create({
+              data: {
+                balanceId: bal.id,
+                reservationId: consumedRes.id,
+                transactionType: 'RESERVED',
+                units: -consumedRes.units,
+                totalBefore: bal.totalUnits,
+                totalAfter: bal.totalUnits,
+                reservedBefore: bal.reservedUnits,
+                reservedAfter,
+                usedBefore: bal.usedUnits,
+                usedAfter,
+                availableBefore: bal.availableUnits,
+                availableAfter,
+                reason: `Reactivated/Rescheduled Completed Visit: ${existingVisit.visitCode || id}`,
+                performedByUserId: req.user?.id || null,
+              }
+            });
+
+            // Adjust subscription completed count
+            await tx.subscription.update({
+              where: { id: bal.subscriptionId },
+              data: {
+                visitsCompleted: { decrement: 1 }
+              }
+            }).catch(() => {});
+
+            existingHeld = consumedRes;
+          }
+        }
+
+        // 3. If still no HELD reservation and a benefit is linked, reserve 1 unit from active package
+        if (!existingHeld && benefitId) {
           const candidateSubs = await tx.subscription.findMany({
             where: {
               beneficiaryId,
@@ -1314,7 +1369,7 @@ router.put('/:id', async (req, res) => {
           }
 
           if (!targetBal) {
-            throw new Error('Cannot reschedule missed visit: Insufficient benefit balance in active packages');
+            throw new Error('Cannot reschedule visit: Insufficient benefit balance in active packages');
           }
 
           const reservedBefore = targetBal.reservedUnits;
@@ -1346,7 +1401,7 @@ router.put('/:id', async (req, res) => {
               usedAfter: targetBal.usedUnits,
               availableBefore,
               availableAfter,
-              reason: `Rescheduled Missed Visit: ${existingVisit.visitCode || id}`,
+              reason: `Rescheduled ${existingVisit.status} Visit: ${existingVisit.visitCode || id}`,
               performedByUserId: req.user?.id || null,
             }
           });
@@ -1358,15 +1413,21 @@ router.put('/:id', async (req, res) => {
         }
       }
 
+      const updateData = {
+        status: 'scheduled',
+        careCompanionId: targetCcId,
+        is3rdParty: isThirdParty,
+        scheduledTime: startTime,
+        durationMinutes
+      };
+      if (existingVisit.status !== 'scheduled') {
+        updateData.checkInTime = null;
+        updateData.checkOutTime = null;
+      }
+
       const updatedVisit = await tx.visit.update({
         where: { id },
-        data: {
-          status: 'scheduled',
-          careCompanionId: targetCcId,
-          is3rdParty: isThirdParty,
-          scheduledTime: startTime,
-          durationMinutes
-        },
+        data: updateData,
         include: {
           beneficiary: { select: { name: true, userId: true, subscriberId: true } },
           careCompanion: { select: { name: true, userId: true } },

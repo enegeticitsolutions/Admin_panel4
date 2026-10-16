@@ -1990,6 +1990,7 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
           scheduledTime: true,
           status: true,
           is3rdParty: true,
+          careCompanionId: true,
           careCompanion: { select: { name: true } },
         },
       });
@@ -2033,6 +2034,8 @@ router.get('/beneficiary/:id/utilization', async (req, res) => {
           status: visitStatus,
           isStuck,
           careCompanion: v ? (v.is3rdParty ? '3rd Party' : v.careCompanion?.name || 'Assigned CC') : 'Orphaned',
+          careCompanionId: v?.careCompanionId || null,
+          is3rdParty: v?.is3rdParty || false,
           units: r.units,
           createdAt: r.createdAt,
         };
