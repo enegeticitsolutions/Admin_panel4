@@ -49,7 +49,25 @@ async function deductBenefitBalance(tx, opts) {
 
   if (!balance) throw new Error('Benefit not found in this subscription');
 
-  if (balance.totalUnits !== -1 && (balance.usedUnits + unitsToDeduct) > balance.totalUnits) {
+  // When a HELD reservation already exists for this visit on this balance, the unit
+  // was pre-deducted from availableUnits at scheduling time. Converting HELD→CONSUMED
+  // is capacity-neutral (reservedUnits goes down, usedUnits goes up by the same amount).
+  // So the net *new* units being added is: unitsToDeduct - heldUnitsForThisVisit.
+  // This prevents the false "Insufficient benefit balance" error for visits that have a
+  // valid pre-existing HELD lock on an otherwise-exhausted balance.
+  let alreadyReservedForThisVisit = 0;
+  if (visitId && balance.totalUnits !== -1) {
+    const existingHeld = await tx.benefitReservation.findFirst({
+      where: { visitId, status: 'HELD', balanceId: balance.id },
+      select: { units: true }
+    });
+    if (existingHeld) {
+      alreadyReservedForThisVisit = existingHeld.units;
+    }
+  }
+
+  const netNewUnits = unitsToDeduct - alreadyReservedForThisVisit;
+  if (balance.totalUnits !== -1 && netNewUnits > 0 && (balance.usedUnits + netNewUnits) > (balance.totalUnits - balance.reservedUnits + alreadyReservedForThisVisit)) {
     throw new Error('Insufficient benefit balance');
   }
 

@@ -59,7 +59,18 @@ async function main() {
   console.log(`   Phone:      ${ben.phone || 'N/A'}`);
   console.log(`   Subscriber: ${ben.subscriber?.name || 'N/A'} (${ben.subscriber?.phone || ben.subscriberId})\n`);
 
-  // 2. Fetch Subscriptions & Balances
+  // 2. Fetch All Visits
+  const visits = await prisma.visit.findMany({
+    where: { beneficiaryId: ben.id },
+    include: {
+      benefit: true,
+      careCompanion: true,
+    },
+    orderBy: { scheduledTime: 'asc' }
+  });
+  const visitMap = new Map(visits.map(v => [v.id, v]));
+
+  // 3. Fetch Subscriptions & Balances
   const subscriptions = await prisma.subscription.findMany({
     where: { beneficiaryId: ben.id },
     include: {
@@ -68,11 +79,7 @@ async function main() {
       benefitBalances: {
         include: {
           benefit: true,
-          reservations: {
-            include: {
-              visit: true
-            }
-          }
+          reservations: true
         }
       }
     },
@@ -98,7 +105,7 @@ async function main() {
       if (heldRes.length > 0) {
         console.log(`     🔒 HELD Reservations (${heldRes.length}):`);
         heldRes.forEach(r => {
-          const v = r.visit;
+          const v = r.visitId ? visitMap.get(r.visitId) : null;
           console.log(`        - Res ID: ${r.id} | Units: ${r.units} | Visit ID: ${r.visitId || 'NONE'}`);
           if (v) {
             console.log(`          Visit Code: #${v.visitCode || 'N/A'} | Status: ${v.status} | Scheduled: ${v.scheduledTime?.toISOString()} | 3rdParty: ${v.is3rdParty}`);
@@ -108,16 +115,6 @@ async function main() {
         });
       }
     });
-  });
-
-  // 3. Fetch All Visits
-  const visits = await prisma.visit.findMany({
-    where: { beneficiaryId: ben.id },
-    include: {
-      benefit: true,
-      careCompanion: true,
-    },
-    orderBy: { scheduledTime: 'asc' }
   });
 
   console.log(`\n================================================================`);
@@ -137,7 +134,7 @@ async function main() {
       let trueHeldUnits = 0;
       for (const r of b.reservations) {
         if (r.status === 'HELD') {
-          const v = r.visit;
+          const v = r.visitId ? visitMap.get(r.visitId) : null;
           const isStuck = !v || ['completed', 'cancelled', 'missed'].includes(v.status);
           if (isStuck) {
             stuckReservations.push({

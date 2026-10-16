@@ -26,7 +26,9 @@ import {
   Unlock,
   RotateCw,
   AlertCircle,
-  X
+  X,
+  Search,
+  Filter
 } from 'lucide-react';
 import { subscriptionApi, visitApi } from '../../services/api';
 import { toast } from 'sonner';
@@ -257,24 +259,24 @@ function CircleRing({
           )}
         </div>
       </div>
-      <div className="text-center">
-        <p className="text-[10px] font-black text-gray-600 uppercase tracking-wider leading-tight max-w-[85px] text-center truncate" title={label}>
+      <div className="text-center w-full px-1">
+        <p className="text-[10px] font-black text-gray-700 uppercase tracking-wider leading-tight text-center truncate max-w-[95px] mx-auto" title={label}>
           {label}
         </p>
         {isSelected && (
-          <span className="text-[8px] font-black text-[#FF7A00] uppercase tracking-widest">Selected</span>
+          <span className="text-[8px] font-black text-[#FF7A00] uppercase tracking-widest block">Selected</span>
         )}
         {!isSelected && isExhausted && (
-          <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">Exhausted</span>
+          <span className="text-[8px] font-black text-rose-500 uppercase tracking-widest block">Exhausted</span>
         )}
         {!isSelected && !isExhausted && isLow && (
-          <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest">Low</span>
+          <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest block">Low</span>
         )}
         {!isSelected && !isExhausted && !isLow && (
-          <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wider">{percent}%</span>
+          <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-wider block">{percent}%</span>
         )}
         {reservedUnits != null && reservedUnits > 0 && (
-          <span className="text-[8px] font-black text-amber-600 bg-amber-50 px-1 py-0.2 rounded border border-amber-200 uppercase tracking-wider block mt-0.5">
+          <span className="text-[8px] font-black text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 uppercase tracking-wider inline-block mt-0.5">
             🔒 {reservedUnits} locked
           </span>
         )}
@@ -307,6 +309,10 @@ export function PackageUtilizationPanel({
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [selectedBalanceForAdjust, setSelectedBalanceForAdjust] = useState<BenefitBalanceForAdjustment | null>(null);
   const [viewingVisitId, setViewingVisitId] = useState<string | null>(null);
+  const [benefitFilter, setBenefitFilter] = useState<'all' | 'utilized' | 'exhausted' | 'locked'>('all');
+  const [benefitSearch, setBenefitSearch] = useState('');
+  const [showAllRings, setShowAllRings] = useState(false);
+  const [expandedLocks, setExpandedLocks] = useState<Record<string, boolean>>({});
   const [reconciling, setReconciling] = useState(false);
   const [releasingId, setReleasingId] = useState<string | null>(null);
   const [cancellingVisitId, setCancellingVisitId] = useState<string | null>(null);
@@ -344,7 +350,12 @@ export function PackageUtilizationPanel({
   };
 
   const handleReleaseStuckLock = async (reservationId: string, visitCode?: string | null) => {
-    const confirm = window.confirm(`Release this locked quota${visitCode ? ` for visit #${visitCode}` : ''}?\n\nThis will restore the 1 locked unit back to available quota immediately.`);
+    const confirm = window.confirm(
+      `Release the quota lock${visitCode ? ` for visit #${visitCode}` : ''}?\n\n` +
+      `This will restore the 1 locked unit back to available quota immediately.\n\n` +
+      `Note: If this visit is already completed or missed, the lock is "orphaned" — ` +
+      `releasing it is safe and recommended so the quota can be reused.`
+    );
     if (!confirm) return;
 
     setReleasingId(reservationId);
@@ -918,333 +929,493 @@ export function PackageUtilizationPanel({
         )}
 
         {/* ── Benefit Rings (Visual Overview) ── */}
-        {benefits.length > 0 ? (
-          <div className="flex flex-wrap justify-center gap-8 py-5 border-y border-gray-100 my-4">
-            {benefits.map((b, i) => (
-              <CircleRing
-                key={b.benefitId}
-                percent={b.usagePercent}
-                size={86}
-                strokeWidth={7}
-                color={COLORS[i % COLORS.length]}
-                label={b.benefitName || 'Benefit'}
-                value={`${b.usedUnits}`}
-                unit={`/ ${b.totalUnits} ${b.unitLabel}`}
-                isExhausted={b.isExhausted}
-                isLow={b.isLowBalance}
-                reservedUnits={b.reservedUnits}
-                isSelected={selectedBenefitId === b.benefitId}
-                isSelectable={isSelectable}
-                onClick={() => onBenefitSelect?.(b.benefitId, b.benefitName, b.unitLabel, subscription.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="py-8 flex flex-col items-center gap-4">
-            <p className="text-sm text-gray-400 text-center italic">No benefit balances configured for this subscription.</p>
-            <button
-              onClick={async () => {
-                if (!subscription?.id) return;
-                setInitializing(true);
-                try {
-                  const result = await subscriptionApi.initializeBalances(subscription.id);
-                  if (result.created > 0) {
-                    toast.success(`✅ Initialized ${result.created} benefit balance(s)!`);
-                    load(subscription.id);
-                  } else {
-                    toast.info(result.message || 'No new balances to create.');
-                  }
-                } catch (err: any) {
-                  toast.error(err.message || 'Failed to initialize balances');
-                } finally {
-                  setInitializing(false);
-                }
-              }}
-              disabled={initializing}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#FF7A00] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#e06d00] transition-colors disabled:opacity-60 cursor-pointer"
-            >
-              {initializing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {initializing ? 'Initializing...' : 'Initialize Benefit Balances'}
-            </button>
-          </div>
-        )}
+        {benefits.length > 0 && (() => {
+          const activeAlertBenefits = benefits.filter(
+            (b) => b.usedUnits > 0 || b.isExhausted || b.isLowBalance || (b.reservedUnits && b.reservedUnits > 0)
+          );
+          const ringsToDisplay = (showAllRings || activeAlertBenefits.length === 0 || benefits.length <= 4)
+            ? benefits
+            : activeAlertBenefits;
+
+          return (
+            <div className="py-4 border-y border-gray-100 my-4">
+              <div className="flex items-center justify-between mb-3 px-1 flex-wrap gap-2">
+                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                  <Activity size={12} className="text-[#FF7A00]" />
+                  Quota Utilization Rings ({ringsToDisplay.length}{!showAllRings && activeAlertBenefits.length > 0 && benefits.length > 4 ? ' of ' + benefits.length + ' active' : ''})
+                </span>
+                {benefits.length > 4 && activeAlertBenefits.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllRings(!showAllRings)}
+                    className="text-[10px] font-bold text-[#FF7A00] hover:text-[#E06C00] bg-orange-50 hover:bg-orange-100 px-3 py-1 rounded-full transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>{showAllRings ? 'Show In-Use Only (' + activeAlertBenefits.length + ')' : 'Show All ' + benefits.length + ' Benefits'}</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap justify-center gap-6 py-2 overflow-x-auto">
+                {ringsToDisplay.map((b, i) => (
+                  <CircleRing
+                    key={b.benefitId}
+                    percent={b.usagePercent}
+                    size={84}
+                    strokeWidth={7}
+                    color={COLORS[i % COLORS.length]}
+                    label={b.benefitName || 'Benefit'}
+                    value={`${b.usedUnits}`}
+                    unit={`/ ${b.totalUnits} ${b.unitLabel}`}
+                    isExhausted={b.isExhausted}
+                    isLow={b.isLowBalance}
+                    reservedUnits={b.reservedUnits}
+                    isSelected={selectedBenefitId === b.benefitId}
+                    isSelectable={isSelectable}
+                    onClick={() => onBenefitSelect?.(b.benefitId, b.benefitName, b.unitLabel, subscription.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Detailed Benefit Cards Grid ── */}
-        {benefits.length > 0 && (
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-[11px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                <Layers size={13} className="text-[#FF7A00]" />
-                Benefit Quota & Usage Breakdown ({benefits.length} Benefits)
-              </h4>
-              <span className="text-[10px] font-bold text-gray-400">
-                {benefits.filter((b) => b.usedUnits > 0).length} of {benefits.length} benefits utilized
-              </span>
-            </div>
+        {benefits.length > 0 && (() => {
+          const utilizedCount = benefits.filter((b) => b.usedUnits > 0).length;
+          const exhaustedCount = benefits.filter((b) => b.isExhausted).length;
+          const lockedCount = benefits.filter((b) => b.reservedUnits && b.reservedUnits > 0).length;
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {benefits.map((b, i) => {
-                const accent = COLORS[i % COLORS.length];
-                const isSelected = selectedBenefitId === b.benefitId;
-                const isHourBased = b.unitLabel?.toLowerCase().includes('hour');
-                const canSelect = isSelectable && !b.isExhausted;
-                const isTopUsed = mostUsedBenefit && mostUsedBenefit.benefitId === b.benefitId && b.usedUnits > 0;
+          const filteredBenefits = benefits.filter((b) => {
+            if (benefitSearch.trim()) {
+              const q = benefitSearch.toLowerCase();
+              const matchName = b.benefitName.toLowerCase().includes(q);
+              const matchType = (b.benefitTypeName || '').toLowerCase().includes(q);
+              if (!matchName && !matchType) return false;
+            }
+            if (benefitFilter === 'utilized') return b.usedUnits > 0;
+            if (benefitFilter === 'exhausted') return b.isExhausted;
+            if (benefitFilter === 'locked') return b.reservedUnits && b.reservedUnits > 0;
+            return true;
+          });
 
-                return (
-                  <div
-                    key={b.benefitId}
-                    onClick={canSelect ? () => onBenefitSelect?.(b.benefitId, b.benefitName, b.unitLabel) : undefined}
-                    className={`p-4 rounded-2xl border transition-all ${
-                      canSelect ? 'cursor-pointer' : ''
-                    } ${
-                      isSelected
-                        ? 'bg-[#FFF5EE] border-[#FF7A00] shadow-md shadow-orange-100'
-                        : b.isExhausted
-                        ? 'bg-red-50/50 border-red-100'
-                        : b.isLowBalance
-                        ? 'bg-amber-50/50 border-amber-200 hover:border-amber-300'
-                        : isTopUsed
-                        ? 'bg-orange-50/30 border-orange-200'
-                        : canSelect
-                        ? 'bg-[#FDFBF9] border-gray-100 hover:border-[#FF7A00] hover:bg-[#FFF9F5]'
-                        : 'bg-[#FDFBF9] border-gray-100'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          {isTopUsed && (
-                            <span title="Most used benefit in this package">
-                              <Award size={13} className="text-[#FF7A00] shrink-0" />
-                            </span>
-                          )}
-                          <p className={`text-xs font-black truncate max-w-[160px] ${isSelected ? 'text-[#FF7A00]' : 'text-gray-800'}`}>
-                            {b.benefitName}
-                          </p>
-                        </div>
-                        {b.benefitTypeName && (
-                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mt-0.5">
-                            {b.benefitTypeName}
-                          </span>
-                        )}
-                      </div>
+          return (
+            <div className="mt-4">
+              {/* Header + Filter Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
+                <div>
+                  <h4 className="text-[11px] font-black text-gray-700 uppercase tracking-widest flex items-center gap-2">
+                    <Layers size={14} className="text-[#FF7A00]" />
+                    Benefit Quota & Usage Breakdown ({benefits.length} Benefits)
+                  </h4>
+                  <span className="text-[10px] font-bold text-gray-400">
+                    {utilizedCount} of {benefits.length} utilized · {exhaustedCount} exhausted · {lockedCount} locked
+                  </span>
+                </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        {b.isExhausted ? (
-                          <span className="flex items-center gap-1 text-[9px] font-black text-red-600 uppercase bg-red-100/80 px-1.5 py-0.5 rounded">
-                            <AlertTriangle size={10} /> Exhausted
-                          </span>
-                        ) : b.isLowBalance ? (
-                          <span className="flex items-center gap-1 text-[9px] font-black text-amber-700 uppercase bg-amber-100/80 px-1.5 py-0.5 rounded">
-                            <AlertTriangle size={10} /> Low
-                          </span>
-                        ) : b.usedUnits > 0 ? (
-                          <span className="text-[9px] font-black text-emerald-700 uppercase bg-emerald-100/80 px-1.5 py-0.5 rounded">
-                            {b.usagePercent}% Used
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-bold text-gray-400 uppercase bg-gray-100 px-1.5 py-0.5 rounded">
-                            Unused
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Progress bar */}
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
-                      <div
-                        className="h-full rounded-full transition-all duration-700"
-                        style={{
-                          width: `${Math.min(b.usagePercent, 100)}%`,
-                          backgroundColor: isSelected ? '#FF7A00' : b.isExhausted ? '#EF4444' : b.isLowBalance ? '#F59E0B' : accent,
-                        }}
-                      />
-                    </div>
-
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className="font-black text-gray-700">
-                        <strong className="text-gray-900">{b.usedUnits}</strong> of {b.totalUnits} {b.unitLabel} used
-                      </span>
-                      <span className="font-bold text-gray-400">
-                        {b.availableUnits != null ? `${b.availableUnits} available` : `${b.remainingUnits} left`}
-                      </span>
-                    </div>
-
-                    {/* Locked / Reserved Banner */}
-                    {b.reservedUnits != null && b.reservedUnits > 0 && (
-                      <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200">
-                        <div className="flex items-center justify-between text-[10px] font-black text-amber-800 uppercase tracking-wider flex-wrap gap-2">
-                          <span className="flex items-center gap-1">
-                            <Lock size={11} className="text-amber-600" />
-                            {b.reservedUnits} {b.unitLabel} Locked / Reserved
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={handleReconcileLocks}
-                              disabled={reconciling}
-                              title="Reconcile and release any stuck/orphaned locks"
-                              className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200/90 hover:bg-amber-300 text-amber-900 border border-amber-300 transition-colors cursor-pointer"
-                            >
-                              <RotateCw size={9} className={reconciling ? 'animate-spin' : ''} />
-                              {reconciling ? 'Syncing...' : 'Fix / Reconcile'}
-                            </button>
-                            <span className="text-[9px] bg-amber-200/80 px-1.5 py-0.5 rounded text-amber-900 font-bold">
-                              {b.availableUnits ?? 0} Avail
-                            </span>
-                          </div>
-                        </div>
-
-                        {b.lockedVisits && b.lockedVisits.length > 0 && (
-                          <div className="mt-2 space-y-1.5">
-                            {b.lockedVisits.map((lv, lIdx) => {
-                              const isScheduled = lv.status === 'scheduled';
-                              const isStuck = lv.isStuck || !isScheduled;
-                              return (
-                                <div
-                                  key={lIdx}
-                                  className={`flex items-center justify-between gap-2 p-2 rounded-lg border text-[9px] font-bold transition-all ${
-                                    isStuck
-                                      ? 'bg-rose-50/90 border-rose-200'
-                                      : 'bg-white/95 border-amber-100 hover:border-amber-300'
-                                  }`}
-                                >
-                                  {/* Left: Code, Time, Companion, Status */}
-                                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                    <span className="font-mono text-[#FF7A00] font-black select-all">
-                                      #{lv.visitCode || 'VISIT'}
-                                    </span>
-                                    <span className="text-gray-500">
-                                      {lv.scheduledTime
-                                        ? new Date(lv.scheduledTime).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                          })
-                                        : 'Scheduled'}
-                                    </span>
-                                    <span className="text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded text-[8px] font-black uppercase border border-purple-100">
-                                      {lv.careCompanion}
-                                    </span>
-                                    {isStuck ? (
-                                      <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-0.5">
-                                        <AlertCircle size={9} /> Stuck ({lv.status})
-                                      </span>
-                                    ) : (
-                                      <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
-                                        Scheduled
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Right: Actions */}
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    {lv.visitId && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setViewingVisitId(lv.visitId)}
-                                        title="View Visit Encounter Details"
-                                        className="p-1 rounded bg-[#E8F0FF] text-[#1D4ED8] hover:bg-[#D1E0FF] transition-colors"
-                                      >
-                                        <Eye size={11} />
-                                      </button>
-                                    )}
-
-                                    {isScheduled && lv.visitId && (
-                                      <>
-                                        <button
-                                          type="button"
-                                          onClick={() => openRescheduleModal(lv)}
-                                          title="Reschedule Visit Date/Time"
-                                          className="p-1 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
-                                        >
-                                          <Calendar size={11} />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleCancelLockedVisit(lv.visitId, lv.visitCode)}
-                                          disabled={cancellingVisitId === lv.visitId}
-                                          title="Cancel Visit & Release Locked Quota"
-                                          className="p-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
-                                        >
-                                          {cancellingVisitId === lv.visitId ? (
-                                            <Loader2 size={11} className="animate-spin" />
-                                          ) : (
-                                            <Trash2 size={11} />
-                                          )}
-                                        </button>
-                                      </>
-                                    )}
-
-                                    {isStuck && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleReleaseStuckLock(lv.reservationId, lv.visitCode)}
-                                        disabled={releasingId === lv.reservationId}
-                                        title="Release Stuck Lock and Restore Quota"
-                                        className="px-2 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white text-[8px] font-black uppercase tracking-wider transition-colors flex items-center gap-1 disabled:opacity-50 shadow-xs"
-                                      >
-                                        {releasingId === lv.reservationId ? (
-                                          <Loader2 size={9} className="animate-spin" />
-                                        ) : (
-                                          <Unlock size={9} />
-                                        )}
-                                        Release Lock
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Adjust Quota Action Button */}
-                    <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-gray-400">
-                        Quota: <strong className="text-gray-700">{b.totalUnits} {b.unitLabel}</strong>
-                      </span>
+                {/* Search & Filter Controls */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Search input */}
+                  <div className="relative min-w-[140px] max-w-[200px]">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search benefit..."
+                      value={benefitSearch}
+                      onChange={(e) => setBenefitSearch(e.target.value)}
+                      className="w-full pl-7 pr-2.5 py-1 text-xs rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:border-[#FF7A00] focus:bg-white transition-all placeholder:text-gray-400"
+                    />
+                    {benefitSearch && (
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedBalanceForAdjust({
-                            balanceId: b.balanceId,
-                            benefitId: b.benefitId,
-                            benefitName: b.benefitName,
-                            unitLabel: b.unitLabel,
-                            totalUnits: b.totalUnits,
-                            usedUnits: b.usedUnits,
-                            remainingUnits: b.remainingUnits,
-                            packageName: subscription.packageName,
-                          });
-                          setIsAdjustModalOpen(true);
-                        }}
-                        className="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-[#FF7A00] text-[#FF7A00] hover:text-white font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 border border-orange-200 hover:border-[#FF7A00] shadow-2xs cursor-pointer"
-                        title={`Adjust Quota for ${b.benefitName}`}
+                        onClick={() => setBenefitSearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                       >
-                        <SlidersHorizontal size={11} />
-                        <span>Adjust Quota</span>
+                        <X size={10} />
                       </button>
-                    </div>
-
-                    {/* Selected indicator line at bottom */}
-                    {isSelected && (
-                      <div className="mt-2 pt-2 border-t border-[#FFE4D3]">
-                        <p className="text-[9px] font-black text-[#FF7A00] uppercase tracking-widest text-center">
-                          ✓ Selected for this visit
-                        </p>
-                      </div>
                     )}
                   </div>
-                );
-              })}
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center gap-1 bg-gray-50 p-0.5 rounded-xl border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setBenefitFilter('all')}
+                      className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                        benefitFilter === 'all'
+                          ? 'bg-white text-gray-900 shadow-2xs font-black'
+                          : 'text-gray-500 hover:text-gray-800'
+                      }`}
+                    >
+                      All ({benefits.length})
+                    </button>
+                    {utilizedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setBenefitFilter('utilized')}
+                        className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                          benefitFilter === 'utilized'
+                            ? 'bg-emerald-600 text-white shadow-2xs'
+                            : 'text-emerald-700 hover:text-emerald-800'
+                        }`}
+                      >
+                        In Use ({utilizedCount})
+                      </button>
+                    )}
+                    {exhaustedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setBenefitFilter('exhausted')}
+                        className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${
+                          benefitFilter === 'exhausted'
+                            ? 'bg-rose-600 text-white shadow-2xs'
+                            : 'text-rose-700 hover:text-rose-800'
+                        }`}
+                      >
+                        Exhausted ({exhaustedCount})
+                      </button>
+                    )}
+                    {lockedCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setBenefitFilter('locked')}
+                        className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                          benefitFilter === 'locked'
+                            ? 'bg-amber-500 text-white shadow-2xs'
+                            : 'text-amber-800 hover:text-amber-900'
+                        }`}
+                      >
+                        <Lock size={9} />
+                        Locked ({lockedCount})
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Grid Cards */}
+              {filteredBenefits.length === 0 ? (
+                <div className="py-8 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                  <p className="text-xs font-bold text-gray-500">No benefits matching "{benefitSearch || benefitFilter}"</p>
+                  <button
+                    type="button"
+                    onClick={() => { setBenefitFilter('all'); setBenefitSearch(''); }}
+                    className="mt-2 text-xs font-bold text-[#FF7A00] hover:underline cursor-pointer"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filteredBenefits.map((b, i) => {
+                    const accent = COLORS[i % COLORS.length];
+                    const isSelected = selectedBenefitId === b.benefitId;
+                    const canSelect = isSelectable && !b.isExhausted;
+                    const isTopUsed = mostUsedBenefit && mostUsedBenefit.benefitId === b.benefitId && b.usedUnits > 0;
+                    const hasLocks = b.reservedUnits != null && b.reservedUnits > 0;
+                    const isLockOpen = expandedLocks[b.benefitId] ?? true;
+
+                    return (
+                      <div
+                        key={b.benefitId}
+                        onClick={canSelect ? () => onBenefitSelect?.(b.benefitId, b.benefitName, b.unitLabel) : undefined}
+                        className={`p-4 rounded-2xl border transition-all flex flex-col justify-between overflow-hidden relative shadow-2xs ${
+                          canSelect ? 'cursor-pointer' : ''
+                        } ${
+                          isSelected
+                            ? 'bg-[#FFF5EE] border-[#FF7A00] shadow-md shadow-orange-100 ring-2 ring-[#FF7A00]/20'
+                            : b.isExhausted
+                            ? 'bg-rose-50/30 border-rose-100 hover:border-rose-200'
+                            : b.isLowBalance
+                            ? 'bg-amber-50/30 border-amber-200 hover:border-amber-300'
+                            : isTopUsed
+                            ? 'bg-orange-50/30 border-orange-200 hover:border-orange-300'
+                            : canSelect
+                            ? 'bg-white border-gray-100 hover:border-[#FF7A00] hover:bg-[#FFF9F5]'
+                            : 'bg-white border-gray-100'
+                        }`}
+                      >
+                        {/* Top Content */}
+                        <div>
+                          {/* Header: Title + Type on left, Status Badge on right */}
+                          <div className="flex items-start justify-between gap-2.5 mb-2.5">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                {isTopUsed && (
+                                  <span title="Most used benefit in this package" className="shrink-0">
+                                    <Award size={13} className="text-[#FF7A00]" />
+                                  </span>
+                                )}
+                                <p
+                                  className={`text-xs font-black truncate ${isSelected ? 'text-[#FF7A00]' : 'text-gray-900'}`}
+                                  title={b.benefitName}
+                                >
+                                  {b.benefitName}
+                                </p>
+                              </div>
+                              {b.benefitTypeName && (
+                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mt-0.5 truncate">
+                                  {b.benefitTypeName}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              {b.isExhausted ? (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black text-rose-700 uppercase bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-full whitespace-nowrap shadow-2xs">
+                                  <AlertTriangle size={10} className="shrink-0 text-rose-600" /> Exhausted
+                                </span>
+                              ) : b.isLowBalance ? (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-700 uppercase bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full whitespace-nowrap shadow-2xs">
+                                  <AlertTriangle size={10} className="shrink-0 text-amber-600" /> Low
+                                </span>
+                              ) : b.usedUnits > 0 ? (
+                                <span className="inline-flex items-center text-[9px] font-black text-emerald-700 uppercase bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full whitespace-nowrap shadow-2xs">
+                                  {b.usagePercent}% Used
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center text-[9px] font-bold text-gray-500 uppercase bg-gray-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                  Unused
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{
+                                width: `${Math.min(b.usagePercent, 100)}%`,
+                                backgroundColor: isSelected ? '#FF7A00' : b.isExhausted ? '#EF4444' : b.isLowBalance ? '#F59E0B' : accent,
+                              }}
+                            />
+                          </div>
+
+                          {/* Usage numbers */}
+                          <div className="flex justify-between items-center text-[10px] mb-2">
+                            <span className="font-bold text-gray-600">
+                              <strong className="text-gray-900 font-black">{b.usedUnits}</strong> of {b.totalUnits} {b.unitLabel} used
+                            </span>
+                            <span className={`font-black ${b.isExhausted ? 'text-rose-600 font-black' : b.isLowBalance ? 'text-amber-600' : 'text-gray-400'}`}>
+                              {b.availableUnits != null ? `${b.availableUnits} available` : `${b.remainingUnits} left`}
+                            </span>
+                          </div>
+
+                          {/* Locked / Reserved Banner */}
+                          {hasLocks && (
+                            <div className="mt-2.5 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200 text-[10px]">
+                              <div className="flex items-center justify-between font-black text-amber-900 gap-1.5 flex-wrap">
+                                <span className="flex items-center gap-1 text-amber-800">
+                                  <Lock size={11} className="text-amber-600 shrink-0" />
+                                  <span>{b.reservedUnits} {b.unitLabel} Locked</span>
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleReconcileLocks();
+                                    }}
+                                    disabled={reconciling}
+                                    title="Reconcile and release any stuck/orphaned locks"
+                                    className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-amber-200 hover:bg-amber-300 text-amber-900 border border-amber-300 transition-colors cursor-pointer"
+                                  >
+                                    <RotateCw size={9} className={reconciling ? 'animate-spin' : ''} />
+                                    {reconciling ? 'Syncing...' : 'Fix / Reconcile'}
+                                  </button>
+                                  {b.lockedVisits && b.lockedVisits.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setExpandedLocks(prev => ({ ...prev, [b.benefitId]: !isLockOpen }));
+                                      }}
+                                      className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-800 transition-colors cursor-pointer"
+                                    >
+                                      <span>{isLockOpen ? 'Hide' : `Manage (${b.lockedVisits.length})`}</span>
+                                      <ChevronDown size={10} className={`transform transition-transform ${isLockOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {b.lockedVisits && b.lockedVisits.length > 0 && isLockOpen && (
+                                <div className="mt-2 space-y-1.5 border-t border-amber-200/60 pt-2">
+                                  {b.lockedVisits.map((lv, lIdx) => {
+                                    const isScheduled = lv.status === 'scheduled';
+                                    // "Orphaned" = visit is completed/cancelled/missed but HELD lock still exists
+                                    const isOrphaned = ['completed', 'cancelled', 'missed'].includes(lv.status);
+                                    // "Stuck" = visit exists but is in an unexpected state (not scheduled, not normally-finished)
+                                    const isStuck = !isScheduled && !isOrphaned;
+                                    return (
+                                      <div
+                                        key={lIdx}
+                                        className={`flex items-center justify-between gap-1.5 p-2 rounded-lg border text-[9px] font-bold transition-all ${
+                                          isOrphaned
+                                            ? 'bg-white border-violet-200 shadow-2xs'
+                                            : isStuck
+                                            ? 'bg-white border-rose-200 shadow-2xs'
+                                            : 'bg-white/95 border-amber-100 hover:border-amber-300'
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                          <span className="font-mono text-[#FF7A00] font-black select-all">
+                                            #{lv.visitCode || 'VISIT'}
+                                          </span>
+                                          <span className="text-gray-500 whitespace-nowrap">
+                                            {lv.scheduledTime
+                                              ? new Date(lv.scheduledTime).toLocaleDateString('en-US', {
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                                  hour: '2-digit',
+                                                  minute: '2-digit',
+                                                })
+                                              : '—'}
+                                          </span>
+                                          <span className="text-purple-700 bg-purple-50 px-1 py-0.2 rounded text-[8px] font-black uppercase border border-purple-100 whitespace-nowrap">
+                                            {lv.careCompanion}
+                                          </span>
+                                          {isOrphaned ? (
+                                            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-100 text-violet-800 border border-violet-200 flex items-center gap-0.5 whitespace-nowrap">
+                                              <AlertCircle size={9} /> Orphaned lock ({lv.status})
+                                            </span>
+                                          ) : isStuck ? (
+                                            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-0.5 whitespace-nowrap">
+                                              <AlertCircle size={9} /> Stuck ({lv.status})
+                                            </span>
+                                          ) : (
+                                            <span className="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 whitespace-nowrap">
+                                              Scheduled
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {lv.visitId && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setViewingVisitId(lv.visitId);
+                                              }}
+                                              title="View Visit Encounter Details"
+                                              className="p-1 rounded bg-[#E8F0FF] text-[#1D4ED8] hover:bg-[#D1E0FF] transition-colors cursor-pointer"
+                                            >
+                                              <Eye size={11} />
+                                            </button>
+                                          )}
+                                          {isScheduled && lv.visitId && (
+                                            <>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  openRescheduleModal(lv);
+                                                }}
+                                                title="Reschedule Visit Date/Time"
+                                                className="p-1 rounded bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors cursor-pointer"
+                                              >
+                                                <Calendar size={11} />
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleCancelLockedVisit(lv.visitId, lv.visitCode);
+                                                }}
+                                                disabled={cancellingVisitId === lv.visitId}
+                                                title="Cancel Visit & Release Locked Quota"
+                                                className="p-1 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50 cursor-pointer"
+                                              >
+                                                {cancellingVisitId === lv.visitId ? (
+                                                  <Loader2 size={11} className="animate-spin" />
+                                                ) : (
+                                                  <Trash2 size={11} />
+                                                )}
+                                              </button>
+                                            </>
+                                          )}
+                                          {/* Show Release Lock for any non-scheduled visit with an orphaned HELD reservation */}
+                                          {(isOrphaned || isStuck) && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleReleaseStuckLock(lv.reservationId, lv.visitCode);
+                                              }}
+                                              disabled={releasingId === lv.reservationId}
+                                              title={isOrphaned
+                                                ? `This visit is already ${lv.status} — release its orphaned lock to restore the quota`
+                                                : 'Release stuck lock and restore quota'}
+                                              className={`px-2 py-1 rounded-md text-white text-[8px] font-black uppercase tracking-wider transition-colors flex items-center gap-1 disabled:opacity-50 shadow-2xs whitespace-nowrap cursor-pointer ${
+                                                isOrphaned
+                                                  ? 'bg-violet-600 hover:bg-violet-700'
+                                                  : 'bg-rose-600 hover:bg-rose-700'
+                                              }`}
+                                            >
+                                              {releasingId === lv.reservationId ? (
+                                                <Loader2 size={9} className="animate-spin" />
+                                              ) : (
+                                                <Unlock size={9} />
+                                              )}
+                                              {isOrphaned ? 'Release Orphaned Lock' : 'Release Lock'}
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Adjust Quota Action Button */}
+                        <div className="mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-gray-400">
+                            Quota: <strong className="text-gray-700">{b.totalUnits} {b.unitLabel}</strong>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBalanceForAdjust({
+                                balanceId: b.balanceId,
+                                benefitId: b.benefitId,
+                                benefitName: b.benefitName,
+                                unitLabel: b.unitLabel,
+                                totalUnits: b.totalUnits,
+                                usedUnits: b.usedUnits,
+                                remainingUnits: b.remainingUnits,
+                                packageName: subscription.packageName,
+                              });
+                              setIsAdjustModalOpen(true);
+                            }}
+                            className="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-[#FF7A00] text-[#FF7A00] hover:text-white font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1.5 border border-orange-200 hover:border-[#FF7A00] shadow-2xs cursor-pointer"
+                            title={`Adjust Quota for ${b.benefitName}`}
+                          >
+                            <SlidersHorizontal size={11} />
+                            <span>Adjust Quota</span>
+                          </button>
+                        </div>
+
+                        {/* Selected indicator line at bottom */}
+                        {isSelected && (
+                          <div className="mt-2 pt-2 border-t border-[#FFE4D3]">
+                            <p className="text-[9px] font-black text-[#FF7A00] uppercase tracking-widest text-center">
+                              ✓ Selected for this visit
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* ── Quota Adjustment Audit Trail ── */}

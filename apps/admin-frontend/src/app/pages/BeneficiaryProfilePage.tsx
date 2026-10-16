@@ -461,7 +461,7 @@ export default function BeneficiaryProfilePage() {
 
   return (
     <div className="p-8 bg-[#F4EAE3] min-h-screen">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-[1400px] mx-auto w-full">
         <div className="flex items-center justify-between mb-6">
           <button 
             onClick={() => navigate(-1)}
