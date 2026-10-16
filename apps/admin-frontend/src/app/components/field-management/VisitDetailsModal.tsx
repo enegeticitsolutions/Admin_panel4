@@ -13,11 +13,12 @@ import { useAuth } from '../../context/AuthContext';
 interface VisitDetailsModalProps {
   visitId: string;
   onClose: () => void;
+  onDeleted?: () => void;
 }
 
-export default function VisitDetailsModal({ visitId, onClose }: VisitDetailsModalProps) {
+export default function VisitDetailsModal({ visitId, onClose, onDeleted }: VisitDetailsModalProps) {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
 
   const [visit, setVisit] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -28,6 +29,7 @@ export default function VisitDetailsModal({ visitId, onClose }: VisitDetailsModa
   const [rejectReason, setRejectReason] = useState('');
   const [editImages, setEditImages] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const toDateTimeLocal = (dateVal?: string | Date | null) => {
@@ -174,6 +176,27 @@ export default function VisitDetailsModal({ visitId, onClose }: VisitDetailsModa
     }
   };
 
+  const handleDeleteVisit = async () => {
+    if (!visit) return;
+    const isCompleted = visit.status === 'completed';
+    const msg = isCompleted
+      ? `Permanently delete visit #${visit.visitCode || visit.id}?\n\nThis visit is marked completed. Deleting it will permanently remove the record and REFUND the deducted quota back to the senior's package balance.`
+      : `Permanently delete visit #${visit.visitCode || visit.id}?\n\nThis will remove the visit record and restore any locked quota immediately.`;
+
+    if (!window.confirm(msg)) return;
+
+    setDeleting(true);
+    try {
+      await visitApi.cancel(visit.id, true);
+      toast.success(`Visit #${visit.visitCode || ''} deleted and quota unblocked!`);
+      onDeleted?.();
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete visit');
+      setDeleting(false);
+    }
+  };
+
   const handleCancelEdit = () => {
     if (!visit) return;
     setEditForm({
@@ -254,12 +277,25 @@ export default function VisitDetailsModal({ visitId, onClose }: VisitDetailsModa
           </div>
           <div className="flex items-center gap-2">
             {!editMode ? (
-              <button
-                onClick={() => setEditMode(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1D4ED8] text-white text-sm font-bold hover:bg-[#1e40af] transition-colors"
-              >
-                <Edit3 size={14} /> Edit
-              </button>
+              <>
+                <button
+                  onClick={() => setEditMode(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1D4ED8] text-white text-sm font-bold hover:bg-[#1e40af] transition-colors cursor-pointer"
+                >
+                  <Edit3 size={14} /> Edit
+                </button>
+                {can('visits.delete') && (
+                  <button
+                    onClick={handleDeleteVisit}
+                    disabled={deleting}
+                    title="Permanently delete this visit & restore quota (Admin / Ops Manager only)"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 text-sm font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    <span>Delete</span>
+                  </button>
+                )}
+              </>
             ) : (
               <>
                 <button

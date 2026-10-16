@@ -70,7 +70,7 @@ export const FRONTEND_PERMISSIONS: Record<string, UserRole[]> = {
   'visits.complete':        ['admin', 'operations_manager', 'field_manager'],
   'visits.cancel_status':   ['admin', 'operations_manager', 'field_manager'],
   'visits.resolve_change':  ['admin', 'operations_manager', 'field_manager'],
-  'visits.delete':          [], // master_admin only
+  'visits.delete':          ['admin', 'operations_manager'],
   'visits.upload_evidence': ['admin', 'operations_manager', 'field_manager'],
   'visits.check_availability': ['admin', 'operations_manager', 'field_manager'],
   'visits.service_requests':   ['admin', 'operations_manager', 'field_manager', 'customer_service_manager', 'customer_service'],

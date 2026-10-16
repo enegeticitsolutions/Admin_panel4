@@ -23,6 +23,7 @@ import { PackageUtilizationPanel } from '../components/PackageUtilizationPanel';
 import VisitDetailsModal from '../components/field-management/VisitDetailsModal';
 import { VitalsTrendsCard } from '../components/beneficiary/VitalsTrendsCard';
 import { format } from 'date-fns';
+import { useAuth } from '../context/AuthContext';
 
 interface StaffPool {
   careCompanions: { id: string; userId: string; name: string; zone: string; isAvailable: boolean }[];
@@ -36,6 +37,8 @@ const vitalIcons: any = {
 };
 
 export default function BeneficiaryProfilePage() {
+  const { can } = useAuth();
+  const canDelete = can('visits.delete');
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [details, setDetails] = useState<any>(null);
@@ -165,6 +168,24 @@ export default function BeneficiaryProfilePage() {
       console.error('Failed to load visits', err);
     } finally {
       setVisitsLoading(false);
+    }
+  };
+
+  const handleDeleteVisit = async (visit: any) => {
+    const isCompleted = visit.status === 'completed';
+    const msg = isCompleted
+      ? `Permanently delete visit #${visit.visitCode || visit.id}?\n\nThis visit is marked completed. Deleting it will permanently remove the record and REFUND the deducted quota back to the senior's package balance.`
+      : `Permanently delete visit #${visit.visitCode || visit.id}?\n\nThis will remove the visit record and restore any locked quota immediately.`;
+
+    if (!window.confirm(msg)) return;
+
+    try {
+      await visitApi.cancel(visit.id, true);
+      toast.success(`Visit #${visit.visitCode || ''} deleted and quota restored!`);
+      fetchVisits();
+      refreshDetailsBackground();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete visit');
     }
   };
 
@@ -1172,6 +1193,15 @@ export default function BeneficiaryProfilePage() {
                             >
                               <Pencil size={13} /> Edit
                             </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDeleteVisit(v)}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-bold hover:bg-red-100 transition-colors"
+                                title="Delete Visit & Restore Quota (Admin / Ops Manager only)"
+                              >
+                                <Trash2 size={13} /> Delete
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -1291,6 +1321,10 @@ export default function BeneficiaryProfilePage() {
               <VisitDetailsModal
                 visitId={openModalVisitId}
                 onClose={() => setOpenModalVisitId(null)}
+                onDeleted={() => {
+                  fetchVisits();
+                  refreshDetailsBackground();
+                }}
               />
             )}
           </div>

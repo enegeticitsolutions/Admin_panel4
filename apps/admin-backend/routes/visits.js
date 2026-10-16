@@ -1169,60 +1169,181 @@ router.get('/', async (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DELETE /api/visits/:id - Cancel or delete a scheduled visit and release quota
+// DELETE /api/visits/:id - Cancel or delete a visit, unblocking quota completely
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   const { can } = require('../utils/rbac');
-  if (!can(req.user, 'visits.delete') && !can(req.user, 'visits.cancel_status')) {
-    return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions to cancel/delete visits' });
+  const isPermanent = req.query.permanent === 'true' || req.query.permanent === true;
+
+  // Permanent deletion is strictly restricted to Admin and Operations Manager ('visits.delete')
+  if (isPermanent) {
+    if (!can(req.user, 'visits.delete')) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only Admins and Operations Managers can permanently delete visits' });
+    }
+  } else {
+    if (!can(req.user, 'visits.delete') && !can(req.user, 'visits.cancel_status')) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions to cancel visits' });
+    }
   }
 
   try {
     const visit = await prisma.visit.findUnique({
       where: { id },
       include: {
-        beneficiary: { select: { name: true, userId: true, subscriberId: true } },
+        beneficiary: { select: { id: true, name: true, userId: true, subscriberId: true } },
         careCompanion: { select: { name: true, userId: true } },
+        benefit: true,
       },
     });
 
     if (!visit) return res.status(404).json({ success: false, message: 'Visit not found' });
-    if (visit.status === 'completed') {
-      return res.status(400).json({ success: false, message: 'Cannot cancel or delete a completed visit' });
+
+    // For soft cancellation (without permanent flag), prevent soft-cancelling a completed visit
+    if (!isPermanent && visit.status === 'completed') {
+      return res.status(400).json({ success: false, message: 'Cannot soft-cancel a completed visit. Use permanent delete to remove the record and restore quota.' });
     }
 
-    const isPermanent = req.query.permanent === 'true';
-
     await prisma.$transaction(async (tx) => {
-      // Release any HELD benefit reservation so senior quota is restored
-      await releaseVisitBenefitReservation(tx, id, isPermanent ? 'Visit permanently deleted' : 'Visit cancelled via admin');
+      // 1. Rollback & unblock all benefit reservations linked to this visit
+      const reservations = await tx.benefitReservation.findMany({
+        where: { visitId: id },
+        include: { balance: true }
+      });
+
+      for (const r of reservations) {
+        if (r.balance) {
+          const bal = r.balance;
+          if (r.status === 'HELD') {
+            // Restore held locked unit back to available
+            const reservedAfter = Math.max(0, bal.reservedUnits - r.units);
+            const availableAfter = bal.totalUnits === -1 ? 999999 : Math.max(0, bal.totalUnits - bal.usedUnits - reservedAfter);
+            await tx.subscriptionBenefitBalance.update({
+              where: { id: bal.id },
+              data: { reservedUnits: reservedAfter, availableUnits: availableAfter }
+            });
+
+            await tx.benefitTransaction.create({
+              data: {
+                balanceId: bal.id,
+                transactionType: 'RELEASED',
+                units: r.units,
+                totalBefore: bal.totalUnits,
+                totalAfter: bal.totalUnits,
+                reservedBefore: bal.reservedUnits,
+                reservedAfter,
+                usedBefore: bal.usedUnits,
+                usedAfter: bal.usedUnits,
+                availableBefore: bal.availableUnits,
+                availableAfter,
+                reason: `Visit ${visit.visitCode || id} deleted: released HELD lock`,
+                performedByUserId: req.user?.id || null,
+              }
+            });
+          } else if (r.status === 'CONSUMED') {
+            // Roll back consumed quota back to available
+            const usedAfter = Math.max(0, bal.usedUnits - r.units);
+            const reservedAfter = bal.reservedUnits;
+            const availableAfter = bal.totalUnits === -1 ? 999999 : Math.max(0, bal.totalUnits - usedAfter - reservedAfter);
+            await tx.subscriptionBenefitBalance.update({
+              where: { id: bal.id },
+              data: { usedUnits: usedAfter, availableUnits: availableAfter }
+            });
+
+            await tx.benefitTransaction.create({
+              data: {
+                balanceId: bal.id,
+                transactionType: 'REFUNDED',
+                units: r.units,
+                totalBefore: bal.totalUnits,
+                totalAfter: bal.totalUnits,
+                reservedBefore: bal.reservedUnits,
+                reservedAfter,
+                usedBefore: bal.usedUnits,
+                usedAfter,
+                availableBefore: bal.availableUnits,
+                availableAfter,
+                reason: `Visit ${visit.visitCode || id} deleted: refunded CONSUMED quota`,
+                performedByUserId: req.user?.id || null,
+              }
+            });
+
+            // Decrement subscription visits completed
+            await tx.subscription.update({
+              where: { id: bal.subscriptionId },
+              data: { visitsCompleted: { decrement: 1 } }
+            }).catch(() => {});
+          }
+        }
+      }
+
+      // If no reservations were found but a PackageHoursLog exists, rollback usedUnits
+      const existingLogs = await tx.packageHoursLog.findMany({ where: { visitId: id } });
+      if (existingLogs.length > 0 && reservations.filter(r => r.status === 'CONSUMED').length === 0 && visit.benefitId) {
+        for (const log of existingLogs) {
+          const bal = await tx.subscriptionBenefitBalance.findFirst({
+            where: { subscriptionId: log.subscriptionId, benefitId: visit.benefitId }
+          });
+          if (bal) {
+            const unitsToRevert = Math.ceil(log.hoursConsumed || 1);
+            const usedAfter = Math.max(0, bal.usedUnits - unitsToRevert);
+            const availableAfter = bal.totalUnits === -1 ? 999999 : Math.max(0, bal.totalUnits - usedAfter - bal.reservedUnits);
+            await tx.subscriptionBenefitBalance.update({
+              where: { id: bal.id },
+              data: { usedUnits: usedAfter, availableUnits: availableAfter }
+            });
+          }
+          await tx.subscription.update({
+            where: { id: log.subscriptionId },
+            data: { visitsCompleted: { decrement: 1 } }
+          }).catch(() => {});
+        }
+      }
+
+      // 2. Safely clean up / unlink foreign key relations
+      await tx.benefitReservation.deleteMany({ where: { visitId: id } });
+      await tx.packageHoursLog.deleteMany({ where: { visitId: id } });
+      await tx.vitalReading.updateMany({ where: { visitId: id }, data: { visitId: null } });
+      await tx.medicationAdherence.updateMany({ where: { visitId: id }, data: { visitId: null } });
 
       if (isPermanent) {
-        // Cascade delete reservations, transactions link, and package logs
-        await tx.benefitReservation.deleteMany({ where: { visitId: id } });
-        await tx.packageHoursLog.deleteMany({ where: { visitId: id } });
+        // Permanently delete the visit record
         await tx.visit.delete({ where: { id } });
-        console.log(`[DELETE VISIT] Visit ${id} permanently removed from database.`);
+        console.log(`[DELETE VISIT] Visit ${id} permanently removed from database & quota restored.`);
       } else {
+        // Soft cancel
         await tx.visit.update({ where: { id }, data: { status: 'cancelled' } });
-
-        // Idempotency safety: if somehow a log exists, remove it.
-        const log = await tx.packageHoursLog.findUnique({ where: { visitId: id } });
-        if (log) {
-          console.warn(`[CANCEL VISIT] Found unexpected log for visit ${id} — removing orphan log.`);
-          await tx.packageHoursLog.delete({ where: { id: log.id } });
-        }
         console.log(`[CANCEL VISIT] Visit ${id} cancelled and reserved benefit released.`);
+      }
+
+      // Audit log
+      if (visit.beneficiary?.userId) {
+        await tx.activityLog.create({
+          data: {
+            userId: visit.beneficiary.userId,
+            type: 'VISIT',
+            action: isPermanent ? 'VISIT_DELETED' : 'VISIT_CANCELLED',
+            details: {
+              visitId: id,
+              encounterId: visit.encounterId,
+              visitCode: visit.visitCode,
+              previousStatus: visit.status,
+              deletedBy: req.user?.name || 'Admin',
+              timestamp: new Date().toISOString(),
+            }
+          }
+        }).catch(() => {});
       }
     });
 
-    // Trigger VISIT_CANCELLED event notification (Push + WhatsApp)
-    visitEventDispatcher.dispatchVisitCancelled(visit);
+    if (!isPermanent) {
+      // Trigger VISIT_CANCELLED event notification for soft cancellations
+      visitEventDispatcher.dispatchVisitCancelled(visit);
+    }
 
     res.json({
       success: true,
-      message: isPermanent ? 'Visit deleted permanently and quota released' : 'Visit cancelled successfully and quota released'
+      message: isPermanent ? 'Visit deleted permanently and quota unblocked' : 'Visit cancelled successfully and quota released'
     });
   } catch (err) {
     console.error('DELETE /visits/:id error:', err);

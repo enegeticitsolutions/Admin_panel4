@@ -4,6 +4,7 @@ import { visitApi, fieldManagerApi } from '../../../services/api';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import VisitDetailsModal from './VisitDetailsModal';
+import { useAuth } from '../../context/AuthContext';
 
 interface ScheduledVisitsPanelProps {
   /** Optional: pre-select a FM by their userId when rendered inside an FM-scoped view */
@@ -34,6 +35,8 @@ interface ConfirmModalState {
 }
 
 export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }: ScheduledVisitsPanelProps) {
+  const { can } = useAuth();
+  const canDelete = can('visits.delete');
   const [visits, setVisits] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -235,6 +238,31 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
           setVisits(prev => prev.filter(v => v.id !== visitId));
         } catch (e: any) {
           toast.error(e.message || 'Failed to cancel visit');
+        } finally {
+          setCancellingId(null);
+        }
+      }
+    });
+  };
+
+  // ── Permanently Delete a visit ──────────────────────────────────────────────
+  const handleDeleteVisit = (visitId: string, visitCode?: string | null, isCompleted?: boolean) => {
+    openConfirm({
+      title: 'Delete Visit Permanently',
+      message: isCompleted
+        ? `Permanently delete visit #${visitCode || 'VISIT'}?\n\nThis visit is marked completed. Deleting it will permanently remove the record and REFUND the deducted quota back to the senior's package balance.`
+        : `Permanently delete visit #${visitCode || 'VISIT'}?\n\nThis will remove the visit record and restore any locked quota immediately.`,
+      confirmLabel: 'Yes, Delete Permanently',
+      confirmColor: 'bg-rose-600 hover:bg-rose-700',
+      onConfirm: async () => {
+        closeConfirm();
+        setCancellingId(visitId);
+        try {
+          await visitApi.cancel(visitId, true);
+          toast.success(`Visit #${visitCode || 'VISIT'} deleted and quota unblocked!`);
+          setVisits(prev => prev.filter(v => v.id !== visitId));
+        } catch (e: any) {
+          toast.error(e.message || 'Failed to delete visit');
         } finally {
           setCancellingId(null);
         }
@@ -690,33 +718,30 @@ export default function ScheduledVisitsPanel({ defaultFmUserId, hideFmSelector }
                         <Eye size={12} />
                       </button>
 
-                      {/* Edit & Cancel — for 3rd-party visits */}
-                      {(visit.status === 'scheduled' || visit.status === 'missed') && (visit.is3rdParty || !visit.careCompanion) && (
-                        <>
-                          {/* Edit / Reschedule button */}
-                          <button
-                            onClick={() => handleOpenEdit(visit)}
-                            title={visit.status === 'missed' ? 'Reschedule Missed Visit' : 'Edit Visit'}
-                            className="p-1.5 rounded-lg bg-[#FFEAD8] text-[#FF7A00] hover:bg-[#FFD3B4] transition-colors"
-                          >
-                            <Edit3 size={12} />
-                          </button>
-                          
-                          {/* Cancel button */}
-                          {visit.status === 'scheduled' && (
-                            <button
-                              onClick={() => handleCancel(visit.id)}
-                              disabled={cancellingId === visit.id}
-                              title="Cancel Visit"
-                              className="p-1.5 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition-colors disabled:opacity-50"
-                            >
-                              {cancellingId === visit.id
-                                ? <RefreshCw size={12} className="animate-spin" />
-                                : <Trash2 size={12} />
-                              }
-                            </button>
-                          )}
-                        </>
+                      {/* Edit / Reschedule button */}
+                      {(visit.status === 'scheduled' || visit.status === 'missed') && (
+                        <button
+                          onClick={() => handleOpenEdit(visit)}
+                          title={visit.status === 'missed' ? 'Reschedule Missed Visit' : 'Edit Visit'}
+                          className="p-1.5 rounded-lg bg-[#FFEAD8] text-[#FF7A00] hover:bg-[#FFD3B4] transition-colors cursor-pointer"
+                        >
+                          <Edit3 size={12} />
+                        </button>
+                      )}
+
+                      {/* Delete button (Permanent) - available for Admin & Operations Manager only */}
+                      {canDelete && (
+                        <button
+                          onClick={() => handleDeleteVisit(visit.id, visit.visitCode, visit.status === 'completed')}
+                          disabled={cancellingId === visit.id}
+                          title="Delete visit permanently & unblock quota (Admin / Ops Manager only)"
+                          className="p-1.5 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {cancellingId === visit.id
+                            ? <RefreshCw size={12} className="animate-spin" />
+                            : <Trash2 size={12} />
+                          }
+                        </button>
                       )}
                     </div>
                   </div>

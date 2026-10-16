@@ -79,7 +79,7 @@ const PERMISSIONS = {
   'visits.complete':        { master_admin: true, admin: true, operations_manager: 'zone', field_manager: 'team' },
   'visits.cancel_status':   { master_admin: true, admin: true, operations_manager: 'zone', field_manager: 'team' },
   'visits.resolve_change':  { master_admin: true, admin: true, operations_manager: 'zone', field_manager: 'team' },
-  'visits.delete':          { master_admin: true },
+  'visits.delete':          { master_admin: true, admin: true, operations_manager: 'zone' },
   'visits.upload_evidence': { master_admin: true, admin: true, operations_manager: 'zone', field_manager: 'team' },
   'visits.check_availability': { master_admin: true, admin: true, operations_manager: 'zone', field_manager: 'team' },
   'visits.service_requests':   { master_admin: true, admin: true, operations_manager: 'zone', field_manager: 'team', customer_service_manager: true, customer_service: true },
