@@ -283,6 +283,10 @@
   border: 1px solid #1F2937;
 }
 
+.partner-stats-bar--3-cols {
+  grid-template-columns: repeat(3, 1fr);
+}
+
 .partner-stat-item {
   text-align: center;
   position: relative;
@@ -1027,7 +1031,11 @@
     padding: 24px;
   }
 
-  .partner-stat-item:nth-child(2)::after {
+  .partner-stats-bar--3-cols {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .partner-stats-bar:not(.partner-stats-bar--3-cols) .partner-stat-item:nth-child(2)::after {
     display: none;
   }
 
@@ -1080,7 +1088,8 @@
     margin: 36px auto 0 auto;
   }
 
-  .partner-stats-bar {
+  .partner-stats-bar,
+  .partner-stats-bar--3-cols {
     grid-template-columns: 1fr;
     padding: 20px;
   }

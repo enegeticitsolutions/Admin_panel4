@@ -459,13 +459,15 @@ export default function PartnerPage() {
          2. STATS / METRICS STRIP (Figma Node 3635:6572)
          ───────────────────────────────────────────────────────────────────────────── */}
       <section className="partner-stats-section">
-        <div className="partner-stats-bar">
-          <div className="partner-stat-item">
-            <div className="partner-stat-value partner-stat-value--orange">
-              {dbPartners.length > 0 ? `${dbPartners.length}+` : "50+"}
+        <div className={`partner-stats-bar ${dbPartners.length === 0 ? "partner-stats-bar--3-cols" : ""}`}>
+          {dbPartners.length > 0 && (
+            <div className="partner-stat-item">
+              <div className="partner-stat-value partner-stat-value--orange">
+                {dbPartners.length}
+              </div>
+              <div className="partner-stat-label">Active partners</div>
             </div>
-            <div className="partner-stat-label">Active partners</div>
-          </div>
+          )}
           <div className="partner-stat-item">
             <div className="partner-stat-value partner-stat-value--orange">
               {dbCategories.length > 0 ? dbCategories.length : "8"}
