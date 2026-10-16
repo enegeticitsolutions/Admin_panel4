@@ -43,7 +43,7 @@ export function Step3ConfigureUnits({
         <div>
           <h2 className="text-xl font-semibold mb-1">Set Allowances &amp; Categories</h2>
           <p className="text-sm text-muted-foreground">
-            Configure quantity, cadence, plan tier category (Included, Member Rate / On-Demand, or We arrange it), and rollover rules.
+            Configure quantity, cadence, plan tier category (Included, Add-on · Member rate, or We arrange it), and rollover rules.
           </p>
         </div>
 

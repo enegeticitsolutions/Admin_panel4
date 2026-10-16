@@ -52,7 +52,23 @@ export function CategorizedBenefitsList({
 
   // Group items by category according to BENEFIT_CATEGORIES_CONFIG order
   const grouped = BENEFIT_CATEGORIES_CONFIG.map((config) => {
-    const categoryItems = items.filter((item) => (item.category || 'included') === config.id);
+    const categoryItems = items
+      .filter((item) => (item.category || 'included') === config.id)
+      .sort((a, b) => {
+        const showA = a.showUnit !== false;
+        const showB = b.showUnit !== false;
+        if (showA && !showB) return -1;
+        if (!showA && showB) return 1;
+
+        if (showA && showB) {
+          if (a.isUnlimited && !b.isUnlimited) return -1;
+          if (!a.isUnlimited && b.isUnlimited) return 1;
+          const uA = Number(a.quantity) || 0;
+          const uB = Number(b.quantity) || 0;
+          if (uB !== uA) return uB - uA;
+        }
+        return 0;
+      });
     return {
       config,
       items: categoryItems,

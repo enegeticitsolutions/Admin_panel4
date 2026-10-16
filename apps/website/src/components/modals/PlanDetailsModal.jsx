@@ -91,6 +91,9 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
           rollover: pb.allowRollover,
           category: cat,
           benefit: pb.benefit,
+          showUnit: pb.showUnit !== false,
+          isUnlimited: !!pb.isUnlimited,
+          unitsIncluded: Number(pb.unitsIncluded) || 0,
         });
       });
     } else if (Array.isArray(plan.features) && plan.features.length > 0) {
@@ -193,10 +196,40 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
         {/* Modal Scrollable Body */}
         <div className="plan-modal-body">
           {BENEFIT_CATEGORIES_CONFIG.map((catConfig) => {
-            const groupItems = featuresList.filter(
+            const rawGroupItems = featuresList.filter(
               (item) => (item.category || "included") === catConfig.id
             );
-            if (groupItems.length === 0) return null;
+            if (rawGroupItems.length === 0) return null;
+
+            // Sort benefits under category (especially 'included'):
+            // Benefits where showUnit is allowed appear on top, ordered by highest units first
+            const groupItems = [...rawGroupItems].sort((a, b) => {
+              const getShowUnit = (x) => {
+                if (x.showUnit !== undefined) return x.showUnit !== false;
+                return x.isUnlimited || /^(\d+|unlimited)/i.test(x.text || "");
+              };
+              const showA = getShowUnit(a);
+              const showB = getShowUnit(b);
+              if (showA && !showB) return -1;
+              if (!showA && showB) return 1;
+
+              if (showA && showB) {
+                const unlimA = a.isUnlimited || /unlimited/i.test(a.text || "");
+                const unlimB = b.isUnlimited || /unlimited/i.test(b.text || "");
+                if (unlimA && !unlimB) return -1;
+                if (!unlimA && unlimB) return 1;
+
+                const getUnits = (x) => {
+                  if (typeof x.unitsIncluded === "number") return x.unitsIncluded;
+                  const m = (x.text || "").match(/^(\d+)/);
+                  return m ? parseInt(m[1], 10) : 0;
+                };
+                const uA = getUnits(a);
+                const uB = getUnits(b);
+                if (uB !== uA) return uB - uA;
+              }
+              return 0;
+            });
 
             return (
               <div key={catConfig.id} className="plan-modal-category-group" style={{ marginBottom: "26px" }}>

@@ -599,7 +599,22 @@ export default function SubscriptionPackagesScreen() {
                                         const cat = x.category || ((x.benefit?.name || '').toLowerCase().includes('facilitation') || (x.benefit?.name || '').toLowerCase().includes('coordination') ? 'arranged' : 'included');
                                         return cat === 'included' ? 1 : cat === 'addon' ? 2 : 3;
                                     };
-                                    return getPri(a) - getPri(b);
+                                    const priDiff = getPri(a) - getPri(b);
+                                    if (priDiff !== 0) return priDiff;
+
+                                    const showA = a.showUnit !== false;
+                                    const showB = b.showUnit !== false;
+                                    if (showA && !showB) return -1;
+                                    if (!showA && showB) return 1;
+
+                                    if (showA && showB) {
+                                        if (a.isUnlimited && !b.isUnlimited) return -1;
+                                        if (!a.isUnlimited && b.isUnlimited) return 1;
+                                        const uA = Number(a.unitsIncluded) || 0;
+                                        const uB = Number(b.unitsIncluded) || 0;
+                                        if (uB !== uA) return uB - uA;
+                                    }
+                                    return 0;
                                 }).map((pb: any, fIdx: number) => {
                                     const rawLabel = (pb.benefit?.unitLabel || '').replace(/^per\s+/i, '').trim();
                                     const formattedLabel = rawLabel ? ' ' + rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1).toLowerCase() + (pb.unitsIncluded > 1 && !rawLabel.toLowerCase().endsWith('s') ? 's' : '') : '';

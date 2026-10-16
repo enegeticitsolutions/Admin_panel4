@@ -113,12 +113,36 @@ export default function PackageCard({
           rollover: pb.allowRollover,
           category: cat,
           benefit: pb.benefit,
+          showUnit: pb.showUnit !== false,
+          isUnlimited: !!pb.isUnlimited,
+          unitsIncluded: Number(pb.unitsIncluded) || 0,
         });
       });
 
-      // Sort so 'included' benefits appear first, ensuring core features are never hidden below
+      // Sort so 'included' benefits appear first, ensuring core features are never hidden below.
+      // Within each category (especially 'included'), sort benefits where showUnit is allowed on top,
+      // ordered descending by units included (highest units first).
       const priority = { included: 1, addon: 2, arranged: 3 };
-      list.sort((a, b) => (priority[a.category] || 1) - (priority[b.category] || 1));
+      list.sort((a, b) => {
+        const pA = priority[a.category] || 1;
+        const pB = priority[b.category] || 1;
+        if (pA !== pB) return pA - pB;
+
+        const showA = a.showUnit !== false;
+        const showB = b.showUnit !== false;
+        if (showA && !showB) return -1;
+        if (!showA && showB) return 1;
+
+        if (showA && showB) {
+          if (a.isUnlimited && !b.isUnlimited) return -1;
+          if (!a.isUnlimited && b.isUnlimited) return 1;
+          const uA = Number(a.unitsIncluded) || 0;
+          const uB = Number(b.unitsIncluded) || 0;
+          if (uB !== uA) return uB - uA;
+        }
+
+        return 0;
+      });
     } else if (Array.isArray(plan.features) && plan.features.length > 0) {
       plan.features.forEach((feat, i) => {
         if (!feat || feat.toLowerCase().trim() === "included benefit") return;

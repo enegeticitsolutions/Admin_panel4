@@ -42,7 +42,7 @@ export const BENEFIT_CATEGORIES_CONFIG: CategoryConfig[] = [
   },
   {
     id: 'addon',
-    label: 'Member Rate / On-Demand',
+    label: 'Add-on · Member rate',
     tagline: 'On-Demand Member Perk',
     explanation: 'Available whenever you need it, at member-discounted rates for MaiHoonNa subscribers.',
     badgeBg: 'bg-blue-50',

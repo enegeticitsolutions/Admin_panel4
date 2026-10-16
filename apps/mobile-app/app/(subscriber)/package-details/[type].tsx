@@ -24,7 +24,7 @@ const BENEFIT_CATEGORIES = [
     },
     {
         id: 'addon',
-        label: 'Member Rate / On-Demand',
+        label: 'Add-on · Member rate',
         explanation: 'Available whenever you need it, at member-discounted rates for MaiHoonNa subscribers.',
         dotColor: '#3B82F6',
         badgeBg: '#EFF6FF',
@@ -269,7 +269,23 @@ export default function PackageDetailScreen() {
                     {(() => {
                         const activeCategories = BENEFIT_CATEGORIES.map((catConfig) => {
                             const rawItems = (pkg.packageBenefits && pkg.packageBenefits.length > 0)
-                                ? pkg.packageBenefits.filter((pb: any) => getCategoryForBenefit(pb) === catConfig.id)
+                                ? [...pkg.packageBenefits]
+                                    .filter((pb: any) => getCategoryForBenefit(pb) === catConfig.id)
+                                    .sort((a: any, b: any) => {
+                                        const showA = a.showUnit !== false;
+                                        const showB = b.showUnit !== false;
+                                        if (showA && !showB) return -1;
+                                        if (!showA && showB) return 1;
+
+                                        if (showA && showB) {
+                                            if (a.isUnlimited && !b.isUnlimited) return -1;
+                                            if (!a.isUnlimited && b.isUnlimited) return 1;
+                                            const uA = Number(a.unitsIncluded) || 0;
+                                            const uB = Number(b.unitsIncluded) || 0;
+                                            if (uB !== uA) return uB - uA;
+                                        }
+                                        return 0;
+                                    })
                                 : (pkg.features || []).filter((feat: string) => getCategoryForBenefit(feat) === catConfig.id);
                             return { ...catConfig, rawItems };
                         }).filter((c) => c.rawItems && c.rawItems.length > 0);

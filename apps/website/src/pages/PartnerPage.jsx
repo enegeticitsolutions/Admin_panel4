@@ -263,6 +263,12 @@ const getCategoryIconStyle = (categoryName) => {
   return { icon: Building2, iconColor: "#FE6700", bg: "#FFF7ED", border: "rgba(254, 103, 0, 0.2)" };
 };
 
+const formatPartnerCount = (count) => {
+  if (!count || count <= 0) return 0;
+  if (count < 10) return count;
+  return `${Math.floor(count / 5) * 5}+`;
+};
+
 export default function PartnerPage() {
   const [dbPartners, setDbPartners] = useState([]);
   const [dbCategories, setDbCategories] = useState([]);
@@ -463,7 +469,7 @@ export default function PartnerPage() {
           {dbPartners.length > 0 && (
             <div className="partner-stat-item">
               <div className="partner-stat-value partner-stat-value--orange">
-                {dbPartners.length}
+                {formatPartnerCount(dbPartners.length)}
               </div>
               <div className="partner-stat-label">Active partners</div>
             </div>
