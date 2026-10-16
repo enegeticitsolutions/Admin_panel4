@@ -448,7 +448,7 @@ export default function SubscriberDashboardScreen() {
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.unlinkedTitle}>Unlinked Care Plan</Text>
                                     <Text style={styles.unlinkedSubtitle}>
-                                        Attach a beneficiary to {sub.package?.name || sub.packageType}
+                                        Assign a beneficiary to {sub.package?.name || (sub.packageType ? sub.packageType.replace(/_/g, ' ') : 'your care plan')} to activate care services.
                                     </Text>
                                 </View>
                             </View>

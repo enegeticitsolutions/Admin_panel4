@@ -208,13 +208,13 @@ function RootNavigator() {
       {!isLoggedIn ? (
         <Stack.Screen name="(auth)" />
       ) : (
-        <Stack.Screen name="(subscriber)" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="(subscriber)" />
       )}
       {isLoggedIn ? (
-        <Stack.Screen name="(beneficiary)" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="(beneficiary)" />
       ) : null}
       {isLoggedIn ? (
-        <Stack.Screen name="(care-companion)" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="(care-companion)" />
       ) : null}
       <Stack.Screen name="(setup)" />
       {isLoggedIn ? (

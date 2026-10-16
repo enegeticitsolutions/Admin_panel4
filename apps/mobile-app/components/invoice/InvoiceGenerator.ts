@@ -356,23 +356,78 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
 
     const Print = await getPrintModule();
     const Sharing = await getSharingModule();
+    let FileSystem: any = null;
+    try {
+      FileSystem = await import('expo-file-system/legacy');
+    } catch (_) {}
 
-    if (Print && Sharing) {
-      const { uri } = await Print.printToFileAsync({
-        html,
-        base64: false,
-      });
-      
+    if (!Print) {
+      Alert.alert('Notice', 'Invoice printing is not available on this platform/configuration.');
+      return;
+    }
+
+    const { uri } = await Print.printToFileAsync({
+      html,
+      base64: false,
+    });
+
+    const sanitizedInvoiceNumber = (data.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `Invoice-${sanitizedInvoiceNumber}.pdf`;
+
+    if (Platform.OS === 'android' && FileSystem?.StorageAccessFramework) {
+      try {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions.granted) {
+          const destinationUri = await FileSystem.StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            fileName,
+            'application/pdf'
+          );
+          const base64Content = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          await FileSystem.writeAsStringAsync(destinationUri, base64Content, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          Alert.alert('Download Complete', 'Invoice saved successfully to your selected folder.');
+          return;
+        }
+      } catch (safErr) {
+        console.warn('StorageAccessFramework save failed or cancelled, falling back to share sheet:', safErr);
+      }
+    }
+
+    if (Platform.OS === 'ios' && FileSystem?.documentDirectory) {
+      try {
+        const targetPath = `${FileSystem.documentDirectory}${fileName}`;
+        await FileSystem.copyAsync({ from: uri, to: targetPath });
+        if (Sharing) {
+          await Sharing.shareAsync(targetPath, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Save Invoice to Files',
+            UTI: 'com.adobe.pdf'
+          });
+          return;
+        }
+      } catch (iosErr) {
+        console.warn('iOS document copy failed, using original uri:', iosErr);
+      }
+    }
+
+    if (Sharing) {
       await Sharing.shareAsync(uri, {
         mimeType: 'application/pdf',
         dialogTitle: 'Download Invoice',
         UTI: 'com.adobe.pdf'
       });
     } else {
-      Alert.alert('Notice', 'Invoice printing is not available on this platform/configuration.');
+      Alert.alert('Notice', 'Invoice sharing/download is not available on this platform.');
     }
   } catch (error) {
     console.error('Error generating PDF:', error);
     throw error;
   }
 };
+
+export const downloadInvoicePDF = generateInvoicePDF;
+

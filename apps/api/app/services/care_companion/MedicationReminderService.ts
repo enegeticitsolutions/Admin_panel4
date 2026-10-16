@@ -47,16 +47,18 @@ export class MedicationReminderService {
       const todayEnd = new Date(now);
       todayEnd.setHours(23, 59, 59, 999);
 
-      // 1. Query active medications covering today
+      // 1. Query active medications covering today with reminders enabled
       const activeMedications = await prisma.medication.findMany({
         where: {
           isActive: true,
+          setReminders: true,
           startDate: { lte: todayEnd },
           OR: [
             { endDate: null },
             { endDate: { gte: todayStart } },
           ],
         },
+
         include: {
           beneficiary: {
             select: {

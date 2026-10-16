@@ -35,6 +35,15 @@ export default function SubscribeFormScreen() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
     const scrollViewRef = useRef<ScrollView>(null);
+    const fieldPositions = useRef<Record<string, number>>({});
+    const scrollToField = (fieldKey: string) => {
+        const y = fieldPositions.current[fieldKey];
+        if (typeof y === 'number') {
+            scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true });
+        } else {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        }
+    };
     const [userData, setUserData] = useState<any>(null);
 
     useEffect(() => {
@@ -153,11 +162,24 @@ export default function SubscribeFormScreen() {
     }, [params.packageId]);
 
     const handleNext = () => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const NAME_REGEX = /^[A-Za-z]+([ A-Za-z'.-]+)*[A-Za-z.]$/;
         let hasError = false;
+        let firstErrorField: string | null = null;
 
-        if (!subscriberForm.fullName.trim()) {
+        const fullNameTrim = subscriberForm.fullName.trim();
+        if (!fullNameTrim) {
             setNameError('Full name is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'fullName';
+        } else if (/\d/.test(fullNameTrim)) {
+            setNameError('Name cannot contain numbers');
+            hasError = true;
+            if (!firstErrorField) firstErrorField = 'fullName';
+        } else if (!NAME_REGEX.test(fullNameTrim) || fullNameTrim.length < 2) {
+            setNameError('Please enter a valid full name (letters and spaces only)');
+            hasError = true;
+            if (!firstErrorField) firstErrorField = 'fullName';
         } else {
             setNameError('');
         }
@@ -166,20 +188,23 @@ export default function SubscribeFormScreen() {
         if (!cleanedPhone) {
             setPhoneError('Phone number is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'phone';
         } else if (cleanedPhone.length !== 10) {
             setPhoneError('Phone number must be exactly 10 digits');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'phone';
         } else {
             setPhoneError('');
         }
 
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!subscriberForm.email.trim()) {
             setEmailError('Email is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'email';
         } else if (!emailRegex.test(subscriberForm.email.trim())) {
             setEmailError('Please enter a valid email address');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'email';
         } else {
             setEmailError('');
         }
@@ -187,6 +212,7 @@ export default function SubscribeFormScreen() {
         if (!subscriberForm.flatPlot.trim()) {
             setFlatPlotError('Flat / Plot / Building is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'flatPlot';
         } else {
             setFlatPlotError('');
         }
@@ -194,6 +220,7 @@ export default function SubscribeFormScreen() {
         if (!subscriberForm.streetArea.trim()) {
             setStreetAreaError('Street / Area is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'streetArea';
         } else {
             setStreetAreaError('');
         }
@@ -201,6 +228,7 @@ export default function SubscribeFormScreen() {
         if (!subscriberForm.city.trim()) {
             setCityError('City is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'city';
         } else {
             setCityError('');
         }
@@ -209,9 +237,11 @@ export default function SubscribeFormScreen() {
         if (!cleanedPincode) {
             setPincodeError('Pincode is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'pincode';
         } else if (cleanedPincode.length !== 6) {
             setPincodeError('Pincode must be exactly 6 digits');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'pincode';
         } else {
             setPincodeError('');
         }
@@ -219,12 +249,17 @@ export default function SubscribeFormScreen() {
         if (!subscriberForm.state.trim()) {
             setStateError('State is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'state';
         } else {
             setStateError('');
         }
 
         if (hasError) {
-            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            if (firstErrorField) {
+                scrollToField(firstErrorField);
+            } else {
+                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            }
             return;
         }
 
@@ -311,7 +346,7 @@ export default function SubscribeFormScreen() {
                     <View style={styles.formCard}>
                         <Text style={styles.sectionTitle}>Subscriber Information</Text>
 
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['fullName'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Full Name *</Text>
                             <TextInput
                                 style={[styles.input, nameError ? { borderColor: '#EF4444' } : null]}
@@ -329,7 +364,7 @@ export default function SubscribeFormScreen() {
                             ) : null}
                         </View>
 
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['phone'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Phone Number *</Text>
                             <View style={styles.phoneInputContainer}>
                                 <View style={[styles.countryCodeBox, phoneError ? { borderColor: '#EF4444' } : null]}>
@@ -353,7 +388,7 @@ export default function SubscribeFormScreen() {
                             ) : null}
                         </View>
 
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['email'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Email Address *</Text>
                             <TextInput
                                 style={[styles.input, emailError ? { borderColor: '#EF4444' } : null]}
@@ -396,7 +431,7 @@ export default function SubscribeFormScreen() {
                         />
 
                         <View style={styles.row}>
-                            <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+                            <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]} onLayout={(e) => { fieldPositions.current['flatPlot'] = e.nativeEvent.layout.y; }}>
                                 <Text style={styles.label}>Flat / Plot / Building *</Text>
                                 <TextInput
                                     style={[styles.input, flatPlotError ? { borderColor: '#EF4444' } : null]}
@@ -413,7 +448,7 @@ export default function SubscribeFormScreen() {
                                     <Text style={styles.errorText}>{flatPlotError}</Text>
                                 ) : null}
                             </View>
-                            <View style={[styles.inputGroup, { flex: 1.5 }]}>
+                            <View style={[styles.inputGroup, { flex: 1.5 }]} onLayout={(e) => { fieldPositions.current['streetArea'] = e.nativeEvent.layout.y; }}>
                                 <Text style={styles.label}>Street / Area *</Text>
                                 <TextInput
                                     style={[styles.input, streetAreaError ? { borderColor: '#EF4444' } : null]}

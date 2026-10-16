@@ -19,6 +19,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LEGAL_CONFIG } from '@/constants/legal';
 import NotificationBell from '@/components/shared/NotificationBell';
 import { queryClient } from '@/services/queryClient';
+import { getSetupDraft, saveSetupDraft, clearSetupDraft } from '@/services/setupDraftService';
+
 
 export default function SchedulePreferencesScreen() {
     const router = useRouter();
@@ -60,8 +62,15 @@ export default function SchedulePreferencesScreen() {
             } catch (err) {
                 console.error('Error parsing pending details in schedule-preferences:', err);
             }
+        } else if (!isVerificationFlow) {
+            getSetupDraft().then((draft) => {
+                if (draft?.preferencesData?.preferredTiming) {
+                    setVisitTiming(draft.preferencesData.preferredTiming);
+                }
+            }).catch(() => {});
         }
     }, [isVerificationFlow, pendingDetailsRaw]);
+
 
     const openDrawer = () => {
         setDrawerOpen(true);
@@ -162,6 +171,7 @@ export default function SchedulePreferencesScreen() {
                     }
 
                     await AsyncStorage.removeItem('beneficiaryDashboardCache');
+                    await clearSetupDraft();
                     queryClient.invalidateQueries({ queryKey: ['subscriberDashboard'] });
                     queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
 
@@ -190,6 +200,11 @@ export default function SchedulePreferencesScreen() {
             return;
         }
 
+        saveSetupDraft({
+            step: 'schedule',
+            preferencesData: { preferredTiming: visitTiming }
+        }).catch(() => {});
+
         push('/(setup)/checkout', {
             packageId: params.packageId,
             subscriberData: params.subscriberData,
@@ -202,6 +217,7 @@ export default function SchedulePreferencesScreen() {
             pendingDetails: params.pendingDetails
         });
     };
+
 
     const handleBack = () => {
         safeBack('/(setup)/emergency-contacts');
