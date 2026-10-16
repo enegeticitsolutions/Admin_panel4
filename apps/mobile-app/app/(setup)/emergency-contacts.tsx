@@ -15,6 +15,8 @@ import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import NotificationBell from '@/components/shared/NotificationBell';
 import { API_URL } from '@/constants/api';
+import { getSetupDraft, saveSetupDraft } from '@/services/setupDraftService';
+
 
 const cleanPhone = (phone?: string) => {
     if (!phone) return '';
@@ -36,6 +38,15 @@ export default function EmergencyContactsScreen() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
     const scrollViewRef = useRef<ScrollView>(null);
+    const fieldPositions = useRef<Record<string, number>>({});
+    const scrollToField = (fieldKey: string) => {
+        const y = fieldPositions.current[fieldKey];
+        if (typeof y === 'number') {
+            scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true });
+        } else {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        }
+    };
     const [userData, setUserData] = useState<any>(null);
 
     const isVerificationFlow = params.isVerificationFlow === 'true';
@@ -53,6 +64,7 @@ export default function EmergencyContactsScreen() {
     const [primaryNameError, setPrimaryNameError] = useState('');
     const [primaryPhoneError, setPrimaryPhoneError] = useState('');
     const [primaryEmailError, setPrimaryEmailError] = useState('');
+    const [secondaryNameError, setSecondaryNameError] = useState('');
     const [secondaryPhoneError, setSecondaryPhoneError] = useState('');
     const [secondaryEmailError, setSecondaryEmailError] = useState('');
 
@@ -127,12 +139,26 @@ export default function EmergencyContactsScreen() {
             const subscriberEmail = subDataFromParams?.email || currentUser?.email || fetchedProfile?.email || '';
 
             if (isMounted) {
-                setForm(prev => ({
-                    ...prev,
-                    primaryName: prev.primaryName || subscriberName,
-                    primaryPhone: prev.primaryPhone || subscriberPhone,
-                    primaryEmail: prev.primaryEmail || subscriberEmail,
-                }));
+                const draft = await getSetupDraft();
+                if (draft?.emergencyContacts && isMounted) {
+                    const ec = draft.emergencyContacts as any;
+                    setForm(prev => ({
+                        ...prev,
+                        primaryName: ec.primaryName || prev.primaryName || subscriberName,
+                        primaryPhone: ec.primaryPhone || prev.primaryPhone || subscriberPhone,
+                        primaryEmail: ec.primaryEmail || prev.primaryEmail || subscriberEmail,
+                        secondaryName: ec.secondaryName || prev.secondaryName,
+                        secondaryPhone: ec.secondaryPhone || prev.secondaryPhone,
+                        secondaryEmail: ec.secondaryEmail || prev.secondaryEmail,
+                    }));
+                } else {
+                    setForm(prev => ({
+                        ...prev,
+                        primaryName: prev.primaryName || subscriberName,
+                        primaryPhone: prev.primaryPhone || subscriberPhone,
+                        primaryEmail: prev.primaryEmail || subscriberEmail,
+                    }));
+                }
             }
         };
 
@@ -141,6 +167,7 @@ export default function EmergencyContactsScreen() {
         return () => {
             isMounted = false;
         };
+
     }, [isVerificationFlow, pendingDetailsRaw, params.subscriberData]);
 
     const openDrawer = () => {
@@ -153,12 +180,24 @@ export default function EmergencyContactsScreen() {
 
     const handleNext = () => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const NAME_REGEX = /^[A-Za-z]+([ A-Za-z'.-]+)*[A-Za-z.]$/;
         let hasError = false;
+        let firstErrorField: string | null = null;
 
         // Mandatory Primary Emergency Contact validation
-        if (!form.primaryName.trim()) {
+        const primaryName = form.primaryName.trim();
+        if (!primaryName) {
             setPrimaryNameError('Primary contact name is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'primaryName';
+        } else if (/\d/.test(primaryName)) {
+            setPrimaryNameError('Contact name cannot contain numbers');
+            hasError = true;
+            if (!firstErrorField) firstErrorField = 'primaryName';
+        } else if (!NAME_REGEX.test(primaryName) || primaryName.length < 2) {
+            setPrimaryNameError('Please enter a valid name (letters and spaces only)');
+            hasError = true;
+            if (!firstErrorField) firstErrorField = 'primaryName';
         } else {
             setPrimaryNameError('');
         }
@@ -167,9 +206,11 @@ export default function EmergencyContactsScreen() {
         if (!cleanedPhone) {
             setPrimaryPhoneError('Primary contact phone number is required');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'primaryPhone';
         } else if (cleanedPhone.length !== 10) {
             setPrimaryPhoneError('Phone number must be exactly 10 digits');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'primaryPhone';
         } else {
             setPrimaryPhoneError('');
         }
@@ -177,14 +218,34 @@ export default function EmergencyContactsScreen() {
         if (form.primaryEmail && !emailRegex.test(form.primaryEmail)) {
             setPrimaryEmailError('Please enter a valid email address');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'primaryEmail';
         } else {
             setPrimaryEmailError('');
+        }
+
+        // Secondary contact validation (optional, but name/phone must be valid if entered)
+        const secName = form.secondaryName.trim();
+        if (secName) {
+            if (/\d/.test(secName)) {
+                setSecondaryNameError('Contact name cannot contain numbers');
+                hasError = true;
+                if (!firstErrorField) firstErrorField = 'secondaryName';
+            } else if (!NAME_REGEX.test(secName) || secName.length < 2) {
+                setSecondaryNameError('Please enter a valid name (letters and spaces only)');
+                hasError = true;
+                if (!firstErrorField) firstErrorField = 'secondaryName';
+            } else {
+                setSecondaryNameError('');
+            }
+        } else {
+            setSecondaryNameError('');
         }
 
         const cleanedSecondaryPhone = form.secondaryPhone.replace(/\D/g, '');
         if (cleanedSecondaryPhone && cleanedSecondaryPhone.length !== 10) {
             setSecondaryPhoneError('Phone number must be exactly 10 digits');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'secondaryPhone';
         } else {
             setSecondaryPhoneError('');
         }
@@ -192,14 +253,24 @@ export default function EmergencyContactsScreen() {
         if (form.secondaryEmail && !emailRegex.test(form.secondaryEmail)) {
             setSecondaryEmailError('Please enter a valid email address');
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'secondaryEmail';
         } else {
             setSecondaryEmailError('');
         }
 
         if (hasError) {
-            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            if (firstErrorField) {
+                scrollToField(firstErrorField);
+            } else {
+                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            }
             return;
         }
+
+        saveSetupDraft({
+            step: 'emergency',
+            emergencyContacts: form as any
+        }).catch(() => {});
 
         push('/(setup)/schedule-preferences', {
             packageId: params.packageId,
@@ -213,6 +284,7 @@ export default function EmergencyContactsScreen() {
             isLinkingFlow: params.isLinkingFlow || 'false'
         });
     };
+
 
     const handleBack = () => {
         safeBack();
@@ -262,7 +334,7 @@ export default function EmergencyContactsScreen() {
                         {/* Primary Emergency Contact */}
                         <Text style={styles.subtextLabel}>Primary Emergency Contact *</Text>
                         
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['primaryName'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Name *</Text>
                             <TextInput
                                 style={[styles.input, primaryNameError ? styles.inputError : null]}
@@ -278,7 +350,7 @@ export default function EmergencyContactsScreen() {
                             ) : null}
                         </View>
 
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['primaryPhone'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Phone *</Text>
                             <TextInput
                                 style={[styles.input, primaryPhoneError ? styles.inputError : null]}
@@ -295,7 +367,7 @@ export default function EmergencyContactsScreen() {
                             ) : null}
                         </View>
 
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['primaryEmail'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Email</Text>
                             <TextInput
                                 style={styles.input}
@@ -316,17 +388,23 @@ export default function EmergencyContactsScreen() {
                         {/* Secondary Emergency Contact */}
                         <Text style={styles.subtextLabel}>Secondary Emergency Contact</Text>
                         
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['secondaryName'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Name</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, secondaryNameError ? styles.inputError : null]}
                                 value={form.secondaryName}
                                 maxLength={50}
-                                onChangeText={(t) => setForm({ ...form, secondaryName: t })}
+                                onChangeText={(t) => {
+                                    setForm({ ...form, secondaryName: t });
+                                    if (secondaryNameError) setSecondaryNameError('');
+                                }}
                             />
+                            {secondaryNameError ? (
+                                <Text style={styles.errorText}>{secondaryNameError}</Text>
+                            ) : null}
                         </View>
 
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['secondaryPhone'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Phone</Text>
                             <TextInput
                                 style={[styles.input, secondaryPhoneError ? styles.inputError : null]}
@@ -343,7 +421,7 @@ export default function EmergencyContactsScreen() {
                             ) : null}
                         </View>
 
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['secondaryEmail'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Email</Text>
                             <TextInput
                                 style={styles.input}

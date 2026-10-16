@@ -21,13 +21,19 @@ export function useAndroidBackHandler(fallback?: string) {
                 return true; // Prevent default OS back
             }
 
-            // 2. Use explicit fallback if provided
+            // 2. If logical stack didn't track it, check Expo Router's native back stack
+            if (router.canGoBack()) {
+                router.back();
+                return true;
+            }
+
+            // 3. Use explicit fallback if provided
             if (fallback) {
                 router.replace(fallback as any);
                 return true;
             }
 
-            // 3. Stack is empty and no fallback: do not blindly pop into auth history.
+            // 4. Stack is empty, router cannot go back, and no fallback:
             // Fall through to screen-level root back handler (useExitOnBack) or default OS behavior.
             return false; 
         };

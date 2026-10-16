@@ -258,66 +258,131 @@ export class MedicationAdherenceManager {
     }
 
     /**
+     * Computes expected vs taken doses over the last 30 days based on active medications
+     * and their daily frequencies rather than merely counting existing log rows.
+     */
+    private async calculate30DayAdherenceMetrics(): Promise<{
+        average: number;
+        taken: number;
+        missed: number;
+        totalExpected: number;
+    }> {
+        await this.resolveBeneficiaryId();
+
+        const now = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+        // 1. Fetch all active medications for this beneficiary
+        const medications = await prisma.medication.findMany({
+            where: {
+                beneficiaryId: this.beneficiaryId,
+                isActive: true,
+                startDate: { lte: now },
+                OR: [
+                    { endDate: null },
+                    { endDate: { gte: thirtyDaysAgo } }
+                ]
+            }
+        });
+
+        // 2. Fetch all recorded adherence logs for the last 30 days
+        const logs = await prisma.medicationAdherence.findMany({
+            where: {
+                beneficiaryId: this.beneficiaryId,
+                scheduledTime: { gte: thirtyDaysAgo, lte: now }
+            }
+        });
+
+        const takenLogsCount = logs.filter(l => l.taken).length;
+
+        // If no medications are configured at all, return 100% adherence and 0 taken / 0 missed
+        if (medications.length === 0) {
+            const taken = logs.filter(l => l.taken).length;
+            const missed = logs.filter(l => !l.taken).length;
+            const score = logs.length > 0 ? Math.round((taken / logs.length) * 100) : 100;
+            return {
+                average: score,
+                taken,
+                missed,
+                totalExpected: logs.length
+            };
+        }
+
+        // 3. Calculate expected scheduled doses for active medications over the 30-day window
+        let totalExpectedDoses = 0;
+
+        for (const med of medications) {
+            // Determine daily frequency
+            let dailyDoses = (med.timeSlots && med.timeSlots.length > 0) ? med.timeSlots.length : 0;
+            if (dailyDoses === 0) {
+                if (med.frequency === 'once_daily') dailyDoses = 1;
+                else if (med.frequency === 'twice_daily') dailyDoses = 2;
+                else if (med.frequency === 'thrice_daily') dailyDoses = 3;
+                else if (med.frequency === 'four_times_daily') dailyDoses = 4;
+                else dailyDoses = 1;
+            }
+
+            // Start of active window for this medication
+            const effectiveStart = new Date(Math.max(new Date(med.startDate).getTime(), thirtyDaysAgo.getTime()));
+            effectiveStart.setHours(0, 0, 0, 0);
+
+            // End of active window for this medication (up to now)
+            const effectiveEnd = med.endDate && new Date(med.endDate) < now
+                ? new Date(med.endDate)
+                : now;
+
+            const diffTime = effectiveEnd.getTime() - effectiveStart.getTime();
+            if (diffTime >= 0) {
+                const daysActive = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
+                totalExpectedDoses += daysActive * dailyDoses;
+            }
+        }
+
+        // Total expected is at least the count of logs recorded
+        const totalExpected = Math.max(totalExpectedDoses, logs.length);
+        const taken = takenLogsCount;
+        const missed = Math.max(0, totalExpected - taken);
+        const average = totalExpected > 0 ? Math.min(100, Math.max(0, Math.round((taken / totalExpected) * 100))) : 100;
+
+        return {
+            average,
+            taken,
+            missed,
+            totalExpected
+        };
+    }
+
+    /**
      * Computes the mathematical adherence percentage over the last 30 days
      * and updates Beneficiary.medicationScore.
      */
     public async recalculateOverallScore(): Promise<number> {
         await this.resolveBeneficiaryId();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-        const logs = await prisma.medicationAdherence.findMany({
-            where: {
-                beneficiaryId: this.beneficiaryId,
-                scheduledTime: { gte: thirtyDaysAgo }
-            }
-        });
-
-        // Calculate adherence percentage
-        const takenCount = logs.filter(l => l.taken).length;
-        const totalLogged = logs.length;
-
-        // If no records exist, default to 100% adherence
-        const score = totalLogged > 0 ? Math.round((takenCount / totalLogged) * 100) : 100;
+        const metrics = await this.calculate30DayAdherenceMetrics();
 
         // Persist to database
         await prisma.beneficiary.update({
             where: { id: this.beneficiaryId },
-            data: { medicationScore: score }
+            data: { medicationScore: metrics.average }
         });
 
-        return score;
+        return metrics.average;
     }
 
     /**
      * Helper: Returns today's overall metrics (average score, total taken, total missed/skipped)
      */
     public async getOverallMetrics(): Promise<{ average: number, taken: number, missed: number }> {
-        await this.resolveBeneficiaryId();
-        const beneficiary = await prisma.beneficiary.findUnique({
-            where: { id: this.beneficiaryId },
-            select: { medicationScore: true }
-        });
-
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-        const logs = await prisma.medicationAdherence.findMany({
-            where: {
-                beneficiaryId: this.beneficiaryId,
-                scheduledTime: { gte: thirtyDaysAgo }
-            }
-        });
-
-        const taken = logs.filter(l => l.taken).length;
-        const missed = logs.filter(l => !l.taken).length;
-
+        const metrics = await this.calculate30DayAdherenceMetrics();
         return {
-            average: beneficiary?.medicationScore ?? 100,
-            taken,
-            missed
+            average: metrics.average,
+            taken: metrics.taken,
+            missed: metrics.missed
         };
     }
+
 
     /**
      * Private helper to translate time slot string ("08:00 AM") or names ("morning") to JS Date object

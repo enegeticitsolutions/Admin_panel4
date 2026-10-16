@@ -291,6 +291,9 @@ router.post('/:visitId/rate', authenticate, async (req: AuthRequest, res: Respon
     });
 
     if (visit) {
+      if (visit.beneficiaryRating !== null && visit.beneficiaryRating !== undefined) {
+        return res.status(409).json({ success: false, message: 'Rating has already been submitted for this meeting.' });
+      }
       const updated = await (prisma.visit as any).update({
         where: { id: visitId as string },
         data: { beneficiaryRating: rating },
@@ -304,9 +307,16 @@ router.post('/:visitId/rate', authenticate, async (req: AuthRequest, res: Respon
     });
     
     if (sathiReq) {
-      // NOTE: rating for sathi visit is usually stored via beneficiaryRating if added, or handled manually
+      if ((sathiReq as any).beneficiaryRating !== null && (sathiReq as any).beneficiaryRating !== undefined) {
+        return res.status(409).json({ success: false, message: 'Rating has already been submitted for this meeting.' });
+      }
+      await (prisma.sathiVisitRequest as any).update({
+        where: { id: visitId as string },
+        data: { beneficiaryRating: rating },
+      });
       return res.json({ success: true, message: 'Rating submitted for Sathi visit' });
     }
+
 
     return res.status(404).json({ success: false, message: 'Visit not found or not authorized' });
   } catch (error: any) {

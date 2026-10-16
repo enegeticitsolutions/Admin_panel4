@@ -207,6 +207,12 @@ export default function InteractionsScreen() {
 
     // ── Rating ────────────────────────────────────────────────────────────
     const handleRate = async (interactionId: string, rating: number) => {
+        const existing = interactions.find(i => i.id === interactionId);
+        if (existing?.beneficiaryRating !== null && existing?.beneficiaryRating !== undefined) {
+            Alert.alert('Notice', 'Rating has already been submitted for this meeting.');
+            return;
+        }
+
         setInteractions(prev =>
             prev.map(i => i.id === interactionId ? { ...i, beneficiaryRating: rating } : i)
         );
@@ -223,8 +229,9 @@ export default function InteractionsScreen() {
             const data = await res.json();
             if (!data.success) {
                 setInteractions(prev =>
-                    prev.map(i => i.id === interactionId ? { ...i, beneficiaryRating: null } : i)
+                    prev.map(i => i.id === interactionId ? { ...i, beneficiaryRating: existing?.beneficiaryRating ?? null } : i)
                 );
+                Alert.alert('Notice', data.message || 'Could not submit rating.');
             } else {
                 emitGlobalRefresh();
             }
@@ -234,6 +241,7 @@ export default function InteractionsScreen() {
             setSubmittingRatingId(null);
         }
     };
+
 
     // ── Feedback ──────────────────────────────────────────────────────────
     const handleSaveFeedback = async (interactionId: string) => {
@@ -298,10 +306,11 @@ export default function InteractionsScreen() {
                 visit={selectedDetailVisit}
                 onClose={() => setSelectedDetailVisit(null)}
                 onRatePress={() => {
-                    if (selectedDetailVisit) {
+                    if (selectedDetailVisit && (selectedDetailVisit.beneficiaryRating === null || selectedDetailVisit.beneficiaryRating === undefined)) {
                         handleRate(selectedDetailVisit.id, selectedDetailVisit.beneficiaryRating || 0);
                     }
                 }}
+
             />
 
             {loading ? (
@@ -486,8 +495,9 @@ export default function InteractionsScreen() {
                                                 rating={v.beneficiaryRating ?? null}
                                                 onRate={(r) => handleRate(v.id, r)}
                                                 size={20}
-                                                readonly={false}
+                                                readonly={hasRated || isSubmittingRating}
                                             />
+
                                             {isSubmittingRating && (
                                                 <ActivityIndicator size="small" color="#FBBF24" style={{ marginLeft: 4 }} />
                                             )}

@@ -16,6 +16,8 @@ import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import HeaderSpacer from '@/components/HeaderSpacer';
 import { AddMedicineModal } from '@/components/ui/AddMedicineModal';
 import NotificationBell from '@/components/shared/NotificationBell';
+import { getSetupDraft, saveSetupDraft } from '@/services/setupDraftService';
+
 
 type Medication = {
     name: string;
@@ -39,6 +41,15 @@ export default function MedicalInfoScreen() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
     const scrollViewRef = useRef<ScrollView>(null);
+    const fieldPositions = useRef<Record<string, number>>({});
+    const scrollToField = (fieldKey: string) => {
+        const y = fieldPositions.current[fieldKey];
+        if (typeof y === 'number') {
+            scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true });
+        } else {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        }
+    };
     const [userData, setUserData] = useState<any>(null);
 
     useEffect(() => {
@@ -245,6 +256,24 @@ export default function MedicalInfoScreen() {
             } catch (err) {
                 console.error('Error parsing pending details in medical-info:', err);
             }
+        } else if (!isVerificationFlow && !params.medicalData) {
+            getSetupDraft().then((draft) => {
+                if (draft?.medicalData) {
+                    const md = draft.medicalData;
+                    if (md.conditions && Array.isArray(md.conditions) && md.conditions.length > 0) {
+                        setConditions(md.conditions);
+                    }
+                    if (md.medications && Array.isArray(md.medications) && md.medications.length > 0) {
+                        setMedications(md.medications);
+                    }
+                    if (md.physicianName) setPhysicianName(md.physicianName);
+                    if (md.physicianPhone) setPhysicianPhone(md.physicianPhone);
+                    if (md.hobbies && Array.isArray(md.hobbies)) {
+                        setHobbiesText(md.hobbies.join(', '));
+                    }
+                    if (md.vitals) setVitals(md.vitals);
+                }
+            }).catch(() => {});
         }
     }, [isVerificationFlow, pendingDetailsRaw]);
 
@@ -268,7 +297,13 @@ export default function MedicalInfoScreen() {
         }
 
         if (hasError) {
-            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            if (customHobbyError) {
+                scrollToField('customHobby');
+            } else if (physicianPhoneError) {
+                scrollToField('physicianPhone');
+            } else {
+                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            }
             return;
         }
 
@@ -281,6 +316,11 @@ export default function MedicalInfoScreen() {
             vitals
         };
 
+        saveSetupDraft({
+            step: 'medical',
+            medicalData: medicalDataPayload
+        }).catch(() => {});
+
         push('/(setup)/emergency-contacts', {
             packageId: params.packageId,
             subscriberData: params.subscriberData,
@@ -292,6 +332,7 @@ export default function MedicalInfoScreen() {
             isLinkingFlow: params.isLinkingFlow || 'false'
         });
     };
+
 
     const handleBack = () => {
         safeBack();
@@ -532,7 +573,7 @@ export default function MedicalInfoScreen() {
                             onChangeText={setPhysicianName}
                         />
 
-                        <View style={{ marginTop: 16 }} />
+                        <View style={{ marginTop: 16 }} onLayout={(e) => { fieldPositions.current['physicianPhone'] = e.nativeEvent.layout.y; }} />
 
                         <Text style={styles.inputLabel}>Physician Phone Number</Text>
                         <TextInput

@@ -16,6 +16,8 @@ import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useAuth } from '@/contexts/AuthContext';
 import RazorpayCheckout from 'react-native-razorpay';
 import { CouponSuccessModal } from '@/components/shared/CouponSuccessModal';
+import { clearSetupDraft } from '@/services/setupDraftService';
+
 
 /**
  * Resolves the Razorpay key in every Expo/EAS environment:
@@ -619,6 +621,7 @@ export default function CheckoutScreen() {
                         await updateUser(resToken, resUser);
                     }
 
+                    await clearSetupDraft();
                     const activatedSub = data.data?.subscription || {};
                     replace('/(setup)/payment-success', {
                         orderId: activatedSub.id || 'N/A',
@@ -627,6 +630,7 @@ export default function CheckoutScreen() {
                         benefits: JSON.stringify(packageBenefits),
                         durationLabel: durationLabel,
                     });
+
                 } else {
                     throw new Error(data.message || "Activation failed on server.");
                 }
@@ -827,6 +831,7 @@ export default function CheckoutScreen() {
                     await updateUser(resToken, resUser);
                 }
 
+                await clearSetupDraft();
                 // Payment gateway is mocked for now, but beneficiary is saved in DB
                 replace('/(setup)/payment-success', {
                     orderId: data.subscriptionId,
@@ -835,6 +840,7 @@ export default function CheckoutScreen() {
                     benefits: JSON.stringify(packageBenefits),
                     durationLabel: durationLabel,
                 });
+
             } else {
                 throw new Error(data.message || "Purchase failed on server.");
             }

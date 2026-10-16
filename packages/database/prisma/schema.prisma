@@ -1089,14 +1089,17 @@ model Notification {
   sentAt     DateTime?
   failedAt   DateTime?
   failReason String?
+  deletedAt  DateTime?
   createdAt  DateTime            @default(now())
   user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
+  @@index([deletedAt])
   @@map("notifications")
 }
+
 
 model Zone {
   id                    String         @id @default(uuid())

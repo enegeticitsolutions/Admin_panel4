@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Modal, Pressable, Animated, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Modal, Pressable, Animated, Dimensions, ActivityIndicator, Alert } from 'react-native';
+
 
 const { width } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.75;
@@ -21,6 +22,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import HeaderSpacer from '@/components/HeaderSpacer';
 import { API_URL } from '@/constants/api';
 import NotificationBell from '@/components/shared/NotificationBell';
+import { getSetupDraft, saveSetupDraft, clearSetupDraft } from '@/services/setupDraftService';
+
 
 
 export default function BeneficiaryInfoScreen() {
@@ -38,6 +41,15 @@ export default function BeneficiaryInfoScreen() {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const drawerAnim = useRef(new Animated.Value(DRAWER_WIDTH)).current;
     const scrollViewRef = useRef<ScrollView>(null);
+    const fieldPositions = useRef<Record<string, number>>({});
+    const scrollToField = (fieldKey: string) => {
+        const y = fieldPositions.current[fieldKey];
+        if (typeof y === 'number') {
+            scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 24), animated: true });
+        } else {
+            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+        }
+    };
     const [userData, setUserData] = useState<any>(null);
     const [isLoadingDetails, setIsLoadingDetails] = useState(false);
     const [pendingData, setPendingData] = useState<any>(null);
@@ -185,8 +197,39 @@ export default function BeneficiaryInfoScreen() {
                     setIsLoadingDetails(false);
                 }
             });
+        } else if (!isVerificationFlow && !params.beneficiaryData) {
+            getSetupDraft().then((draft) => {
+                if (draft?.beneficiaryData && (draft.beneficiaryData.fullName || draft.beneficiaryData.name)) {
+                    const beneficiaryName = draft.beneficiaryData.fullName || draft.beneficiaryData.name;
+                    Alert.alert(
+                        'Resume Draft?',
+                        `You have an unfinished enrollment draft for "${beneficiaryName}". Would you like to restore your progress?`,
+                        [
+                            {
+                                text: 'Start Fresh',
+                                style: 'destructive',
+                                onPress: () => clearSetupDraft()
+                            },
+                            {
+                                text: 'Resume',
+                                onPress: () => {
+                                    setBeneficiaryForm(prev => ({
+                                        ...prev,
+                                        ...draft.beneficiaryData,
+                                        fullName: draft.beneficiaryData?.fullName || draft.beneficiaryData?.name || prev.fullName
+                                    }));
+                                    if (draft.beneficiaryData?.photoUri) {
+                                        setPickedPhotoUri(draft.beneficiaryData.photoUri);
+                                    }
+                                }
+                            }
+                        ]
+                    );
+                }
+            }).catch(() => {});
         }
     }, [isVerificationFlow, beneficiaryId, params.subscriberData]);
+
 
     const handleToggleSameAsSubscriber = () => {
         const nextState = !isSameAsSubscriber;
@@ -418,10 +461,22 @@ export default function BeneficiaryInfoScreen() {
 
     const handleNext = async () => {
         let hasError = false;
+        let firstErrorField: string | null = null;
 
-        if (!beneficiaryForm.fullName.trim()) {
+        const nameVal = beneficiaryForm.fullName.trim();
+        const NAME_REGEX = /^[A-Za-z]+([ A-Za-z'.-]+)*[A-Za-z.]$/;
+        if (!nameVal) {
             setNameError("Beneficiary name is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'fullName';
+        } else if (/\d/.test(nameVal)) {
+            setNameError("Beneficiary name cannot contain numbers");
+            hasError = true;
+            if (!firstErrorField) firstErrorField = 'fullName';
+        } else if (!NAME_REGEX.test(nameVal) || nameVal.length < 2) {
+            setNameError("Please enter a valid full name (letters and spaces only)");
+            hasError = true;
+            if (!firstErrorField) firstErrorField = 'fullName';
         } else {
             setNameError(null);
         }
@@ -429,6 +484,7 @@ export default function BeneficiaryInfoScreen() {
         if (!beneficiaryForm.dob) {
             setDobError("Date of Birth is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'dob';
         } else if (beneficiaryForm.dob.length === 10) {
             const parts = beneficiaryForm.dob.split('/');
             const day = parseInt(parts[0], 10);
@@ -439,11 +495,13 @@ export default function BeneficiaryInfoScreen() {
             if (year > currentYear || year < currentYear - 120) {
                 setDobError(`Year must be between ${currentYear - 120} and ${currentYear}`);
                 hasError = true;
+                if (!firstErrorField) firstErrorField = 'dob';
             } else {
                 const dateObj = new Date(year, month - 1, day);
                 if (dateObj.getFullYear() !== year || dateObj.getMonth() !== month - 1 || dateObj.getDate() !== day) {
                     setDobError("Invalid date format (e.g. 31st of Feb)");
                     hasError = true;
+                    if (!firstErrorField) firstErrorField = 'dob';
                 } else {
                     setDobError(null);
                 }
@@ -451,11 +509,13 @@ export default function BeneficiaryInfoScreen() {
         } else {
             setDobError("Date must be in DD/MM/YYYY format");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'dob';
         }
 
         if (!beneficiaryForm.gender) {
             setGenderError("Gender is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'gender';
         } else {
             setGenderError(null);
         }
@@ -463,6 +523,7 @@ export default function BeneficiaryInfoScreen() {
         if (!beneficiaryForm.maritalStatus) {
             setMaritalStatusError("Marital status is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'maritalStatus';
         } else {
             setMaritalStatusError(null);
         }
@@ -471,9 +532,11 @@ export default function BeneficiaryInfoScreen() {
         if (!rel || rel.toLowerCase() === 'please select') {
             setRelationshipError("Relationship to subscriber is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'relationship';
         } else if (rel.toLowerCase() === 'other') {
             setCustomRelationshipError("Please specify relationship");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'relationship';
         } else {
             setRelationshipError(null);
             setCustomRelationshipError(null);
@@ -483,19 +546,23 @@ export default function BeneficiaryInfoScreen() {
         if (!beneficiaryForm.phone || beneficiaryForm.phone.trim().length === 0) {
             setPhoneError("Phone number is required.");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'phone';
         } else if (beneficiaryForm.phone.length !== 10) {
             setPhoneError("Phone number must be exactly 10 digits");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'phone';
         } else {
             const isPhoneValid = await validatePhone(beneficiaryForm.phone);
             if (!isPhoneValid) {
                 hasError = true;
+                if (!firstErrorField) firstErrorField = 'phone';
             }
         }
 
         if (!beneficiaryForm.flatPlot.trim()) {
             setFlatPlotError("Flat / Plot / Building is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'flatPlot';
         } else {
             setFlatPlotError(null);
         }
@@ -503,6 +570,7 @@ export default function BeneficiaryInfoScreen() {
         if (!beneficiaryForm.streetArea.trim()) {
             setStreetAreaError("Street / Area is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'streetArea';
         } else {
             setStreetAreaError(null);
         }
@@ -510,6 +578,7 @@ export default function BeneficiaryInfoScreen() {
         if (!beneficiaryForm.city.trim()) {
             setCityError("City is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'city';
         } else {
             setCityError(null);
         }
@@ -518,9 +587,11 @@ export default function BeneficiaryInfoScreen() {
         if (!cleanedPincode) {
             setPincodeError("Pincode is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'pincode';
         } else if (cleanedPincode.length !== 6) {
             setPincodeError("Pincode must be exactly 6 digits");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'pincode';
         } else {
             setPincodeError(null);
         }
@@ -528,12 +599,17 @@ export default function BeneficiaryInfoScreen() {
         if (!beneficiaryForm.state.trim()) {
             setStateError("State is required");
             hasError = true;
+            if (!firstErrorField) firstErrorField = 'state';
         } else {
             setStateError(null);
         }
 
         if (hasError) {
-            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            if (firstErrorField) {
+                scrollToField(firstErrorField);
+            } else {
+                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            }
             return;
         }
 
@@ -549,19 +625,30 @@ export default function BeneficiaryInfoScreen() {
         const finalAddress = beneficiaryForm.address.trim() || constructedAddress;
 
         const packageIdToPass = params.packageId || (pendingData?.subscriptions?.[0]?.packageType || '');
+        const beneficiaryPayload = {
+            ...beneficiaryForm,
+            address: finalAddress,
+            photoUri: pickedPhotoUri
+        };
+
+        saveSetupDraft({
+            step: 'beneficiary',
+            packageId: packageIdToPass,
+            isLinkingFlow: params.isLinkingFlow === 'true',
+            subscriberData: params.subscriberData ? JSON.parse(params.subscriberData as string) : undefined,
+            beneficiaryData: beneficiaryPayload
+        }).catch(() => {});
+
         push('/(setup)/medical-info', {
             packageId: packageIdToPass,
             subscriberData: params.subscriberData || (subscriberProfile ? JSON.stringify(subscriberProfile) : (userData ? JSON.stringify(userData) : undefined)),
             isVerificationFlow: params.isVerificationFlow,
             beneficiaryId: params.beneficiaryId,
-            beneficiaryData: JSON.stringify({
-                ...beneficiaryForm,
-                address: finalAddress,
-                photoUri: pickedPhotoUri
-            }),
+            beneficiaryData: JSON.stringify(beneficiaryPayload),
             pendingDetails: pendingData ? JSON.stringify(pendingData) : undefined,
             isLinkingFlow: params.isLinkingFlow || 'false'
         });
+
     };
 
     const handleBack = () => {
@@ -673,7 +760,7 @@ export default function BeneficiaryInfoScreen() {
                         </View>
 
                         {/* Beneficiary Name */}
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['fullName'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Beneficiary Name *</Text>
                             <TextInput
                                 style={[styles.input, nameError ? { borderColor: '#EF4444' } : null]}
@@ -694,7 +781,7 @@ export default function BeneficiaryInfoScreen() {
                         </View>
 
                         {/* Date of Birth */}
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['dob'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Date of Birth *</Text>
                             <View style={[styles.inputWithIcon, dobError ? { borderColor: '#EF4444' } : null]}>
                                 <TextInput
@@ -723,7 +810,7 @@ export default function BeneficiaryInfoScreen() {
                         </View>
 
                         {/* Gender Segmented Selection */}
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['gender'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Gender *</Text>
                             <View style={styles.segmentContainer}>
                                 <SegmentedButton
@@ -753,7 +840,7 @@ export default function BeneficiaryInfoScreen() {
                         </View>
 
                         {/* Marital Status Segmented Selection */}
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['maritalStatus'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Marital Status *</Text>
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.segmentContainer}>
                                 {['Single', 'Married', 'Widowed', 'Divorced'].map((status) => (
@@ -777,7 +864,7 @@ export default function BeneficiaryInfoScreen() {
                         </View>
 
                         {/* Relationship Dropdown */}
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['relationship'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Relationship to Subscriber *</Text>
                             <TouchableOpacity
                                 style={[styles.inputWithIcon, relationshipError ? { borderColor: '#EF4444' } : null]}
@@ -821,7 +908,7 @@ export default function BeneficiaryInfoScreen() {
                         )}
 
                         {/* Phone Number */}
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['phone'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Phone Number <Text style={{ color: '#EF4444' }}>*</Text></Text>
                             <TextInput
                                 style={[styles.input, phoneError ? { borderColor: '#EF4444' } : null]}
@@ -869,7 +956,7 @@ export default function BeneficiaryInfoScreen() {
                         />
 
                         <View style={styles.row}>
-                            <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+                            <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]} onLayout={(e) => { fieldPositions.current['flatPlot'] = e.nativeEvent.layout.y; }}>
                                 <Text style={[styles.label, styles.rowLabel]}>Flat / Plot / Building *</Text>
                                 <TextInput
                                     style={[styles.input, flatPlotError ? { borderColor: '#EF4444' } : null]}
@@ -888,7 +975,7 @@ export default function BeneficiaryInfoScreen() {
                                     </Text>
                                 )}
                             </View>
-                            <View style={[styles.inputGroup, { flex: 1.5 }]}>
+                            <View style={[styles.inputGroup, { flex: 1.5 }]} onLayout={(e) => { fieldPositions.current['streetArea'] = e.nativeEvent.layout.y; }}>
                                 <Text style={[styles.label, styles.rowLabel]}>Street / Area *</Text>
                                 <TextInput
                                     style={[styles.input, streetAreaError ? { borderColor: '#EF4444' } : null]}
@@ -922,7 +1009,7 @@ export default function BeneficiaryInfoScreen() {
                         </View>
 
                         <View style={styles.row}>
-                            <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]}>
+                            <View style={[styles.inputGroup, { flex: 1, marginRight: 10 }]} onLayout={(e) => { fieldPositions.current['city'] = e.nativeEvent.layout.y; }}>
                                 <Text style={styles.label}>City *</Text>
                                 <TextInput
                                     style={[styles.input, cityError ? { borderColor: '#EF4444' } : null]}
@@ -941,7 +1028,7 @@ export default function BeneficiaryInfoScreen() {
                                     </Text>
                                 )}
                             </View>
-                            <View style={[styles.inputGroup, { flex: 1 }]}>
+                            <View style={[styles.inputGroup, { flex: 1 }]} onLayout={(e) => { fieldPositions.current['pincode'] = e.nativeEvent.layout.y; }}>
                                 <Text style={styles.label}>Pincode *</Text>
                                 <TextInput
                                     style={[styles.input, pincodeError ? { borderColor: '#EF4444' } : null]}
@@ -963,7 +1050,7 @@ export default function BeneficiaryInfoScreen() {
                             </View>
                         </View>
 
-                        <View style={styles.inputGroup}>
+                        <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['state'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>State *</Text>
                             <TextInput
                                 style={[styles.input, stateError ? { borderColor: '#EF4444' } : null]}

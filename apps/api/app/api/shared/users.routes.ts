@@ -134,11 +134,13 @@ const getNotificationsHandler = async (req: any, res: any, next: any) => {
     const isVolunteer = authReq.userRole === 'volunteer';
     const userIds = await resolveLinkedUserIds(userId);
 
+    // Exclude soft-deleted notifications from the user inbox
     const rawNotifications = await prisma.notification.findMany({
-      where: { userId: { in: userIds } },
+      where: { userId: { in: userIds }, deletedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
+
 
     const notifications = rawNotifications.filter(n => {
       const d = (n.data || {}) as any;
@@ -176,7 +178,7 @@ const markReadHandler = async (req: any, res: any, next: any) => {
     const userIds = await resolveLinkedUserIds(userId);
 
     const notification = await prisma.notification.findFirst({
-      where: { id, userId: { in: userIds } },
+      where: { id, userId: { in: userIds }, deletedAt: null },
     });
 
     if (!notification) {
@@ -207,7 +209,7 @@ const markAllReadHandler = async (req: any, res: any, next: any) => {
     const userIds = await resolveLinkedUserIds(userId);
 
     const unread = await prisma.notification.findMany({
-      where: { userId: { in: userIds }, isRead: false },
+      where: { userId: { in: userIds }, isRead: false, deletedAt: null },
       select: { id: true, data: true, title: true },
     });
 
@@ -249,7 +251,7 @@ const getUnreadCountHandler = async (req: any, res: any, next: any) => {
     const userIds = await resolveLinkedUserIds(userId);
 
     const unread = await prisma.notification.findMany({
-      where: { userId: { in: userIds }, isRead: false },
+      where: { userId: { in: userIds }, isRead: false, deletedAt: null },
       select: { data: true, title: true },
     });
 
@@ -285,15 +287,16 @@ const deleteNotificationHandler = async (req: any, res: any, next: any) => {
     const userIds = await resolveLinkedUserIds(userId);
 
     const notification = await prisma.notification.findFirst({
-      where: { id, userId: { in: userIds } },
+      where: { id, userId: { in: userIds }, deletedAt: null },
     });
 
     if (!notification) {
       return res.status(404).json({ success: false, message: 'Notification not found' });
     }
 
-    await prisma.notification.delete({
+    await prisma.notification.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
 
     res.json({ success: true, message: 'Notification deleted successfully' });
@@ -315,7 +318,7 @@ const clearAllNotificationsHandler = async (req: any, res: any, next: any) => {
     const userIds = await resolveLinkedUserIds(userId);
 
     const notifications = await prisma.notification.findMany({
-      where: { userId: { in: userIds } },
+      where: { userId: { in: userIds }, deletedAt: null },
       select: { id: true, data: true, title: true },
     });
 
@@ -330,8 +333,9 @@ const clearAllNotificationsHandler = async (req: any, res: any, next: any) => {
     }).map(n => n.id);
 
     if (idsToDelete.length > 0) {
-      await prisma.notification.deleteMany({
+      await prisma.notification.updateMany({
         where: { id: { in: idsToDelete } },
+        data: { deletedAt: new Date() },
       });
     }
 
