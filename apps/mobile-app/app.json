@@ -21,6 +21,7 @@
       "icon": "./assets/images/icon.png",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
+        "NSMicrophoneUsageDescription": "MaiHoonNa requires microphone access to dictate visit notes and clinical observations.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "MaiHoonNa uses your location to share it with your care team when you trigger an SOS Emergency Alert.",
         "NSLocationAlwaysUsageDescription": "MaiHoonNa needs background location access so your GPS coordinates are shared with caregivers the moment you press the SOS button.",
         "LSApplicationQueriesSchemes": [
@@ -83,7 +84,8 @@
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.FOREGROUND_SERVICE"
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.RECORD_AUDIO"
       ],
       "config": {
         "googleMaps": {
@@ -132,6 +134,12 @@
               ]
             }
           }
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "MaiHoonNa requires microphone access to dictate visit notes and clinical observations."
         }
       ]
     ],

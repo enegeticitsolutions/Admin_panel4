@@ -11,6 +11,8 @@ import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, P
 import { API_URL } from '@/constants/api';
 import { CompanionBackButton } from '../../components/care-companion/CompanionBackButton';
 import { VisitImageGallery } from '../../components/care-companion/VisitImageGallery';
+import { VoiceNotesRecorder } from '@/components/care-companion/VoiceNotesRecorder';
+import { SoapReviewModal, SoapData } from '@/components/care-companion/SoapReviewModal';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { NavigationService } from '@/utils/NavigationService';
@@ -97,6 +99,11 @@ export default function VisitDetailsScreen() {
     const [mood, setMood] = useState('Neutral');
     const [isLocallySaved, setIsLocallySaved] = useState(false);
     const [showVitalsErrors, setShowVitalsErrors] = useState(false);
+
+    // SOAP AI state
+    const [soapModalVisible, setSoapModalVisible] = useState(false);
+    const [soapData, setSoapData] = useState<SoapData | null>(null);
+    const [aiSummarizing, setAiSummarizing] = useState(false);
 
     // Geo-fencing state
     const [currentLat, setCurrentLat] = useState<number | null>(null);
@@ -445,6 +452,80 @@ export default function VisitDetailsScreen() {
         }
 
         return { isValid: true };
+    };
+
+    const handleGenerateSoapSummary = async () => {
+        if (!visitNotes.trim()) {
+            showAlert('Notes Required', 'Please dictate voice notes or type observations before generating an AI SOAP summary.', 'warning');
+            return;
+        }
+
+        setAiSummarizing(true);
+        try {
+            const token = authToken || (await AsyncStorage.getItem('userToken'));
+
+            const vitalsList = Object.keys(vitalsValues).map(vid => {
+                const def = requiredVitals.find(rv => rv.id === vid);
+                const val = vitalsValues[vid];
+                let displayVal = '';
+                if (def?.dataType === 'dual_numeric') {
+                    displayVal = `${val.valueNumeric || ''}/${val.valueNumeric2 || ''}`;
+                } else if (def?.dataType === 'numeric') {
+                    displayVal = val.valueNumeric || '';
+                } else {
+                    displayVal = val.valueText || '';
+                }
+                return {
+                    name: def?.name || 'Vital',
+                    value: displayVal,
+                    unit: def?.unit || undefined
+                };
+            }).filter(v => Boolean(v.value));
+
+            const medicationsList = meds.map(m => ({
+                name: m.name,
+                taken: m.checked
+            }));
+
+            const response = await fetch(`${API_URL}/care-companion/visits/${visitId}/ai/summarize-soap`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    visitId,
+                    rawNotes: visitNotes,
+                    mood: mood.toLowerCase(),
+                    vitalsList,
+                    medicationsList
+                })
+            });
+
+            const json = await response.json();
+            if (json.success && json.data) {
+                setSoapData(json.data);
+                setSoapModalVisible(true);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } else {
+                showAlert('AI Summarization Failed', json.message || 'Could not generate SOAP notes. Please try again.', 'error');
+            }
+        } catch (err: any) {
+            console.error('SOAP generation error:', err);
+            showAlert('Network Error', 'Failed to reach AI service. Please check your connection.', 'error');
+        } finally {
+            setAiSummarizing(false);
+        }
+    };
+
+    const handleApplySoap = (formattedNotes: string, mode: 'replace' | 'append') => {
+        if (mode === 'replace') {
+            setVisitNotes(formattedNotes);
+        } else {
+            setVisitNotes(prev => prev ? `${prev}\n\n${formattedNotes}` : formattedNotes);
+        }
+        setSoapModalVisible(false);
+        showAlert('SOAP Note Applied', 'The structured clinical SOAP note has been applied to Visit Notes.', 'success');
     };
 
     const handleSaveEncounter = async () => {
@@ -1211,17 +1292,52 @@ export default function VisitDetailsScreen() {
                         {/* 6. VISIT NOTES CARD */}
                         {isCheckedIn && (
                             <View style={styles.card}>
-                                <View style={styles.cardHeader}>
-                                    <Ionicons name="document-text-outline" size={20} color="#4F46E5" />
-                                    <Text style={styles.cardTitle}>Visit Notes</Text>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                    <View style={[styles.cardHeader, { marginBottom: 0 }]}>
+                                        <Ionicons name="document-text-outline" size={20} color="#4F46E5" />
+                                        <Text style={styles.cardTitle}>Visit Notes</Text>
+                                    </View>
+                                    {authToken ? (
+                                        <VoiceNotesRecorder
+                                            visitId={visitId as string}
+                                            token={authToken}
+                                            onTranscribed={(transcript) => {
+                                                setVisitNotes(prev => prev ? `${prev}\n${transcript}` : transcript);
+                                            }}
+                                        />
+                                    ) : null}
                                 </View>
+
                                 <TextInput
-                                    style={[styles.textArea, { height: 100 }]}
-                                    placeholder="Additional observations and notes from the visit..."
+                                    style={[styles.textArea, { minHeight: 110 }]}
+                                    placeholder="Dictate voice notes or type observations here..."
                                     placeholderTextColor="#9CA3AF"
                                     multiline
-                                    value={visitNotes} onChangeText={setVisitNotes}
+                                    value={visitNotes}
+                                    onChangeText={setVisitNotes}
                                 />
+
+                                <TouchableOpacity
+                                    style={[
+                                        styles.aiSummarizeBtn,
+                                        (!visitNotes.trim() || aiSummarizing) && { opacity: 0.6 }
+                                    ]}
+                                    onPress={handleGenerateSoapSummary}
+                                    disabled={!visitNotes.trim() || aiSummarizing}
+                                    activeOpacity={0.8}
+                                >
+                                    {aiSummarizing ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <ActivityIndicator size="small" color="#4F46E5" style={{ marginRight: 8 }} />
+                                            <Text style={styles.aiSummarizeBtnText}>Generating Clinical SOAP Note...</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="sparkles" size={17} color="#4F46E5" style={{ marginRight: 6 }} />
+                                            <Text style={styles.aiSummarizeBtnText}>AI Summarise (SOAP Format)</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
                             </View>
                         )}
 
@@ -1320,6 +1436,14 @@ export default function VisitDetailsScreen() {
                     if (cb) cb();
                 }}
                 onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+            />
+
+            {/* Clinical SOAP Notes Review Modal */}
+            <SoapReviewModal
+                visible={soapModalVisible}
+                soapData={soapData}
+                onApply={handleApplySoap}
+                onDismiss={() => setSoapModalVisible(false)}
             />
         </SafeAreaView>
     );
@@ -1462,4 +1586,22 @@ const styles = StyleSheet.create({
 
     manualBtn: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, paddingVertical: 14, alignItems: 'center' },
     manualBtnText: { color: '#111827', fontFamily: 'Poppins_600SemiBold', fontSize: 14 },
+
+    aiSummarizeBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#EEF2FF',
+        borderWidth: 1.5,
+        borderColor: '#C7D2FE',
+        borderRadius: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        marginTop: 12,
+    },
+    aiSummarizeBtnText: {
+        fontFamily: 'Poppins_600SemiBold',
+        fontSize: 13,
+        color: '#4F46E5',
+    },
 });

@@ -4,8 +4,12 @@ import { createVisitSchema, checkInSchema, checkOutSchema, rateVisitSchema, save
 import * as visitService from '../../services/care_companion/visit_service';
 import prisma from '../../core/database';
 import { resolveFileUrl } from '../../services/storage/urlResolver';
+import visitAiRouter from './visit-ai.routes';
 
 const router = Router();
+
+// Mount AI voice transcription and SOAP summarization endpoints
+router.use('/', visitAiRouter);
 
 router.post('/', authenticate, validate(createVisitSchema), async (req: Request, res: Response) => {
   const visit = await visitService.createVisit(req.body);

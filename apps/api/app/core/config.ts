@@ -30,4 +30,8 @@ export const config = {
     actionType: process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=',
     returnURL: process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you',
   },
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+    model: process.env.GEMINI_MODEL || 'gemini-flash-latest',
+  },
 };
