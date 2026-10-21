@@ -448,10 +448,14 @@ export const TimelineTab = ({ visits: initialVisits }: { visits: VisitProps[] })
                             </View>
                         ) : null
                     ) : (
-                        !!visit.notes ? (
+                        (visit.visitSummary || visit.notes) ? (
                             <View style={{ marginTop: scale(4), marginBottom: scale(12) }}>
-                                <Text style={styles.visitSectionLabel}>Notes:</Text>
-                                <Text style={styles.visitNotes} numberOfLines={2}>{visit.notes}</Text>
+                                <Text style={styles.visitSectionLabel}>
+                                    {visit.visitSummary ? 'Care Update (Family Connect):' : 'Notes:'}
+                                </Text>
+                                <Text style={styles.visitNotes} numberOfLines={2}>
+                                    {visit.visitSummary || visit.notes}
+                                </Text>
                             </View>
                         ) : null
                     )}

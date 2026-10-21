@@ -28,7 +28,12 @@ export interface SoapData {
 interface SoapReviewModalProps {
   visible: boolean;
   soapData: SoapData | null;
-  onApply: (formattedNotes: string, mode: 'replace' | 'append') => void;
+  onApply: (
+    formattedNotes: string,
+    mode: 'replace' | 'append',
+    familyConnectSummary?: string,
+    escalation?: { escalate: boolean; reason?: string }
+  ) => void;
   onDismiss: () => void;
 }
 
@@ -50,12 +55,20 @@ export const SoapReviewModal: React.FC<SoapReviewModalProps> = ({
 
   const handleConfirmReplace = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onApply(soapData.formattedNotes, 'replace');
+    const escalationInfo = hasEscalation ? {
+      escalate: true,
+      reason: `${soapData.escalationLevel}: ${soapData.escalationReasons?.join('; ') || 'Clinical flag'}`
+    } : undefined;
+    onApply(soapData.formattedNotes, 'replace', soapData.familyConnectSummary, escalationInfo);
   };
 
   const handleConfirmAppend = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onApply(soapData.formattedNotes, 'append');
+    const escalationInfo = hasEscalation ? {
+      escalate: true,
+      reason: `${soapData.escalationLevel}: ${soapData.escalationReasons?.join('; ') || 'Clinical flag'}`
+    } : undefined;
+    onApply(soapData.formattedNotes, 'append', soapData.familyConnectSummary, escalationInfo);
   };
 
   const getStatusColor = (status: string) => {

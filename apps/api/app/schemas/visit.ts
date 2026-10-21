@@ -43,6 +43,9 @@ export const saveDetailsSchema = Joi.object({
     })
   ).optional(),
   notes: Joi.string().allow('', null).optional(),
+  visitSummary: Joi.string().allow('', null).optional(),
+  escalateToManager: Joi.boolean().optional(),
+  escalationReason: Joi.string().allow('', null).optional(),
 });
 
 export const checkOutSchema = saveDetailsSchema.append({

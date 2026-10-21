@@ -242,6 +242,7 @@ router.get('/:visitId/details', authenticate, async (req: AuthRequest, res: Resp
                 medicationAdherence: visit.medicationAdherence,
                 medications: medicationsList,
                 vitals: vitalsList,
+                visitSummary: visit.visitSummary || null,
                 notes: visit.visitSummary || visit.notes,
                 photos,
                 subscriberRating: visit.subscriberRating ?? null,

@@ -96,6 +96,9 @@ export default function VisitDetailsScreen() {
     const [manualRemarks, setManualRemarks] = useState('');
     const [medNotes, setMedNotes] = useState('');
     const [visitNotes, setVisitNotes] = useState('');
+    const [familyConnectSummary, setFamilyConnectSummary] = useState('');
+    const [escalateToManager, setEscalateToManager] = useState(false);
+    const [escalationReason, setEscalationReason] = useState('');
     const [mood, setMood] = useState('Neutral');
     const [isLocallySaved, setIsLocallySaved] = useState(false);
     const [showVitalsErrors, setShowVitalsErrors] = useState(false);
@@ -154,6 +157,11 @@ export default function VisitDetailsScreen() {
                 setRequiredVitals(json.data.requiredVitals || []);
                 setMood(json.data.visit?.mood || 'Neutral');
                 setVisitNotes(json.data.visit?.notes || '');
+                setFamilyConnectSummary(json.data.visit?.visitSummary || '');
+                if (json.data.visit?.escalateToManager) {
+                    setEscalateToManager(true);
+                    setEscalationReason(json.data.visit?.escalationReason || '');
+                }
                 setManualRemarks(json.data.visit?.manualCheckInReason || '');
 
                 if (json.data.activeMedications && json.data.activeMedications.length > 0) {
@@ -375,7 +383,10 @@ export default function VisitDetailsScreen() {
             })),
             mood: mood.toLowerCase(),
             medicationAdherence: meds.every(m => m.checked),
-            notes: visitNotes || medNotes
+            notes: visitNotes || medNotes,
+            visitSummary: familyConnectSummary || undefined,
+            escalateToManager: escalateToManager || undefined,
+            escalationReason: escalationReason || undefined,
         };
     };
 
@@ -518,14 +529,26 @@ export default function VisitDetailsScreen() {
         }
     };
 
-    const handleApplySoap = (formattedNotes: string, mode: 'replace' | 'append') => {
+    const handleApplySoap = (
+        formattedNotes: string,
+        mode: 'replace' | 'append',
+        familyConnect?: string,
+        escalation?: { escalate: boolean; reason?: string }
+    ) => {
         if (mode === 'replace') {
             setVisitNotes(formattedNotes);
         } else {
             setVisitNotes(prev => prev ? `${prev}\n\n${formattedNotes}` : formattedNotes);
         }
+        if (familyConnect) {
+            setFamilyConnectSummary(familyConnect);
+        }
+        if (escalation?.escalate) {
+            setEscalateToManager(true);
+            setEscalationReason(escalation.reason || 'Clinical flag triggered');
+        }
         setSoapModalVisible(false);
-        showAlert('SOAP Note Applied', 'The structured clinical SOAP note has been applied to Visit Notes.', 'success');
+        showAlert('SOAP Note Applied', 'The clinical SOAP note and Family Connect update have been prepared for this visit.', 'success');
     };
 
     const handleSaveEncounter = async () => {
@@ -1338,6 +1361,27 @@ export default function VisitDetailsScreen() {
                                         </View>
                                     )}
                                 </TouchableOpacity>
+
+                                {!!familyConnectSummary && (
+                                    <View style={{
+                                        marginTop: 12,
+                                        padding: 12,
+                                        backgroundColor: '#FFF7ED',
+                                        borderRadius: 12,
+                                        borderWidth: 1,
+                                        borderColor: '#FFEDD5'
+                                    }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                            <Ionicons name="heart" size={14} color="#EA580C" style={{ marginRight: 6 }} />
+                                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#C2410C' }}>
+                                                Family Connect Update (Visible to Family):
+                                            </Text>
+                                        </View>
+                                        <Text style={{ fontSize: 13, color: '#4B5563', lineHeight: 18 }}>
+                                            {familyConnectSummary}
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
                         )}
 

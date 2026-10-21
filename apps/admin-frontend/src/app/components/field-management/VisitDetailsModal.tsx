@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import {
   X, CalendarClock, User, UserCheck, Activity, Brain, Image as ImageIcon,
   CheckCircle, XCircle, MapPin, Loader2, Pill, Clock, Edit3, Save, RotateCcw,
-  AlertTriangle, ChevronRight, Trash2, Plus, Upload, Star, AlertCircle, Sparkles, Lock
+  AlertTriangle, ChevronRight, Trash2, Plus, Upload, Star, AlertCircle, Sparkles, Lock, FileText, Heart
 } from 'lucide-react';
 import { visitApi } from '../../../services/api';
 import { toast } from 'sonner';
@@ -675,21 +675,40 @@ export default function VisitDetailsModal({ visitId, onClose, onDeleted }: Visit
                     <p className="text-xs text-gray-400 italic text-center py-2">No vitals recorded for this visit.</p>
                   )}
 
-                  {/* Notes — editable */}
+                  {/* Escalation Alert Banner */}
+                  {(visit.escalateToManager || visit.escalationReason) && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2.5">
+                      <AlertTriangle size={18} className="text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-red-800">Clinical Escalation Flagged</p>
+                        <p className="text-xs text-red-700 mt-0.5">{visit.escalationReason || 'Action required by Field / Care Manager.'}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Clinical Notes (SOAP Format) — editable */}
                   <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Notes</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <FileText size={12} className="text-indigo-600" />
+                        Clinical Report / SOAP Notes
+                      </p>
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        MHN-TPL-SOAP-001
+                      </span>
+                    </div>
                     {editMode ? (
                       <textarea
                         value={editForm.notes}
                         onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                        rows={3}
-                        className="w-full text-sm text-gray-700 bg-[#FAF8F5] border border-[#1D4ED8]/50 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/30"
-                        placeholder="Add notes…"
+                        rows={6}
+                        className="w-full text-sm font-mono text-gray-800 bg-[#FAF8F5] border border-[#1D4ED8]/50 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/30"
+                        placeholder="Add clinical report / SOAP notes…"
                       />
                     ) : (
                       visit.notes
-                        ? <p className="text-sm text-gray-700 whitespace-pre-wrap bg-[#FAF8F5] p-3 rounded-xl border border-[#E7DED6]">{visit.notes}</p>
-                        : <p className="text-sm text-gray-400 italic">No notes</p>
+                        ? <p className="text-sm font-mono text-gray-800 whitespace-pre-wrap bg-[#FAF8F5] p-3.5 rounded-xl border border-[#E7DED6] leading-relaxed">{visit.notes}</p>
+                        : <p className="text-sm text-gray-400 italic bg-[#FAF8F5]/30 p-2.5 rounded-xl border border-dashed border-[#E7DED6]">No clinical notes recorded</p>
                     )}
                   </div>
 
@@ -705,21 +724,29 @@ export default function VisitDetailsModal({ visitId, onClose, onDeleted }: Visit
                     </div>
                   )}
 
-                  {/* Visit Summary — editable */}
+                  {/* Family Connect Summary — editable */}
                   <div>
-                    <p className="text-[10px] font-black text-[#1D4ED8] uppercase tracking-widest mb-1">Visit Summary</p>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] font-black text-[#EA580C] uppercase tracking-widest flex items-center gap-1.5">
+                        <Heart size={12} className="text-[#EA580C]" />
+                        Family Connect Update (Visible in Subscriber App)
+                      </p>
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                        Subscriber View
+                      </span>
+                    </div>
                     {editMode ? (
                       <textarea
                         value={editForm.visitSummary}
                         onChange={e => setEditForm(f => ({ ...f, visitSummary: e.target.value }))}
                         rows={4}
-                        className="w-full text-sm text-gray-800 bg-[#E8F0FF]/30 border border-[#1D4ED8]/50 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/30"
-                        placeholder="Add visit summary…"
+                        className="w-full text-sm text-gray-800 bg-[#FFF7ED]/30 border border-[#EA580C]/50 rounded-xl p-3 resize-none focus:outline-none focus:ring-2 focus:ring-[#EA580C]/30"
+                        placeholder="Add Family Connect summary for subscriber…"
                       />
                     ) : (
                       visit.visitSummary
-                        ? <p className="text-sm text-gray-800 whitespace-pre-wrap bg-[#E8F0FF]/30 p-3 rounded-xl border border-[#D1E0FF]">{visit.visitSummary}</p>
-                        : <p className="text-sm text-gray-400 italic">No summary</p>
+                        ? <p className="text-sm text-gray-800 whitespace-pre-wrap bg-[#FFF7ED]/40 p-3.5 rounded-xl border border-[#FED7AA] leading-relaxed">{visit.visitSummary}</p>
+                        : <p className="text-sm text-gray-400 italic bg-[#FFF7ED]/20 p-2.5 rounded-xl border border-dashed border-[#FED7AA]">No Family Connect summary generated</p>
                     )}
                   </div>
                 </div>

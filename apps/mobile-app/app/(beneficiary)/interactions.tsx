@@ -612,10 +612,12 @@ export default function InteractionsScreen() {
                                                 </View>
                                             )}
 
-                                            {/* Clinical Notes */}
-                                            <Text style={styles.sectionHeading}>Clinical Notes</Text>
+                                            {/* Care Companion Notes */}
+                                            <Text style={styles.sectionHeading}>
+                                                {v.visitSummary ? 'Care Companion Update' : 'Observations & Notes'}
+                                            </Text>
                                             <View style={styles.notesBox}>
-                                                <Text style={styles.notesText}>{v.notes || 'No clinical notes recorded.'}</Text>
+                                                <Text style={styles.notesText}>{v.visitSummary || v.notes || 'No remarks recorded.'}</Text>
                                             </View>
 
                                             {/* Feedback (editable) */}

@@ -801,6 +801,7 @@ export const getBeneficiaryProfile = async (beneficiaryId: string) => {
       bp: bpReading?.value || null,
       heartRate: hrReading?.value || null,
       bloodSugar: bsReading?.value || null,
+      visitSummary: v.visitSummary || null,
       notes: v.visitSummary || v.notes,
       // Detailed fields for Subscriber encounter modal
       checkInTime: checkInTimeFormatted,

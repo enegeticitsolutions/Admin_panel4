@@ -442,6 +442,9 @@ router.get('/:visitId/details', authenticate, async (req: Request, res: Response
           checkOutTime: visit.checkOutTime,
           status: visit.status,
           notes: visit.notes,
+          visitSummary: visit.visitSummary,
+          escalateToManager: visit.escalateToManager,
+          escalationReason: visit.escalationReason,
           mood: visit.mood,
           manualCheckInReason: visit.manualCheckInReason,
           // Geo-fencing fields for the mobile app

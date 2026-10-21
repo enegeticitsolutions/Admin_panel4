@@ -50,6 +50,7 @@ export interface VisitDetailData {
   bp?: string | null;
   heartRate?: string | null;
   bloodSugar?: string | null;
+  visitSummary?: string | null;
   notes?: string | null;
   // Detailed fields
   checkInTime?: string | null;
@@ -556,16 +557,27 @@ export function VisitDetailsModal({
             {/* ── 6. Clinical / Partner & Care Notes ── */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="document-text" size={scale(18)} color="#4F46E5" />
+                <Ionicons
+                  name={visit.visitSummary && !visit.is3rdParty ? "heart" : "document-text"}
+                  size={scale(18)}
+                  color={visit.visitSummary && !visit.is3rdParty ? "#EA580C" : "#4F46E5"}
+                />
                 <Text style={styles.sectionTitle}>
-                  {visit.is3rdParty ? 'Partner Service & Completion Notes' : 'Observations & Notes'}
+                  {visit.is3rdParty
+                    ? 'Partner Service & Completion Notes'
+                    : (visit.visitSummary ? 'Care Companion Update' : 'Observations & Notes')}
                 </Text>
+                {visit.visitSummary && !visit.is3rdParty ? (
+                  <View style={{ marginLeft: 'auto', backgroundColor: '#FFF7ED', paddingHorizontal: scale(8), paddingVertical: scale(2), borderRadius: scale(10), borderWidth: 1, borderColor: '#FFEDD5' }}>
+                    <Text style={{ fontSize: scale(10), fontWeight: '700', color: '#C2410C' }}>Family Connect</Text>
+                  </View>
+                ) : null}
               </View>
-              <View style={styles.notesBox}>
+              <View style={[styles.notesBox, visit.visitSummary && !visit.is3rdParty && { backgroundColor: '#FFFDF9', borderColor: '#FED7AA' }]}>
                 <Text style={styles.notesText}>
                   {visit.thirdPartyNotes
                     ? `${visit.thirdPartyNotes}${visit.notes ? `\n\n${visit.notes}` : ''}`
-                    : (visit.notes || (visit.is3rdParty ? 'Service completed and verified by admin.' : 'No special clinical remarks were recorded by the Care Companion for this visit.'))}
+                    : (visit.visitSummary || visit.notes || (visit.is3rdParty ? 'Service completed and verified by admin.' : 'No special clinical remarks were recorded by the Care Companion for this visit.'))}
                 </Text>
               </View>
             </View>
