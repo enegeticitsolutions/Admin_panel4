@@ -227,6 +227,9 @@ export const updateVisitDetails = async (data: {
   mood?: string;
   medicationAdherence: boolean;
   notes?: string;
+  visitSummary?: string;
+  escalateToManager?: boolean;
+  escalationReason?: string;
 }) => {
   return prisma.$transaction(async (tx) => {
     const existingVisit = await tx.visit.findUnique({ where: { id: data.visitId } });
@@ -238,6 +241,15 @@ export const updateVisitDetails = async (data: {
       notes: existingVisit.notes?.startsWith('__benefitId:') ? data.notes : (data.notes || existingVisit.notes),
     };
 
+    if (data.visitSummary !== undefined) {
+      visitUpdateData.visitSummary = data.visitSummary;
+    }
+    if (data.escalateToManager !== undefined) {
+      visitUpdateData.escalateToManager = data.escalateToManager;
+    }
+    if (data.escalationReason !== undefined) {
+      visitUpdateData.escalationReason = data.escalationReason;
+    }
 
     const visit = await tx.visit.update({
       where: { id: data.visitId },
@@ -446,6 +458,9 @@ export const checkOut = async (data: {
   mood?: string;
   medicationAdherence: boolean;
   notes?: string;
+  visitSummary?: string;
+  escalateToManager?: boolean;
+  escalationReason?: string;
 }) => {
   const visit = await prisma.$transaction(async (tx) => {
     // 1. Get the visit to know checkInTime
@@ -469,6 +484,16 @@ export const checkOut = async (data: {
       mood: data.mood as any,
       notes: existingVisit.notes?.startsWith('__benefitId:') ? data.notes : (data.notes || existingVisit.notes),
     };
+
+    if (data.visitSummary !== undefined) {
+      visitUpdateData.visitSummary = data.visitSummary;
+    }
+    if (data.escalateToManager !== undefined) {
+      visitUpdateData.escalateToManager = data.escalateToManager;
+    }
+    if (data.escalationReason !== undefined) {
+      visitUpdateData.escalationReason = data.escalationReason;
+    }
 
 
     // 3. Update the Visit record

@@ -4,13 +4,96 @@ import { evaluateRedFlags } from '../care_companion/soap_rules_engine';
 
 export class GeminiAiAdapter implements IAiService {
   private apiKey: string;
-  private model: string;
+  private configuredModel: string;
   private baseUrl: string;
 
   constructor() {
     this.apiKey = config.gemini.apiKey;
-    this.model = config.gemini.model || 'gemini-flash-latest';
+    this.configuredModel = config.gemini.model || 'gemini-flash-lite-latest';
     this.baseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+  }
+
+  /**
+   * Returns a prioritized list of Gemini models to attempt.
+   * If the primary model encounters high demand (HTTP 503), quota limits (429),
+   * deprecation (404), or timeout, the adapter cascades to backup models.
+   */
+  private getCandidateModels(): string[] {
+    const list = [
+      this.configuredModel,
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-flash-latest',
+    ];
+    return list.filter((m, idx, arr) => Boolean(m) && arr.indexOf(m) === idx);
+  }
+
+  /**
+   * Helper method to call Gemini generateContent with automatic fallback across models.
+   */
+  private async callGemini(
+    requestBody: any,
+    timeoutMs = 25000
+  ): Promise<{ data: any; usedModel: string }> {
+    if (!this.apiKey) {
+      throw new Error('GEMINI_API_KEY is not configured on the server.');
+    }
+
+    const candidateModels = this.getCandidateModels();
+    let lastError: Error | null = null;
+
+    for (const model of candidateModels) {
+      const endpoint = `${this.baseUrl}/models/${model}:generateContent`;
+
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-goog-api-key': this.apiKey,
+          },
+          body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.warn(
+            `⚠️ [GeminiAiAdapter] Model "${model}" responded with HTTP ${response.status}: ${errText.slice(0, 200)}`
+          );
+
+          if (response.status === 400 && errText.includes('API_KEY_INVALID')) {
+            throw new Error('Gemini API key is invalid. Please check GEMINI_API_KEY.');
+          }
+
+          lastError = new Error(
+            `Gemini model "${model}" failed (HTTP ${response.status}): ${response.statusText || 'Unavailable'}`
+          );
+          continue;
+        }
+
+        const data = (await response.json()) as any;
+        return { data, usedModel: model };
+      } catch (err: any) {
+        console.warn(
+          `⚠️ [GeminiAiAdapter] Model "${model}" call failed: ${err.message || err}`
+        );
+
+        if (err.message?.includes('API key is invalid')) {
+          throw err;
+        }
+
+        lastError = err;
+      }
+    }
+
+    throw (
+      lastError ||
+      new Error(
+        'Gemini AI service is temporarily experiencing high traffic across all models. Please try again shortly.'
+      )
+    );
   }
 
   /**
@@ -23,7 +106,6 @@ export class GeminiAiAdapter implements IAiService {
     }
 
     const base64Audio = audioBuffer.toString('base64');
-    const endpoint = `${this.baseUrl}/models/${this.model}:generateContent`;
 
     const requestBody = {
       contents: [
@@ -50,24 +132,10 @@ Rules:
       ],
     };
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-goog-api-key': this.apiKey,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    const { data } = await this.callGemini(requestBody, 30000);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Gemini Transcription Error:', response.status, errText);
-      throw new Error(`Gemini audio transcription failed: ${response.statusText}`);
-    }
-
-    const result = (await response.json()) as any;
     const candidateText =
-      result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 
     if (candidateText === 'NO_SPEECH_DETECTED' || candidateText.length === 0) {
       return '';
@@ -150,34 +218,20 @@ Return pure valid JSON matching this schema:
   "followUpPrompts": ["string"]
 }`;
 
-    const endpoint = `${this.baseUrl}/models/${this.model}:generateContent`;
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-goog-api-key': this.apiKey,
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: systemPrompt }],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.2, // Low temperature for high clinical precision
+    const requestBody = {
+      contents: [
+        {
+          parts: [{ text: systemPrompt }],
         },
-      }),
-    });
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.2, // Low temperature for high clinical precision
+      },
+    };
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Gemini SOAP Generation Error:', response.status, errText);
-      throw new Error(`Gemini SOAP generation failed: ${response.statusText}`);
-    }
+    const { data, usedModel } = await this.callGemini(requestBody, 25000);
 
-    const data = (await response.json()) as any;
     const rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!rawContent) {
       throw new Error('No content returned from Gemini SOAP generator');
@@ -238,7 +292,7 @@ ${parsed.plan || 'Routine monitoring'}`;
       familyConnectSummary: parsed.familyConnectSummary || '',
       followUpPrompts: (parsed.followUpPrompts || []).slice(0, 3),
       formattedNotes,
-      aiModelId: this.model,
+      aiModelId: usedModel,
       generatedAt: new Date().toISOString(),
     };
   }

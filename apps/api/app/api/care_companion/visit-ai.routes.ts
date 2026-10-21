@@ -119,9 +119,17 @@ router.post(
       });
     } catch (error: any) {
       console.error('❌ [Voice Transcription Error]:', error);
+      const isFetchError =
+        error.message?.includes('fetch failed') ||
+        error.name === 'TypeError' ||
+        error.name === 'TimeoutError';
+      const userMessage = isFetchError
+        ? 'AI transcription service is temporarily experiencing network delays. Please try again.'
+        : (error.message || 'Failed to transcribe audio. Please try again or type manually.');
+
       return res.status(500).json({
         success: false,
-        message: error.message || 'Failed to transcribe audio. Please try again or type manually.',
+        message: userMessage,
       });
     }
   }
@@ -201,9 +209,17 @@ router.post(
       });
     } catch (error: any) {
       console.error('❌ [SOAP Summarization Error]:', error);
+      const isFetchError =
+        error.message?.includes('fetch failed') ||
+        error.name === 'TypeError' ||
+        error.name === 'TimeoutError';
+      const userMessage = isFetchError
+        ? 'AI service is temporarily experiencing network delays. Please try again in a few moments.'
+        : (error.message || 'Failed to generate AI SOAP notes. Please try again.');
+
       return res.status(500).json({
         success: false,
-        message: error.message || 'Failed to generate AI SOAP notes. Please try again.',
+        message: userMessage,
       });
     }
   }
