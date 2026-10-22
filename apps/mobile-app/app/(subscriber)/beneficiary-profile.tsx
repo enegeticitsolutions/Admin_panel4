@@ -36,8 +36,30 @@ export default function BeneficiaryProfileScreen() {
     const id = Array.isArray(rawId) ? rawId[0] : rawId;
 
 
-    const [activeTab, setActiveTab] = useState<TabType>('Timeline');
+    const rawTab = params.tab;
+    const initialTab: TabType = (typeof rawTab === 'string' && ['Timeline', 'Vitals', 'Medical'].includes(rawTab))
+        ? (rawTab as TabType)
+        : 'Timeline';
+
+    const [activeTab, setActiveTab] = useState<TabType>(initialTab);
     const [userData, setUserData] = useState<any>(null);
+    const scrollViewRef = React.useRef<ScrollView>(null);
+    const [tabSectionY, setTabSectionY] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (typeof params.tab === 'string' && ['Timeline', 'Vitals', 'Medical'].includes(params.tab)) {
+            setActiveTab(params.tab as TabType);
+        }
+    }, [params.tab]);
+
+    useEffect(() => {
+        if (params.tab === 'Timeline' && tabSectionY != null && scrollViewRef.current) {
+            const timer = setTimeout(() => {
+                scrollViewRef.current?.scrollTo({ y: Math.max(0, tabSectionY - 10), animated: true });
+            }, 300);
+            return () => clearTimeout(timer);
+        }
+    }, [params.tab, params.highlightVisitId, params.visitId, tabSectionY]);
 
     // Drawer state
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -194,7 +216,7 @@ export default function BeneficiaryProfileScreen() {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
                 {/* ── Hero Card ── */}
                 <View style={styles.heroSection}>
@@ -281,7 +303,7 @@ export default function BeneficiaryProfileScreen() {
                 <NextVisitCard nextVisit={beneficiary.nextVisit} />
 
                 {/* ── Tabs & Content Wrapper ── */}
-                <View style={styles.tabSectionWrapper}>
+                <View style={styles.tabSectionWrapper} onLayout={(e) => setTabSectionY(e.nativeEvent.layout.y)}>
                     {/* ── Tab Bar ── */}
                     <View style={styles.tabBar}>
                         {(['Timeline', 'Vitals', 'Medical'] as TabType[]).map((tab) => (
@@ -303,7 +325,12 @@ export default function BeneficiaryProfileScreen() {
 
                     {/* ── Tab Content ── */}
                     <View style={styles.tabContentContainer}>
-                        {activeTab === 'Timeline' && <TimelineTab visits={beneficiary.timeline || []} />}
+                        {activeTab === 'Timeline' && (
+                            <TimelineTab
+                                visits={beneficiary.timeline || []}
+                                highlightVisitId={(params.highlightVisitId || params.visitId) as string | undefined}
+                            />
+                        )}
                         {activeTab === 'Vitals' && <VitalsTab beneficiary={beneficiary} />}
                         {activeTab === 'Medical' && <MedicalTab beneficiary={beneficiary} conditions={conditions} onRefresh={refetch} />}
                     </View>

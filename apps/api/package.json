@@ -11,13 +11,15 @@
     "seed:test": "ts-node --transpile-only prisma/seed_test.ts",
     "prisma:generate": "prisma generate --schema=../../packages/database/prisma/schema.prisma",
     "prisma:push": "prisma db push --schema=../../packages/database/prisma/schema.prisma",
-    "db:sync": "prisma db push --schema=../../packages/database/prisma/schema.prisma && prisma generate --schema=../../packages/database/prisma/schema.prisma"
+    "db:sync": "prisma db push --schema=../../packages/database/prisma/schema.prisma && prisma generate --schema=../../packages/database/prisma/schema.prisma",
+    "invoices:reconcile": "tsx scripts/reconcile_invoices.ts",
+    "invoices:reconcile:dry-run": "tsx scripts/reconcile_invoices.ts --dry-run"
   },
   "dependencies": {
     "@aws-sdk/s3-request-presigner": "^3.1127.0",
+    "@maihoonna/billing": "*",
     "@maihoonna/database": "*",
     "@maihoonna/notifications": "*",
-    "@maihoonna/billing": "*",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@supabase/supabase-js": "^2.105.1",
@@ -37,6 +39,7 @@
     "nodemailer": "^6.10.0",
     "pg": "^8.23.0",
     "prisma": "^7.8.0",
+    "puppeteer": "^25.15.0",
     "razorpay": "^2.9.6",
     "twilio": "^5.4.0",
     "uuid": "^14.0.0"

@@ -431,3 +431,47 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
 
 export const downloadInvoicePDF = generateInvoicePDF;
 
+/**
+ * Downloads the canonical statutory PDF directly from the S3 presigned URL
+ * and opens the system Share/Save sheet for the user.
+ */
+export const downloadS3InvoicePDF = async (pdfUrl: string, fileName?: string) => {
+  try {
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        window.open(pdfUrl, '_blank');
+        return;
+      }
+    }
+
+    let FileSystem: any = null;
+    try {
+      FileSystem = await import('expo-file-system/legacy');
+    } catch (_) {}
+    const Sharing = await getSharingModule();
+
+    const name = fileName || `Invoice-${Date.now()}.pdf`;
+
+    if (FileSystem?.documentDirectory) {
+      const localUri = `${FileSystem.documentDirectory}${name}`;
+      const downloadResult = await FileSystem.downloadAsync(pdfUrl, localUri);
+
+      if (Sharing && downloadResult?.uri) {
+        await Sharing.shareAsync(downloadResult.uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Save Invoice to Files',
+          UTI: 'com.adobe.pdf',
+        });
+        return;
+      }
+    }
+
+    // Fallback: Native browser/linking
+    const Linking = (await import('react-native')).Linking;
+    await Linking.openURL(pdfUrl);
+  } catch (err: any) {
+    console.error('[downloadS3InvoicePDF] Error downloading PDF:', err);
+    Alert.alert('Download Error', 'Could not download or open invoice PDF. Please try again.');
+  }
+};
+

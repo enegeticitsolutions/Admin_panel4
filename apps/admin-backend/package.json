@@ -17,9 +17,9 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1018.0",
     "@aws-sdk/s3-request-presigner": "^3.1127.0",
+    "@maihoonna/billing": "*",
     "@maihoonna/database": "*",
     "@maihoonna/notifications": "*",
-    "@maihoonna/billing": "*",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@supabase/supabase-js": "^2.100.1",
@@ -33,6 +33,7 @@
     "multer": "^2.4.0",
     "pg": "^8.20.0",
     "prisma": "^7.8.0",
+    "puppeteer": "^25.15.0",
     "razorpay": "^2.9.8",
     "uuid": "^13.0.0",
     "ws": "^8.21.1",

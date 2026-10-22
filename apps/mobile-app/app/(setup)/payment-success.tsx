@@ -8,8 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ActivityIndicator, Alert } from 'react-native';
 import { API_URL } from '@/constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { generateInvoicePDF } from '../../components/invoice/InvoiceGenerator';
-import type { InvoiceData } from '../../components/invoice/InvoiceGenerator';
+import { downloadS3InvoicePDF } from '../../components/invoice/InvoiceGenerator';
 
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
@@ -66,14 +65,8 @@ export default function PaymentSuccessScreen() {
         try {
             setIsDownloading(true);
             const token = await AsyncStorage.getItem('userToken');
-            
-            // 1. Fetch Company Config
-            const configResRaw = await fetch(`${API_URL}/public/company/config`);
-            const configRes = await configResRaw.json();
-            const cConfig = configRes.data || {};
 
-            // 2. Fetch Invoice By OrderId
-            // The Razorpay order ID is what we saved in the backend as transactionId during creation
+            // 1. Fetch Invoice By OrderId
             const invoiceResRaw = await fetch(`${API_URL}/subscriber/invoices/order/${orderId}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -87,46 +80,20 @@ export default function PaymentSuccessScreen() {
                 return;
             }
 
-            const invoiceData: InvoiceData = {
-                invoiceNumber: invoice.invoiceNumber,
-                issuedAt: invoice.issuedAt,
-                status: invoice.status,
-                companyName: cConfig.COMPANY_NAME,
-                companyAddress: cConfig.COMPANY_ADDRESS,
-                companyGstin: cConfig.COMPANY_GSTIN,
-                companyPan: cConfig.COMPANY_PAN,
-                companyCin: cConfig.COMPANY_CIN,
-                companyEmail: cConfig.COMPANY_EMAIL,
-                companyPhone: cConfig.COMPANY_PHONE,
-                companyBankName: cConfig.COMPANY_BANK_NAME,
-                companyBankAccount: cConfig.COMPANY_BANK_ACCOUNT,
-                companyBankIfsc: cConfig.COMPANY_BANK_IFSC,
-                companyUpiId: cConfig.COMPANY_UPI_ID,
-                subscriberName: invoice.subscriber?.name || 'Subscriber',
-                subscriberPhone: invoice.subscriber?.phone || '',
-                subscriberEmail: invoice.subscriber?.email || '',
-                subscriberAddress: invoice.subscriber?.address || 'Haryana',
-                placeOfSupply: invoice.placeOfSupply || 'Haryana',
-                items: invoice.items.map((i: any) => ({
-                    description: i.description,
-                    hsnSacCode: i.hsnSacCode,
-                    quantity: i.quantity,
-                    unitPrice: i.unitPrice,
-                    taxRate: i.taxRate,
-                    tax: i.isGstExempt ? 0 : Math.round(((i.amount * (i.taxRate || 0)) / 100) * 100) / 100,
-                    amount: i.amount
-                })),
-                baseAmount: invoice.baseAmount,
-                discountAmount: invoice.discountAmount,
-                saathiDiscountAmount: invoice.saathiDiscountAmount,
-                cgstAmount: invoice.cgstAmount,
-                sgstAmount: invoice.sgstAmount,
-                igstAmount: invoice.igstAmount,
-                taxAmount: invoice.taxAmount,
-                totalAmount: invoice.totalAmount,
-            };
+            // 2. Fetch Presigned S3 PDF URL
+            const pdfResRaw = await fetch(`${API_URL}/subscriber/invoices/${invoice.id}/pdf-url`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const pdfRes = await pdfResRaw.json();
 
-            await generateInvoicePDF(invoiceData);
+            if (!pdfRes.success || !pdfRes.data?.downloadUrl) {
+                Alert.alert('Error', pdfRes.message || 'Invoice PDF not found.');
+                return;
+            }
+
+            await downloadS3InvoicePDF(pdfRes.data.downloadUrl, pdfRes.data.fileName);
         } catch (error) {
             console.error('Invoice Download Error:', error);
             Alert.alert('Error', 'Could not download invoice. Please try again later.');

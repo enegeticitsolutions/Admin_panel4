@@ -23,8 +23,10 @@ function getStorageService() {
 }
 
 // Export dynamic proxy to prevent stale uninitialized instance
-const storageProxy = new Proxy({}, {
+const storageProxy = new Proxy({ getStorageService }, {
   get(target, prop) {
+    if (prop === 'getStorageService') return getStorageService;
+    if (prop in target) return target[prop];
     const service = getStorageService();
     const val = service[prop];
     if (typeof val === 'function') {
@@ -36,4 +38,5 @@ const storageProxy = new Proxy({}, {
 
 module.exports = storageProxy;
 module.exports.getStorageService = getStorageService;
+
 

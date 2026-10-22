@@ -2402,6 +2402,9 @@ model Invoice {
   dueDate  DateTime?
   paidAt   DateTime?
 
+  pdfUrl         String?   // S3 file key: e.g. "invoices/MHN-INV-2026-27-00001.pdf"
+  pdfGeneratedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
