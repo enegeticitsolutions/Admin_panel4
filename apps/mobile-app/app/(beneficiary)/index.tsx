@@ -27,7 +27,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { triggerEmergencyAlert, dialEmergencyHelpline, EMERGENCY_HELPLINE_NUMBER } from '@/services/emergencyTrigger';
 import { useCustomAlert } from '@/contexts/CustomAlertContext';
 
-const MOCK_BENEFICIARY_ID = '8340d860-2641-479c-b26a-8b9a71bcec29';
 
 const headerPattern = require('@/assets/images/header-pattern.png');
 
@@ -139,20 +138,15 @@ export default function BeneficiaryDashboard() {
         fetchEligibility();
     }, []);
 
-    const {
-        data,
-        isLoading: loading,
-    } = useQuery({
-        queryKey: ['beneficiaryDashboardInfo', MOCK_BENEFICIARY_ID],
-        queryFn: async () => {
-            const [storedUser, storedToken] = await Promise.all([
-                AsyncStorage.getItem('userData'),
-                AsyncStorage.getItem('userToken'),
-            ]);
 
-            if (!storedUser || !storedToken) {
-                throw new Error('Auth missing');
-            }
+    const {
+        data: personalData,
+        isLoading: personalLoading,
+    } = useQuery({
+        queryKey: ['beneficiaryDashboardInfo', user?.id],
+        queryFn: async () => {
+            const storedToken = await AsyncStorage.getItem('userToken');
+            if (!storedToken) return null;
 
             const response = await fetch(`${API_URL}/beneficiary/dashboard/dashboard/me`, {
                 headers: {
@@ -161,21 +155,34 @@ export default function BeneficiaryDashboard() {
                 },
             });
 
-            if (response.status === 404) {
-                // User has no personal beneficiary profile row yet (e.g. pure subscriber / family manager)
+            if (response.status === 404 || !response.ok) {
                 return null;
             }
 
-            if (!response.ok) {
-                throw new Error('Backend error');
-            }
-
             const res = await response.json();
-            if (res.success) {
-                return res.data;
-            }
+            return res.success ? (res.data as DashboardData) : null;
+        },
+    });
 
-            return null;
+    const {
+        data: subscriberData,
+        isLoading: subscriberLoading,
+    } = useQuery({
+        queryKey: ['subscriberSummary', user?.id],
+        queryFn: async () => {
+            const storedToken = await AsyncStorage.getItem('userToken');
+            if (!storedToken) return null;
+
+            const response = await fetch(`${API_URL}/subscriber/dashboard/me`, {
+                headers: {
+                    Authorization: `Bearer ${storedToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) return null;
+            const res = await response.json();
+            return res.success ? res.data : null;
         },
     });
 
@@ -231,7 +238,7 @@ export default function BeneficiaryDashboard() {
         }
     };
 
-    if (loading) {
+    if (personalLoading && subscriberLoading) {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#FE6700" />
@@ -239,55 +246,42 @@ export default function BeneficiaryDashboard() {
         );
     }
 
-    const displayData: DashboardData = data || {
-        greeting: 'Good Morning',
-        firstName: 'User',
-        emotionalScore: 8,
-        nextVisit: 'Feb 27',
-        adherence: '95%',
-        careCoordinator: {
-            id: '1',
-            name: 'Dr. Sarah Johnson',
-            role: 'Primary Care Coordinator',
-            bio: 'Board-certified nurse practitioner with 15+ years of experience in geriatric care.',
-            photo: null,
-            phone: '+91 98765 43210',
-        },
-        todaysMedications: [
-            {
-                id: '1',
-                name: 'Lisinopril',
-                dosage: '10mg',
-                condition: 'Blood Pressure',
-                time: '08:00 AM',
-                completed: false,
-                adherenceScore: 95,
-            },
-            {
-                id: '2',
-                name: 'Metformin',
-                dosage: '500mg',
-                condition: 'Diabetes',
-                time: '08:00 AM',
-                completed: false,
-                adherenceScore: 92,
-            },
-        ],
-    };
+    const hasPersonalCarePlan = Boolean(personalData);
+
+    const currentHour = new Date().getHours();
+    let defaultGreeting = 'Good Evening';
+    if (currentHour < 12) defaultGreeting = 'Good Morning';
+    else if (currentHour < 17) defaultGreeting = 'Good Afternoon';
+
+    const greeting = personalData?.greeting || defaultGreeting;
+    const firstName = user?.name ? user.name.split(' ')[0] : (personalData?.firstName || 'there');
+    const familyBeneficiaries: any[] = subscriberData?.beneficiaries || [];
 
     const formatDate = (dateString: string | null) => {
         if (!dateString) return 'Not Scheduled';
-
         const date = new Date(dateString);
         if (Number.isNaN(date.getTime())) return dateString;
-
         return date.toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
         });
     };
 
-    const firstName = user?.name ? user.name.split(' ')[0] : (displayData?.firstName || 'there');
+    const getDisplayAge = (b: any): string => {
+        if (b.dateOfBirth) {
+            try {
+                const dob = new Date(b.dateOfBirth);
+                if (!isNaN(dob.getTime())) {
+                    const today = new Date();
+                    let age = today.getFullYear() - dob.getFullYear();
+                    const m = today.getMonth() - dob.getMonth();
+                    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+                    return `${age} yrs`;
+                }
+            } catch (_) { }
+        }
+        return b.age ? `${b.age} yrs` : '';
+    };
 
     return (
         <ScrollView
@@ -306,7 +300,7 @@ export default function BeneficiaryDashboard() {
                     <View style={{ paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 40 : 20), paddingBottom: 20 }}>
                         <View style={[styles.headerContent, responsiveContentStyle]}>
                             <View>
-                                <Text style={styles.greetingTitle}>{displayData.greeting}, {firstName}!</Text>
+                                <Text style={styles.greetingTitle}>{greeting}, {firstName}!</Text>
                                 <Text style={styles.greetingSubtitle}>
                                     How are you feeling today?
                                 </Text>
@@ -360,130 +354,254 @@ export default function BeneficiaryDashboard() {
             </View>
 
             <View style={[styles.mainContent, responsiveContentStyle]}>
-                <View style={styles.statsRow}>
-                    <View style={styles.statCard}>
-                        <View style={[styles.statIconBadge, { backgroundColor: '#DBEAFE' }]}>
-                            <Feather name="calendar" size={20} color="#155DFC" />
-                        </View>
+                {/* ── CASE 1: Primary User Has a Personal Care Plan ── */}
+                {hasPersonalCarePlan ? (
+                    <>
+                        {(personalData?.nextVisit || personalData?.adherence) && (
+                            <View style={styles.statsRow}>
+                                {personalData?.nextVisit && (
+                                    <View style={styles.statCard}>
+                                        <View style={[styles.statIconBadge, { backgroundColor: '#DBEAFE' }]}>
+                                            <Feather name="calendar" size={20} color="#155DFC" />
+                                        </View>
+                                        <Text style={styles.statLabel}>Next Visit</Text>
+                                        <Text style={styles.statValue}>
+                                            {formatDate(personalData.nextVisit)}
+                                        </Text>
+                                    </View>
+                                )}
 
-                        <Text style={styles.statLabel}>Next Visit</Text>
-                        <Text style={styles.statValue}>
-                            {formatDate(displayData.nextVisit)}
-                        </Text>
-                    </View>
-
-                    <View style={styles.statCard}>
-                        <View style={[styles.statIconBadge, { backgroundColor: '#DCFCE7' }]}>
-                            <Feather name="trending-up" size={20} color="#00A63E" />
-                        </View>
-
-                        <Text style={styles.statLabel}>Adherence</Text>
-                        <Text style={styles.statValue}>{displayData.adherence}</Text>
-                    </View>
-                </View>
-
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Your Care Coordinator</Text>
-                    <TouchableOpacity onPress={() => router.push('/(beneficiary)/team')}>
-                        <Text style={styles.linkText}>View Team</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {displayData.careCoordinator ? (
-                    <View style={styles.card}>
-                        <View style={styles.ccHeader}>
-                            <View style={styles.ccAvatar}>
-                                {displayData.careCoordinator.photo ? (
-                                    <Image
-                                        source={{ uri: sanitizeImageUri(displayData.careCoordinator.photo) }}
-                                        style={styles.ccImage}
-                                    />
-
-                                ) : (
-                                    <AntDesign name="user" size={30} color="#AAAAAA" />
+                                {personalData?.adherence && (
+                                    <View style={styles.statCard}>
+                                        <View style={[styles.statIconBadge, { backgroundColor: '#DCFCE7' }]}>
+                                            <Feather name="trending-up" size={20} color="#00A63E" />
+                                        </View>
+                                        <Text style={styles.statLabel}>Adherence</Text>
+                                        <Text style={styles.statValue}>{personalData.adherence}</Text>
+                                    </View>
                                 )}
                             </View>
+                        )}
 
-                            <View style={styles.ccInfo}>
-                                <Text style={styles.ccName}>
-                                    {displayData.careCoordinator.name}
-                                </Text>
-                                <Text style={styles.ccRole}>
-                                    {displayData.careCoordinator.role}
-                                </Text>
+                        {personalData?.careCoordinator && (
+                            <>
+                                <View style={styles.sectionHeader}>
+                                    <Text style={styles.sectionTitle}>Your Care Coordinator</Text>
+                                    <TouchableOpacity onPress={() => router.push('/(beneficiary)/team')}>
+                                        <Text style={styles.linkText}>View Team</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.card}>
+                                    <View style={styles.ccHeader}>
+                                        <View style={styles.ccAvatar}>
+                                            {personalData.careCoordinator.photo ? (
+                                                <Image
+                                                    source={{ uri: sanitizeImageUri(personalData.careCoordinator.photo) }}
+                                                    style={styles.ccImage}
+                                                />
+                                            ) : (
+                                                <AntDesign name="user" size={30} color="#AAAAAA" />
+                                            )}
+                                        </View>
+
+                                        <View style={styles.ccInfo}>
+                                            <Text style={styles.ccName}>
+                                                {personalData.careCoordinator.name}
+                                            </Text>
+                                            <Text style={styles.ccRole}>
+                                                {personalData.careCoordinator.role}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <Text style={styles.ccBio} numberOfLines={2}>
+                                        {personalData.careCoordinator.bio}
+                                    </Text>
+
+                                    <ConnectContactButton
+                                        name={personalData.careCoordinator.name}
+                                        role={personalData.careCoordinator.role}
+                                        phone={personalData.careCoordinator.phone || null}
+                                        photo={personalData.careCoordinator.photo}
+                                        trigger={
+                                            <View style={styles.primaryBtn}>
+                                                <Text style={styles.primaryBtnText}>Call Now</Text>
+                                            </View>
+                                        }
+                                    />
+                                </View>
+                            </>
+                        )}
+
+                        {personalData?.todaysMedications && personalData.todaysMedications.length > 0 && (
+                            <>
+                                <View style={styles.sectionHeader}>
+                                    <Text style={styles.sectionTitle}>Today's Medications</Text>
+                                    <TouchableOpacity onPress={() => router.push('/(beneficiary)/meds' as any)}>
+                                        <Text style={styles.linkText}>View All</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {personalData.todaysMedications.map((med) => (
+                                    <View key={med.id} style={styles.medCard}>
+                                        <View style={styles.medHeader}>
+                                            <View style={styles.medIconBadge}>
+                                                <MaterialCommunityIcons
+                                                    name="pill"
+                                                    size={20}
+                                                    color="#FE6700"
+                                                />
+                                            </View>
+
+                                            <View style={styles.medInfo}>
+                                                <Text style={styles.medName}>{med.name}</Text>
+                                                <Text style={styles.medDosage}>
+                                                    {med.dosage} • {med.condition}
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={styles.medFooter}>
+                                            <Text style={styles.medTime}>⏰ {med.time}</Text>
+
+                                            <View style={styles.adherenceBadge}>
+                                                <Text style={styles.adherenceBadgeText}>
+                                                    Adherence {med.adherenceScore}%
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                ))}
+                            </>
+                        )}
+                    </>
+                ) : (
+                    /* ── CASE 2: Primary User Has Not Bought a Personal Plan Yet ── */
+                    <View style={styles.noPlanCard}>
+                        <View style={styles.noPlanHeader}>
+                            <View style={styles.noPlanIconBox}>
+                                <Feather name="shield" size={24} color="#FE6700" />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 12 }}>
+                                <Text style={styles.noPlanTitle}>Personal Care Plan</Text>
+                                <Text style={styles.noPlanSubtitle}>No active plan for yourself yet</Text>
                             </View>
                         </View>
-
-                        <Text style={styles.ccBio} numberOfLines={2}>
-                            {displayData.careCoordinator.bio}
+                        <Text style={styles.noPlanDesc}>
+                            You are managing care and payments for your family. Protect your own wellness with dedicated companion visits, regular vitals checkups, and 24/7 care support.
                         </Text>
-
-                        <ConnectContactButton
-                            name={displayData.careCoordinator.name}
-                            role={displayData.careCoordinator.role}
-                            phone={displayData.careCoordinator.phone || null}
-                            photo={displayData.careCoordinator.photo}
-                            trigger={
-                                <View style={styles.primaryBtn}>
-                                    <Text style={styles.primaryBtnText}>Call Now</Text>
-                                </View>
-                            }
-                        />
-                    </View>
-                ) : (
-                    <View style={styles.emptyCard}>
-                        <MaterialCommunityIcons name="doctor" size={26} color="#FE6700" />
-                        <View style={{ marginLeft: 12, flex: 1 }}>
-                            <Text style={styles.emptyCardTitle}>Care Coordinator</Text>
-                            <Text style={styles.emptyCardSub}>Your dedicated care coordinator will be assigned shortly.</Text>
-                        </View>
+                        <TouchableOpacity
+                            style={styles.noPlanBtn}
+                            onPress={() => router.push('/(setup)/subscription-packages')}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={styles.noPlanBtnText}>Explore Plans for Myself</Text>
+                            <Feather name="arrow-right" size={16} color="#FFFFFF" />
+                        </TouchableOpacity>
                     </View>
                 )}
 
+                {/* ── Family Care Activity (Beneficiaries under care) ── */}
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Today's Medications</Text>
-                    <TouchableOpacity onPress={() => router.push('/(beneficiary)/meds' as any)}>
-                        <Text style={styles.linkText}>View All</Text>
+                    <Text style={styles.sectionTitle}>Family Care Activity</Text>
+                    <TouchableOpacity onPress={() => router.push('/(subscriber)')}>
+                        <Text style={styles.linkText}>Family Connect</Text>
                     </TouchableOpacity>
                 </View>
 
-                {displayData.todaysMedications && displayData.todaysMedications.length > 0 ? (
-                    displayData.todaysMedications.map((med) => (
-                        <View key={med.id} style={styles.medCard}>
-                            <View style={styles.medHeader}>
-                                <View style={styles.medIconBadge}>
-                                    <MaterialCommunityIcons
-                                        name="pill"
-                                        size={20}
-                                        color="#FE6700"
-                                    />
-                                </View>
+                {familyBeneficiaries.length > 0 ? (
+                    familyBeneficiaries.map((b) => {
+                        const isSelf = (b.relationship || '').toLowerCase() === 'self' || b.isSelf;
+                        const isPending = b.packageStatus === 'pending' || b.verificationStatus === 'pending';
+                        const isExpired = b.packageStatus === 'expired';
+                        const isActive = b.packageStatus === 'active';
 
-                                <View style={styles.medInfo}>
-                                    <Text style={styles.medName}>{med.name}</Text>
-                                    <Text style={styles.medDosage}>
-                                        {med.dosage} • {med.condition}
+                        return (
+                            <TouchableOpacity
+                                key={b.id}
+                                style={styles.familyCard}
+                                onPress={() => {
+                                    if (isPending) {
+                                        router.push({
+                                            pathname: '/(setup)/beneficiary-info',
+                                            params: { isVerificationFlow: 'true', beneficiaryId: b.id }
+                                        });
+                                    } else if (isExpired) {
+                                        router.push('/(setup)/subscription-packages');
+                                    } else {
+                                        router.push(`/(subscriber)/beneficiary-profile?id=${b.id}`);
+                                    }
+                                }}
+                                activeOpacity={0.85}
+                            >
+                                <Image
+                                    source={{
+                                        uri: sanitizeImageUri(
+                                            b.photo,
+                                            `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name || 'Member')}&background=FFE3D1&color=FE6700&bold=true`
+                                        )
+                                    }}
+                                    style={styles.familyAvatar}
+                                />
+
+                                <View style={styles.familyInfo}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Text style={styles.familyName}>{b.name}</Text>
+                                        {isSelf && (
+                                            <View style={styles.selfBadge}>
+                                                <Text style={styles.selfBadgeText}>Self</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    <Text style={styles.familyMeta}>
+                                        {getDisplayAge(b)}{b.relationship ? ` • ${b.relationship}` : ''}
                                     </Text>
                                 </View>
-                            </View>
 
-                            <View style={styles.medFooter}>
-                                <Text style={styles.medTime}>⏰ {med.time}</Text>
-
-                                <View style={styles.adherenceBadge}>
-                                    <Text style={styles.adherenceBadgeText}>
-                                        Adherence {med.adherenceScore}%
-                                    </Text>
+                                <View style={styles.familyStatusWrap}>
+                                    {isActive ? (
+                                        <View style={styles.activePlanBadge}>
+                                            <View style={styles.activeDot} />
+                                            <Text style={styles.activePlanText}>Active Care</Text>
+                                        </View>
+                                    ) : isPending ? (
+                                        <View style={styles.pendingPlanBadge}>
+                                            <Ionicons name="time-outline" size={12} color="#D97706" />
+                                            <Text style={styles.pendingPlanText}>Setup</Text>
+                                        </View>
+                                    ) : isExpired ? (
+                                        <View style={styles.expiredPlanBadge}>
+                                            <Text style={styles.expiredPlanText}>Renew</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={styles.neutralPlanBadge}>
+                                            <Text style={styles.neutralPlanText}>No Plan</Text>
+                                        </View>
+                                    )}
+                                    <Ionicons name="chevron-forward" size={16} color="#9CA3AF" style={{ marginLeft: 6 }} />
                                 </View>
-                            </View>
-                        </View>
-                    ))
+                            </TouchableOpacity>
+                        );
+                    })
                 ) : (
-                    <View style={styles.emptyCard}>
-                        <Ionicons name="checkmark-circle-outline" size={26} color="#10B981" />
-                        <View style={{ marginLeft: 12, flex: 1 }}>
-                            <Text style={styles.emptyCardTitle}>All Caught Up!</Text>
-                            <Text style={styles.emptyCardSub}>No pending medications scheduled for today.</Text>
+                    <View style={styles.emptyFamilyCard}>
+                        <View style={styles.emptyFamilyIconBox}>
+                            <Ionicons name="people-outline" size={26} color="#FE6700" />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={styles.emptyFamilyTitle}>No Family Members Added</Text>
+                            <Text style={styles.emptyFamilySub}>
+                                Add your parents or family members to monitor their health visits and companion support.
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.addFamilyBtn}
+                                onPress={() => router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } })}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="person-add-outline" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.addFamilyBtnText}>Add Family Member</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 )}
@@ -1085,5 +1203,220 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins-Regular',
         fontSize: 12,
         color: '#6B7280',
+    },
+    noPlanCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 18,
+        marginBottom: 20,
+        borderWidth: 1,
+        borderColor: '#FFE4D6',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        elevation: 3,
+    },
+    noPlanHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    noPlanIconBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        backgroundColor: '#FFF5ED',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    noPlanTitle: {
+        fontFamily: 'Poppins-Bold',
+        fontSize: 16,
+        color: '#111827',
+    },
+    noPlanSubtitle: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 12,
+        color: '#6B7280',
+    },
+    noPlanDesc: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 13,
+        color: '#4B5563',
+        lineHeight: 19,
+        marginBottom: 14,
+    },
+    noPlanBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FE6700',
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        gap: 8,
+    },
+    noPlanBtnText: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 14,
+        color: '#FFFFFF',
+    },
+    familyCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 14,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
+    },
+    familyAvatar: {
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        backgroundColor: '#F3F4F6',
+    },
+    familyInfo: {
+        flex: 1,
+        marginLeft: 12,
+    },
+    familyName: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 15,
+        color: '#111827',
+    },
+    selfBadge: {
+        backgroundColor: '#EFF6FF',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    selfBadgeText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 10,
+        color: '#2563EB',
+    },
+    familyMeta: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 12,
+        color: '#6B7280',
+        marginTop: 2,
+    },
+    familyStatusWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    activePlanBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#ECFDF5',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        gap: 5,
+    },
+    activeDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#10B981',
+    },
+    activePlanText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 11,
+        color: '#059669',
+    },
+    pendingPlanBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFBEB',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        gap: 4,
+    },
+    pendingPlanText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 11,
+        color: '#D97706',
+    },
+    expiredPlanBadge: {
+        backgroundColor: '#FEF2F2',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    expiredPlanText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 11,
+        color: '#DC2626',
+    },
+    neutralPlanBadge: {
+        backgroundColor: '#F3F4F6',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    neutralPlanText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 11,
+        color: '#6B7280',
+    },
+    emptyFamilyCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    emptyFamilyIconBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: '#FFF5ED',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    emptyFamilyTitle: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 14,
+        color: '#111827',
+        marginBottom: 2,
+    },
+    emptyFamilySub: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 12,
+        color: '#6B7280',
+        lineHeight: 17,
+        marginBottom: 10,
+    },
+    addFamilyBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        backgroundColor: '#FE6700',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    addFamilyBtnText: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 12,
+        color: '#FFFFFF',
     },
 });
