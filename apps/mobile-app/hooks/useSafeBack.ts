@@ -13,7 +13,7 @@ export function useSafeBack() {
         let route = fallbackRoute;
         if (!route || route === '/') {
             if (isLoggedIn) {
-                route = role === 'beneficiary' ? '/(beneficiary)' : role === 'care_companion' ? '/(care-companion)' : '/(subscriber)';
+                route = role === 'care_companion' ? '/(care-companion)' : '/(beneficiary)';
             } else {
                 route = '/';
             }

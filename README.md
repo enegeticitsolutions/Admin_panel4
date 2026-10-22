@@ -288,9 +288,28 @@ CORS policies in `apps/api/app/main.ts` validate origins:
 
 ## 7. Mobile App Testing & Development Guide
 
-Follow this guide to run **`apps/mobile-app`** or **`apps/sathi-app`** on a physical device.
+> 📖 **Full Local Setup & Run Guide:** See [docs/devops/LOCAL_SETUP_AND_RUN_GUIDE.md](file:///c:/Users/harsh/OneDrive/Desktop/MHN/docs/devops/LOCAL_SETUP_AND_RUN_GUIDE.md) for complete all-in-one instructions.
 
-### 🤖 Android Setup via USB (Recommended — Bypasses Wi-Fi Firewalls)
+Follow this guide to run **`apps/mobile-app`** or **`apps/sathi-app`** on the Android Emulator or physical device.
+
+### 📱 Android Virtual Device / Emulator (Pixel 10)
+
+1. **Launch the Pixel 10 Emulator** (Automatically boots & reverses ports):
+   ```bash
+   npm run emulator:pixel
+   ```
+2. **Start the Metro Bundler** (Auto-connects ports in background):
+   ```bash
+   npm run dev:mobile
+   ```
+3. **Run directly on Pixel 10** (or tap the app icon on the emulator):
+   ```bash
+   npm run android:pixel
+   ```
+
+---
+
+### 🤖 Android Setup via USB (Physical Device)
 
 Using USB debugging bypasses local Wi-Fi router AP isolation, ISP blockades, and Windows Firewall issues.
 
@@ -428,23 +447,17 @@ node packages/database/prisma/seed.js                                # Seed data
 # ------------------------------------------------------------------
 # Running Applications Concurrently / Individually
 # ------------------------------------------------------------------
-# Admin Backend API (Port 3001)
-cd apps/admin-backend && npm run dev
+# Run from repository root:
+npm run dev:api                             # Primary Client API (Port 8001)
+npm run dev:admin                           # Admin Backend API (Port 3001)
+npm run dev:admin-ui                        # Admin Frontend Dashboard (Port 5173)
+cd apps/website && npm run dev              # Marketing Website Portal (Port 5174)
+npm run worker                              # Notification Worker Engine
 
-# Primary Client API (Port 8001)
-cd apps/api && npm run dev
-
-# Admin Frontend Dashboard (Port 5173)
-cd apps/admin-frontend && npm run dev
-
-# Marketing Website Portal (Port 5174)
-cd apps/website && npm run dev
-
-# Mobile App (Subscriber/Senior)
-cd apps/mobile-app && npx expo start --localhost --go
-
-# Saathi Volunteer App
-cd apps/sathi-app && npx expo start --localhost --go
+# Mobile App & Pixel 10 Emulator:
+npm run emulator:pixel                      # Launch Pixel 10 Android Emulator
+npm run dev:mobile                          # Start Metro Bundler (Port 8081)
+npm run android:pixel                       # Build & Run on Pixel 10 Emulator
 ```
 
 ---

@@ -53,10 +53,8 @@ export default function LoginPasswordScreen() {
                 const role = result.user.role;
                 if (role === "care_companion") {
                     replace("/(care-companion)");
-                } else if (role === "beneficiary") {
-                    replace("/(beneficiary)");
                 } else {
-                    replace("/(subscriber)");
+                    replace("/(beneficiary)");
                 }
             } else {
                 Alert.alert("Login Failed", data.message || "Invalid credentials.");

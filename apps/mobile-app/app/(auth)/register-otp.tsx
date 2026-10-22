@@ -69,12 +69,10 @@ export default function RegisterOtpScreen() {
         const role = result.user.role;
         if (role === 'care_companion') {
           replace('/(care-companion)');
-        } else if (role === 'beneficiary') {
-          replace('/(beneficiary)');
         } else if (role === 'prospect') {
           replace('/(setup)/subscription-packages');
         } else {
-          replace('/(subscriber)');
+          replace('/(beneficiary)');
         }
       } else {
         Alert.alert('Registration Failed', data.message || 'Something went wrong.');

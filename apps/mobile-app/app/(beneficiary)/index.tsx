@@ -74,18 +74,7 @@ export default function BeneficiaryDashboard() {
     const actionCardWidth = Math.floor((availableGridWidth - ((numColumns - 1) * 16)) / numColumns);
     useExitOnBack();
     const { showConfirm, showAlert } = useCustomAlert();
-
-    const { availableRoles, switchRole, isSwitchingRole } = useAuth();
-    const isDualRole = availableRoles.includes('subscriber') && availableRoles.includes('beneficiary');
-
-    const handleSwitchToSubscriber = async () => {
-        try {
-            await switchRole('subscriber');
-            router.replace('/(subscriber)');
-        } catch (err: any) {
-            Alert.alert('Switch Failed', err?.message || 'Could not switch to subscriber view.');
-        }
-    };
+    const { user } = useAuth();
 
     const [triggeringEmergency, setTriggeringEmergency] = useState(false);
     const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'done'>('idle');
@@ -172,6 +161,11 @@ export default function BeneficiaryDashboard() {
                 },
             });
 
+            if (response.status === 404) {
+                // User has no personal beneficiary profile row yet (e.g. pure subscriber / family manager)
+                return null;
+            }
+
             if (!response.ok) {
                 throw new Error('Backend error');
             }
@@ -181,7 +175,7 @@ export default function BeneficiaryDashboard() {
                 return res.data;
             }
 
-            throw new Error('API returned false success');
+            return null;
         },
     });
 
@@ -293,6 +287,8 @@ export default function BeneficiaryDashboard() {
         });
     };
 
+    const firstName = user?.name ? user.name.split(' ')[0] : (displayData?.firstName || 'there');
+
     return (
         <ScrollView
             style={styles.container}
@@ -310,30 +306,21 @@ export default function BeneficiaryDashboard() {
                     <View style={{ paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 40 : 20), paddingBottom: 20 }}>
                         <View style={[styles.headerContent, responsiveContentStyle]}>
                             <View>
-                                <Text style={styles.greetingTitle}>{displayData.greeting}</Text>
+                                <Text style={styles.greetingTitle}>{displayData.greeting}, {firstName}!</Text>
                                 <Text style={styles.greetingSubtitle}>
                                     How are you feeling today?
                                 </Text>
                             </View>
 
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                {isDualRole && (
-                                    <TouchableOpacity
-                                        style={styles.switchHeaderPill}
-                                        onPress={handleSwitchToSubscriber}
-                                        disabled={isSwitchingRole}
-                                        activeOpacity={0.8}
-                                    >
-                                        {isSwitchingRole ? (
-                                            <ActivityIndicator size="small" color="#FF6A00" />
-                                        ) : (
-                                            <>
-                                                <Ionicons name="swap-horizontal" size={14} color="#FF6A00" style={{ marginRight: 4 }} />
-                                                <Text style={styles.switchHeaderPillText}>Subscriber View</Text>
-                                            </>
-                                        )}
-                                    </TouchableOpacity>
-                                )}
+                                <TouchableOpacity
+                                    style={styles.switchHeaderPill}
+                                    onPress={() => router.push('/(subscriber)')}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="people-outline" size={14} color="#FF6A00" style={{ marginRight: 4 }} />
+                                    <Text style={styles.switchHeaderPillText}>Family</Text>
+                                </TouchableOpacity>
 
                                 <View style={styles.notificationWrapper}>
                                     <NotificationBell />
@@ -402,7 +389,7 @@ export default function BeneficiaryDashboard() {
                     </TouchableOpacity>
                 </View>
 
-                {displayData.careCoordinator && (
+                {displayData.careCoordinator ? (
                     <View style={styles.card}>
                         <View style={styles.ccHeader}>
                             <View style={styles.ccAvatar}>
@@ -443,6 +430,14 @@ export default function BeneficiaryDashboard() {
                             }
                         />
                     </View>
+                ) : (
+                    <View style={styles.emptyCard}>
+                        <MaterialCommunityIcons name="doctor" size={26} color="#FE6700" />
+                        <View style={{ marginLeft: 12, flex: 1 }}>
+                            <Text style={styles.emptyCardTitle}>Care Coordinator</Text>
+                            <Text style={styles.emptyCardSub}>Your dedicated care coordinator will be assigned shortly.</Text>
+                        </View>
+                    </View>
                 )}
 
                 <View style={styles.sectionHeader}>
@@ -452,42 +447,76 @@ export default function BeneficiaryDashboard() {
                     </TouchableOpacity>
                 </View>
 
-                {displayData.todaysMedications.map((med) => (
-                    <View key={med.id} style={styles.medCard}>
-                        <View style={styles.medHeader}>
-                            <View style={styles.medIconBadge}>
-                                <MaterialCommunityIcons
-                                    name="pill"
-                                    size={20}
-                                    color="#FE6700"
-                                />
+                {displayData.todaysMedications && displayData.todaysMedications.length > 0 ? (
+                    displayData.todaysMedications.map((med) => (
+                        <View key={med.id} style={styles.medCard}>
+                            <View style={styles.medHeader}>
+                                <View style={styles.medIconBadge}>
+                                    <MaterialCommunityIcons
+                                        name="pill"
+                                        size={20}
+                                        color="#FE6700"
+                                    />
+                                </View>
+
+                                <View style={styles.medInfo}>
+                                    <Text style={styles.medName}>{med.name}</Text>
+                                    <Text style={styles.medDosage}>
+                                        {med.dosage} • {med.condition}
+                                    </Text>
+                                </View>
                             </View>
 
-                            <View style={styles.medInfo}>
-                                <Text style={styles.medName}>{med.name}</Text>
-                                <Text style={styles.medDosage}>
-                                    {med.dosage} • {med.condition}
-                                </Text>
+                            <View style={styles.medFooter}>
+                                <Text style={styles.medTime}>⏰ {med.time}</Text>
+
+                                <View style={styles.adherenceBadge}>
+                                    <Text style={styles.adherenceBadgeText}>
+                                        Adherence {med.adherenceScore}%
+                                    </Text>
+                                </View>
                             </View>
                         </View>
-
-                        <View style={styles.medFooter}>
-                            <Text style={styles.medTime}>⏰ {med.time}</Text>
-
-                            <View style={styles.adherenceBadge}>
-                                <Text style={styles.adherenceBadgeText}>
-                                    Adherence {med.adherenceScore}%
-                                </Text>
-                            </View>
+                    ))
+                ) : (
+                    <View style={styles.emptyCard}>
+                        <Ionicons name="checkmark-circle-outline" size={26} color="#10B981" />
+                        <View style={{ marginLeft: 12, flex: 1 }}>
+                            <Text style={styles.emptyCardTitle}>All Caught Up!</Text>
+                            <Text style={styles.emptyCardSub}>No pending medications scheduled for today.</Text>
                         </View>
                     </View>
-                ))}
+                )}
 
                 <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Quick Actions</Text>
                 </View>
 
                 <View style={styles.quickActionsGrid}>
+                    <TouchableOpacity
+                        style={[styles.actionCard, { width: actionCardWidth }]}
+                        onPress={() => router.push('/(subscriber)')}
+                    >
+                        <View style={[styles.actionIconBadge, { backgroundColor: '#EFF6FF' }]}>
+                            <Ionicons name="people" size={24} color="#2563EB" />
+                        </View>
+
+                        <Text style={styles.actionTitle} numberOfLines={1} adjustsFontSizeToFit>Family Connect</Text>
+                        <Text style={styles.actionSubtitle} numberOfLines={2}>Reports & family status</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.actionCard, { width: actionCardWidth }]}
+                        onPress={() => router.push('/(setup)/subscription-packages')}
+                    >
+                        <View style={[styles.actionIconBadge, { backgroundColor: '#FFF5ED' }]}>
+                            <Feather name="shopping-bag" size={24} color="#FE6700" />
+                        </View>
+
+                        <Text style={styles.actionTitle} numberOfLines={1} adjustsFontSizeToFit>Browse Packages</Text>
+                        <Text style={styles.actionSubtitle} numberOfLines={2}>Care plans & add members</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                         style={[styles.actionCard, { width: actionCardWidth }]}
                         onPress={() => router.push('/(beneficiary)/vitals')}
@@ -498,6 +527,18 @@ export default function BeneficiaryDashboard() {
 
                         <Text style={styles.actionTitle} numberOfLines={1} adjustsFontSizeToFit>Log Vitals</Text>
                         <Text style={styles.actionSubtitle} numberOfLines={2}>Track blood pressure & more</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.actionCard, { width: actionCardWidth }]}
+                        onPress={() => router.push('/(beneficiary)/meds' as any)}
+                    >
+                        <View style={[styles.actionIconBadge, { backgroundColor: '#FEF3C7' }]}>
+                            <MaterialCommunityIcons name="pill" size={24} color="#D97706" />
+                        </View>
+
+                        <Text style={styles.actionTitle} numberOfLines={1} adjustsFontSizeToFit>Medications</Text>
+                        <Text style={styles.actionSubtitle} numberOfLines={2}>View schedule & details</Text>
                     </TouchableOpacity>
 
                     {sathiEligible && (
@@ -513,18 +554,6 @@ export default function BeneficiaryDashboard() {
                             <Text style={styles.actionSubtitle} numberOfLines={2}>Request visit & help</Text>
                         </TouchableOpacity>
                     )}
-
-                    <TouchableOpacity
-                        style={[styles.actionCard, { width: actionCardWidth }]}
-                        onPress={() => router.push('/(beneficiary)/meds' as any)}
-                    >
-                        <View style={[styles.actionIconBadge, { backgroundColor: '#FEF3C7' }]}>
-                            <MaterialCommunityIcons name="pill" size={24} color="#D97706" />
-                        </View>
-
-                        <Text style={styles.actionTitle} numberOfLines={1} adjustsFontSizeToFit>Medications</Text>
-                        <Text style={styles.actionSubtitle} numberOfLines={2}>View schedule & details</Text>
-                    </TouchableOpacity>
 
                     <TouchableOpacity
                         style={[styles.actionCard, { width: actionCardWidth }]}
@@ -1030,5 +1059,31 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins-SemiBold',
         fontSize: 12,
         color: '#FF6A00',
+    },
+    emptyCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    emptyCardTitle: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 14,
+        color: '#111827',
+        marginBottom: 2,
+    },
+    emptyCardSub: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 12,
+        color: '#6B7280',
     },
 });

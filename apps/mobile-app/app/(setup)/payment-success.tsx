@@ -23,7 +23,7 @@ export default function PaymentSuccessScreen() {
         resetStack();
     }, [resetStack]);
 
-    useAndroidBackHandler('/(subscriber)');
+    useAndroidBackHandler('/(beneficiary)');
 
     // Destructure passed data (or use defaults if missing)
     const orderId = (params.orderId as string) || `ORD${Date.now()}`;
@@ -217,7 +217,7 @@ export default function PaymentSuccessScreen() {
                 </View>
 
                 {/* Actions */}
-                <TouchableOpacity style={styles.enrollBtn} onPress={() => router.replace('/(subscriber)')}>
+                <TouchableOpacity style={styles.enrollBtn} onPress={() => router.replace('/(beneficiary)')}>
                     <Ionicons name="home-outline" size={19} color="#FFFFFF" style={{ marginRight: 8 }} />
                     <Text style={styles.enrollBtnText}>Go to Dashboard</Text>
                 </TouchableOpacity>

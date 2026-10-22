@@ -154,15 +154,13 @@ export default function Index() {
   }
 
   // Role-based redirection to the correct home dashboard
-  if (role === 'beneficiary') {
-    return <Redirect href="/(beneficiary)" />;
-  } else if (role === 'care_companion') {
+  if (role === 'care_companion') {
     return <Redirect href="/(care-companion)" />;
   } else if (role === 'prospect') {
     return <Redirect href="/(setup)/subscription-packages" />;
   } else {
-    // Default: subscriber dashboard (all customers, subscribers, volunteers & staff using customer app)
-    return <Redirect href="/(subscriber)" />;
+    // Unified customer home dashboard (for both self-care and family care managers)
+    return <Redirect href="/(beneficiary)" />;
   }
 }
 

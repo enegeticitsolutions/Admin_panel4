@@ -283,12 +283,10 @@ export default function RegisterScreen() {
                     resetStack();
                     if (result.user.role === 'care_companion') {
                         replace("/(care-companion)");
-                    } else if (result.user.role === 'beneficiary') {
-                        replace("/(beneficiary)");
                     } else if (result.user.role === 'prospect') {
                         replace("/(setup)/subscription-packages");
                     } else {
-                        replace("/(subscriber)");
+                        replace("/(beneficiary)");
                     }
                 } else {
                     Alert.alert("Registration Failed", data.message || "Something went wrong.");
@@ -378,12 +376,10 @@ export default function RegisterScreen() {
                 resetStack();
                 if (result.user.role === 'care_companion') {
                     replace("/(care-companion)");
-                } else if (result.user.role === 'beneficiary') {
-                    replace("/(beneficiary)");
                 } else if (result.user.role === 'prospect') {
                     replace("/(setup)/subscription-packages");
                 } else {
-                    replace("/(subscriber)");
+                    replace("/(beneficiary)");
                 }
             } else {
                 Alert.alert("Registration Failed", registerData.message || "Something went wrong.");

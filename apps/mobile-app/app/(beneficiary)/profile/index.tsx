@@ -121,7 +121,10 @@ export default function ProfileScreen() {
                 },
             });
 
-            const result = await response.json();
+            const result = response.ok ? await response.json() : { success: false };
+            const storedUserRaw = await AsyncStorage.getItem('userData');
+            const storedUser = storedUserRaw ? JSON.parse(storedUserRaw) : null;
+
             if (result.success && result.data) {
                 const b = result.data;
                 const formattedGender = b.gender ? b.gender.charAt(0).toUpperCase() + b.gender.slice(1) : '--';
@@ -142,6 +145,22 @@ export default function ProfileScreen() {
                         email: isEmailPlaceholder ? '--' : fetchedEmail,
                         address: b.address || '--',
                         isEmailVerified: b.user?.isVerified || false,
+                    }
+                });
+            } else if (storedUser) {
+                setProfile({
+                    name: storedUser.name || 'Care Member',
+                    age: storedUser.age || '--',
+                    gender: storedUser.gender ? storedUser.gender.charAt(0).toUpperCase() + storedUser.gender.slice(1) : '--',
+                    bloodGroup: 'A+',
+                    allergiesCount: 0,
+                    conditionsCount: 0,
+                    profilePhoto: storedUser.profilePhoto || storedUser.photo || null,
+                    contact: {
+                        phone: storedUser.phone || '--',
+                        email: storedUser.email || '--',
+                        address: storedUser.address || '--',
+                        isEmailVerified: storedUser.isVerified || false,
                     }
                 });
             }

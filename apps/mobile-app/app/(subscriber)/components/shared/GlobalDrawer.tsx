@@ -129,19 +129,6 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
         }, 260);
     };
 
-    // ─── Dual-role handler ───────────────────────────────────────────────────
-    const handleSwitchToBeneficiary = async () => {
-        onClose();
-        setTimeout(async () => {
-            try {
-                await switchRole('beneficiary');
-                // AuthContext role change triggers automatic re-route via index.tsx
-                router.replace('/(beneficiary)');
-            } catch (err: any) {
-                Alert.alert('Switch Failed', err?.message || 'Could not switch profile. Please try again.');
-            }
-        }, 300);
-    };
 
     // ─── Reusable Account Deletion hook ───────────────────────────────────────
     const deleteAccountWithConfirm = useDeleteAccountWithConfirm(onClose);
@@ -188,7 +175,7 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
                                     {isSubscriber && (
                                         <View style={styles.roleBadge}>
                                             <View style={styles.onlineDot} />
-                                            <Text style={styles.roleBadgeText}>Subscriber</Text>
+                                            <Text style={styles.roleBadgeText}>Member</Text>
                                         </View>
                                     )}
                                 </View>
@@ -204,42 +191,19 @@ const GlobalDrawer = ({ isOpen, onClose, drawerAnim, userData: _userDataProp }: 
                     >
                         {isLoggedIn ? (
                             <>
-                                {/* ── Dual-Role Switch Card (only for self-subscriber/beneficiary) ── */}
-                                {isDualRole && (
-                                    <TouchableOpacity
-                                        style={styles.switchRoleCard}
-                                        onPress={handleSwitchToBeneficiary}
-                                        activeOpacity={0.85}
-                                        disabled={isSwitchingRole}
-                                    >
-                                        <LinearGradient
-                                            colors={['#FF6B35', '#FF5C00']}
-                                            start={{ x: 0, y: 0 }}
-                                            end={{ x: 1, y: 0 }}
-                                            style={styles.switchRoleGradient}
-                                        >
-                                            <View style={styles.switchRoleLeft}>
-                                                <View style={styles.switchRoleIconBox}>
-                                                    {isSwitchingRole ? (
-                                                        <ActivityIndicator size="small" color="#FF5C00" />
-                                                    ) : (
-                                                        <Ionicons name="heart-outline" size={scale(18)} color="#FF5C00" />
-                                                    )}
-                                                </View>
-                                                <View>
-                                                    <Text style={styles.switchRoleTitle}>Switch to My Care Profile</Text>
-                                                    <Text style={styles.switchRoleSub}>Daily meds, visits & SOS</Text>
-                                                </View>
-                                            </View>
-                                            <Ionicons name="swap-horizontal-outline" size={scale(20)} color="#FFFFFF" />
-                                        </LinearGradient>
-                                    </TouchableOpacity>
-                                )}
 
                                 <Text style={styles.sectionLabel}>MENU</Text>
                                 <DrawerItem 
-                                    label="Dashboard" 
-                                    icon="grid-outline" 
+                                    label="Home" 
+                                    icon="home-outline" 
+                                    bg="#EFF6FF"
+                                    color="#2563EB"
+                                    active={pathname.includes('(beneficiary)')}
+                                    onPress={() => { onClose(); push('/(beneficiary)'); }} 
+                                />
+                                <DrawerItem 
+                                    label="Family Connect" 
+                                    icon="people-outline" 
                                     bg="#FFF7ED"
                                     color="#F97316"
                                     active={pathname === '/' || pathname === '/(subscriber)' || pathname === '/(subscriber)/'}

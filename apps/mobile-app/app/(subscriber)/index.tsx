@@ -14,7 +14,7 @@ import { formatHours } from '@/utils/timeFormat';
 import GlobalDrawer from './components/shared/GlobalDrawer';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import NotificationBell from '@/components/shared/NotificationBell';
-import { useExitOnBack } from '@/hooks/useExitOnBack';
+import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 
 const { width, height } = Dimensions.get('window');
@@ -25,10 +25,10 @@ const HORIZONTAL_PADDING = scale(20);
 const CARD_GAP = scale(12);
 
 export default function SubscriberDashboardScreen() {
-    useExitOnBack();
+    // Navigated from Family Connect tab/more
     const router = useRouter();
+    useAndroidBackHandler('/(beneficiary)');
     const queryClient = useQueryClient();
-    const { availableRoles, switchRole, isSwitchingRole } = useAuth();
 
     const [userData, setUserData] = useState<any>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -43,15 +43,6 @@ export default function SubscriberDashboardScreen() {
     const [selectedQueuedSub, setSelectedQueuedSub] = useState<any | null>(null);
     const [isActivating, setIsActivating] = useState(false);
     const pullAnim = useRef(new Animated.Value(0)).current;
-
-    const handleSwitchToBeneficiary = async () => {
-        try {
-            await switchRole('beneficiary');
-            router.replace('/(beneficiary)');
-        } catch (err: any) {
-            Alert.alert('Switch Failed', err?.message || 'Could not switch to beneficiary profile.');
-        }
-    };
 
     useEffect(() => {
         if (highlightBen) {
@@ -218,10 +209,7 @@ export default function SubscriberDashboardScreen() {
     const unlinkedSubs = (dashboard?.activeSubscriptions || []).filter((sub: any) => !sub.beneficiaryId);
     const queuedSubs = dashboard?.queuedSubscriptions || [];
 
-    const hasSelfBeneficiary = (beneficiaries || userData?.subscriberBeneficiaries || []).some(
-        (b: any) => (b.relationship || '').toLowerCase() === 'self' || b.isSelf || (userData?.id && b.userId === userData.id)
-    );
-    const isDualRole = (availableRoles.includes('subscriber') && availableRoles.includes('beneficiary')) || hasSelfBeneficiary;
+
 
     const firstName = (userData?.name || 'there').split(' ')[0];
     const happinessScore = stats.happinessScore !== undefined && stats.happinessScore !== null ? `${stats.happinessScore}%` : '--';
@@ -302,9 +290,24 @@ export default function SubscriberDashboardScreen() {
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            {/* ── Inline Dashboard Header (Figma) ── */}
+            {/* ── Family Connect Header ── */}
             <View style={styles.dashHeader}>
-                <Text style={styles.dashTitle}>Dashboard</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(8) }}>
+                    <TouchableOpacity 
+                        onPress={() => {
+                            if (router.canGoBack()) {
+                                router.back();
+                            } else {
+                                router.replace('/(beneficiary)');
+                            }
+                        }} 
+                        style={styles.headerBackBtn}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                        <Ionicons name="arrow-back" size={scale(24)} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <Text style={styles.dashTitle}>Family Connect</Text>
+                </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: scale(16) }}>
                     <NotificationBell />
                     <TouchableOpacity onPress={openDrawer} style={styles.headerIconBtn}>
@@ -626,24 +629,7 @@ export default function SubscriberDashboardScreen() {
                                         ) : null}
                                     </View>
 
-                                    {isSelf && isDualRole && !isPending ? (
-                                        <TouchableOpacity
-                                            style={styles.switchCareBtn}
-                                            onPress={handleSwitchToBeneficiary}
-                                            disabled={isSwitchingRole}
-                                        >
-                                            {isSwitchingRole ? (
-                                                <ActivityIndicator size="small" color="#FFFFFF" />
-                                            ) : (
-                                                <>
-                                                    <Ionicons name="swap-horizontal" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
-                                                    <Text style={styles.switchCareBtnText}>Switch UI</Text>
-                                                </>
-                                            )}
-                                        </TouchableOpacity>
-                                    ) : (
-                                        <Ionicons name="chevron-forward" size={20} color={isPending ? "#D97706" : "#A3A3A3"} />
-                                    )}
+                                    <Ionicons name="chevron-forward" size={20} color={isPending ? "#D97706" : "#A3A3A3"} />
                                 </TouchableOpacity>
                             );
                         })
@@ -897,6 +883,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FE6700', // Matches the top of the banner
     },
     dashTitle: { fontSize: scale(17), fontWeight: '600', color: '#FFFFFF' },
+    headerBackBtn: { width: scale(36), height: scale(36), justifyContent: 'center', alignItems: 'center' },
     headerIconBtn: { width: scale(36), height: scale(36), justifyContent: 'center', alignItems: 'center', position: 'relative' },
     headerBadge: {
         position: 'absolute', top: 2, right: -2, width: scale(18), height: scale(18),
