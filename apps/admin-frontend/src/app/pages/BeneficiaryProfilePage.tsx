@@ -70,16 +70,10 @@ export default function BeneficiaryProfilePage() {
   const handleViewInvoice = async (invoiceId: string) => {
     setOpeningInvoiceId(invoiceId);
     try {
-      const html = await invoicesApi.fetchInvoiceHtml(invoiceId);
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const blobUrl = URL.createObjectURL(blob);
-      const win = window.open(blobUrl, '_blank');
-      if (!win) {
-        window.open(invoicesApi.getInvoiceHtmlUrl(invoiceId), '_blank');
-      }
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      const { downloadUrl } = await invoicesApi.fetchInvoicePdfUrl(invoiceId);
+      window.open(downloadUrl, '_blank');
     } catch (err: any) {
-      toast.error(err.message || 'Failed to open invoice preview');
+      toast.error(err.message || 'Failed to open invoice PDF');
     } finally {
       setOpeningInvoiceId(null);
     }

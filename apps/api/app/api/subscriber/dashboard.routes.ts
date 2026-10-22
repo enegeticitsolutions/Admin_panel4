@@ -297,6 +297,8 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
         .filter((v: any) => v.careCompanion?.user?.isActive !== false) // Filter out notes from deactivated staff
         .map((v: any) => ({
           id: v.id,
+          visitId: v.id,
+          beneficiaryId: v.beneficiaryId,
           title: "Care Companion Update",
           date: v.scheduledTime,
           isNew: true,

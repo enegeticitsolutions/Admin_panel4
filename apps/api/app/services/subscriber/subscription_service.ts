@@ -1811,13 +1811,75 @@ export const activateSubscription = async (
       );
     }
 
-    // H. Create Payment record
+    // H. Create Invoice & Payment record
     let invoiceNumber: string | null = null;
+    let invoiceId: string | null = null;
     if (subscription) {
-      invoiceNumber = `ADM-ACT-${Date.now()}`;
+      invoiceNumber = await generateInvoiceNumber(tx);
+      const subscriber = await tx.user.findUnique({
+        where: { id: userId },
+        select: { state: true },
+      });
+      const customerState = beneficiary?.state || subscriber?.state || '';
+      const basePrice = Number(versionObj?.basePrice || 0);
+
+      const taxItems: BenefitTaxItem[] = [
+        {
+          name: `${versionObj?.name || 'Prepaid Care Package'}${months > 1 ? ` (${months} Months)` : ''}`,
+          quantity: 1,
+          unitPrice: basePrice,
+          gstRate: 18,
+          hsnSacCode: '998399',
+          isGstExempt: false,
+        }
+      ];
+
+      const invoiceCalc = calculateItemizedInvoice(
+        taxItems,
+        0,
+        customerState,
+        process.env.COMPANY_STATE || 'Haryana'
+      );
+
+      const createdInvoice = await tx.invoice.create({
+        data: {
+          id: generateUUID(),
+          invoiceNumber,
+          invoiceType: 'SUBSCRIPTION',
+          status: 'PAID',
+          subscriberId: userId,
+          beneficiaryId,
+          subscriptionId: subscription.id,
+          baseAmount: invoiceCalc.baseAmount,
+          discountAmount: 0,
+          taxAmount: invoiceCalc.taxAmount,
+          totalAmount: invoiceCalc.totalAmount,
+          placeOfSupply: invoiceCalc.placeOfSupply || customerState,
+          cgstAmount: invoiceCalc.cgstAmount,
+          sgstAmount: invoiceCalc.sgstAmount,
+          igstAmount: invoiceCalc.igstAmount,
+          issuedAt: new Date(),
+          paidAt: new Date(),
+          items: {
+            create: invoiceCalc.items.map((item) => ({
+              id: generateUUID(),
+              description: item.description,
+              hsnSacCode: item.hsnSacCode,
+              taxRate: item.taxRate,
+              isGstExempt: item.isGstExempt,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              amount: item.amount,
+            })),
+          },
+        },
+      });
+      invoiceId = createdInvoice.id;
+
       await tx.payment.create({
         data: {
           invoiceNumber,
+          invoiceId,
           subscriberId: userId,
           beneficiaryId,
           subscriptionId: subscription.id,
@@ -1830,9 +1892,10 @@ export const activateSubscription = async (
             units: vb.unitsIncluded,
             unitLabel: vb.snapshotUnitLabel
           })) || [],
-          baseAmount: versionObj?.basePrice || 0,
-          amountPaid: versionObj?.basePrice || 0,
+          baseAmount: invoiceCalc.baseAmount,
+          amountPaid: invoiceCalc.totalAmount,
           discountAmount: 0,
+          taxAmount: invoiceCalc.taxAmount,
           paymentMethod: 'csa_prepaid',
           paymentStatus: 'success',
           planStartDate: start,

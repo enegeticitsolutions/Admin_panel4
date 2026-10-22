@@ -91,6 +91,7 @@ export const getInvoiceByOrderId = async (req: AuthRequest, res: Response) => {
 // Returns printable HTML for a tax invoice (subscriber-scoped).
 
 import escapeHtml from 'escape-html';
+import { InvoicePdfService } from '../../services/invoice/invoice_pdf.service';
 
 export const getInvoiceHtml = async (req: AuthRequest, res: Response) => {
   try {
@@ -138,6 +139,47 @@ export const getInvoiceHtml = async (req: AuthRequest, res: Response) => {
   } catch (err: any) {
     console.error('[InvoicesController.getInvoiceHtml]', err.message);
     res.status(500).send(`<h3>Error generating invoice: ${escapeHtml(err.message)}</h3>`);
+  }
+};
+
+// ─── GET /subscriber/invoices/:id/pdf-url ────────────────────────────────────
+// Returns presigned S3 URL for downloading/viewing the statutory PDF.
+
+export const getInvoicePdfUrl = async (req: AuthRequest, res: Response) => {
+  try {
+    const subscriberId = req.userId!;
+    const { id } = req.params;
+
+    const result = await InvoicePdfService.getInvoicePdfUrl(id, subscriberId);
+
+    res.json({
+      success: true,
+      data: {
+        downloadUrl: result.downloadUrl,
+        fileName: result.fileName,
+      },
+    });
+  } catch (err: any) {
+    console.error('[InvoicesController.getInvoicePdfUrl]', err.message);
+    const status = err.message?.includes('not found') ? 404 : 500;
+    res.status(status).json({ success: false, message: err.message || 'Failed to get invoice PDF URL' });
+  }
+};
+
+// ─── GET /subscriber/invoices/:id/pdf ────────────────────────────────────────
+// Directly redirects to the presigned S3 PDF URL for seamless browser/mobile download.
+
+export const downloadInvoicePdf = async (req: AuthRequest, res: Response) => {
+  try {
+    const subscriberId = req.userId!;
+    const { id } = req.params;
+
+    const result = await InvoicePdfService.getInvoicePdfUrl(id, subscriberId);
+    res.redirect(result.downloadUrl);
+  } catch (err: any) {
+    console.error('[InvoicesController.downloadInvoicePdf]', err.message);
+    const status = err.message?.includes('not found') ? 404 : 500;
+    res.status(status).send(`<h3>Error downloading invoice: ${escapeHtml(err.message)}</h3>`);
   }
 };
 

@@ -188,8 +188,51 @@ async function getInvoiceHtml(req, res) {
   }
 }
 
+const { InvoicePdfService } = require('./invoice.pdf.service');
+
+/**
+ * GET /api/invoices/:id/pdf-url
+ * Returns presigned S3 download/view URL for the invoice PDF.
+ */
+async function getInvoicePdfUrl(req, res) {
+  try {
+    const { id } = req.params;
+    const result = await InvoicePdfService.getInvoicePdfUrl(id);
+
+    res.json({
+      success: true,
+      data: {
+        downloadUrl: result.downloadUrl,
+        fileName: result.fileName,
+      },
+    });
+  } catch (err) {
+    console.error('[InvoiceController] getInvoicePdfUrl error:', err);
+    const status = err.message && err.message.includes('not found') ? 404 : 500;
+    res.status(status).json({ success: false, message: err.message || 'Failed to get invoice PDF URL' });
+  }
+}
+
+/**
+ * GET /api/invoices/:id/pdf
+ * Directly redirects to the presigned S3 PDF URL for seamless browser download.
+ */
+async function downloadInvoicePdf(req, res) {
+  try {
+    const { id } = req.params;
+    const result = await InvoicePdfService.getInvoicePdfUrl(id);
+    res.redirect(result.downloadUrl);
+  } catch (err) {
+    console.error('[InvoiceController] downloadInvoicePdf error:', err);
+    const status = err.message && err.message.includes('not found') ? 404 : 500;
+    res.status(status).send('Error downloading invoice: ' + err.message);
+  }
+}
+
 module.exports = {
   listInvoices,
   getInvoiceById,
   getInvoiceHtml,
+  getInvoicePdfUrl,
+  downloadInvoicePdf,
 };

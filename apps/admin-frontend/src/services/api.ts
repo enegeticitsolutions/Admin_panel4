@@ -2136,6 +2136,15 @@ export const invoicesApi = {
     }
     return await res.text();
   },
+
+  fetchInvoicePdfUrl: async (id: string): Promise<{ downloadUrl: string; fileName: string }> => {
+    const res = await apiFetch(`${API_BASE}/invoices/${encodeURIComponent(id)}/pdf-url`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to load invoice PDF');
+    }
+    return data.data;
+  },
 };
 
 // ============================================================================

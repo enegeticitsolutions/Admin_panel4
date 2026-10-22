@@ -92,7 +92,13 @@ const RatingModal = ({
     );
 };
 
-export const TimelineTab = ({ visits: initialVisits }: { visits: VisitProps[] }) => {
+export const TimelineTab = ({
+    visits: initialVisits,
+    highlightVisitId,
+}: {
+    visits: VisitProps[];
+    highlightVisitId?: string;
+}) => {
     const [visits, setVisits] = useState<VisitProps[]>(initialVisits);
     const [ratingModalVisit, setRatingModalVisit] = useState<VisitProps | null>(null);
     const [selectedDetailVisit, setSelectedDetailVisit] = useState<VisitProps | null>(null);
@@ -202,13 +208,25 @@ export const TimelineTab = ({ visits: initialVisits }: { visits: VisitProps[] })
                 }}
             />
 
-            {visits.map((visit, i) => (
-                <TouchableOpacity
-                    key={visit.id || i}
-                    style={[styles.visitCard, visit.is3rdParty && styles.thirdPartyVisitCard]}
-                    activeOpacity={0.88}
-                    onPress={() => setSelectedDetailVisit(visit)}
-                >
+            {visits.map((visit, i) => {
+                const isHighlighted = !!highlightVisitId && (visit.id === highlightVisitId || visit.encounterId === highlightVisitId);
+                return (
+                    <TouchableOpacity
+                        key={visit.id || i}
+                        style={[
+                            styles.visitCard,
+                            visit.is3rdParty && styles.thirdPartyVisitCard,
+                            isHighlighted && styles.highlightedVisitCard,
+                        ]}
+                        activeOpacity={0.88}
+                        onPress={() => setSelectedDetailVisit(visit)}
+                    >
+                        {isHighlighted && (
+                            <View style={styles.highlightBadge}>
+                                <Ionicons name="sparkles" size={scale(12)} color="#D95800" style={{ marginRight: scale(4) }} />
+                                <Text style={styles.highlightBadgeText}>Selected Update</Text>
+                            </View>
+                        )}
                     {/* Header: Avatar, Info, Status/Rate */}
                     {visit.is3rdParty ? (
                         <View style={styles.thirdPartyHeader}>
@@ -471,7 +489,8 @@ export const TimelineTab = ({ visits: initialVisits }: { visits: VisitProps[] })
                         <Ionicons name="chevron-forward" size={scale(16)} color={visit.is3rdParty ? '#4F46E5' : '#0369A1'} />
                     </View>
                 </TouchableOpacity>
-            ))}
+                );
+            })}
         </View>
     );
 };
@@ -759,6 +778,33 @@ const styles = StyleSheet.create({
         fontSize: scale(15),
         fontWeight: '700',
         color: '#FFFFFF',
+    },
+    highlightedVisitCard: {
+        borderColor: '#FE6700',
+        borderWidth: 2,
+        backgroundColor: '#FFFBF7',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    highlightBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        backgroundColor: '#FFE8CE',
+        borderColor: '#FDBA74',
+        borderWidth: 1,
+        borderRadius: scale(6),
+        paddingHorizontal: scale(8),
+        paddingVertical: scale(3),
+        marginBottom: scale(10),
+    },
+    highlightBadgeText: {
+        fontSize: scale(11),
+        fontWeight: '700',
+        color: '#C2410C',
     },
 });
 

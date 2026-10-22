@@ -7,8 +7,7 @@ import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
-import { generateInvoicePDF } from '@/components/invoice/InvoiceGenerator';
-import type { InvoiceData } from '@/components/invoice/InvoiceGenerator';
+import { downloadS3InvoicePDF } from '@/components/invoice/InvoiceGenerator';
 
 export default function OrderHistoryScreen() {
   const router = useRouter();
@@ -46,65 +45,17 @@ export default function OrderHistoryScreen() {
       setDownloadingId(invoiceId);
       const token = await AsyncStorage.getItem('userToken');
       
-      const configResRaw = await fetch(`${API_URL}/public/company/config`);
-      const configRes = await configResRaw.json();
-      const cConfig = configRes.data || {};
-
-      const invoiceResRaw = await fetch(`${API_URL}/subscriber/invoices/${invoiceId}`, {
+      const resRaw = await fetch(`${API_URL}/subscriber/invoices/${invoiceId}/pdf-url`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const invoiceRes = await invoiceResRaw.json();
-      const invoice = invoiceRes.data;
+      const res = await resRaw.json();
 
-      if (!invoice) {
-        Alert.alert('Not Found', 'Invoice not found.');
+      if (!res.success || !res.data?.downloadUrl) {
+        Alert.alert('Not Found', res.message || 'Invoice PDF not found.');
         return;
       }
 
-      const invoiceData: InvoiceData = {
-        invoiceNumber: invoice.invoiceNumber,
-        issuedAt: invoice.issuedAt,
-        status: invoice.status,
-        companyName: cConfig.COMPANY_NAME,
-        companyAddress: cConfig.COMPANY_ADDRESS,
-        companyGstin: cConfig.COMPANY_GSTIN,
-        companyPan: cConfig.COMPANY_PAN,
-        companyCin: cConfig.COMPANY_CIN,
-        companyEmail: cConfig.COMPANY_EMAIL,
-        companyPhone: cConfig.COMPANY_PHONE,
-        companyBankName: cConfig.COMPANY_BANK_NAME,
-        companyBankAccount: cConfig.COMPANY_BANK_ACCOUNT,
-        companyBankIfsc: cConfig.COMPANY_BANK_IFSC,
-        companyUpiId: cConfig.COMPANY_UPI_ID,
-        subscriberName: invoice.subscriber?.name || 'Subscriber',
-        subscriberPhone: invoice.subscriber?.phone || '',
-        subscriberEmail: invoice.subscriber?.email || '',
-        subscriberAddress: invoice.subscriber?.address || 'Haryana',
-        placeOfSupply: invoice.placeOfSupply || 'Haryana',
-        items: invoice.items.map((i: any) => ({
-            description: i.description,
-            hsnSacCode: i.hsnSacCode,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-            taxRate: i.taxRate,
-            tax: i.isGstExempt ? 0 : Math.round(((i.amount * (i.taxRate || 0)) / 100) * 100) / 100,
-            amount: i.amount
-        })),
-        baseAmount: invoice.baseAmount,
-        discountAmount: invoice.discountAmount,
-        saathiDiscountAmount: invoice.saathiDiscountAmount,
-        cgstAmount: invoice.cgstAmount,
-        sgstAmount: invoice.sgstAmount,
-        igstAmount: invoice.igstAmount,
-        taxAmount: invoice.taxAmount,
-        totalAmount: invoice.totalAmount,
-        paymentMethod: invoice.payments?.[0]?.paymentMethod || 'Online',
-        transactionId: invoice.payments?.[0]?.transactionId || invoice.payments?.[0]?.gatewayPaymentId,
-        paymentStatus: invoice.payments?.[0]?.paymentStatus,
-        gatewayName: invoice.payments?.[0]?.gatewayName,
-      };
-
-      await generateInvoicePDF(invoiceData);
+      await downloadS3InvoicePDF(res.data.downloadUrl, res.data.fileName);
     } catch (error) {
       console.error('Invoice Download Error:', error);
       Alert.alert('Error', 'Could not download invoice. Please try again later.');

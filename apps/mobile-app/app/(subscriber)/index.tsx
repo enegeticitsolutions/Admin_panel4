@@ -234,7 +234,37 @@ export default function SubscriberDashboardScreen() {
     const formatDate = (dateStr: string) => {
         if (!dateStr) return '';
         const d = new Date(dateStr);
-        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} • ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} AM`;
+        if (isNaN(d.getTime())) return dateStr;
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = d.getHours();
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const formattedHours = String(hours % 12 || 12).padStart(2, '0');
+        return `${year}-${month}-${day} • ${formattedHours}:${minutes} ${ampm}`;
+    };
+
+    const handleNavigateToTimeline = (targetBeneficiaryId?: string, visitId?: string) => {
+        const benId = targetBeneficiaryId || selectedBeneficiaryId || dashboard?.beneficiaries?.[0]?.id;
+        if (!benId) {
+            Alert.alert('Notice', 'No beneficiary found to display timeline.');
+            return;
+        }
+
+        if (benId !== selectedBeneficiaryId) {
+            setSelectedBeneficiaryId(benId);
+            AsyncStorage.setItem('selectedBeneficiaryId', benId);
+        }
+
+        router.push({
+            pathname: '/(subscriber)/beneficiary-profile',
+            params: {
+                id: benId,
+                tab: 'Timeline',
+                ...(visitId ? { highlightVisitId: visitId } : {})
+            }
+        });
     };
 
     // Compute age from DOB if present — avoids showing stale stored age value
@@ -625,11 +655,22 @@ export default function SubscriberDashboardScreen() {
                     <View style={{ position: 'relative' }}>
                         <View style={styles.sectionHeaderRow}>
                             <Text style={styles.sectionTitle}>Recent Updates</Text>
-                            <TouchableOpacity><Text style={styles.viewAllText}>View All</Text></TouchableOpacity>
+                            <TouchableOpacity
+                                activeOpacity={0.7}
+                                onPress={() => handleNavigateToTimeline()}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                                <Text style={styles.viewAllText}>View All</Text>
+                            </TouchableOpacity>
                         </View>
 
                         {recentUpdates.map((update: any, i: number) => (
-                            <View key={update.id || i} style={styles.updateCard}>
+                            <TouchableOpacity
+                                key={update.id || i}
+                                style={styles.updateCard}
+                                activeOpacity={0.75}
+                                onPress={() => handleNavigateToTimeline(update.beneficiaryId, update.id || update.visitId)}
+                            >
                                 <View style={styles.updateIconBox}>
                                     <Ionicons name="chatbox-outline" size={20} color="#FE6700" />
                                 </View>
@@ -641,7 +682,8 @@ export default function SubscriberDashboardScreen() {
                                     <Text style={styles.updateDate}>{formatDate(update.date)}</Text>
                                     <Text style={styles.updateBody} numberOfLines={2}>{update.body}</Text>
                                 </View>
-                            </View>
+                                <Ionicons name="chevron-forward" size={18} color="#D1D5DB" style={{ alignSelf: 'center', marginLeft: 6 }} />
+                            </TouchableOpacity>
                         ))}
                     </View>
                 )}

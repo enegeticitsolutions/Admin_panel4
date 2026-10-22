@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { X, Download, Printer, FileText, Loader2, AlertCircle } from 'lucide-react';
 import { invoicesApi } from '../../services/api';
 
 interface InvoiceViewModalProps {
@@ -9,13 +9,15 @@ interface InvoiceViewModalProps {
 }
 
 export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onClose, invoiceId }) => {
-  const [htmlContent, setHtmlContent] = useState<string>('');
+  const [pdfUrl, setPdfUrl] = useState<string>('');
+  const [fileName, setFileName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
     if (!isOpen || !invoiceId) {
-      setHtmlContent('');
+      setPdfUrl('');
+      setFileName('');
       setError('');
       return;
     }
@@ -24,16 +26,17 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
     setLoading(true);
     setError('');
 
-    invoicesApi.fetchInvoiceHtml(invoiceId)
-      .then((html) => {
+    invoicesApi.fetchInvoicePdfUrl(invoiceId)
+      .then((res) => {
         if (isMounted) {
-          setHtmlContent(html);
+          setPdfUrl(res.downloadUrl);
+          setFileName(res.fileName);
           setLoading(false);
         }
       })
       .catch((err) => {
         if (isMounted) {
-          setError(err.message || 'Failed to load invoice preview');
+          setError(err.message || 'Failed to load statutory invoice PDF');
           setLoading(false);
         }
       });
@@ -46,11 +49,25 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
   if (!isOpen || !invoiceId) return null;
 
   const handlePrint = () => {
-    const iframe = document.getElementById('admin-invoice-print-frame') as HTMLIFrameElement | null;
+    const iframe = document.getElementById('admin-invoice-pdf-frame') as HTMLIFrameElement | null;
     if (iframe && iframe.contentWindow) {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
+    } else if (pdfUrl) {
+      window.open(pdfUrl, '_blank');
     }
+  };
+
+  const handleDownload = () => {
+    if (!pdfUrl) return;
+    const a = document.createElement('a');
+    a.href = pdfUrl;
+    a.download = fileName || `Invoice-${invoiceId}.pdf`;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (
@@ -66,7 +83,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
               <FileText size={20} />
             </div>
             <div>
-              <h3 className="font-bold text-gray-900 text-base">GST Tax Invoice Preview</h3>
+              <h3 className="font-bold text-gray-900 text-base">GST Tax Invoice (PDF)</h3>
               <p className="text-xs text-gray-500 font-medium">Ref: {invoiceId}</p>
             </div>
           </div>
@@ -74,11 +91,19 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
           <div className="flex items-center gap-3">
             <button
               onClick={handlePrint}
-              disabled={loading || !!error}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF7A00] text-white text-xs font-bold hover:bg-[#e66e00] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading || !!error || !pdfUrl}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Printer size={15} />
-              Print / Save as PDF
+              Print
+            </button>
+            <button
+              onClick={handleDownload}
+              disabled={loading || !!error || !pdfUrl}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF7A00] text-white text-xs font-bold hover:bg-[#e66e00] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download size={15} />
+              Download PDF
             </button>
             <button
               onClick={onClose}
@@ -94,7 +119,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
           {loading && (
             <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center gap-3 z-10">
               <Loader2 size={32} className="animate-spin text-[#FF7A00]" />
-              <p className="text-sm font-semibold text-gray-600">Loading statutory invoice...</p>
+              <p className="text-sm font-semibold text-gray-600">Generating and loading statutory PDF...</p>
             </div>
           )}
 
@@ -103,7 +128,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
               <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center text-red-500 mb-3">
                 <AlertCircle size={28} />
               </div>
-              <p className="text-sm font-bold text-gray-800 mb-1">Unable to load invoice</p>
+              <p className="text-sm font-bold text-gray-800 mb-1">Unable to load invoice PDF</p>
               <p className="text-xs text-gray-500 max-w-md mb-4">{error}</p>
               <button
                 onClick={onClose}
@@ -114,11 +139,11 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
             </div>
           )}
 
-          {htmlContent && !loading && (
+          {pdfUrl && !loading && (
             <iframe
-              id="admin-invoice-print-frame"
-              title="Tax Invoice"
-              srcDoc={htmlContent}
+              id="admin-invoice-pdf-frame"
+              title="Tax Invoice PDF"
+              src={pdfUrl}
               className="w-full h-full border-none bg-white"
             />
           )}
