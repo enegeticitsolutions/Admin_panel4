@@ -178,10 +178,25 @@ export const getBeneficiary = async (beneficiaryId: string) => {
 };
 
 export const getSubscriberBeneficiaries = async (subscriberId: string) => {
-  const beneficiaries = await prisma.beneficiary.findMany({ where: { subscriberId, status: { not: 'deleted' } } });
+  const beneficiaries = await prisma.beneficiary.findMany({
+    where: {
+      OR: [
+        { subscriberId },
+        { careCircleMembers: { some: { userId: subscriberId, status: 'active' } } }
+      ],
+      status: { not: 'deleted' }
+    },
+    include: {
+      careCircleMembers: {
+        where: { userId: subscriberId, status: 'active' }
+      }
+    }
+  });
   return Promise.all(
-    beneficiaries.map(async (b) => ({
+    beneficiaries.map(async (b: any) => ({
       ...b,
+      isCareCircleMember: b.subscriberId !== subscriberId,
+      careCircleRole: b.subscriberId === subscriberId ? 'primary_sponsor' : (b.careCircleMembers?.[0]?.role || 'caregiver'),
       photo: b.photo ? await resolveFileUrl(b.photo, 1800) : null,
     }))
   );

@@ -479,8 +479,11 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
     if (!beneficiary) {
       return res.status(404).json({ success: false, message: 'Beneficiary not found' });
     }
-    if (beneficiary.subscriberId !== userId) {
-      return res.status(403).json({ success: false, message: 'Forbidden' });
+    const isCareCircle = await prisma.careCircleMember.findFirst({
+      where: { beneficiaryId, userId, status: 'active', canRenew: true }
+    });
+    if (beneficiary.subscriberId !== userId && !isCareCircle) {
+      return res.status(403).json({ success: false, message: 'Forbidden: You do not have permission to link plans to this beneficiary' });
     }
 
     // 3. Link them in a transaction

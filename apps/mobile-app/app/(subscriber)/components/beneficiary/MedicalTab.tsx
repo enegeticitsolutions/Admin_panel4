@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert, Modal, TextInput, Linking } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { API_URL } from '@/constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -35,7 +35,7 @@ const getVitalColor = (label: string, index: number) => {
     return map[label.toLowerCase()] || VITAL_COLORS[index % VITAL_COLORS.length];
 };
 
-const MedicalRecordItem = ({ doc, onRefresh, existingRecords }: { doc: any; onRefresh: () => void; existingRecords: any[] }) => {
+const MedicalRecordItem = ({ doc, onRefresh, existingRecords, canEdit = true }: { doc: any; onRefresh: () => void; existingRecords: any[]; canEdit?: boolean }) => {
     const [isRenaming, setIsRenaming] = useState(false);
     const [newTitle, setNewTitle] = useState(doc.title);
 
@@ -135,14 +135,16 @@ const MedicalRecordItem = ({ doc, onRefresh, existingRecords }: { doc: any; onRe
                     <Text style={styles.docTitle}>{doc.title}</Text>
                     <Text style={styles.docMeta}>{doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', gap: scale(12) }}>
-                    <TouchableOpacity onPress={() => setIsRenaming(true)}>
-                        <Ionicons name="pencil-outline" size={scale(18)} color="#9CA3AF" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleDelete}>
-                        <Ionicons name="trash-outline" size={scale(18)} color="#EF4444" />
-                    </TouchableOpacity>
-                </View>
+                {canEdit && (
+                    <View style={{ flexDirection: 'row', gap: scale(12) }}>
+                        <TouchableOpacity onPress={() => setIsRenaming(true)}>
+                            <Ionicons name="pencil-outline" size={scale(18)} color="#9CA3AF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleDelete}>
+                            <Ionicons name="trash-outline" size={scale(18)} color="#EF4444" />
+                        </TouchableOpacity>
+                    </View>
+                )}
             </TouchableOpacity>
 
             {/* Rename Modal */}
@@ -170,6 +172,7 @@ const MedicalRecordItem = ({ doc, onRefresh, existingRecords }: { doc: any; onRe
 };
 
 export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary: any, conditions: string[], onRefresh: () => void }) => {
+    const canEdit = beneficiary?.canEditDetails !== false;
     const [uploading, setUploading] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<any>(null);
     const [docName, setDocName] = useState("");
@@ -368,19 +371,33 @@ export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary
                 {beneficiary.medicalRecords?.length > 0 ? (
                     <>
                         {beneficiary.medicalRecords.map((doc: any, i: number) => (
-                            <MedicalRecordItem key={doc.id || i} doc={doc} onRefresh={onRefresh} existingRecords={beneficiary.medicalRecords || []} />
+                            <MedicalRecordItem key={doc.id || i} doc={doc} onRefresh={onRefresh} existingRecords={beneficiary.medicalRecords || []} canEdit={canEdit} />
                         ))}
-                        <TouchableOpacity style={styles.uploadBtn} onPress={handlePickDocument} disabled={uploading}>
-                            <Text style={styles.uploadBtnText}>{uploading ? "Uploading..." : "Upload Documents"}</Text>
-                        </TouchableOpacity>
+                        {canEdit ? (
+                            <TouchableOpacity style={styles.uploadBtn} onPress={handlePickDocument} disabled={uploading}>
+                                <Text style={styles.uploadBtnText}>{uploading ? "Uploading..." : "Upload Documents"}</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.viewOnlyNoticeBox}>
+                                <Feather name="eye" size={scale(13)} color="#6B7280" style={{ marginRight: scale(5) }} />
+                                <Text style={styles.viewOnlyNoticeText}>View-only access: Document uploads restricted</Text>
+                            </View>
+                        )}
                     </>
                 ) : (
                     <View style={styles.emptyRecordsBox}>
                         <Ionicons name="document-text-outline" size={scale(28)} color="#9CA3AF" />
                         <Text style={styles.emptyRecordsText}>No medical records uploaded yet</Text>
-                        <TouchableOpacity style={styles.uploadBtnSmall} onPress={handlePickDocument} disabled={uploading}>
-                            <Text style={styles.uploadBtnTextSmall}>{uploading ? "Uploading..." : "Upload Documents"}</Text>
-                        </TouchableOpacity>
+                        {canEdit ? (
+                            <TouchableOpacity style={styles.uploadBtnSmall} onPress={handlePickDocument} disabled={uploading}>
+                                <Text style={styles.uploadBtnTextSmall}>{uploading ? "Uploading..." : "Upload Documents"}</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.viewOnlyNoticeBox}>
+                                <Feather name="eye" size={scale(13)} color="#6B7280" style={{ marginRight: scale(5) }} />
+                                <Text style={styles.viewOnlyNoticeText}>View-only access: Document uploads restricted</Text>
+                            </View>
+                        )}
                     </View>
                 )}
 
@@ -412,13 +429,15 @@ export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary
             <View style={styles.medCard}>
                 <View style={styles.medCardHeaderRow}>
                     <Text style={styles.medCardTitle}>Current Medications</Text>
-                    <TouchableOpacity 
-                        style={styles.addMedBtn} 
-                        onPress={() => setIsMedModalVisible(true)}
-                    >
-                        <Ionicons name="add-circle" size={scale(18)} color="#F97316" />
-                        <Text style={styles.addMedBtnText}>Add</Text>
-                    </TouchableOpacity>
+                    {canEdit && (
+                        <TouchableOpacity 
+                            style={styles.addMedBtn} 
+                            onPress={() => setIsMedModalVisible(true)}
+                        >
+                            <Ionicons name="add-circle" size={scale(18)} color="#F97316" />
+                            <Text style={styles.addMedBtnText}>Add</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
 
                 {beneficiary.medicationList?.length > 0 ? (
@@ -432,12 +451,14 @@ export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary
                                     Frequency: {formatFrequency(m.frequency)} {m.instructions ? `• ${m.instructions}` : ''}
                                 </Text>
                             </View>
-                            <TouchableOpacity 
-                                onPress={() => handleDeleteMedication(m.id, m.name)}
-                                style={styles.trashBtn}
-                            >
-                                <Ionicons name="trash-outline" size={scale(18)} color="#EF4444" />
-                            </TouchableOpacity>
+                            {canEdit && (
+                                <TouchableOpacity 
+                                    onPress={() => handleDeleteMedication(m.id, m.name)}
+                                    style={styles.trashBtn}
+                                >
+                                    <Ionicons name="trash-outline" size={scale(18)} color="#EF4444" />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     ))
                 ) : (
@@ -576,6 +597,21 @@ const styles = StyleSheet.create({
     modalInput: { backgroundColor: '#F9FAFB', borderRadius: scale(10), padding: scale(14), marginBottom: scale(16), borderWidth: 1, borderColor: '#E5E7EB' },
     modalBtn: { backgroundColor: '#F97316', padding: scale(14), borderRadius: scale(10), alignItems: 'center' },
     modalBtnText: { color: '#FFF', fontWeight: '700' },
+    viewOnlyNoticeBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#F3F4F6',
+        borderRadius: scale(8),
+        paddingVertical: scale(10),
+        paddingHorizontal: scale(12),
+        marginTop: scale(12),
+    },
+    viewOnlyNoticeText: {
+        fontSize: scale(11),
+        color: '#6B7280',
+        fontWeight: '500',
+    },
 });
 
 export default MedicalTab;

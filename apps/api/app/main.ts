@@ -22,6 +22,7 @@ import serviceRequestsRouter from './api/subscriber/service-requests.routes';
 import addressesRouter from './api/subscriber/addresses.routes';
 import subscriberVitalsRouter from './api/subscriber/vitals.routes';
 import invoicesRouter from './api/subscriber/invoices.routes';
+import careCircleRouter from './api/subscriber/care-circle.routes';
 
 // Care Companion Routes
 import visitsRouter from './api/care_companion/visits.routes';
@@ -190,6 +191,7 @@ app.use(`${API}/subscriber/service-requests`, serviceRequestsRouter);
 app.use(`${API}/subscriber/addresses`, addressesRouter);
 app.use(`${API}/subscriber/vitals`, subscriberVitalsRouter);
 app.use(`${API}/subscriber/invoices`, invoicesRouter);
+app.use(`${API}/subscriber/care-circle`, careCircleRouter);
 app.use(`${API}/subscriber`, subscriberRouter);
 
 // Role: Care Companion endpoints

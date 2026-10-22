@@ -11,10 +11,48 @@ async function verifyBeneficiaryAccess(userId?: string, userRole?: string, benef
   }
   const ben = await prisma.beneficiary.findUnique({
     where: { id: beneficiaryId },
-    select: { subscriberId: true, userId: true }
+    select: {
+      subscriberId: true,
+      userId: true,
+      careCircleMembers: {
+        where: { userId: userId, status: 'active' },
+        select: { id: true, canViewVitals: true, canRenew: true, canEditDetails: true }
+      }
+    }
   });
   if (!ben) return false;
-  return ben.subscriberId === userId || ben.userId === userId;
+  return ben.subscriberId === userId || ben.userId === userId || ben.careCircleMembers.length > 0;
+}
+
+async function verifyBeneficiaryWriteAccess(userId?: string, userRole?: string, beneficiaryId?: string): Promise<{ allowed: boolean; reason?: string }> {
+  if (!userId || !beneficiaryId) return { allowed: false, reason: 'Unauthorized' };
+  if (['admin', 'master_admin', 'super_admin', 'field_manager', 'operations_manager', 'customer_service'].includes(userRole || '')) {
+    return { allowed: true };
+  }
+  const ben = await prisma.beneficiary.findUnique({
+    where: { id: beneficiaryId },
+    select: {
+      subscriberId: true,
+      userId: true,
+      careCircleMembers: {
+        where: { userId: userId, status: 'active' },
+        select: { id: true, canEditDetails: true }
+      }
+    }
+  });
+  if (!ben) return { allowed: false, reason: 'Beneficiary not found' };
+  // Primary sponsor or profile owner has full write permissions
+  if (ben.subscriberId === userId || ben.userId === userId) {
+    return { allowed: true };
+  }
+  const membership = ben.careCircleMembers[0];
+  if (!membership) {
+    return { allowed: false, reason: 'Access denied: You are not part of this Care Circle.' };
+  }
+  if (!membership.canEditDetails) {
+    return { allowed: false, reason: 'Access denied: You have View-Only access to this profile. Contact the primary caregiver for edit permissions.' };
+  }
+  return { allowed: true };
 }
 
 export const getBeneficiaryProfile = async (req: Request, res: Response) => {
@@ -26,7 +64,14 @@ export const getBeneficiaryProfile = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to view this beneficiary.' });
     }
     const profile = await beneficiaryService.getBeneficiaryProfile(beneficiaryId);
-    res.json({ success: true, data: profile });
+    const writeCheck = await verifyBeneficiaryWriteAccess(authReq.userId, authReq.userRole, beneficiaryId);
+    res.json({
+      success: true,
+      data: {
+        ...profile,
+        canEditDetails: writeCheck.allowed,
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -70,9 +115,9 @@ export const updateBeneficiary = async (req: Request, res: Response) => {
   try {
     const beneficiaryId = req.params.beneficiaryId as string;
     const authReq = req as any;
-    const hasAccess = await verifyBeneficiaryAccess(authReq.userId, authReq.userRole, beneficiaryId);
-    if (!hasAccess) {
-      return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to modify this beneficiary.' });
+    const writeCheck = await verifyBeneficiaryWriteAccess(authReq.userId, authReq.userRole, beneficiaryId);
+    if (!writeCheck.allowed) {
+      return res.status(403).json({ success: false, message: writeCheck.reason || 'Access denied' });
     }
     const data = await beneficiaryService.updateBeneficiary(beneficiaryId, req.body);
     res.json({ success: true, data });
@@ -96,6 +141,18 @@ export const deleteBeneficiary = async (req: Request, res: Response) => {
 export const updateMedicalRecord = async (req: Request, res: Response) => {
   try {
     const recordId = req.params.recordId as string;
+    const authReq = req as any;
+    const record = await prisma.medicalRecord.findUnique({
+      where: { id: recordId },
+      select: { beneficiaryId: true }
+    });
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'Medical record not found' });
+    }
+    const writeCheck = await verifyBeneficiaryWriteAccess(authReq.userId, authReq.userRole, record.beneficiaryId);
+    if (!writeCheck.allowed) {
+      return res.status(403).json({ success: false, message: writeCheck.reason || 'Access denied' });
+    }
     const data = await beneficiaryService.updateMedicalRecord(recordId, req.body);
     res.json({ success: true, data });
   } catch (error: any) {
@@ -106,6 +163,18 @@ export const updateMedicalRecord = async (req: Request, res: Response) => {
 export const deleteMedicalRecord = async (req: Request, res: Response) => {
   try {
     const recordId = req.params.recordId as string;
+    const authReq = req as any;
+    const record = await prisma.medicalRecord.findUnique({
+      where: { id: recordId },
+      select: { beneficiaryId: true }
+    });
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'Medical record not found' });
+    }
+    const writeCheck = await verifyBeneficiaryWriteAccess(authReq.userId, authReq.userRole, record.beneficiaryId);
+    if (!writeCheck.allowed) {
+      return res.status(403).json({ success: false, message: writeCheck.reason || 'Access denied' });
+    }
     await beneficiaryService.deleteMedicalRecord(recordId);
     res.json({ success: true, message: 'Medical record deleted' });
   } catch (error: any) {
@@ -117,6 +186,11 @@ export const uploadMedicalRecord = async (req: Request, res: Response) => {
   try {
     const subscriberId = (req as any).userId;
     const beneficiaryId = req.params.beneficiaryId as string;
+    const authReq = req as any;
+    const writeCheck = await verifyBeneficiaryWriteAccess(subscriberId, authReq.userRole, beneficiaryId);
+    if (!writeCheck.allowed) {
+      return res.status(403).json({ success: false, message: writeCheck.reason || 'Access denied' });
+    }
     const file = req.file;
 
     if (!file) {
@@ -169,9 +243,9 @@ export const addMedication = async (req: Request, res: Response) => {
   try {
     const beneficiaryId = req.params.beneficiaryId as string;
     const authReq = req as any;
-    const hasAccess = await verifyBeneficiaryAccess(authReq.userId, authReq.userRole, beneficiaryId);
-    if (!hasAccess) {
-      return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to add medications for this beneficiary.' });
+    const writeCheck = await verifyBeneficiaryWriteAccess(authReq.userId, authReq.userRole, beneficiaryId);
+    if (!writeCheck.allowed) {
+      return res.status(403).json({ success: false, message: writeCheck.reason || 'Access denied' });
     }
     const data = await beneficiaryService.addMedication(beneficiaryId, req.body);
     res.status(201).json({ success: true, data });
@@ -183,6 +257,18 @@ export const addMedication = async (req: Request, res: Response) => {
 export const deleteMedication = async (req: Request, res: Response) => {
   try {
     const medicationId = req.params.medicationId as string;
+    const authReq = req as any;
+    const med = await prisma.medication.findUnique({
+      where: { id: medicationId },
+      select: { beneficiaryId: true }
+    });
+    if (!med) {
+      return res.status(404).json({ success: false, message: 'Medication not found' });
+    }
+    const writeCheck = await verifyBeneficiaryWriteAccess(authReq.userId, authReq.userRole, med.beneficiaryId);
+    if (!writeCheck.allowed) {
+      return res.status(403).json({ success: false, message: writeCheck.reason || 'Access denied' });
+    }
     await beneficiaryService.deleteMedication(medicationId);
     res.json({ success: true, message: 'Medication removed successfully' });
   } catch (error: any) {

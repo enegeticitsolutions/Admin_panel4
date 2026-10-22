@@ -23,6 +23,7 @@ export default function EditBeneficiaryScreen() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [canEdit, setCanEdit] = useState(true);
     const [userData, setUserData] = useState<any>(null);
 
     // Drawer state
@@ -110,6 +111,7 @@ export default function EditBeneficiaryScreen() {
 
                 if (bData.success) {
                     const beneficiary = bData.data;
+                    if (beneficiary.canEditDetails === false) setCanEdit(false);
                     setName(beneficiary.name || '');
                     setAge(String(beneficiary.age || ''));
                     setGender(beneficiary.gender || 'male');
@@ -171,6 +173,11 @@ export default function EditBeneficiaryScreen() {
 
         if (missingFields.length > 0) {
             showAlert('Missing Details', `Please fill in the following required fields:\n- ${missingFields.join('\n- ')}`);
+            return;
+        }
+
+        if (!canEdit) {
+            showAlert('Read-Only Access', 'You have View-Only access to this profile. Only primary caregivers and authorized editors can save modifications.');
             return;
         }
 
@@ -270,6 +277,18 @@ export default function EditBeneficiaryScreen() {
             </View>
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+                    {!canEdit && (
+                        <View style={styles.viewOnlyBanner}>
+                            <Ionicons name="eye-outline" size={scale(20)} color="#4B5563" style={{ marginRight: scale(10) }} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.viewOnlyBannerTitle}>View-Only Access</Text>
+                                <Text style={styles.viewOnlyBannerDesc}>
+                                    You have View-Only access to this profile. Modifications cannot be saved.
+                                </Text>
+                            </View>
+                        </View>
+                    )}
 
                     {/* Basic Info */}
                     <View style={styles.card}>
@@ -463,8 +482,12 @@ export default function EditBeneficiaryScreen() {
                         </TouchableOpacity>
                     </View>
 
-                    <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.7 }]} onPress={handleSave} disabled={saving}>
-                        {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>Save Changes</Text>}
+                    <TouchableOpacity 
+                        style={[styles.saveBtn, (!canEdit || saving) && { opacity: 0.6, backgroundColor: !canEdit ? '#9CA3AF' : '#F97316' }]} 
+                        onPress={handleSave} 
+                        disabled={!canEdit || saving}
+                    >
+                        {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>{canEdit ? 'Save Changes' : 'View Only (Read Only)'}</Text>}
                     </TouchableOpacity>
 
                 </ScrollView>
@@ -649,5 +672,26 @@ const styles = StyleSheet.create({
     optionText: { fontSize: scale(16), color: '#4B5563' },
     optionTextActive: { color: '#F97316', fontWeight: '600' },
     coordsBadge: { flexDirection: 'row', alignItems: 'center', gap: scale(4), marginTop: scale(10), backgroundColor: '#ECFDF5', paddingHorizontal: scale(10), paddingVertical: scale(6), borderRadius: scale(8), alignSelf: 'flex-start' },
-    coordsText: { fontSize: scale(12), color: '#10B981', fontWeight: '600' }
+    coordsText: { fontSize: scale(12), color: '#10B981', fontWeight: '600' },
+    viewOnlyBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: scale(12),
+        padding: scale(14),
+        marginBottom: scale(16),
+    },
+    viewOnlyBannerTitle: {
+        fontSize: scale(14),
+        fontWeight: '700',
+        color: '#374151',
+    },
+    viewOnlyBannerDesc: {
+        fontSize: scale(12),
+        color: '#6B7280',
+        marginTop: scale(2),
+        lineHeight: scale(16),
+    },
 });
