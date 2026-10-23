@@ -64,6 +64,11 @@ async function resolvePartnerMedia(partner, ttlSeconds = 86400 * 7) {
     }
   }
 
+  // Ensure bannerImageUrl falls back to first photo if missing
+  if (!resolved.bannerImageUrl && Array.isArray(resolved.photos) && resolved.photos.length > 0) {
+    resolved.bannerImageUrl = resolved.photos[0];
+  }
+
   // Resolve documents array of objects [{ name, url, documentType, ... }]
   if (Array.isArray(resolved.documents) && resolved.documents.length > 0) {
     resolved.documents = await Promise.all(

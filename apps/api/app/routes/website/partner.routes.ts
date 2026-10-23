@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../../core/database';
 import { createTransporter, isEmailConfigured, formatISTTimestamp } from './utils/mailer';
 import { ZohoCrmService } from '../../services/crm/zoho_crm_service';
-import { resolveFileUrl } from '../../services/storage/urlResolver';
+import { resolveFileUrl, resolveFileUrls } from '../../services/storage/urlResolver';
 
 const router = Router();
 
@@ -212,10 +212,10 @@ Service Details: ${serviceDetails ? serviceDetails.trim() : 'None provided'}`,
 });
 
 /**
- * GET /api/website/partners
+ * GET /api/website/partners & /api/website/public & /api/partners/public
  * Returns dynamic active partner categories and approved/published partners for the website.
  */
-router.get('/partners', async (req: Request, res: Response) => {
+const getWebsitePartnersHandler = async (req: Request, res: Response) => {
   try {
     const [categories, partners] = await Promise.all([
       (prisma as any).partnerCategory.findMany({
@@ -246,14 +246,14 @@ router.get('/partners', async (req: Request, res: Response) => {
       partners.map(async (p: any) => {
         const logoUrl = p.logoUrl ? await resolveFileUrl(p.logoUrl, 86400 * 7) : p.logoUrl;
         const bannerImageUrl = p.bannerImageUrl ? await resolveFileUrl(p.bannerImageUrl, 86400 * 7) : p.bannerImageUrl;
-        let photos = p.photos;
-        if (Array.isArray(p.photos) && p.photos.length > 0) {
-          photos = await Promise.all(p.photos.map((ph: string) => resolveFileUrl(ph, 86400 * 7)));
-        }
+        const photos = await resolveFileUrls(p.photos, 86400 * 7);
+        // Fall back to first photo if bannerImageUrl is not explicitly set
+        const resolvedBanner = bannerImageUrl || (photos.length > 0 ? photos[0] : null);
+
         return {
           ...p,
           logoUrl,
-          bannerImageUrl,
+          bannerImageUrl: resolvedBanner,
           photos,
         };
       })
@@ -274,7 +274,11 @@ router.get('/partners', async (req: Request, res: Response) => {
       data: { categories: [], partners: [] },
     });
   }
-});
+};
+
+router.get('/partners', getWebsitePartnersHandler);
+router.get('/public', getWebsitePartnersHandler);
+router.get('/partners/public', getWebsitePartnersHandler);
 
 export default router;
 

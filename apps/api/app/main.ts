@@ -72,6 +72,7 @@ import sathiRouter from './api/sathi/sathi.routes';
 
 // Website-specific Internal Routes
 import websiteRouter from './routes/website/websiteRoutes';
+import partnerRouter from './routes/website/partner.routes';
 
 // Payments & Webhook Router (Proxies to admin-backend payments service)
 import paymentsRouter from './api/payments/payment.routes';
@@ -242,6 +243,7 @@ app.use(`${API}/sathi`, sathiRouter);
 
 // Website-specific Internal endpoints
 app.use(`${API}/website`, websiteRouter);
+app.use(`${API}/partners`, partnerRouter);
 
 // Payments & Razorpay Webhook endpoints (app-level proxy to admin-backend)
 app.use(`${API}/payments`, paymentsRouter);

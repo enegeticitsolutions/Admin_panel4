@@ -72,12 +72,18 @@ export class PartnerService {
    */
   async getPublishedPartners() {
     const urls = [
-      'http://localhost:3001/api/partners/public',
-      'http://127.0.0.1:3001/api/partners/public',
-      '/api/partners/public',
       `${this.apiBaseUrl}/website/partners`,
       '/api/website/partners',
+      '/api/partners/public',
+      '/admin-api/api/partners/public',
     ];
+
+    if (
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ) {
+      urls.push('http://localhost:3001/api/partners/public', 'http://127.0.0.1:3001/api/partners/public');
+    }
 
     for (const url of urls) {
       try {

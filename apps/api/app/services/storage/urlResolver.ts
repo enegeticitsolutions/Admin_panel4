@@ -12,13 +12,14 @@ export function extractStorageKey(keyOrUrl?: string | null): string | null {
   const trimmed = keyOrUrl.trim();
   if (!trimmed) return null;
 
-  // Already a presigned AWS URL with active signatures
-  if (trimmed.includes('X-Amz-Signature') || trimmed.includes('X-Amz-Algorithm')) {
-    return null;
-  }
-
   // Known external public hosts — no S3 signing needed
-  if (trimmed.includes('unsplash.com') || trimmed.includes('supabase.co')) {
+  if (
+    trimmed.includes('unsplash.com') ||
+    trimmed.includes('supabase.co') ||
+    trimmed.includes('placehold.co') ||
+    trimmed.includes('drive.google.com') ||
+    trimmed.includes('dropbox.com')
+  ) {
     return null;
   }
 
@@ -29,23 +30,33 @@ export function extractStorageKey(keyOrUrl?: string | null): string | null {
     return clean || null;
   }
 
-  // Parse HTTP/HTTPS URL pointing to an S3 bucket
+  // Parse HTTP/HTTPS URL pointing to an S3 bucket (handles both raw S3 URLs and presigned URLs)
   try {
     const url = new URL(trimmed);
     let pathname = decodeURIComponent(url.pathname).replace(/^\/+/, '');
-    const parts = pathname.split('/');
-    // If pathname begins with the bucket name (e.g. s3.amazonaws.com/maihoonna-media-staging/...)
-    if (
-      parts[0] &&
-      (parts[0].includes('maihoonna') ||
-        parts[0].includes('staging') ||
-        parts[0].includes('production') ||
-        parts[0].includes('media') ||
-        parts[0].includes('staff'))
-    ) {
-      parts.shift();
-      pathname = parts.join('/');
+
+    // Strip bucket prefix if this is a path-style S3 URL:
+    // e.g. https://s3.ap-south-1.amazonaws.com/<bucket>/<key>
+    const configuredBucket = process.env.STORAGE_BUCKET || process.env.AWS_S3_BUCKET;
+    if (configuredBucket && pathname.startsWith(configuredBucket + '/')) {
+      pathname = pathname.substring(configuredBucket.length + 1);
+    } else {
+      const parts = pathname.split('/');
+      if (
+        parts[0] &&
+        (parts[0].includes('maihoonna') ||
+          parts[0].includes('staging') ||
+          parts[0].includes('production') ||
+          parts[0].includes('media') ||
+          parts[0].includes('staff'))
+      ) {
+        parts.shift();
+        pathname = parts.join('/');
+      }
     }
+
+    // Strip any residual query-string fragments
+    pathname = pathname.split('?')[0];
     return pathname || null;
   } catch {
     return trimmed;

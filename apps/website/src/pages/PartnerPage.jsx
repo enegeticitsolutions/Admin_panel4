@@ -310,10 +310,24 @@ export default function PartnerPage() {
   const allFormattedPartners = React.useMemo(() => {
     return dbPartners.map((p) => {
       const catName = p.category?.name || p.type || "Healthcare Partner";
+      let photosList = [];
+      if (Array.isArray(p.photos)) {
+        photosList = p.photos.filter(Boolean);
+      } else if (typeof p.photos === 'string' && p.photos.trim()) {
+        try {
+          const parsed = JSON.parse(p.photos);
+          if (Array.isArray(parsed)) photosList = parsed.filter(Boolean);
+          else if (parsed) photosList = [parsed];
+        } catch {
+          photosList = [p.photos.trim()];
+        }
+      }
+      const primaryImg = p.bannerImageUrl || (photosList.length > 0 ? photosList[0] : null) || p.logoUrl || getCategoryImage(catName);
+
       return {
         id: p.id,
-        img: p.bannerImageUrl || (Array.isArray(p.photos) && p.photos.length > 0 ? p.photos[0] : null) || p.logoUrl || getCategoryImage(catName),
-        photos: p.photos || [],
+        img: primaryImg,
+        photos: photosList,
         category: catName,
         badgeClass: getCategoryBadgeClass(catName),
         name: p.organizationName || p.name,
@@ -697,12 +711,20 @@ export default function PartnerPage() {
                       className="partner-showcase-img"
                       loading="lazy"
                       onError={(e) => {
-                        e.currentTarget.src = getCategoryImage(partner.category);
+                        const fallback = getCategoryImage(partner.category);
+                        if (e.currentTarget.src !== fallback) {
+                          e.currentTarget.src = fallback;
+                        }
                       }}
                     />
                     <span className={`partner-showcase-category-pill ${partner.badgeClass}`}>
                       {partner.category}
                     </span>
+                    {partner.photos && partner.photos.length > 1 && (
+                      <span className="partner-showcase-photo-pill">
+                        📷 {partner.photos.length} photos
+                      </span>
+                    )}
                   </div>
                   <div className="partner-showcase-body">
                     <h3 className="partner-showcase-title">{partner.name}</h3>
