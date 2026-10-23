@@ -44,10 +44,16 @@ export async function reconcileInvoices(dryRun = false) {
     paidAt: Date;
     isNewlyCreated: boolean;
   }> = [];
+  const usedInvoiceIds = new Set<string>();
 
   for (const p of payments) {
     const paymentDate = p.paidAt || p.createdAt || new Date();
     let invoiceId = p.invoiceId;
+
+    if (invoiceId && usedInvoiceIds.has(invoiceId)) {
+      // Avoid duplicate invoice assignment; create a fresh 1:1 invoice
+      invoiceId = null;
+    }
 
     if (!invoiceId) {
       // Check if an invoice exists matching payment.invoiceNumber
@@ -56,7 +62,7 @@ export async function reconcileInvoices(dryRun = false) {
           where: { invoiceNumber: p.invoiceNumber },
           select: { id: true },
         });
-        if (existingInv) {
+        if (existingInv && !usedInvoiceIds.has(existingInv.id)) {
           invoiceId = existingInv.id;
         }
       }
@@ -134,6 +140,7 @@ export async function reconcileInvoices(dryRun = false) {
         },
       });
 
+      usedInvoiceIds.add(createdInvoice.id);
       paymentInvoiceMap.push({
         paymentId: p.id,
         invoiceId: createdInvoice.id,
@@ -141,6 +148,7 @@ export async function reconcileInvoices(dryRun = false) {
         isNewlyCreated: true,
       });
     } else {
+      usedInvoiceIds.add(invoiceId);
       paymentInvoiceMap.push({
         paymentId: p.id,
         invoiceId,
@@ -159,8 +167,19 @@ export async function reconcileInvoices(dryRun = false) {
     return;
   }
 
-  // 3. Rename all invoices and payments to temporary values to prevent unique constraint collisions
-  console.log(`\nApplying temporary numbering to prevent unique constraint collisions...`);
+  // 3. Rename all invoices and payments in the DB to temporary values to prevent unique constraint collisions
+  console.log(`\nApplying temporary numbering to prevent unique constraint collisions across DB...`);
+  await prisma.$executeRawUnsafe(`
+    UPDATE invoices 
+    SET "invoiceNumber" = 'TEMP-OLD-' || id 
+    WHERE "invoiceNumber" LIKE 'MHN/INV/%'
+  `);
+  await prisma.$executeRawUnsafe(`
+    UPDATE payments 
+    SET "invoiceNumber" = 'TEMP-OLD-' || id 
+    WHERE "invoiceNumber" LIKE 'MHN/INV/%'
+  `);
+
   for (let i = 0; i < paymentInvoiceMap.length; i++) {
     const item = paymentInvoiceMap[i];
     await prisma.invoice.update({
