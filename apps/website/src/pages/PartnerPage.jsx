@@ -33,6 +33,9 @@ import {
   UserCheck,
   BadgeCheck,
   Zap,
+  X,
+  Phone,
+  ExternalLink,
 } from "lucide-react";
 import "./PartnerPage.css";
 
@@ -273,6 +276,8 @@ export default function PartnerPage() {
   const [dbPartners, setDbPartners] = useState([]);
   const [dbCategories, setDbCategories] = useState([]);
   const [loadingPartners, setLoadingPartners] = useState(true);
+  const [selectedModalPartner, setSelectedModalPartner] = useState(null);
+  const [modalActivePhotoIdx, setModalActivePhotoIdx] = useState(0);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -335,6 +340,9 @@ export default function PartnerPage() {
         desc: p.description,
         badgeText: p.customBadgeText || "Verified partner",
         websiteUrl: p.websiteUrl,
+        phone: p.phone,
+        email: p.email,
+        primaryContactName: p.primaryContactName,
         highlights: p.serviceHighlights || [],
         isDynamic: true,
       };
@@ -703,7 +711,14 @@ export default function PartnerPage() {
           ) : (
             <div className="partner-network-grid">
               {displayPartners.map((partner, idx) => (
-                <div key={partner.id || idx} className="partner-showcase-card">
+                <div
+                  key={partner.id || idx}
+                  className="partner-showcase-card"
+                  onClick={() => {
+                    setSelectedModalPartner(partner);
+                    setModalActivePhotoIdx(0);
+                  }}
+                >
                   <div className="partner-showcase-img-wrap">
                     <img
                       src={partner.img}
@@ -733,7 +748,7 @@ export default function PartnerPage() {
 
                     {partner.highlights && partner.highlights.length > 0 && (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", margin: "8px 0" }}>
-                        {partner.highlights.map((hl, hIdx) => (
+                        {partner.highlights.slice(0, 3).map((hl, hIdx) => (
                           <span
                             key={hIdx}
                             style={{
@@ -756,21 +771,17 @@ export default function PartnerPage() {
                         <Shield className="w-3.5 h-3.5 text-emerald-600 inline mr-1" />
                         {partner.badgeText || "Active partner"}
                       </span>
-                      {partner.websiteUrl && (
-                        <a
-                          href={partner.websiteUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            fontSize: "12px",
-                            color: "#FE6700",
-                            fontWeight: "600",
-                            textDecoration: "none",
-                          }}
-                        >
-                          Visit Website &rarr;
-                        </a>
-                      )}
+                      <button
+                        type="button"
+                        className="partner-showcase-view-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedModalPartner(partner);
+                          setModalActivePhotoIdx(0);
+                        }}
+                      >
+                        View Profile &rarr;
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -779,6 +790,197 @@ export default function PartnerPage() {
           )}
         </div>
       </section>
+
+      {/* ─────────────────────────────────────────────────────────────────────────────
+         PARTNER PROFILE PUBLIC MODAL
+         ───────────────────────────────────────────────────────────────────────────── */}
+      {selectedModalPartner && (
+        <div
+          className="partner-profile-modal-backdrop"
+          onClick={() => setSelectedModalPartner(null)}
+        >
+          <div
+            className="partner-profile-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button
+              type="button"
+              className="partner-profile-modal-close"
+              onClick={() => setSelectedModalPartner(null)}
+              aria-label="Close profile"
+            >
+              <X style={{ width: "18px", height: "18px" }} />
+            </button>
+
+            {/* 16:9 Banner Cover */}
+            <div className="partner-profile-modal-banner-wrap">
+              <img
+                src={
+                  selectedModalPartner.photos && selectedModalPartner.photos.length > modalActivePhotoIdx
+                    ? selectedModalPartner.photos[modalActivePhotoIdx]
+                    : selectedModalPartner.img
+                }
+                alt={selectedModalPartner.name}
+                className="partner-profile-modal-banner"
+              />
+              <span className={`partner-showcase-category-pill ${selectedModalPartner.badgeClass}`}>
+                {selectedModalPartner.category}
+              </span>
+            </div>
+
+            {/* Photo thumbnails if multiple */}
+            {selectedModalPartner.photos && selectedModalPartner.photos.length > 1 && (
+              <div style={{ display: "flex", gap: "8px", padding: "12px 28px 0", overflowX: "auto" }}>
+                {selectedModalPartner.photos.map((ph, pIdx) => (
+                  <button
+                    key={pIdx}
+                    type="button"
+                    onClick={() => setModalActivePhotoIdx(pIdx)}
+                    style={{
+                      width: "60px",
+                      height: "40px",
+                      borderRadius: "6px",
+                      overflow: "hidden",
+                      border: modalActivePhotoIdx === pIdx ? "2px solid #FE6700" : "1px solid #E5E7EB",
+                      padding: 0,
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <img src={ph} alt={`Thumbnail ${pIdx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Modal Body */}
+            <div className="partner-profile-modal-content">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "8px" }}>
+                <h2 style={{ fontSize: "20px", fontWeight: "800", color: "#111827", margin: 0 }}>
+                  {selectedModalPartner.name}
+                </h2>
+                <span className="partner-verified-badge" style={{ flexShrink: 0 }}>
+                  <Shield className="w-3.5 h-3.5 text-emerald-600 inline mr-1" />
+                  {selectedModalPartner.badgeText || "Verified partner"}
+                </span>
+              </div>
+
+              <div style={{ fontSize: "13px", color: "#6B7280", marginBottom: "16px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <MapPin style={{ width: "14px", height: "14px", color: "#FE6700" }} />
+                {selectedModalPartner.location}
+              </div>
+
+              {/* Service Highlights */}
+              {selectedModalPartner.highlights && selectedModalPartner.highlights.length > 0 && (
+                <div style={{ marginBottom: "18px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#9CA3AF", marginBottom: "8px" }}>
+                    Service Highlights
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {selectedModalPartner.highlights.map((hl, hIdx) => (
+                      <span
+                        key={hIdx}
+                        style={{
+                          fontSize: "12px",
+                          padding: "4px 10px",
+                          backgroundColor: "#F3F4F6",
+                          color: "#1F2937",
+                          borderRadius: "6px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        ✓ {hl}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Full Description */}
+              <div style={{ marginBottom: "24px" }}>
+                <div style={{ fontSize: "11px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.05em", color: "#9CA3AF", marginBottom: "8px" }}>
+                  About Partner
+                </div>
+                <p style={{ fontSize: "14px", lineHeight: "1.65", color: "#374151", margin: 0, whiteSpace: "pre-line" }}>
+                  {selectedModalPartner.desc}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", borderTop: "1px solid #F3F4F6", paddingTop: "18px" }}>
+                {selectedModalPartner.phone && (
+                  <a
+                    href={`tel:${selectedModalPartner.phone}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      backgroundColor: "#FE6700",
+                      color: "#FFFFFF",
+                      padding: "10px 20px",
+                      borderRadius: "10px",
+                      fontSize: "13px",
+                      fontWeight: "700",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <Phone style={{ width: "14px", height: "14px" }} />
+                    Call Partner
+                  </a>
+                )}
+
+                {selectedModalPartner.websiteUrl && (
+                  <a
+                    href={selectedModalPartner.websiteUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      backgroundColor: "#F3F4F6",
+                      color: "#1F2937",
+                      padding: "10px 18px",
+                      borderRadius: "10px",
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <ExternalLink style={{ width: "14px", height: "14px" }} />
+                    Visit Website
+                  </a>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedModalPartner(null);
+                    scrollTo("partner-apply");
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    backgroundColor: "transparent",
+                    color: "#6B7280",
+                    border: "1px solid #E5E7EB",
+                    padding: "10px 18px",
+                    borderRadius: "10px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    marginLeft: "auto",
+                  }}
+                >
+                  Join as Partner &rarr;
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
 
       {/* ─────────────────────────────────────────────────────────────────────────────

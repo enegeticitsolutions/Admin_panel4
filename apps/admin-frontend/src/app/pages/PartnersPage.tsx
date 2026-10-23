@@ -37,7 +37,9 @@ import {
   File,
   Download,
   FolderOpen,
+  Crop,
 } from 'lucide-react';
+import { ImageCropperModal } from '../components/common/ImageCropperModal';
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -110,6 +112,11 @@ export default function PartnersPage() {
   const [currentPhotoInput, setCurrentPhotoInput] = useState<string>('');
   const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
 
+  // 16:9 Mandated Image Cropper States
+  const [isCropModalOpen, setIsCropModalOpen] = useState<boolean>(false);
+  const [cropSourceImage, setCropSourceImage] = useState<string | null>(null);
+  const [cropTargetIndex, setCropTargetIndex] = useState<number | null>(null);
+
   // Single-Add Document Management States
   const [selectedDocType, setSelectedDocType] = useState<string>('MOU / Agreement');
   const [customDocNameInput, setCustomDocNameInput] = useState<string>('');
@@ -173,44 +180,67 @@ export default function PartnersPage() {
     setCurrentPhotoInput('');
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const file = files[0];
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropSourceImage(reader.result as string);
+      setCropTargetIndex(null);
+      setIsCropModalOpen(true);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleStartCropExisting = (photoUrl: string, idx: number) => {
+    setCropSourceImage(photoUrl);
+    setCropTargetIndex(idx);
+    setIsCropModalOpen(true);
+  };
+
+  const handleCropComplete = async (croppedFile: File, previewUrl: string) => {
+    setIsCropModalOpen(false);
     setIsUploadingPhoto(true);
     try {
-      let photoUrl = '';
+      let finalUrl = '';
       try {
-        const res = await partnerApi.uploadPhoto(file);
-        photoUrl = res?.previewUrl || res?.url || (res as any)?.data?.url || '';
+        const res = await partnerApi.uploadPhoto(croppedFile);
+        finalUrl = res?.previewUrl || res?.url || (res as any)?.data?.url || '';
       } catch (uploadErr) {
-        console.warn('Backend storage upload error, falling back to local reader:', uploadErr);
+        console.warn('Backend storage upload error, falling back to cropped preview:', uploadErr);
       }
 
-      // Fallback to local Data URL if backend storage returns empty or has issue
-      if (!photoUrl) {
-        photoUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+      if (!finalUrl) {
+        finalUrl = previewUrl;
       }
 
-      if (photoUrl) {
-        const existingPhotos = partnerFormData.photos || [];
-        const updatedPhotos = [...existingPhotos, photoUrl];
+      const existingPhotos = [...(partnerFormData.photos || [])];
+      if (cropTargetIndex !== null && cropTargetIndex >= 0 && cropTargetIndex < existingPhotos.length) {
+        const oldPhoto = existingPhotos[cropTargetIndex];
+        existingPhotos[cropTargetIndex] = finalUrl;
+        const updatedBanner = partnerFormData.bannerImageUrl === oldPhoto ? finalUrl : partnerFormData.bannerImageUrl;
         setPartnerFormData({
           ...partnerFormData,
-          photos: updatedPhotos,
-          bannerImageUrl: partnerFormData.bannerImageUrl || photoUrl,
+          photos: existingPhotos,
+          bannerImageUrl: updatedBanner || finalUrl,
+        });
+      } else {
+        existingPhotos.push(finalUrl);
+        setPartnerFormData({
+          ...partnerFormData,
+          photos: existingPhotos,
+          bannerImageUrl: partnerFormData.bannerImageUrl || finalUrl,
         });
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to process photo');
+      alert(err.message || 'Failed to process cropped photo');
     } finally {
       setIsUploadingPhoto(false);
-      e.target.value = '';
+      setCropSourceImage(null);
+      setCropTargetIndex(null);
     }
   };
 
@@ -1403,6 +1433,16 @@ export default function PartnersPage() {
                                 </span>
                               )}
 
+                              {/* Crop Button (16:9) */}
+                              <button
+                                type="button"
+                                onClick={() => handleStartCropExisting(photoUrl, idx)}
+                                className="absolute top-1.5 right-8 p-1 bg-black/70 hover:bg-[#FE6700] text-white rounded transition opacity-90 group-hover:opacity-100 shadow"
+                                title="Crop & adjust 16:9 framing"
+                              >
+                                <Crop className="w-3 h-3" />
+                              </button>
+
                               {/* Delete Button */}
                               <button
                                 type="button"
@@ -1945,6 +1985,21 @@ export default function PartnersPage() {
           </div>
         </div>
       )}
+
+      {/* 16:9 Image Cropper Modal */}
+      <ImageCropperModal
+        isOpen={isCropModalOpen}
+        imageSrc={cropSourceImage}
+        aspectRatio={16 / 9}
+        targetWidth={1200}
+        targetHeight={675}
+        onCropComplete={handleCropComplete}
+        onCancel={() => {
+          setIsCropModalOpen(false);
+          setCropSourceImage(null);
+          setCropTargetIndex(null);
+        }}
+      />
     </div>
   );
 }
