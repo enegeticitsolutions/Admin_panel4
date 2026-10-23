@@ -12,7 +12,7 @@ export async function reconcileInvoices(dryRun = false) {
   console.log(`======================================================\n`);
 
   // 1. Fetch all successful payments chronologically
-  const payments = await prisma.payment.findMany({
+  const rawPayments = await prisma.payment.findMany({
     where: { paymentStatus: 'success' },
     include: {
       subscription: {
@@ -29,11 +29,67 @@ export async function reconcileInvoices(dryRun = false) {
     ],
   });
 
-  console.log(`Total successful payments found: ${payments.length}`);
+  // Helper: Detect test accounts (Anirudh / 8585858585)
+  function isTestAccount(p: any): boolean {
+    const subPhone = String(p.subscriber?.phone || '');
+    const subName = String(p.subscriber?.name || '').toLowerCase();
+    const benPhone = String(p.subscription?.beneficiary?.phone || '');
+    const benName = String(p.subscription?.beneficiary?.name || '').toLowerCase();
+
+    return (
+      subPhone.includes('8585858585') ||
+      benPhone.includes('8585858585') ||
+      subName.includes('anirudh') ||
+      benName.includes('anirudh')
+    );
+  }
+
+  const testPayments = rawPayments.filter(isTestAccount);
+  const payments = rawPayments.filter((p) => !isTestAccount(p));
+
+  console.log(`Total payments found: ${rawPayments.length}`);
+  console.log(`  - Real Subscriber Payments: ${payments.length}`);
+  console.log(`  - Test Account Payments Excluded (Anirudh / 8585858585): ${testPayments.length}`);
+
+  // Disarm any test account invoices so they NEVER consume real statutory invoice numbers
+  if (!dryRun) {
+    if (testPayments.length > 0) {
+      for (const tp of testPayments) {
+        if (tp.invoiceId) {
+          await prisma.invoice.updateMany({
+            where: { id: tp.invoiceId },
+            data: { invoiceNumber: `TEST-ANIRUDH-INV-${tp.invoiceId.slice(0, 8)}` },
+          });
+        }
+        await prisma.payment.update({
+          where: { id: tp.id },
+          data: { invoiceNumber: `TEST-ANIRUDH-PAY-${tp.id.slice(0, 8)}` },
+        });
+      }
+    }
+
+    // Also disarm any orphan invoices directly belonging to Anirudh
+    const anirudhUsers = await prisma.user.findMany({
+      where: {
+        OR: [
+          { phone: { contains: '8585858585' } },
+          { name: { contains: 'anirudh', mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true },
+    });
+    const anirudhUserIds = anirudhUsers.map((u) => u.id);
+    if (anirudhUserIds.length > 0) {
+      await prisma.invoice.updateMany({
+        where: { subscriberId: { in: anirudhUserIds } },
+        data: { invoiceNumber: `TEST-ANIRUDH-USER-${generateUUID().slice(0, 8)}` },
+      });
+    }
+  }
 
   const totalPayments = payments.length;
   if (totalPayments === 0) {
-    console.log('No payments found.');
+    console.log('No real subscriber payments found.');
     return;
   }
 
@@ -237,9 +293,13 @@ export async function reconcileInvoices(dryRun = false) {
 
   console.log(`Invoice counter updated to ${totalPayments}.`);
 
-  // 6. Generate and upload statutory PDFs in batches
+  // 6. Generate and upload statutory PDFs in batches (Real reconciled invoices only)
   console.log(`\nGenerating and uploading statutory PDFs to S3 in batches...`);
+  const realInvoiceIds = paymentInvoiceMap.map((item) => item.invoiceId);
   const allInvoices = await prisma.invoice.findMany({
+    where: {
+      id: { in: realInvoiceIds },
+    },
     include: {
       subscriber: true,
       beneficiary: true,
