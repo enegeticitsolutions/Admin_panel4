@@ -67,11 +67,11 @@ export async function resolveFileUrl(
   const trimmed = keyOrUrl.trim();
   if (!trimmed) return null;
 
-  // If already presigned or public external host, return directly
+  // External public CDNs that never need S3 presigning
   if (
-    trimmed.includes('X-Amz-Signature') ||
     trimmed.includes('unsplash.com') ||
-    trimmed.includes('supabase.co')
+    trimmed.includes('supabase.co') ||
+    trimmed.includes('placehold.co')
   ) {
     return trimmed;
   }

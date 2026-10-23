@@ -4,8 +4,110 @@ const { prisma } = require('../lib/prisma');
 const { verifyToken } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const storageService = require('../services/storage');
-const { resolveFileUrl } = require('../services/storage/urlResolver');
+const { resolveFileUrl, extractStorageKey } = require('../services/storage/urlResolver');
 const { dispatchPartnerEnrolmentRequest, dispatchPartnerEnrolmentApproved } = require('../services/events/admin-event.dispatcher');
+
+/**
+ * Helper: Strip transient presigned query parameters and extract raw canonical key before DB save.
+ */
+function sanitizeStorageKey(keyOrUrl) {
+  if (!keyOrUrl || typeof keyOrUrl !== 'string') return keyOrUrl;
+  const trimmed = keyOrUrl.trim();
+  if (!trimmed) return trimmed;
+  // External cloud docs or third-party images that do not need S3 presigning
+  if (
+    trimmed.includes('drive.google.com') ||
+    trimmed.includes('dropbox.com') ||
+    trimmed.includes('unsplash.com') ||
+    trimmed.includes('supabase.co') ||
+    trimmed.includes('placehold.co')
+  ) {
+    return trimmed;
+  }
+  const key = extractStorageKey(trimmed);
+  return key || trimmed;
+}
+
+/**
+ * Helper: Resolve partner media fields (logo, banner, photos, compliance documents)
+ * to fresh presigned URLs. Defaults to 7 days (86400 * 7) for public website reliability.
+ */
+async function resolvePartnerMedia(partner, ttlSeconds = 86400 * 7) {
+  if (!partner) return partner;
+  const resolved = { ...partner };
+
+  if (resolved.logoUrl) {
+    resolved.logoUrl = await resolveFileUrl(resolved.logoUrl, ttlSeconds);
+  }
+  if (resolved.bannerImageUrl) {
+    resolved.bannerImageUrl = await resolveFileUrl(resolved.bannerImageUrl, ttlSeconds);
+  }
+  if (resolved.attachmentUrl) {
+    resolved.attachmentUrl = await resolveFileUrl(resolved.attachmentUrl, ttlSeconds);
+  }
+
+  // Resolve photos array
+  if (Array.isArray(resolved.photos) && resolved.photos.length > 0) {
+    resolved.photos = await Promise.all(
+      resolved.photos.map(p => resolveFileUrl(p, ttlSeconds))
+    );
+  } else if (typeof resolved.photos === 'string' && resolved.photos.trim()) {
+    try {
+      const parsed = JSON.parse(resolved.photos);
+      if (Array.isArray(parsed)) {
+        resolved.photos = await Promise.all(
+          parsed.map(p => resolveFileUrl(p, ttlSeconds))
+        );
+      }
+    } catch {
+      resolved.photos = [await resolveFileUrl(resolved.photos, ttlSeconds)];
+    }
+  }
+
+  // Resolve documents array of objects [{ name, url, documentType, ... }]
+  if (Array.isArray(resolved.documents) && resolved.documents.length > 0) {
+    resolved.documents = await Promise.all(
+      resolved.documents.map(async (doc) => {
+        if (!doc) return doc;
+        if (typeof doc === 'string') {
+          const fresh = await resolveFileUrl(doc, ttlSeconds);
+          return {
+            name: doc.split('/').pop() || 'Document',
+            url: fresh,
+            previewUrl: fresh,
+          };
+        }
+        const freshUrl = doc.url ? await resolveFileUrl(doc.url, ttlSeconds) : doc.url;
+        return {
+          ...doc,
+          url: freshUrl,
+          previewUrl: freshUrl,
+        };
+      })
+    );
+  } else if (typeof resolved.documents === 'string' && resolved.documents.trim()) {
+    try {
+      const parsed = JSON.parse(resolved.documents);
+      if (Array.isArray(parsed)) {
+        resolved.documents = await Promise.all(
+          parsed.map(async (doc) => {
+            if (!doc) return doc;
+            const freshUrl = doc.url ? await resolveFileUrl(doc.url, ttlSeconds) : doc.url;
+            return {
+              ...doc,
+              url: freshUrl,
+              previewUrl: freshUrl,
+            };
+          })
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return resolved;
+}
 
 /**
  * Helper: Forward partner submission directly to Zoho CRM Web-to-Entity endpoint
@@ -315,11 +417,15 @@ router.get('/public', async (req, res) => {
       }),
     ]);
 
+    const resolvedPartners = await Promise.all(
+      partners.map(p => resolvePartnerMedia(p, 86400 * 7))
+    );
+
     res.json({
       success: true,
       data: {
         categories,
-        partners,
+        partners: resolvedPartners,
       },
     });
   } catch (error) {
@@ -539,9 +645,13 @@ router.get('/', async (req, res) => {
       }),
     ]);
 
+    const resolvedPartners = await Promise.all(
+      partners.map(p => resolvePartnerMedia(p, 86400 * 7))
+    );
+
     res.json({
       success: true,
-      data: partners,
+      data: resolvedPartners,
       pagination: {
         total,
         page: pageNum,
@@ -569,7 +679,8 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Partner not found' });
     }
 
-    res.json({ success: true, data: partner });
+    const resolved = await resolvePartnerMedia(partner, 86400 * 7);
+    res.json({ success: true, data: resolved });
   } catch (error) {
     console.error('Error fetching partner details:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch partner details' });
@@ -622,6 +733,19 @@ router.post('/', async (req, res) => {
     const mainBanner = bannerImageUrl || (partnerPhotos.length > 0 ? partnerPhotos[0] : null);
     const partnerDocs = Array.isArray(documents) ? documents : (documents ? [documents] : []);
 
+    const cleanPhotos = partnerPhotos.map(sanitizeStorageKey);
+    const cleanBanner = mainBanner ? sanitizeStorageKey(mainBanner) : null;
+    const cleanLogo = logoUrl ? sanitizeStorageKey(logoUrl) : null;
+    const cleanDocs = partnerDocs.map(doc => {
+      if (!doc) return doc;
+      if (typeof doc === 'string') return sanitizeStorageKey(doc);
+      return {
+        ...doc,
+        url: sanitizeStorageKey(doc.url),
+      };
+    });
+    const cleanAttachment = attachmentUrl ? sanitizeStorageKey(attachmentUrl) : (cleanDocs.length > 0 ? (cleanDocs[0].url || cleanDocs[0]) : null);
+
     const newPartner = await prisma.partner.create({
       data: {
         organizationName: organizationName.trim(),
@@ -632,17 +756,17 @@ router.post('/', async (req, res) => {
         phone: phone?.trim() || null,
         city: city?.trim() || null,
         state: state?.trim() || null,
-        attachmentUrl: attachmentUrl || (partnerDocs.length > 0 ? partnerDocs[0].url : null),
-        documents: partnerDocs,
+        attachmentUrl: cleanAttachment,
+        documents: cleanDocs,
         status: status || 'PENDING',
         adminNotes: adminNotes || null,
         assignedToAdmin: assignedToAdmin || null,
         isPublished: Boolean(isPublished),
         isFeatured: Boolean(isFeatured),
         displayOrder: displayOrder ? parseInt(displayOrder, 10) : 0,
-        logoUrl: logoUrl || null,
-        bannerImageUrl: mainBanner,
-        photos: partnerPhotos,
+        logoUrl: cleanLogo,
+        bannerImageUrl: cleanBanner,
+        photos: cleanPhotos,
         websiteUrl: websiteUrl || null,
         customBadgeText: customBadgeText || null,
         serviceHighlights: Array.isArray(serviceHighlights) ? serviceHighlights : [],
@@ -653,7 +777,8 @@ router.post('/', async (req, res) => {
       },
     });
 
-    res.status(201).json({ success: true, data: newPartner, message: 'Partner created successfully' });
+    const resolvedNewPartner = await resolvePartnerMedia(newPartner, 86400 * 7);
+    res.status(201).json({ success: true, data: resolvedNewPartner, message: 'Partner created successfully' });
   } catch (error) {
     console.error('Error creating partner:', error);
     res.status(500).json({ success: false, message: 'Failed to create partner' });
@@ -700,6 +825,19 @@ router.put('/:id', async (req, res) => {
     const computedBanner = bannerImageUrl !== undefined ? bannerImageUrl : (partnerPhotos && partnerPhotos.length > 0 ? partnerPhotos[0] : undefined);
     const partnerDocs = documents !== undefined ? (Array.isArray(documents) ? documents : [documents]) : undefined;
 
+    const cleanPhotos = partnerPhotos !== undefined ? partnerPhotos.map(sanitizeStorageKey) : undefined;
+    const cleanBanner = computedBanner !== undefined ? sanitizeStorageKey(computedBanner) : undefined;
+    const cleanLogo = logoUrl !== undefined ? sanitizeStorageKey(logoUrl) : undefined;
+    const cleanDocs = partnerDocs !== undefined ? partnerDocs.map(doc => {
+      if (!doc) return doc;
+      if (typeof doc === 'string') return sanitizeStorageKey(doc);
+      return {
+        ...doc,
+        url: sanitizeStorageKey(doc.url),
+      };
+    }) : undefined;
+    const cleanAttachment = attachmentUrl !== undefined ? sanitizeStorageKey(attachmentUrl) : (cleanDocs && cleanDocs.length > 0 ? (cleanDocs[0].url || cleanDocs[0]) : undefined);
+
     const updated = await prisma.partner.update({
       where: { id },
       data: {
@@ -711,17 +849,17 @@ router.put('/:id', async (req, res) => {
         phone: phone !== undefined ? (phone?.trim() || null) : undefined,
         city: city !== undefined ? (city?.trim() || null) : undefined,
         state: state !== undefined ? (state?.trim() || null) : undefined,
-        attachmentUrl: attachmentUrl !== undefined ? attachmentUrl : (partnerDocs && partnerDocs.length > 0 ? partnerDocs[0].url : undefined),
-        documents: partnerDocs !== undefined ? partnerDocs : undefined,
+        attachmentUrl: cleanAttachment,
+        documents: cleanDocs,
         status: status !== undefined ? status : undefined,
         adminNotes: adminNotes !== undefined ? adminNotes : undefined,
         assignedToAdmin: assignedToAdmin !== undefined ? assignedToAdmin : undefined,
         isPublished: isPublished !== undefined ? Boolean(isPublished) : undefined,
         isFeatured: isFeatured !== undefined ? Boolean(isFeatured) : undefined,
         displayOrder: displayOrder !== undefined ? parseInt(displayOrder, 10) : undefined,
-        logoUrl: logoUrl !== undefined ? logoUrl : undefined,
-        bannerImageUrl: computedBanner,
-        photos: partnerPhotos,
+        logoUrl: cleanLogo,
+        bannerImageUrl: cleanBanner,
+        photos: cleanPhotos,
         websiteUrl: websiteUrl !== undefined ? websiteUrl : undefined,
         customBadgeText: customBadgeText !== undefined ? customBadgeText : undefined,
         serviceHighlights: Array.isArray(serviceHighlights) ? serviceHighlights : undefined,
@@ -740,7 +878,8 @@ router.put('/:id', async (req, res) => {
       }).catch(err => console.warn('[PartnerUpdate] Event dispatch warning:', err.message));
     }
 
-    res.json({ success: true, data: updated, message: 'Partner updated successfully' });
+    const resolvedUpdated = await resolvePartnerMedia(updated, 86400 * 7);
+    res.json({ success: true, data: resolvedUpdated, message: 'Partner updated successfully' });
   } catch (error) {
     console.error('Error updating partner:', error);
     res.status(500).json({ success: false, message: 'Failed to update partner' });
@@ -759,18 +898,18 @@ router.post('/upload-photo', upload.single('file'), async (req, res) => {
 
     const fileKey = `partners/${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
     const { url } = await storageService.upload(file.buffer, fileKey, file.mimetype);
-    const previewUrl = await resolveFileUrl(url);
+    const previewUrl = await resolveFileUrl(url, 86400 * 7);
 
     res.json({
       success: true,
       data: {
         url: previewUrl || url,
         previewUrl: previewUrl || url,
-        storageKey: url,
+        storageKey: fileKey,
       },
       url: previewUrl || url,
       previewUrl: previewUrl || url,
-      storageKey: url,
+      storageKey: fileKey,
       message: 'Photo uploaded successfully',
     });
   } catch (error) {
@@ -791,7 +930,7 @@ router.post('/upload-document', upload.single('file'), async (req, res) => {
 
     const fileKey = `partners/documents/${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
     const { url } = await storageService.upload(file.buffer, fileKey, file.mimetype);
-    const previewUrl = await resolveFileUrl(url);
+    const previewUrl = await resolveFileUrl(url, 86400 * 7);
 
     res.json({
       success: true,
@@ -799,7 +938,7 @@ router.post('/upload-document', upload.single('file'), async (req, res) => {
         name: file.originalname,
         url: previewUrl || url,
         previewUrl: previewUrl || url,
-        storageKey: url,
+        storageKey: fileKey,
         mimeType: file.mimetype,
         fileSizeBytes: file.size,
         uploadedAt: new Date().toISOString(),

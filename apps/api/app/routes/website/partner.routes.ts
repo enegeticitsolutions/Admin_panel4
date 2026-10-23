@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../../core/database';
 import { createTransporter, isEmailConfigured, formatISTTimestamp } from './utils/mailer';
 import { ZohoCrmService } from '../../services/crm/zoho_crm_service';
+import { resolveFileUrl } from '../../services/storage/urlResolver';
 
 const router = Router();
 
@@ -241,11 +242,28 @@ router.get('/partners', async (req: Request, res: Response) => {
       }),
     ]);
 
+    const resolvedPartners = await Promise.all(
+      partners.map(async (p: any) => {
+        const logoUrl = p.logoUrl ? await resolveFileUrl(p.logoUrl, 86400 * 7) : p.logoUrl;
+        const bannerImageUrl = p.bannerImageUrl ? await resolveFileUrl(p.bannerImageUrl, 86400 * 7) : p.bannerImageUrl;
+        let photos = p.photos;
+        if (Array.isArray(p.photos) && p.photos.length > 0) {
+          photos = await Promise.all(p.photos.map((ph: string) => resolveFileUrl(ph, 86400 * 7)));
+        }
+        return {
+          ...p,
+          logoUrl,
+          bannerImageUrl,
+          photos,
+        };
+      })
+    );
+
     return res.status(200).json({
       success: true,
       data: {
         categories,
-        partners,
+        partners: resolvedPartners,
       },
     });
   } catch (error: any) {

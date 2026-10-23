@@ -4,8 +4,24 @@ const path = require('path');
 const { prisma } = require('../lib/prisma');
 const upload = require('../middleware/upload');
 const storageService = require('../services/storage');
-const { resolveFileUrl } = require('../services/storage/urlResolver');
+const { resolveFileUrl, extractStorageKey } = require('../services/storage/urlResolver');
 const { verifyToken, authorizeRoles } = require('../middleware/auth');
+
+function sanitizeStorageKey(keyOrUrl) {
+  if (!keyOrUrl || typeof keyOrUrl !== 'string') return keyOrUrl;
+  const trimmed = keyOrUrl.trim();
+  if (!trimmed) return trimmed;
+  if (
+    trimmed.includes('unsplash.com') ||
+    trimmed.includes('supabase.co') ||
+    trimmed.includes('ui-avatars.com') ||
+    trimmed.includes('placehold.co')
+  ) {
+    return trimmed;
+  }
+  const key = extractStorageKey(trimmed);
+  return key || trimmed;
+}
 
 const adminsOnly = [verifyToken, authorizeRoles('admin', 'master_admin')];
 
@@ -109,7 +125,13 @@ router.put('/home/testimonials', adminsOnly, async (req, res) => {
     });
 
     let newContent = content && content.content ? content.content : {};
-    newContent.testimonials = testimonials;
+    newContent.testimonials = testimonials.map(t => {
+      if (!t) return t;
+      return {
+        ...t,
+        image: t.image ? sanitizeStorageKey(t.image) : t.image,
+      };
+    });
 
     await prisma.websiteContent.upsert({
       where: { pageKey: 'home_page' },

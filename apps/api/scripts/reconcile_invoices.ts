@@ -85,7 +85,7 @@ export async function reconcileInvoices(dryRun = false) {
       const sgstAmount = isHaryana ? Math.round((taxAmount - cgstAmount) * 100) / 100 : 0;
       const igstAmount = isHaryana ? 0 : taxAmount;
 
-      const packageName = p.subscription?.package?.name || 'MaiHoonNa Eldercare Subscription Plan';
+      const packageName: string = p.subscription?.package?.name || 'MaiHoonNa Eldercare Subscription Plan';
       const newInvoiceId = generateUUID();
       const tempNumber = `TEMP-NEW-${p.id}`;
 
@@ -113,7 +113,7 @@ export async function reconcileInvoices(dryRun = false) {
             create: [
               {
                 id: generateUUID(),
-                description: packageName,
+                description: packageName || 'MaiHoonNa Eldercare Subscription Plan',
                 hsnSacCode: '998399',
                 taxRate: 18,
                 isGstExempt: false,

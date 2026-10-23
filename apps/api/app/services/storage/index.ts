@@ -18,12 +18,18 @@ let instance: StorageService | null = null;
 export function getStorageService(): StorageService {
   if (instance) return instance;
 
-  const provider = (process.env.STORAGE_PROVIDER || 'supabase').toLowerCase();
+  const rawProvider = (process.env.STORAGE_PROVIDER || '').replace(/['"]/g, '').trim().toLowerCase();
 
-  if (provider === 's3') {
+  // In AWS environments (Staging / Production), use S3Storage.
+  // Auto-detect S3 if explicitly requested, or if STORAGE_BUCKET is configured, or if Supabase is not configured.
+  const isS3 =
+    rawProvider === 's3' ||
+    Boolean(process.env.STORAGE_BUCKET) ||
+    !process.env.SUPABASE_URL;
+
+  if (isS3) {
     instance = new S3Storage();
   } else {
-    // Default to Supabase for local development
     instance = new SupabaseStorage();
   }
 
