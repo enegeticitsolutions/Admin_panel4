@@ -53,6 +53,158 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/volunteers/ongoing-visits — real-time ongoing companion visits for FM/OM/Admins
+router.get('/ongoing-visits', async (req, res) => {
+  try {
+    const visits = await prisma.volunteerVisitLog.findMany({
+      where: {
+        status: 'in_progress',
+      },
+      include: {
+        volunteer: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            profilePhoto: true,
+            latitude: true,
+            longitude: true,
+            address: true,
+            flatPlot: true,
+            streetArea: true,
+            landmark: true,
+            city: true,
+            state: true,
+            pincode: true,
+            totalCreditHours: true,
+            totalCreditPoints: true,
+          },
+        },
+        beneficiary: {
+          select: {
+            id: true,
+            name: true,
+            photo: true,
+            age: true,
+            gender: true,
+            address: true,
+            flatPlot: true,
+            streetArea: true,
+            landmark: true,
+            city: true,
+            state: true,
+            pincode: true,
+            latitude: true,
+            longitude: true,
+            user: {
+              select: {
+                id: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        assignment: {
+          select: {
+            id: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: {
+        checkInTime: 'desc',
+      },
+    });
+
+    const now = new Date();
+
+    const formattedVisits = await Promise.all(
+      visits.map(async (visit) => {
+        let volunteerPhoto = visit.volunteer?.profilePhoto || null;
+        if (volunteerPhoto) {
+          try {
+            volunteerPhoto = await resolveFileUrl(volunteerPhoto);
+          } catch (e) {
+            console.warn('[ongoing-visits] Photo resolution failed:', e.message);
+          }
+        }
+
+        let beneficiaryPhoto = visit.beneficiary?.photo || null;
+        if (beneficiaryPhoto) {
+          try {
+            beneficiaryPhoto = await resolveFileUrl(beneficiaryPhoto);
+          } catch (e) {
+            console.warn('[ongoing-visits] Ben photo resolution failed:', e.message);
+          }
+        }
+
+        const checkIn = new Date(visit.checkInTime);
+        const elapsedMs = Math.max(0, now.getTime() - checkIn.getTime());
+        const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
+        const elapsedSeconds = Math.floor(elapsedMs / 1000);
+
+        const v = visit.volunteer;
+        const b = visit.beneficiary;
+
+        const volunteerAddress = v
+          ? [v.flatPlot, v.streetArea, v.landmark, v.city, v.pincode].filter(Boolean).join(', ') || v.address || null
+          : null;
+
+        const beneficiaryAddress = b
+          ? [b.flatPlot, b.streetArea, b.landmark, b.city, b.pincode].filter(Boolean).join(', ') || b.address || null
+          : null;
+
+        return {
+          id: visit.id,
+          assignmentId: visit.assignmentId,
+          checkInTime: visit.checkInTime,
+          elapsedMinutes,
+          elapsedSeconds,
+          notes: visit.notes,
+          status: visit.status,
+          volunteer: v
+            ? {
+                id: v.id,
+                name: v.name,
+                phone: v.phone,
+                email: v.email,
+                profilePhoto: volunteerPhoto,
+                latitude: v.latitude,
+                longitude: v.longitude,
+                address: volunteerAddress,
+                totalCreditHours: v.totalCreditHours,
+                totalCreditPoints: v.totalCreditPoints,
+              }
+            : null,
+          beneficiary: b
+            ? {
+                id: b.id,
+                name: b.name,
+                phone: b.user?.phone || null,
+                photo: beneficiaryPhoto,
+                age: b.age,
+                gender: b.gender,
+                latitude: b.latitude,
+                longitude: b.longitude,
+                address: beneficiaryAddress,
+              }
+            : null,
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      count: formattedVisits.length,
+      data: formattedVisits,
+    });
+  } catch (err) {
+    console.error('GET /api/volunteers/ongoing-visits error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // GET /api/volunteers/:id — detail view with credit ledger history
 router.get('/:id', async (req, res) => {
   try {

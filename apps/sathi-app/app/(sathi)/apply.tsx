@@ -209,6 +209,15 @@ export default function ApplyVolunteerScreen() {
       setFormError('Full Name is required.');
       return;
     }
+    if (!form.email.trim()) {
+      setFormError('Email Address is required.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email.trim())) {
+      setFormError('Please enter a valid email address.');
+      return;
+    }
     if (!city || !state || !pincode) {
       setFormError('City, State, and Pincode are required. Please pick an accurate location.');
       return;
@@ -252,7 +261,7 @@ export default function ApplyVolunteerScreen() {
         },
         body: JSON.stringify({
           name: form.name.trim(),
-          email: form.email.trim() || null,
+          email: form.email.trim(),
           age: calculatedAge,
           gender: form.gender.trim() || null,
           address: address.trim() || null,
@@ -565,7 +574,7 @@ export default function ApplyVolunteerScreen() {
 
             {/* Email */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email Address</Text>
+              <Text style={styles.label}>Email Address *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="your.email@example.com"

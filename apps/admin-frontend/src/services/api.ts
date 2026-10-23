@@ -40,6 +40,7 @@ import type {
   StaffOnboardingMetadata,
   StaffOnboardingPayload,
   CallbackRequest,
+  OngoingVolunteerVisit,
 } from '../types';
 
 // Simulate network delay for realistic behavior
@@ -945,6 +946,10 @@ export const partnerApi = {
 // ============================================================================
 
 export const volunteerApi = {
+  async getOngoingVisits(): Promise<OngoingVolunteerVisit[]> {
+    return apiJson<OngoingVolunteerVisit[]>('/volunteers/ongoing-visits');
+  },
+
   async getAll(status?: string): Promise<Volunteer[]> {
     const query = status ? `?status=${status}` : '';
     return apiJson<Volunteer[]>(`/volunteers${query}`);

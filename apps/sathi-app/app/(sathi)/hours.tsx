@@ -20,6 +20,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_URL } from '@/constants/api';
+import { NavigationService } from '@/utils/NavigationService';
 import { SathiBottomNav } from '@/components/shared/SathiBottomNav';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
@@ -348,6 +349,36 @@ export default function SathiHours() {
                     );
                   })}
                 </View>
+
+                {selectedMatch && (
+                  <View style={{ marginTop: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FFF0E6', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#FFD4B8' }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={{ fontSize: 11, fontFamily: 'Poppins-Medium', color: '#6B7280' }}>Saved Location:</Text>
+                      <Text style={{ fontSize: 12, fontFamily: 'Poppins-Regular', color: '#111827' }} numberOfLines={1}>
+                        {selectedMatch.beneficiary.address || [selectedMatch.beneficiary.city, selectedMatch.beneficiary.pincode].filter(Boolean).join(' - ') || 'Address on file'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => NavigationService.instance.navigate({
+                        address: selectedMatch.beneficiary.address,
+                        latitude: selectedMatch.beneficiary.latitude,
+                        longitude: selectedMatch.beneficiary.longitude,
+                        label: selectedMatch.beneficiary.name,
+                        flatPlot: selectedMatch.beneficiary.flatPlot,
+                        streetArea: selectedMatch.beneficiary.streetArea,
+                        landmark: selectedMatch.beneficiary.landmark,
+                        city: selectedMatch.beneficiary.city,
+                        state: selectedMatch.beneficiary.state,
+                        pincode: selectedMatch.beneficiary.pincode,
+                      })}
+                      style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FE6700', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                    >
+                      <Ionicons name="navigate-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: 'Poppins-SemiBold' }}>Directions</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
                 {(() => {
                   const closest = selectedMatch ? getClosestVisit(selectedMatch.beneficiary.id) : null;

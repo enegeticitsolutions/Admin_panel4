@@ -24,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { API_URL } from '@/constants/api';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import { NavigationService } from '@/utils/NavigationService';
 import { SathiBottomNav } from '@/components/shared/SathiBottomNav';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
@@ -965,10 +966,28 @@ export default function SathiDashboard() {
                     <Text style={{ fontSize: scale(16), color: '#111827', fontFamily: 'Poppins-SemiBold', marginBottom: scale(4) }}>
                       {item.name}{item.age ? `, ${item.age}` : ''}
                     </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="location-outline" size={14} color="#6B7280" />
-                      <Text style={{ fontSize: scale(13), color: '#6B7280', fontFamily: 'Poppins-Regular', marginLeft: scale(4) }}>{item.location || 'Delhi'}</Text>
-                    </View>
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', marginTop: scale(2) }}
+                      activeOpacity={0.7}
+                      onPress={() => NavigationService.instance.navigate({
+                        address: item.address || item.location,
+                        latitude: item.latitude,
+                        longitude: item.longitude,
+                        label: item.name,
+                        flatPlot: item.flatPlot,
+                        streetArea: item.streetArea,
+                        landmark: item.landmark,
+                        city: item.city,
+                        state: item.state,
+                        pincode: item.pincode,
+                      })}
+                    >
+                      <Ionicons name="location-outline" size={14} color="#FE6700" />
+                      <Text style={{ fontSize: scale(13), color: '#4B5563', fontFamily: 'Poppins-Regular', marginLeft: scale(4), textDecorationLine: 'underline', flex: 1 }} numberOfLines={1}>
+                        {item.address || item.location || 'Delhi'}
+                      </Text>
+                      <Ionicons name="chevron-forward" size={12} color="#9CA3AF" />
+                    </TouchableOpacity>
                   </View>
                   <View style={{ backgroundColor: '#EAF2FF', borderWidth: 1, borderColor: '#4B93FF', paddingHorizontal: scale(8), paddingVertical: scale(2), borderRadius: scale(12) }}>
                     <Text style={{ fontSize: scale(11), color: '#4B93FF', fontFamily: 'Poppins-Medium' }}>{item.distance || '1.2 km'}</Text>
@@ -984,40 +1003,72 @@ export default function SathiDashboard() {
                   <Text style={{ fontSize: scale(13), color: '#6B7280', fontFamily: 'Poppins-Medium' }}>{item.visitCount || 0} visits</Text>
                 </View>
 
-                {/* Start Visit Button OR Countdown OR IN PROGRESS */}
-                {item.status === 'IN_PROGRESS' ? (
-                  <View style={{ marginTop: scale(20) }}>
-                    <TouchableOpacity
-                      style={{ backgroundColor: '#DBEAFE', paddingVertical: scale(12), borderRadius: scale(20), flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#93C5FD' }}
-                      onPress={() => replace('/(sathi)/hours')}
-                    >
-                      <Ionicons name="time" size={18} color="#1E40AF" style={{ marginRight: 6 }} />
-                      <Text style={{ color: '#1E40AF', fontFamily: 'Poppins-SemiBold', fontSize: scale(14) }}>
-                        {activeVisitElapsedTime}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : !isWithin30Mins && countdownText ? (
-                  <View style={{ marginTop: scale(20), backgroundColor: '#F3F4F6', paddingVertical: scale(12), borderRadius: scale(20), flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-                    <Ionicons name="time-outline" size={18} color="#9CA3AF" style={{ marginRight: 6 }} />
-                    <Text style={{ color: '#6B7280', fontFamily: 'Poppins-SemiBold', fontSize: scale(14) }}>{countdownText}</Text>
-                  </View>
-                ) : (
+                {/* Action Buttons Row: Navigate + Start Visit / Active Visit / Countdown */}
+                <View style={{ flexDirection: 'row', gap: scale(10), marginTop: scale(20) }}>
                   <TouchableOpacity
-                    style={{ marginTop: scale(20), backgroundColor: '#FF6F00', paddingVertical: scale(12), borderRadius: scale(20), flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
-                    onPress={() => {
-                      if (dashboard?.activeVisit) {
-                        Alert.alert('Action Denied', 'You already have an active visit in progress. Please check out of your current visit before starting a new one.');
-                        return;
-                      }
-                      setOtpRequestId(item.id);
-                      setShowOtpModal(true);
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#FFF0E6',
+                      borderWidth: 1.5,
+                      borderColor: '#FE6700',
+                      paddingVertical: scale(12),
+                      paddingHorizontal: scale(14),
+                      borderRadius: scale(20),
                     }}
+                    activeOpacity={0.8}
+                    onPress={() => NavigationService.instance.navigate({
+                      address: item.address || item.location,
+                      latitude: item.latitude,
+                      longitude: item.longitude,
+                      label: item.name,
+                      flatPlot: item.flatPlot,
+                      streetArea: item.streetArea,
+                      landmark: item.landmark,
+                      city: item.city,
+                      state: item.state,
+                      pincode: item.pincode,
+                    })}
                   >
-                    <Ionicons name="play-circle-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                    <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins-SemiBold', fontSize: scale(14) }}>Start Visit</Text>
+                    <Ionicons name="navigate-circle-outline" size={18} color="#FE6700" style={{ marginRight: 4 }} />
+                    <Text style={{ color: '#FE6700', fontFamily: 'Poppins-SemiBold', fontSize: scale(13) }}>Navigate</Text>
                   </TouchableOpacity>
-                )}
+
+                  <View style={{ flex: 1 }}>
+                    {item.status === 'IN_PROGRESS' ? (
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#DBEAFE', paddingVertical: scale(12), borderRadius: scale(20), flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#93C5FD' }}
+                        onPress={() => replace('/(sathi)/hours')}
+                      >
+                        <Ionicons name="time" size={18} color="#1E40AF" style={{ marginRight: 6 }} />
+                        <Text style={{ color: '#1E40AF', fontFamily: 'Poppins-SemiBold', fontSize: scale(14) }}>
+                          {activeVisitElapsedTime}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : !isWithin30Mins && countdownText ? (
+                      <View style={{ backgroundColor: '#F3F4F6', paddingVertical: scale(12), borderRadius: scale(20), flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
+                        <Ionicons name="time-outline" size={18} color="#9CA3AF" style={{ marginRight: 6 }} />
+                        <Text style={{ color: '#6B7280', fontFamily: 'Poppins-SemiBold', fontSize: scale(14) }}>{countdownText}</Text>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#FF6F00', paddingVertical: scale(12), borderRadius: scale(20), flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => {
+                          if (dashboard?.activeVisit) {
+                            Alert.alert('Action Denied', 'You already have an active visit in progress. Please check out of your current visit before starting a new one.');
+                            return;
+                          }
+                          setOtpRequestId(item.id);
+                          setShowOtpModal(true);
+                        }}
+                      >
+                        <Ionicons name="play-circle-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={{ color: '#FFFFFF', fontFamily: 'Poppins-SemiBold', fontSize: scale(14) }}>Start Visit</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
               </View>
             );
           })
@@ -1054,10 +1105,25 @@ export default function SathiDashboard() {
                     <Text style={{ fontSize: scale(16), color: '#111827', fontFamily: 'Poppins-SemiBold', marginBottom: scale(4) }}>
                       {item.name}{item.age ? `, ${item.age}` : ''}
                     </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="location-outline" size={14} color="#6B7280" />
-                      <Text style={{ fontSize: scale(13), color: '#6B7280', fontFamily: 'Poppins-Regular', marginLeft: scale(4) }}>{item.location || 'Delhi'}</Text>
-                    </View>
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center' }}
+                      activeOpacity={0.7}
+                      onPress={() => NavigationService.instance.navigate({
+                        address: item.address || item.location,
+                        latitude: item.latitude,
+                        longitude: item.longitude,
+                        label: item.name,
+                        flatPlot: item.flatPlot,
+                        streetArea: item.streetArea,
+                        landmark: item.landmark,
+                        city: item.city,
+                        state: item.state,
+                        pincode: item.pincode,
+                      })}
+                    >
+                      <Ionicons name="location-outline" size={14} color="#FE6700" />
+                      <Text style={{ fontSize: scale(13), color: '#6B7280', fontFamily: 'Poppins-Regular', marginLeft: scale(4), textDecorationLine: 'underline' }}>{item.location || 'Delhi'}</Text>
+                    </TouchableOpacity>
                   </View>
                   <View style={{ backgroundColor: '#EAF2FF', borderWidth: 1, borderColor: '#4B93FF', paddingHorizontal: scale(8), paddingVertical: scale(2), borderRadius: scale(12) }}>
                     <Text style={{ fontSize: scale(11), color: '#4B93FF', fontFamily: 'Poppins-Medium' }}>{item.distance || '1.2 km'}</Text>

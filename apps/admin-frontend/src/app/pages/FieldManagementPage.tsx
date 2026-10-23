@@ -9,12 +9,13 @@
  */
 
 import React, { useState } from 'react';
+import { Link } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import OpsManagerFieldView from '../components/field-management/OpsManagerFieldView';
 import FieldManagerView from '../components/field-management/FieldManagerView';
 import RosterReviewPanel from '../components/field-management/RosterReviewPanel';
 import PlannedVsActualReport from '../components/field-management/PlannedVsActualReport';
-import { Calendar, Users, ClipboardList, MessageSquare } from 'lucide-react';
+import { Calendar, Users, ClipboardList, MessageSquare, Navigation } from 'lucide-react';
 
 export default function FieldManagementPage() {
   const { user } = useAuth();
@@ -56,9 +57,18 @@ export default function FieldManagementPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="border-b border-border pb-4">
-        <h1 className="text-2xl font-bold text-foreground">Field Management Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+      <div className="border-b border-border pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Field Management Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+        </div>
+        <Link
+          to="/saathi-tracking"
+          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-sm hover:shadow transition-all shrink-0 self-start sm:self-auto"
+        >
+          <Navigation size={14} className="animate-pulse" />
+          <span>Live Saathi Tracker</span>
+        </Link>
       </div>
 
       {/* Tabs navigation */}

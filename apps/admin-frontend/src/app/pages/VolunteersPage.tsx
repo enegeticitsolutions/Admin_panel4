@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { Link } from 'react-router';
 import { PageHeader } from '../components/common/PageHeader';
 import { DataCard } from '../components/common/DataCard';
 import { StatusChip } from '../components/common/StatusChip';
@@ -497,6 +498,15 @@ export default function VolunteersPage() {
       <PageHeader
         title="Verified Saathi Volunteers"
         description="View credit balances, log history, and manage senior companion assignments with smart matching & location filtering."
+        action={
+          <Link
+            to="/saathi-tracking"
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-sm hover:shadow transition-all"
+          >
+            <Navigation size={14} className="animate-pulse" />
+            <span>Live Companion Map Tracker</span>
+          </Link>
+        }
       />
 
       {/* Summary Metrics */}

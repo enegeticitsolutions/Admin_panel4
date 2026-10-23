@@ -31,6 +31,7 @@ import {
   ShieldAlert,
   Clock,
   Crown,
+  Navigation,
 } from 'lucide-react';
 import { cn } from '../ui/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
@@ -140,7 +141,13 @@ const navigationSections: NavSection[] = [
         path: '/volunteers',
         label: 'Saathi Volunteers',
         icon: Handshake,
-        roles: ['master_admin', 'admin', 'saathi_coordinator'],
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'saathi_coordinator'],
+      },
+      {
+        path: '/saathi-tracking',
+        label: 'Live Saathi Tracker',
+        icon: Navigation,
+        roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'saathi_coordinator'],
       },
       {
         path: '/volunteer-requests',

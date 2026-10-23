@@ -191,8 +191,9 @@ const PERMISSIONS = {
   'callbacks.update': { master_admin: true, admin: true, customer_service_manager: true, customer_service: true },
 
   // ── Volunteers ─────────────────────────────────────────────────────────────
-  'volunteers.list':            { master_admin: true, admin: true, operations_manager: 'read', saathi_coordinator: true },
-  'volunteers.view':            { master_admin: true, admin: true, operations_manager: 'read', saathi_coordinator: true },
+  'volunteers.list':            { master_admin: true, admin: true, operations_manager: 'read', field_manager: 'read', saathi_coordinator: true },
+  'volunteers.view':            { master_admin: true, admin: true, operations_manager: 'read', field_manager: 'read', saathi_coordinator: true },
+  'volunteers.live_tracking':   { master_admin: true, admin: true, operations_manager: 'read', field_manager: 'read', saathi_coordinator: true },
   'volunteers.verify':          { master_admin: true, admin: true, saathi_coordinator: true },
   'volunteers.reject':          { master_admin: true, admin: true, saathi_coordinator: true },
   'volunteers.toggle_active':   { master_admin: true, admin: true, saathi_coordinator: true },

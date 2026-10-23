@@ -1,8 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import { Dimensions } from 'react-native';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const scale = (size: number) => Math.round((SCREEN_WIDTH / 390) * size);
 import {
   View,
   Text,
@@ -10,28 +6,37 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  useWindowDimensions,
   Image,
   Alert,
-  Linking,
+  Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { API_URL } from '@/constants/api';
+import { NavigationService } from '@/utils/NavigationService';
 import { SathiBottomNav } from '@/components/shared/SathiBottomNav';
 import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Bounded responsive scaling: stays proportional across small phones and large Pro Max screens
+const scale = (size: number) => {
+  const ratio = SCREEN_WIDTH / 390;
+  const clamped = Math.min(Math.max(ratio, 0.85), 1.25);
+  return Math.round(clamped * size);
+};
 
 const DEEP_ORANGE = '#FE6700';
 
 export default function SathiMatches() {
   useExitOnBack();
   useAndroidBackHandler();
-  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
@@ -68,37 +73,11 @@ export default function SathiMatches() {
     }, [])
   );
 
-  const handleRespondRequest = async (requestId: string, action: 'ACCEPT' | 'REJECT') => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      if (!token) return;
-
-      const response = await fetch(`${API_URL}/sathi/visit-requests/${requestId}/respond`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ action, rejectionReason: action === 'REJECT' ? 'Reschedule requested' : undefined }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to respond');
-      }
-
-      Alert.alert('Success', action === 'ACCEPT' ? 'Visit request accepted!' : 'Visit request rescheduled/rejected.');
-      fetchMatches(); // Refresh the list
-    } catch (error) {
-      console.error('Error responding to request:', error);
-      Alert.alert('Error', 'Could not process your response.');
-    }
-  };
-
   if (loading) {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator size="large" color={DEEP_ORANGE} />
-        <Text style={styles.loaderText}>Finding visit requests...</Text>
+        <Text style={styles.loaderText}>Loading beneficiaries...</Text>
       </View>
     );
   }
@@ -106,15 +85,15 @@ export default function SathiMatches() {
   if (error) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <MaterialCommunityIcons name="wifi-off" size={scale(64)} color="#D1D5DB" />
-        <Text style={{ marginTop: scale(16), fontSize: scale(16), color: '#4B5563', textAlign: 'center', paddingHorizontal: scale(32) }}>
+        <MaterialCommunityIcons name="wifi-off" size={scale(56)} color="#D1D5DB" />
+        <Text style={{ marginTop: scale(16), fontSize: scale(15), color: '#4B5563', textAlign: 'center', paddingHorizontal: scale(32), fontFamily: 'Poppins-Regular' }}>
           {error}
         </Text>
         <TouchableOpacity 
-          style={{ marginTop: scale(24), backgroundColor: DEEP_ORANGE, paddingHorizontal: scale(24), paddingVertical: scale(12), borderRadius: scale(8) }}
+          style={styles.retryBtn}
           onPress={() => { setLoading(true); fetchMatches(); }}
         >
-          <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: scale(16) }}>Retry</Text>
+          <Text style={styles.retryBtnText}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -122,80 +101,173 @@ export default function SathiMatches() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Header */}
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + scale(95), scale(120)) }
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Page Header */}
         <View style={styles.header}>
           <Text style={styles.welcomeText}>Beneficiaries</Text>
           <Text style={styles.locationText}>Connect with seniors near you</Text>
         </View>
 
-        {/* Tip Card */}
+        {/* Tip / Guidance Card */}
         <View style={styles.tipCard}>
-          <Ionicons name="information-circle-outline" size={22} color="#FF6F00" style={styles.tipIcon} />
+          <View style={styles.tipIconBadge}>
+            <Ionicons name="information-circle" size={scale(20)} color="#EA580C" />
+          </View>
           <View style={styles.tipTextContent}>
-            <Text style={styles.tipTitle}>How matching works:</Text>
+            <Text style={styles.tipTitle}>How matching works</Text>
             <Text style={styles.tipDesc}>
-              Review nearby beneficiaries and connect with those whose needs align with your availability. Once matched, you'll receive their contact information to schedule your first visit.
+              Review your assigned beneficiaries, check their saved address, and use 1-tap navigation or call to schedule companion visits.
             </Text>
           </View>
         </View>
 
-        {/* Assigned Beneficiaries section */}
-        <Text style={styles.sectionTitle}>Assigned Beneficiaries</Text>
+        {/* Section Header with Count */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Assigned Beneficiaries</Text>
+          {matches.length > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{matches.length}</Text>
+            </View>
+          )}
+        </View>
 
+        {/* Beneficiary Cards List */}
         {matches.length > 0 ? (
           matches.map((item: any) => {
             const ben = item.beneficiary || item;
             const distance = ben.distance || '1.0 km';
             const totalVisits = item.totalVisits !== undefined ? item.totalVisits : 0;
             const lastVisit = item.lastVisit ? `Last: ${item.lastVisit}` : 'No prior visits';
+            const displayAddress = ben.address || ben.location || [ben.city, ben.pincode].filter(Boolean).join(' - ') || 'Address not specified';
 
             return (
               <View key={item.assignmentId || ben.id} style={styles.matchCard}>
-                <View style={styles.seniorHeader}>
-                  <Image source={{ uri: sanitizeImageUri(ben.photo, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150') }} style={styles.seniorPhoto} />
-                  <View style={styles.seniorMeta}>
-                    <Text style={styles.seniorName}>{ben.name}</Text>
-                    <View style={styles.locationRow}>
-                      <Ionicons name="location-outline" size={14} color="#6B7280" />
-                      <Text style={[styles.locationTextSmall, { flex: 1 }]} numberOfLines={1}>{ben.location || ben.address || 'Delhi'}</Text>
-                    </View>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                {/* 1. Header Row: Avatar, Name, Age/Gender, Distance Badge */}
+                <View style={styles.cardHeader}>
+                  <Image
+                    source={{ uri: sanitizeImageUri(ben.photo, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150') }}
+                    style={styles.seniorPhoto}
+                  />
+                  <View style={styles.headerMeta}>
+                    <View style={styles.nameAndDistanceRow}>
+                      <Text style={styles.seniorName} numberOfLines={1}>
+                        {ben.name}
+                      </Text>
                       <View style={styles.distanceBadge}>
+                        <Ionicons name="navigate-outline" size={scale(11)} color="#EA580C" style={{ marginRight: 3 }} />
                         <Text style={styles.distanceText}>{distance}</Text>
                       </View>
-                      <ConnectContactButton
-                        name={ben.name}
-                        role="Beneficiary"
-                        phone={ben.phone || ben.user?.phone || ben.contactNumber || null}
-                        photo={ben.photo}
-                        trigger={
-                          <View style={{ padding: 6, backgroundColor: '#FFF0E6', borderRadius: 20 }}>
-                            <Ionicons name="call" size={18} color="#FF6A00" />
-                          </View>
-                        }
-                      />
+                    </View>
+
+                    <Text style={styles.seniorSubText}>
+                      {ben.age ? `${ben.age} yrs` : 'Senior'}
+                      {ben.gender && ben.gender !== 'prefer_not_to_say' ? ` • ${ben.gender}` : ''}
+                    </Text>
                   </View>
                 </View>
 
-                {/* Gap/Spacing */}
-                <View style={{ height: 24 }} />
+                {/* 2. Full-Width Tappable Location Bar */}
+                <TouchableOpacity
+                  style={styles.locationBar}
+                  activeOpacity={0.75}
+                  onPress={() => NavigationService.instance.navigate({
+                    address: displayAddress,
+                    latitude: ben.latitude,
+                    longitude: ben.longitude,
+                    label: ben.name,
+                    flatPlot: ben.flatPlot,
+                    streetArea: ben.streetArea,
+                    landmark: ben.landmark,
+                    city: ben.city,
+                    state: ben.state,
+                    pincode: ben.pincode,
+                  })}
+                >
+                  <View style={styles.locationIconBadge}>
+                    <Ionicons name="location" size={scale(14)} color="#EA580C" />
+                  </View>
+                  <View style={{ flex: 1, marginRight: scale(6) }}>
+                    <Text style={styles.locationLabel}>SAVED ADDRESS</Text>
+                    <Text style={styles.addressText} numberOfLines={2}>
+                      {displayAddress}
+                    </Text>
+                  </View>
+                  <View style={styles.locationChevron}>
+                    <Ionicons name="chevron-forward" size={scale(14)} color="#9CA3AF" />
+                  </View>
+                </TouchableOpacity>
 
-                {/* Bottom Row */}
-                <View style={styles.actionsRow}>
-                  <Text style={styles.statsText}>{totalVisits} total visits</Text>
-                  <Text style={styles.statsText}>{lastVisit}</Text>
+                {/* 3. Visits Statistics Row */}
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <Ionicons name="calendar-outline" size={scale(13)} color="#6B7280" style={{ marginRight: 5 }} />
+                    <Text style={styles.statText}>
+                      <Text style={styles.statBold}>{totalVisits}</Text> {totalVisits === 1 ? 'visit' : 'total visits'}
+                    </Text>
+                  </View>
+                  <View style={styles.statDot} />
+                  <View style={styles.statItem}>
+                    <Ionicons name="time-outline" size={scale(13)} color="#6B7280" style={{ marginRight: 5 }} />
+                    <Text style={styles.statText}>{lastVisit}</Text>
+                  </View>
+                </View>
+
+                {/* 4. Action Buttons Row: Dual Responsive 50/50 Buttons */}
+                <View style={styles.actionBtnsRow}>
+                  {/* Navigate Button */}
+                  <TouchableOpacity
+                    style={styles.navigateBtn}
+                    activeOpacity={0.85}
+                    onPress={() => NavigationService.instance.navigate({
+                      address: displayAddress,
+                      latitude: ben.latitude,
+                      longitude: ben.longitude,
+                      label: ben.name,
+                      flatPlot: ben.flatPlot,
+                      streetArea: ben.streetArea,
+                      landmark: ben.landmark,
+                      city: ben.city,
+                      state: ben.state,
+                      pincode: ben.pincode,
+                    })}
+                  >
+                    <Ionicons name="navigate-circle-outline" size={scale(17)} color="#EA580C" style={{ marginRight: 6 }} />
+                    <Text style={styles.navigateBtnText}>Navigate</Text>
+                  </TouchableOpacity>
+
+                  {/* Call Button via ConnectContactButton */}
+                  <View style={{ flex: 1 }}>
+                    <ConnectContactButton
+                      name={ben.name}
+                      role="Beneficiary"
+                      phone={ben.phone || ben.user?.phone || ben.contactNumber || null}
+                      photo={ben.photo}
+                      trigger={
+                        <View style={styles.callBtn}>
+                          <Ionicons name="call-outline" size={scale(16)} color="#15803D" style={{ marginRight: 6 }} />
+                          <Text style={styles.callBtnText}>Call</Text>
+                        </View>
+                      }
+                    />
+                  </View>
                 </View>
               </View>
             );
           })
         ) : (
           <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="account-search" size={60} color="#9CA3AF" />
-            <Text style={styles.emptyText}>No matched beneficiaries assigned yet.</Text>
+            <View style={styles.emptyIconCircle}>
+              <MaterialCommunityIcons name="account-search-outline" size={scale(36)} color="#9CA3AF" />
+            </View>
+            <Text style={styles.emptyText}>No matched beneficiaries assigned yet</Text>
             <Text style={styles.emptySubText}>
-              Your matched beneficiaries will appear here once allocated by operations staff.
+              Your matched senior companions will appear here once allocated by your operations coordinator.
             </Text>
           </View>
         )}
@@ -212,9 +284,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF0E6',
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 24,
-    paddingBottom: 100,
+    paddingHorizontal: scale(16),
+    paddingTop: scale(20),
   },
   loaderContainer: {
     flex: 1,
@@ -223,162 +294,300 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF0E6',
   },
   loaderText: {
-    marginTop: 12,
+    marginTop: scale(12),
     color: '#6B7280',
     fontFamily: 'Poppins-Medium',
+    fontSize: scale(14),
   },
   header: {
-    marginBottom: 20,
+    marginBottom: scale(16),
   },
   welcomeText: {
-    fontSize: 24,
+    fontSize: scale(24),
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
-    color: '#000000',
+    color: '#111827',
   },
   locationText: {
-    fontSize: 15,
+    fontSize: scale(14),
     color: '#6B7280',
-    marginTop: 4,
+    marginTop: scale(2),
+    fontFamily: 'Poppins-Regular',
   },
+  // Tip Card
   tipCard: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#FF6F00',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: scale(16),
+    padding: scale(14),
+    marginBottom: scale(20),
+    shadowColor: '#EA580C',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  tipIcon: {
-    marginRight: 12,
-    marginTop: 2,
+  tipIconBadge: {
+    width: scale(32),
+    height: scale(32),
+    borderRadius: scale(10),
+    backgroundColor: '#FFF7ED',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: scale(12),
   },
   tipTextContent: {
     flex: 1,
   },
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: scale(16),
-  },
-  statsText: {
-    fontSize: scale(13),
-    color: '#4B5563',
-    fontFamily: 'Poppins-Medium',
-  },
-  seniorPhoto: {
-    width: scale(56),
-    height: scale(56),
-    borderRadius: scale(12),
-  },
-  seniorMeta: {
-    flex: 1,
-    marginLeft: scale(14),
-  },
-  seniorName: {
-    fontSize: scale(16),
-    color: '#111827',
-    fontFamily: 'Poppins-SemiBold',
-    marginBottom: scale(4),
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  locationTextSmall: {
-    fontSize: scale(13),
-    color: '#6B7280',
-    fontFamily: 'Poppins-Regular',
-    marginLeft: scale(4),
-  },
-  distanceBadge: {
-    backgroundColor: '#E0E7FF',
-    paddingHorizontal: scale(10),
-    paddingVertical: scale(4),
-    borderRadius: scale(12),
-    alignSelf: 'flex-start',
-  },
-  distanceText: {
-    fontSize: scale(12),
-    color: '#4338CA',
-    fontFamily: 'Poppins-Medium',
-  },
-  bioText: {
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 20,
-  },
   tipTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 4,
+    fontSize: scale(13.5),
+    fontFamily: 'Poppins-SemiBold',
+    color: '#9A3412',
+    marginBottom: scale(2),
   },
   tipDesc: {
-    fontSize: 14,
+    fontSize: scale(12),
     color: '#4B5563',
-    lineHeight: 20,
+    lineHeight: scale(18),
+    fontFamily: 'Poppins-Regular',
+  },
+  // Section Header
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: scale(14),
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: scale(17),
+    fontFamily: 'Poppins-Bold',
     fontWeight: '700',
-    color: '#000000',
-    marginBottom: 16,
+    color: '#111827',
   },
+  countBadge: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FDBA74',
+    paddingHorizontal: scale(8),
+    paddingVertical: scale(2),
+    borderRadius: scale(10),
+  },
+  countBadgeText: {
+    fontSize: scale(11.5),
+    fontFamily: 'Poppins-SemiBold',
+    color: '#EA580C',
+  },
+  // Beneficiary Card
   matchCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: scale(20),
+    padding: scale(16),
+    marginBottom: scale(16),
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.05,
     shadowRadius: 10,
-    elevation: 3,
+    elevation: 2,
   },
-  seniorHeader: {
+  cardHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
   },
-  tagsRow: {
+  seniorPhoto: {
+    width: scale(52),
+    height: scale(52),
+    borderRadius: scale(16),
+    backgroundColor: '#F3F4F6',
+  },
+  headerMeta: {
+    flex: 1,
+    marginLeft: scale(12),
+  },
+  nameAndDistanceRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: scale(8),
   },
-  tag: {
-    backgroundColor: '#F3E8FF',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  tagText: {
-    fontSize: 12,
-    color: '#9333EA',
+  seniorName: {
+    fontSize: scale(15.5),
+    color: '#111827',
+    fontFamily: 'Poppins-SemiBold',
     fontWeight: '600',
+    flex: 1,
   },
-  dateTimeRow: {
+  seniorSubText: {
+    fontSize: scale(12),
+    color: '#6B7280',
+    fontFamily: 'Poppins-Regular',
+    marginTop: scale(2),
+  },
+  distanceBadge: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 20,
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: scale(8),
+    paddingVertical: scale(3),
+    borderRadius: scale(10),
   },
-  emptyContainer: {
+  distanceText: {
+    fontSize: scale(11),
+    color: '#EA580C',
+    fontFamily: 'Poppins-Medium',
+  },
+  // Full-Width Location Bar
+  locationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: scale(14),
+    paddingHorizontal: scale(10),
+    paddingVertical: scale(9),
+    marginTop: scale(12),
+  },
+  locationIconBadge: {
+    width: scale(28),
+    height: scale(28),
+    borderRadius: scale(8),
+    backgroundColor: '#FFF7ED',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 24,
+    marginRight: scale(10),
+  },
+  locationLabel: {
+    fontSize: scale(9.5),
+    color: '#9CA3AF',
+    fontFamily: 'Poppins-SemiBold',
+    letterSpacing: 0.6,
+  },
+  addressText: {
+    fontSize: scale(12),
+    color: '#1F2937',
+    fontFamily: 'Poppins-Medium',
+    marginTop: scale(1),
+  },
+  locationChevron: {
+    paddingLeft: scale(4),
+  },
+  // Stats Row
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: scale(12),
+    marginTop: scale(12),
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statText: {
+    fontSize: scale(12),
+    color: '#6B7280',
+    fontFamily: 'Poppins-Regular',
+  },
+  statBold: {
+    fontFamily: 'Poppins-SemiBold',
+    color: '#111827',
+  },
+  statDot: {
+    width: scale(3),
+    height: scale(3),
+    borderRadius: scale(1.5),
+    backgroundColor: '#D1D5DB',
+  },
+  // Action Buttons (50/50 Responsive)
+  actionBtnsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(10),
+    marginTop: scale(14),
+  },
+  navigateBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1.5,
+    borderColor: '#EA580C',
+    borderRadius: scale(14),
+    paddingVertical: scale(11),
+  },
+  navigateBtnText: {
+    color: '#EA580C',
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: scale(13),
+  },
+  callBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#16A34A',
+    borderRadius: scale(14),
+    paddingVertical: scale(11),
+  },
+  callBtnText: {
+    color: '#16A34A',
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: scale(13),
+  },
+  // Empty State
+  emptyContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: scale(20),
+    padding: scale(28),
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    marginTop: scale(8),
+  },
+  emptyIconCircle: {
+    width: scale(64),
+    height: scale(64),
+    borderRadius: scale(32),
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: scale(14),
   },
   emptyText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 12,
-    marginBottom: 4,
+    fontSize: scale(15),
+    color: '#1F2937',
+    fontFamily: 'Poppins-SemiBold',
+    textAlign: 'center',
+    marginBottom: scale(6),
   },
   emptySubText: {
-    fontSize: 12,
+    fontSize: scale(12.5),
     color: '#6B7280',
+    fontFamily: 'Poppins-Regular',
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: scale(18),
+  },
+  retryBtn: {
+    marginTop: scale(20),
+    backgroundColor: DEEP_ORANGE,
+    paddingHorizontal: scale(24),
+    paddingVertical: scale(10),
+    borderRadius: scale(12),
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: scale(14),
   },
 });

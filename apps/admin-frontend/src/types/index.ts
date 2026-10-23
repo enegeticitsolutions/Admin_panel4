@@ -629,3 +629,39 @@ export interface CallbackRequest {
   updatedAt: string;
 }
 
+// ============================================================================
+// ONGOING VOLUNTEER (SAATHI) VISIT TYPES
+// ============================================================================
+
+export interface OngoingVolunteerVisit {
+  id: string;
+  assignmentId: string;
+  checkInTime: string;
+  elapsedMinutes: number;
+  elapsedSeconds: number;
+  notes?: string | null;
+  status: string;
+  volunteer: {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string | null;
+    profilePhoto?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    address?: string | null;
+    totalCreditHours?: number;
+    totalCreditPoints?: number;
+  } | null;
+  beneficiary: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    photo?: string | null;
+    age?: number | null;
+    gender?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    address?: string | null;
+  } | null;
+}
