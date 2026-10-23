@@ -34,7 +34,6 @@ import {
   BadgeCheck,
   Zap,
   X,
-  Phone,
   ExternalLink,
 } from "lucide-react";
 import "./PartnerPage.css";
@@ -909,26 +908,6 @@ export default function PartnerPage() {
 
               {/* Action Buttons */}
               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", borderTop: "1px solid #F3F4F6", paddingTop: "18px" }}>
-                {selectedModalPartner.phone && (
-                  <a
-                    href={`tel:${selectedModalPartner.phone}`}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      backgroundColor: "#FE6700",
-                      color: "#FFFFFF",
-                      padding: "10px 20px",
-                      borderRadius: "10px",
-                      fontSize: "13px",
-                      fontWeight: "700",
-                      textDecoration: "none",
-                    }}
-                  >
-                    <Phone style={{ width: "14px", height: "14px" }} />
-                    Call Partner
-                  </a>
-                )}
 
                 {selectedModalPartner.websiteUrl && (
                   <a
