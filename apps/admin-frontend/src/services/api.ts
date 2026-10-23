@@ -2145,6 +2145,79 @@ export const invoicesApi = {
     }
     return data.data;
   },
+
+  createInvoice: async (payload: FormData | Record<string, any>): Promise<any> => {
+    const isFormData = payload instanceof FormData;
+    const res = await apiFetch(`${API_BASE}/invoices`, {
+      method: 'POST',
+      headers: isFormData ? {} : { 'Content-Type': 'application/json' },
+      body: isFormData ? payload : JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to create invoice');
+    }
+    return data.data;
+  },
+
+  uploadInvoicePdf: async (invoiceId: string, file: File): Promise<any> => {
+    const formData = new FormData();
+    formData.append('pdf', file);
+    const res = await apiFetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to upload invoice PDF');
+    }
+    return data.data;
+  },
+
+  deleteInvoicePdf: async (invoiceId: string): Promise<any> => {
+    const res = await apiFetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+      method: 'DELETE',
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to delete invoice PDF');
+    }
+    return data;
+  },
+
+  deleteInvoice: async (invoiceId: string): Promise<any> => {
+    const res = await apiFetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}`, {
+      method: 'DELETE',
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to delete invoice');
+    }
+    return data;
+  },
+
+  getCounter: async (financialYear?: string): Promise<{ financialYear: string; lastCount: number; nextCount: number; nextInvoiceNumber: string }> => {
+    const query = financialYear ? `?financialYear=${encodeURIComponent(financialYear)}` : '';
+    const res = await apiFetch(`${API_BASE}/invoices/counter${query}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to fetch invoice counter');
+    }
+    return data.data;
+  },
+
+  updateCounter: async (lastCount: number, financialYear?: string): Promise<any> => {
+    const res = await apiFetch(`${API_BASE}/invoices/counter`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lastCount, financialYear }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to update invoice counter');
+    }
+    return data.data;
+  },
 };
 
 // ============================================================================

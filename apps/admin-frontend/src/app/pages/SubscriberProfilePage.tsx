@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { 
   X, User, Phone, Mail, MapPin, Package, Calendar, Loader2, Users, 
   UserCheck, ChevronRight, ArrowLeft, Edit2, TrendingUp, AlertTriangle, PackageCheck, CheckCircle2, Info,
-  Receipt, ExternalLink, FileText
+  Receipt, ExternalLink, FileText, Plus, Upload, Trash2, FileMinus, Hash
 } from 'lucide-react';
 import { subscriberApi, invoicesApi } from '../../services/api';
 import { StatusChip } from '../components/common/StatusChip';
 import { Button } from '../components/ui/button';
 import { EditSubscriberDialog } from '../components/forms/EditSubscriberDialog';
+import { AddInvoiceDialog } from '../components/forms/AddInvoiceDialog';
+import { InvoiceCounterDialog } from '../components/forms/InvoiceCounterDialog';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
@@ -28,6 +30,15 @@ export default function SubscriberProfilePage() {
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [openingInvoiceId, setOpeningInvoiceId] = useState<string | null>(null);
 
+  // Invoice management & counter states
+  const [counterData, setCounterData] = useState<any>(null);
+  const [isCounterModalOpen, setIsCounterModalOpen] = useState(false);
+  const [isAddInvoiceModalOpen, setIsAddInvoiceModalOpen] = useState(false);
+  const [uploadingInvoiceId, setUploadingInvoiceId] = useState<string | null>(null);
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
+  const [targetUploadInvoiceId, setTargetUploadInvoiceId] = useState<string | null>(null);
+  const hiddenFileInputRef = useRef<HTMLInputElement | null>(null);
+
   const fetchDetails = async () => {
     if (!id) return;
     setLoading(true);
@@ -37,10 +48,20 @@ export default function SubscriberProfilePage() {
       setDetails(data);
       loadUtilization(id);
       loadInvoices(id);
+      loadCounter();
     } catch (err: any) {
       setError(err.message || 'Failed to load subscriber details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCounter = async () => {
+    try {
+      const data = await invoicesApi.getCounter('2026-27');
+      setCounterData(data);
+    } catch (e) {
+      // Non-critical
     }
   };
 
@@ -77,6 +98,61 @@ export default function SubscriberProfilePage() {
       toast.error(err.message || 'Failed to open invoice PDF');
     } finally {
       setOpeningInvoiceId(null);
+    }
+  };
+
+  const handleRowFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!targetUploadInvoiceId || !e.target.files || !e.target.files[0]) return;
+    const file = e.target.files[0];
+    if (file.type !== 'application/pdf') {
+      toast.error('Only PDF files are supported');
+      return;
+    }
+    setUploadingInvoiceId(targetUploadInvoiceId);
+    try {
+      await invoicesApi.uploadInvoicePdf(targetUploadInvoiceId, file);
+      toast.success('PDF attached successfully to invoice!');
+      if (id) loadInvoices(id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to attach PDF');
+    } finally {
+      setUploadingInvoiceId(null);
+      setTargetUploadInvoiceId(null);
+      if (hiddenFileInputRef.current) hiddenFileInputRef.current.value = '';
+    }
+  };
+
+  const triggerUploadPdf = (invoiceId: string) => {
+    setTargetUploadInvoiceId(invoiceId);
+    hiddenFileInputRef.current?.click();
+  };
+
+  const handleDeletePdf = async (invoiceId: string, invoiceNum: string) => {
+    if (!window.confirm(`Delete the attached PDF from S3 for invoice ${invoiceNum}?`)) return;
+    setDeletingInvoiceId(invoiceId);
+    try {
+      await invoicesApi.deleteInvoicePdf(invoiceId);
+      toast.success('Attached PDF deleted successfully');
+      if (id) loadInvoices(id);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete PDF');
+    } finally {
+      setDeletingInvoiceId(null);
+    }
+  };
+
+  const handleDeleteInvoice = async (invoiceId: string, invoiceNum: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete invoice ${invoiceNum}? This cannot be undone.`)) return;
+    setDeletingInvoiceId(invoiceId);
+    try {
+      await invoicesApi.deleteInvoice(invoiceId);
+      toast.success(`Invoice ${invoiceNum} deleted successfully`);
+      if (id) loadInvoices(id);
+      loadCounter();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete invoice');
+    } finally {
+      setDeletingInvoiceId(null);
     }
   };
 
@@ -577,9 +653,9 @@ export default function SubscriberProfilePage() {
               {/* ─────────── TAB 4: INVOICE / BILLING ─────────── */}
               <TabsContent value="invoices" className="space-y-6 mt-0 outline-none">
                 <div className="bg-white rounded-[32px] p-8 shadow-sm border border-[#E7DED6]">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
                         <Receipt size={18} />
                       </div>
                       <div>
@@ -591,7 +667,30 @@ export default function SubscriberProfilePage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Counter Badge with Quick Edit */}
+                      <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-xl border border-emerald-200 text-[11px] font-black">
+                        <span>Next Inv: {counterData?.nextInvoiceNumber || 'MHN/INV/2026-27/00010'}</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsCounterModalOpen(true)}
+                          className="ml-1 text-emerald-700 hover:text-emerald-950 underline text-[10px] font-bold cursor-pointer"
+                          title="Configure next invoice number"
+                        >
+                          Edit
+                        </button>
+                      </div>
+
+                      {/* Add Invoice Button */}
+                      <Button
+                        type="button"
+                        onClick={() => setIsAddInvoiceModalOpen(true)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider px-3.5 py-1.5 h-auto flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Plus size={14} /> Add / Attach Invoice
+                      </Button>
+
                       {details.beneficiaries && details.beneficiaries.length > 1 && (
                         <div className="flex gap-1 bg-gray-50 p-1 rounded-xl border border-gray-200 text-[10px] font-bold">
                           <button
@@ -615,6 +714,7 @@ export default function SubscriberProfilePage() {
                           ))}
                         </div>
                       )}
+
                       <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
                         {filteredInvoices.length} record{filteredInvoices.length !== 1 ? 's' : ''}
                       </span>
@@ -654,14 +754,14 @@ export default function SubscriberProfilePage() {
                         return (
                           <div
                             key={inv.id}
-                            className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-[#FDFBF9] hover:border-emerald-200 hover:bg-emerald-50/20 transition-all group"
+                            className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-gray-100 bg-[#FDFBF9] hover:border-emerald-200 hover:bg-emerald-50/20 transition-all group gap-4"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
                               <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
                                 <Receipt size={14} />
                               </div>
-                              <div>
-                                <p className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors">
+                              <div className="min-w-0">
+                                <p className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors truncate">
                                   {inv.invoiceNumber}
                                 </p>
                                 <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -682,19 +782,22 @@ export default function SubscriberProfilePage() {
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
+
+                            <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
+                              <div className="text-right mr-2">
                                 <p className="text-sm font-black text-gray-800">₹{Number(inv.totalAmount).toFixed(2)}</p>
                                 {Number(inv.taxAmount) > 0 && (
                                   <p className="text-[9px] font-bold text-gray-400">incl. ₹{Number(inv.taxAmount).toFixed(2)} GST</p>
                                 )}
                               </div>
+
+                              {/* View / Download PDF */}
                               <button
                                 type="button"
                                 onClick={() => handleViewInvoice(inv.id)}
                                 disabled={openingInvoiceId === inv.id}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E7DED6] text-gray-600 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
-                                title="View / Print Invoice"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E7DED6] text-gray-700 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
+                                title="View / Print Invoice PDF"
                               >
                                 {openingInvoiceId === inv.id ? (
                                   <Loader2 size={12} className="animate-spin text-emerald-600" />
@@ -702,6 +805,50 @@ export default function SubscriberProfilePage() {
                                   <ExternalLink size={12} />
                                 )}
                                 <span>View</span>
+                              </button>
+
+                              {/* Attach or Replace PDF */}
+                              <button
+                                type="button"
+                                onClick={() => triggerUploadPdf(inv.id)}
+                                disabled={uploadingInvoiceId === inv.id}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E7DED6] text-gray-700 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
+                                title={inv.pdfUrl ? 'Replace attached PDF' : 'Attach PDF to this invoice'}
+                              >
+                                {uploadingInvoiceId === inv.id ? (
+                                  <Loader2 size={12} className="animate-spin text-emerald-600" />
+                                ) : (
+                                  <Upload size={12} />
+                                )}
+                                <span>{inv.pdfUrl ? 'Replace' : '+ PDF'}</span>
+                              </button>
+
+                              {/* Delete PDF from S3 (if present) */}
+                              {inv.pdfUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePdf(inv.id, inv.invoiceNumber)}
+                                  disabled={deletingInvoiceId === inv.id}
+                                  className="p-2 rounded-xl bg-white border border-[#E7DED6] text-gray-400 hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50/50 transition-colors disabled:opacity-50"
+                                  title="Delete attached PDF file"
+                                >
+                                  <FileMinus size={13} />
+                                </button>
+                              )}
+
+                              {/* Delete Invoice Record Permanently */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteInvoice(inv.id, inv.invoiceNumber)}
+                                disabled={deletingInvoiceId === inv.id}
+                                className="p-2 rounded-xl bg-white border border-[#E7DED6] text-gray-400 hover:border-red-400 hover:text-red-600 hover:bg-red-50/50 transition-colors disabled:opacity-50"
+                                title="Delete invoice record permanently"
+                              >
+                                {deletingInvoiceId === inv.id ? (
+                                  <Loader2 size={13} className="animate-spin text-red-500" />
+                                ) : (
+                                  <Trash2 size={13} />
+                                )}
                               </button>
                             </div>
                           </div>
@@ -715,6 +862,36 @@ export default function SubscriberProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Hidden file input for attaching/replacing PDF on an invoice row */}
+      <input
+        type="file"
+        ref={hiddenFileInputRef}
+        onChange={handleRowFileChange}
+        accept="application/pdf"
+        className="hidden"
+      />
+
+      <AddInvoiceDialog
+        isOpen={isAddInvoiceModalOpen}
+        onClose={() => setIsAddInvoiceModalOpen(false)}
+        subscriber={details}
+        nextInvoiceNumber={counterData?.nextInvoiceNumber}
+        onSuccess={() => {
+          if (id) loadInvoices(id);
+          loadCounter();
+        }}
+      />
+
+      <InvoiceCounterDialog
+        isOpen={isCounterModalOpen}
+        onClose={() => setIsCounterModalOpen(false)}
+        initialLastCount={counterData?.lastCount ?? 9}
+        financialYear={counterData?.financialYear ?? '2026-27'}
+        onSuccess={() => {
+          loadCounter();
+        }}
+      />
 
       <EditSubscriberDialog
         isOpen={isEditModalOpen}

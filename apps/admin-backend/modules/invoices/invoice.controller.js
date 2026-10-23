@@ -1,5 +1,8 @@
 const { prisma } = require('../../lib/prisma');
 const { render: renderInvoiceHtml } = require('./invoice.html.renderer');
+const { InvoicePdfService } = require('./invoice.pdf.service');
+const storage = require('../../services/storage');
+const { currentIndianFinancialYear, generateInvoiceNumber: billingGenerateInvoiceNumber } = require('@maihoonna/billing');
 
 /**
  * GET /api/invoices
@@ -113,10 +116,6 @@ async function getInvoiceById(req, res) {
 /**
  * GET /api/invoices/:id/html
  * Renders a statutory printable Tax Invoice document.
- *
- * Delegates to the shared invoice.html.renderer.js — single source of truth
- * for all invoice HTML output (admin, website, mobile app via apps/api).
- * Correctly renders: coupon discount + saathi volunteer discount.
  */
 async function getInvoiceHtml(req, res) {
   try {
@@ -163,10 +162,6 @@ async function getInvoiceHtml(req, res) {
     const configMap = {};
     for (const row of configRows) { configMap[row.key] = row.value; }
 
-    // Company details — resolved in priority order on every request:
-    //   1. SystemConfig DB table  (updated in real-time via admin panel)
-    //   2. env var                (deployment-level override)
-    //   3. hardcoded string       (absolute last resort — should never be reached in production)
     const company = {
       name:    configMap.COMPANY_NAME    || process.env.COMPANY_NAME    || 'MaiHoonNa Eldercare Private Limited',
       address: configMap.COMPANY_ADDRESS || process.env.COMPANY_ADDRESS || 'DLF Phase V, Gurugram, Haryana',
@@ -177,7 +172,6 @@ async function getInvoiceHtml(req, res) {
       phone:   configMap.COMPANY_PHONE   || process.env.COMPANY_PHONE   || '8507070049',
     };
 
-    // Renderer handles all HTML, discount rows (coupon + saathi), escaping, and numberToWords.
     const html = renderInvoiceHtml(invoice, company);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -187,8 +181,6 @@ async function getInvoiceHtml(req, res) {
     res.status(500).send('Error generating invoice preview: ' + err.message);
   }
 }
-
-const { InvoicePdfService } = require('./invoice.pdf.service');
 
 /**
  * GET /api/invoices/:id/pdf-url
@@ -229,10 +221,356 @@ async function downloadInvoicePdf(req, res) {
   }
 }
 
+/**
+ * POST /api/invoices
+ * Create manual invoice / attach invoice with optional PDF file upload.
+ */
+async function createInvoice(req, res) {
+  try {
+    const {
+      subscriberId,
+      beneficiaryId,
+      invoiceNumber: customInvoiceNumber,
+      invoiceType = 'SUBSCRIPTION',
+      status = 'PAID',
+      totalAmount,
+      baseAmount: customBaseAmount,
+      taxAmount: customTaxAmount,
+      placeOfSupply,
+      issuedAt,
+      paidAt,
+      description = 'MaiHoonNa Eldercare Subscription Plan',
+    } = req.body;
+
+    if (!subscriberId) {
+      return res.status(400).json({ success: false, message: 'subscriberId is required' });
+    }
+
+    const subscriber = await prisma.user.findUnique({
+      where: { id: subscriberId },
+    });
+    if (!subscriber) {
+      return res.status(404).json({ success: false, message: 'Subscriber not found' });
+    }
+
+    const tot = parseFloat(totalAmount) || 0;
+    let base = parseFloat(customBaseAmount);
+    let tax = parseFloat(customTaxAmount);
+
+    if (isNaN(base) || isNaN(tax)) {
+      base = +(tot / 1.18).toFixed(2);
+      tax = +(tot - base).toFixed(2);
+    }
+
+    const state = placeOfSupply || subscriber.state || 'Haryana';
+    const isInterState = state.trim().toLowerCase() !== 'haryana';
+    const cgst = isInterState ? 0 : +(tax / 2).toFixed(2);
+    const sgst = isInterState ? 0 : +(tax / 2).toFixed(2);
+    const igst = isInterState ? tax : 0;
+
+    let finalInvoiceNumber = customInvoiceNumber?.trim();
+    if (!finalInvoiceNumber) {
+      finalInvoiceNumber = await billingGenerateInvoiceNumber(prisma, issuedAt ? new Date(issuedAt) : new Date());
+    }
+
+    // Check if invoice number is already taken
+    const existing = await prisma.invoice.findUnique({
+      where: { invoiceNumber: finalInvoiceNumber },
+    });
+    if (existing) {
+      return res.status(409).json({ success: false, message: `Invoice number ${finalInvoiceNumber} already exists` });
+    }
+
+    let pdfUrl = null;
+    let pdfGeneratedAt = null;
+
+    if (req.file) {
+      const sanitizedNumber = finalInvoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '-');
+      const s3Path = `invoices/${sanitizedNumber}.pdf`;
+      await storage.upload(req.file.buffer, s3Path, 'application/pdf');
+      pdfUrl = s3Path;
+      pdfGeneratedAt = new Date();
+    }
+
+    const invoiceDate = issuedAt ? new Date(issuedAt) : new Date();
+    const invoicePaidDate = status === 'PAID' ? (paidAt ? new Date(paidAt) : invoiceDate) : null;
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        invoiceNumber: finalInvoiceNumber,
+        invoiceType,
+        status,
+        subscriberId,
+        beneficiaryId: beneficiaryId && beneficiaryId !== 'none' ? beneficiaryId : null,
+        baseAmount: base,
+        discountAmount: 0,
+        saathiDiscountAmount: 0,
+        taxAmount: tax,
+        totalAmount: tot,
+        placeOfSupply: state,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        igstAmount: igst,
+        issuedAt: invoiceDate,
+        paidAt: invoicePaidDate,
+        pdfUrl,
+        pdfGeneratedAt,
+        items: {
+          create: [
+            {
+              description: description || 'MaiHoonNa Eldercare Subscription Plan',
+              hsnSacCode: '998399',
+              taxRate: 18,
+              isGstExempt: false,
+              quantity: 1,
+              unitPrice: base,
+              amount: base,
+            },
+          ],
+        },
+      },
+      include: {
+        subscriber: true,
+        beneficiary: true,
+        items: true,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Invoice created successfully',
+      data: invoice,
+    });
+  } catch (err) {
+    console.error('[InvoiceController] createInvoice error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * POST /api/invoices/:id/pdf
+ * Attach or replace PDF file for an existing invoice.
+ */
+async function uploadInvoicePdf(req, res) {
+  try {
+    const { id } = req.params;
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'PDF file is required' });
+    }
+
+    const invoice = await prisma.invoice.findFirst({
+      where: {
+        OR: [{ id }, { invoiceNumber: id }],
+      },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+
+    const sanitizedNumber = (invoice.invoiceNumber || invoice.id).replace(/[^a-zA-Z0-9_-]/g, '-');
+    const s3Path = `invoices/${sanitizedNumber}.pdf`;
+
+    await storage.upload(req.file.buffer, s3Path, 'application/pdf');
+
+    const updated = await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        pdfUrl: s3Path,
+        pdfGeneratedAt: new Date(),
+      },
+    });
+
+    const downloadUrl = await storage.getPresignedUrl(s3Path, 3600);
+
+    res.json({
+      success: true,
+      message: 'Invoice PDF attached successfully',
+      data: {
+        invoice: updated,
+        downloadUrl,
+      },
+    });
+  } catch (err) {
+    console.error('[InvoiceController] uploadInvoicePdf error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * DELETE /api/invoices/:id/pdf
+ * Delete PDF file attachment from S3 and remove link on invoice.
+ */
+async function deleteInvoicePdf(req, res) {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findFirst({
+      where: {
+        OR: [{ id }, { invoiceNumber: id }],
+      },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+
+    if (invoice.pdfUrl) {
+      try {
+        await storage.delete(invoice.pdfUrl);
+      } catch (s3Err) {
+        console.warn(`[InvoiceController] S3 delete warning for ${invoice.pdfUrl}:`, s3Err.message);
+      }
+    }
+
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        pdfUrl: null,
+        pdfGeneratedAt: null,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Invoice PDF deleted successfully',
+    });
+  } catch (err) {
+    console.error('[InvoiceController] deleteInvoicePdf error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * DELETE /api/invoices/:id
+ * Delete entire invoice record, cascade-delete items, unlink payments, delete S3 PDF.
+ */
+async function deleteInvoice(req, res) {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findFirst({
+      where: {
+        OR: [{ id }, { invoiceNumber: id }],
+      },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+
+    // Attempt to delete S3 PDF file if it exists
+    if (invoice.pdfUrl) {
+      try {
+        await storage.delete(invoice.pdfUrl);
+      } catch (s3Err) {
+        console.warn(`[InvoiceController] S3 delete warning for ${invoice.pdfUrl}:`, s3Err.message);
+      }
+    }
+
+    // Unlink any payments referencing this invoice
+    await prisma.payment.updateMany({
+      where: { invoiceId: invoice.id },
+      data: { invoiceId: null },
+    });
+
+    // Delete invoice items
+    await prisma.invoiceItem.deleteMany({
+      where: { invoiceId: invoice.id },
+    });
+
+    // Delete invoice record
+    await prisma.invoice.delete({
+      where: { id: invoice.id },
+    });
+
+    res.json({
+      success: true,
+      message: `Invoice ${invoice.invoiceNumber} deleted successfully`,
+    });
+  } catch (err) {
+    console.error('[InvoiceController] deleteInvoice error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * GET /api/invoices/counter
+ * Get current sequence counter state for the given or current financial year.
+ */
+async function getInvoiceCounter(req, res) {
+  try {
+    const financialYear = req.query.financialYear || currentIndianFinancialYear();
+    const counter = await prisma.invoiceCounter.findUnique({
+      where: { financialYear },
+    });
+
+    const lastCount = counter ? counter.lastCount : 0;
+    const nextCount = lastCount + 1;
+    const nextInvoiceNumber = `MHN/INV/${financialYear}/${String(nextCount).padStart(5, '0')}`;
+
+    res.json({
+      success: true,
+      data: {
+        financialYear,
+        lastCount,
+        nextCount,
+        nextInvoiceNumber,
+      },
+    });
+  } catch (err) {
+    console.error('[InvoiceController] getInvoiceCounter error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * POST /api/invoices/counter
+ * Set or reset lastCount for the given financial year.
+ */
+async function updateInvoiceCounter(req, res) {
+  try {
+    const { lastCount, financialYear: customFY } = req.body;
+    if (lastCount === undefined || isNaN(parseInt(lastCount, 10))) {
+      return res.status(400).json({ success: false, message: 'lastCount is required and must be an integer' });
+    }
+
+    const financialYear = customFY || currentIndianFinancialYear();
+    const countVal = Math.max(0, parseInt(lastCount, 10));
+
+    const updated = await prisma.invoiceCounter.upsert({
+      where: { financialYear },
+      update: { lastCount: countVal },
+      create: { financialYear, lastCount: countVal },
+    });
+
+    const nextCount = countVal + 1;
+    const nextInvoiceNumber = `MHN/INV/${financialYear}/${String(nextCount).padStart(5, '0')}`;
+
+    res.json({
+      success: true,
+      message: `Invoice counter for ${financialYear} updated to ${countVal}. Next invoice: ${nextInvoiceNumber}`,
+      data: {
+        financialYear,
+        lastCount: updated.lastCount,
+        nextCount,
+        nextInvoiceNumber,
+      },
+    });
+  } catch (err) {
+    console.error('[InvoiceController] updateInvoiceCounter error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
 module.exports = {
   listInvoices,
   getInvoiceById,
   getInvoiceHtml,
   getInvoicePdfUrl,
   downloadInvoicePdf,
+  createInvoice,
+  uploadInvoicePdf,
+  deleteInvoicePdf,
+  deleteInvoice,
+  getInvoiceCounter,
+  updateInvoiceCounter,
 };
