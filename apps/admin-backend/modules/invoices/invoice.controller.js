@@ -269,6 +269,9 @@ async function createInvoice(req, res) {
     const igst = isInterState ? tax : 0;
 
     let finalInvoiceNumber = customInvoiceNumber?.trim();
+    if (finalInvoiceNumber) {
+      finalInvoiceNumber = finalInvoiceNumber.replace(/\.pdf$/i, '').trim();
+    }
     if (!finalInvoiceNumber) {
       finalInvoiceNumber = await billingGenerateInvoiceNumber(prisma, issuedAt ? new Date(issuedAt) : new Date());
     }
@@ -292,7 +295,13 @@ async function createInvoice(req, res) {
       pdfGeneratedAt = new Date();
     }
 
-    const invoiceDate = issuedAt ? new Date(issuedAt) : new Date();
+    let invoiceDate = new Date();
+    if (issuedAt) {
+      const parsed = new Date(issuedAt);
+      if (!isNaN(parsed.getTime())) {
+        invoiceDate = parsed;
+      }
+    }
     const invoicePaidDate = status === 'PAID' ? (paidAt ? new Date(paidAt) : invoiceDate) : null;
 
     const invoice = await prisma.invoice.create({
@@ -343,6 +352,128 @@ async function createInvoice(req, res) {
     });
   } catch (err) {
     console.error('[InvoiceController] createInvoice error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * POST /api/invoices/direct-attach-pdf
+ * Directly upload and attach a PDF document for a subscriber with zero tedious form-filling.
+ * Automatically derives the invoice number from the PDF filename (e.g. MHN-INV-2026-27-00001.pdf).
+ * If the invoice record already exists, updates its PDF.
+ * If it doesn't exist, creates the record and attaches the PDF immediately.
+ */
+async function directAttachPdf(req, res) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'PDF file is required' });
+    }
+
+    const { subscriberId, beneficiaryId, customInvoiceNumber, amount } = req.body;
+    if (!subscriberId) {
+      return res.status(400).json({ success: false, message: 'subscriberId is required' });
+    }
+
+    const subscriber = await prisma.user.findUnique({
+      where: { id: subscriberId },
+    });
+    if (!subscriber) {
+      return res.status(404).json({ success: false, message: 'Subscriber not found' });
+    }
+
+    // Determine clean invoice number from input or original filename
+    let rawNumber = (customInvoiceNumber || req.file.originalname || 'MHN-INV-ATTACHED').trim();
+    rawNumber = rawNumber.replace(/\.[^/.]+$/, '').trim(); // Remove file extension like .pdf
+
+    const invoiceNumber = rawNumber;
+    const sanitizedKey = invoiceNumber.replace(/[^a-zA-Z0-9_-]/g, '-');
+    const s3Path = `invoices/${sanitizedKey}.pdf`;
+
+    // Upload file directly to S3
+    await storage.upload(req.file.buffer, s3Path, 'application/pdf');
+
+    // Check if invoice record already exists
+    let invoice = await prisma.invoice.findFirst({
+      where: {
+        OR: [
+          { invoiceNumber: invoiceNumber },
+          { invoiceNumber: invoiceNumber.replace(/-/g, '/') },
+        ],
+      },
+    });
+
+    const parsedAmount = parseFloat(amount) || 0;
+    const base = +(parsedAmount / 1.18).toFixed(2);
+    const tax = +(parsedAmount - base).toFixed(2);
+
+    if (invoice) {
+      // Update existing invoice with newly uploaded PDF
+      invoice = await prisma.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          pdfUrl: s3Path,
+          pdfGeneratedAt: new Date(),
+          ...(parsedAmount > 0 ? { totalAmount: parsedAmount, baseAmount: base, taxAmount: tax } : {}),
+        },
+        include: {
+          subscriber: true,
+          beneficiary: true,
+          items: true,
+        },
+      });
+    } else {
+      // Create new invoice record linked directly to this PDF
+      invoice = await prisma.invoice.create({
+        data: {
+          invoiceNumber: invoiceNumber,
+          invoiceType: 'SUBSCRIPTION',
+          status: 'PAID',
+          subscriberId: subscriber.id,
+          beneficiaryId: beneficiaryId && beneficiaryId !== 'none' ? beneficiaryId : null,
+          baseAmount: base,
+          discountAmount: 0,
+          saathiDiscountAmount: 0,
+          taxAmount: tax,
+          totalAmount: parsedAmount,
+          placeOfSupply: subscriber.state || 'Haryana',
+          issuedAt: new Date(),
+          paidAt: new Date(),
+          pdfUrl: s3Path,
+          pdfGeneratedAt: new Date(),
+          items: {
+            create: [
+              {
+                description: `Invoice ${invoiceNumber}`,
+                hsnSacCode: '998399',
+                taxRate: 18,
+                isGstExempt: false,
+                quantity: 1,
+                unitPrice: base,
+                amount: base,
+              },
+            ],
+          },
+        },
+        include: {
+          subscriber: true,
+          beneficiary: true,
+          items: true,
+        },
+      });
+    }
+
+    const downloadUrl = await storage.getPresignedUrl(s3Path, 3600);
+
+    res.status(200).json({
+      success: true,
+      message: `Invoice ${invoiceNumber} attached successfully`,
+      data: {
+        invoice,
+        downloadUrl,
+      },
+    });
+  } catch (err) {
+    console.error('[InvoiceController] directAttachPdf error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 }
@@ -568,6 +699,7 @@ module.exports = {
   getInvoicePdfUrl,
   downloadInvoicePdf,
   createInvoice,
+  directAttachPdf,
   uploadInvoicePdf,
   deleteInvoicePdf,
   deleteInvoice,

@@ -13,6 +13,9 @@ router.get('/', invoiceController.listInvoices);
 // POST /api/invoices (Create manual invoice / attach invoice with optional PDF)
 router.post('/', upload.single('pdf'), invoiceController.createInvoice);
 
+// POST /api/invoices/direct-attach-pdf (Direct 1-click PDF upload & link)
+router.post('/direct-attach-pdf', upload.single('pdf'), invoiceController.directAttachPdf);
+
 // GET /api/invoices/:id
 router.get('/:id', invoiceController.getInvoiceById);
 

@@ -37,7 +37,9 @@ export default function SubscriberProfilePage() {
   const [uploadingInvoiceId, setUploadingInvoiceId] = useState<string | null>(null);
   const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null);
   const [targetUploadInvoiceId, setTargetUploadInvoiceId] = useState<string | null>(null);
+  const [isDirectUploading, setIsDirectUploading] = useState(false);
   const hiddenFileInputRef = useRef<HTMLInputElement | null>(null);
+  const directFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchDetails = async () => {
     if (!id) return;
@@ -119,6 +121,32 @@ export default function SubscriberProfilePage() {
       setUploadingInvoiceId(null);
       setTargetUploadInvoiceId(null);
       if (hiddenFileInputRef.current) hiddenFileInputRef.current.value = '';
+    }
+  };
+
+  const triggerDirectPdfPicker = () => {
+    directFileInputRef.current?.click();
+  };
+
+  const handleDirectPdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0] || !id) return;
+    const file = e.target.files[0];
+    if (file.type !== 'application/pdf') {
+      toast.error('Only PDF files are supported');
+      return;
+    }
+    setIsDirectUploading(true);
+    const toastId = toast.loading(`Attaching ${file.name}...`);
+    try {
+      await invoicesApi.directAttachPdf(id, file, selectedBenId !== 'all' ? selectedBenId : undefined);
+      toast.success(`Invoice PDF ${file.name} attached successfully!`, { id: toastId });
+      loadInvoices(id);
+      loadCounter();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to attach PDF', { id: toastId });
+    } finally {
+      setIsDirectUploading(false);
+      if (directFileInputRef.current) directFileInputRef.current.value = '';
     }
   };
 
@@ -682,13 +710,33 @@ export default function SubscriberProfilePage() {
                         </button>
                       </div>
 
-                      {/* Add Invoice Button */}
+                      {/* Direct 1-Click Attach PDF File */}
                       <Button
                         type="button"
-                        onClick={() => setIsAddInvoiceModalOpen(true)}
+                        onClick={triggerDirectPdfPicker}
+                        disabled={isDirectUploading}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider px-3.5 py-1.5 h-auto flex items-center gap-1.5 shadow-xs"
                       >
-                        <Plus size={14} /> Add / Attach Invoice
+                        {isDirectUploading ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            Attaching...
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={14} /> Attach PDF File
+                          </>
+                        )}
+                      </Button>
+
+                      {/* Full Itemized Invoice Form Modal (Kept as requested) */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsAddInvoiceModalOpen(true)}
+                        className="rounded-xl text-xs font-black uppercase tracking-wider px-3 py-1.5 h-auto flex items-center gap-1.5 border-[#E7DED6] hover:bg-emerald-50/40"
+                      >
+                        <Plus size={14} /> Full Invoice Form
                       </Button>
 
                       {details.beneficiaries && details.beneficiaries.length > 1 && (
@@ -727,8 +775,42 @@ export default function SubscriberProfilePage() {
                       Loading billing records...
                     </div>
                   ) : filteredInvoices.length === 0 ? (
-                    <div className="py-12 text-center text-gray-400 text-xs font-bold uppercase tracking-widest">
-                      No invoices found for this subscriber
+                    <div className="py-12 flex flex-col items-center justify-center text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200 p-8">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+                        <FileText size={24} />
+                      </div>
+                      <h4 className="text-sm font-black text-gray-800">No invoices attached yet</h4>
+                      <p className="text-xs text-gray-400 font-medium max-w-sm mt-1 mb-5">
+                        You can attach an already created invoice PDF directly, or fill out the full invoice form.
+                      </p>
+                      <div className="flex items-center gap-3 flex-wrap justify-center">
+                        <Button
+                          type="button"
+                          onClick={triggerDirectPdfPicker}
+                          disabled={isDirectUploading}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider px-4 py-2.5 flex items-center gap-2 shadow-xs cursor-pointer"
+                        >
+                          {isDirectUploading ? (
+                            <>
+                              <Loader2 size={14} className="animate-spin" />
+                              Attaching PDF...
+                            </>
+                          ) : (
+                            <>
+                              <Upload size={15} />
+                              Attach Invoice PDF Directly
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setIsAddInvoiceModalOpen(true)}
+                          className="rounded-xl text-xs font-black uppercase tracking-wider px-4 py-2.5 flex items-center gap-1.5 border-[#E7DED6]"
+                        >
+                          <Plus size={14} /> Full Invoice Form
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -862,6 +944,15 @@ export default function SubscriberProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Hidden file input for 1-click direct attach PDF */}
+      <input
+        type="file"
+        ref={directFileInputRef}
+        onChange={handleDirectPdfChange}
+        accept="application/pdf"
+        className="hidden"
+      />
 
       {/* Hidden file input for attaching/replacing PDF on an invoice row */}
       <input

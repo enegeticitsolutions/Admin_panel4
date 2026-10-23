@@ -59,11 +59,7 @@ export const AddInvoiceDialog: React.FC<Props> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amountVal = parseFloat(totalAmount);
-    if (isNaN(amountVal) || amountVal < 0) {
-      toast.error('Please enter a valid total amount');
-      return;
-    }
+    const amountVal = parseFloat(totalAmount) || 0;
 
     setIsSubmitting(true);
     try {
@@ -72,8 +68,9 @@ export const AddInvoiceDialog: React.FC<Props> = ({
       if (beneficiaryId && beneficiaryId !== 'none') {
         formData.append('beneficiaryId', beneficiaryId);
       }
-      if (invoiceNumber.trim()) {
-        formData.append('invoiceNumber', invoiceNumber.trim());
+      const cleanNumber = invoiceNumber.trim().replace(/\.pdf$/i, '');
+      if (cleanNumber) {
+        formData.append('invoiceNumber', cleanNumber);
       }
       formData.append('invoiceType', invoiceType);
       formData.append('status', status);

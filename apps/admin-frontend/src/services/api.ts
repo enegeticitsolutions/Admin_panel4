@@ -2160,6 +2160,24 @@ export const invoicesApi = {
     return data.data;
   },
 
+  directAttachPdf: async (subscriberId: string, file: File, beneficiaryId?: string): Promise<any> => {
+    const formData = new FormData();
+    formData.append('subscriberId', subscriberId);
+    if (beneficiaryId && beneficiaryId !== 'none') {
+      formData.append('beneficiaryId', beneficiaryId);
+    }
+    formData.append('pdf', file);
+    const res = await apiFetch(`${API_BASE}/invoices/direct-attach-pdf`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to attach PDF');
+    }
+    return data.data;
+  },
+
   uploadInvoicePdf: async (invoiceId: string, file: File): Promise<any> => {
     const formData = new FormData();
     formData.append('pdf', file);
