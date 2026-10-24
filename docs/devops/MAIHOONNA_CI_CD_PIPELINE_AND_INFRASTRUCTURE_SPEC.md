@@ -14,7 +14,7 @@ This section benchmarks what the DevOps team (**Narendr Bhaiya**) has already co
 | :--- | :--- |
 | **AWS VPC (20.0.0.0/16)** in `ap-south-1` fully provisioned | Provision 4 logical databases on RDS (`maihoonna_dev`, `staging`, `preprod`, `prod`) |
 | **Air-gapped private subnets** configured (no public IP leaks) | Create restricted `dev_user` role (unblocks developers on localhost) |
-| **PROD EC2 (20.0.15.243)** & `sg-0f2877e35b3101fbe` created | Install Node 20, PM2, and Nginx on DEV (`20.0.21.75`), UAT (`20.0.154.117`), PROD |
+| **PROD EC2 (20.0.15.243)** & `sg-0f2877e35b3101fbe` created | Install Node 22.23.4 (LTS, CVE-2026-111497 patched), PM2, and Nginx on DEV (`20.0.21.75`), UAT (`20.0.154.117`), PROD |
 | **UAT EC2 (20.0.154.117)** & **DEV EC2 (20.0.21.75)** running | Deploy Nginx reverse proxy (`/api/` ➔ 8001, `/admin-api/` ➔ 5000, `/admin` ➔ static) |
 | **Management Server** (OpenVPN & Jenkins host) running | Deploy PM2 `ecosystem.config.js` for zero-downtime cluster management |
 | **ALB (`maihoonna-prod-alb`)** & target group configured | Store 6 Jenkins credentials (3 SSH keys, 3 DB connection URLs) |
@@ -434,11 +434,14 @@ To execute this plan smoothly, here is the exact task division:
 - [ ] Provide the RDS endpoint and `dev_user` password to the development team.
 
 ### 2. EC2 Server Setup (`20.0.21.75`, `20.0.154.117`, `20.0.15.243`)
-- [ ] Ensure Node.js v20.x, npm, PM2, and Nginx are installed:
+- [ ] Ensure Node.js v22.23.4 (LTS — patched for CVE-2026-111497), npm, PM2, and Nginx are installed:
   ```bash
   sudo apt update && sudo apt install -y curl nginx
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-  sudo apt install -y nodejs
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+  source ~/.bashrc
+  nvm install 22.23.4
+  nvm use 22.23.4
+  nvm alias default 22.23.4
   sudo npm install -g pm2
   ```
 - [ ] Configure Nginx reverse proxy using the template in Section 4.2.

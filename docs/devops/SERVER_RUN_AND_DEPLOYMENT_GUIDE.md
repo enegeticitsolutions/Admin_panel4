@@ -216,6 +216,12 @@ server {
 
     # 1. Primary API (apps/api on port 8001)
     location /api/ {
+        # CVE-2026-111497 (Node2Shell) mitigation: reject Brotli-encoded request bodies
+        # Remove this block once all servers are confirmed running Node.js >= 22.23.4
+        if ($http_content_encoding = "br") {
+            return 415;
+        }
+
         proxy_pass http://127.0.0.1:8001/api/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
@@ -228,6 +234,12 @@ server {
 
     # 2. Admin Backend API (apps/admin-backend on port 3001)
     location /admin-api/ {
+        # CVE-2026-111497 (Node2Shell) mitigation: reject Brotli-encoded request bodies
+        # Remove this block once all servers are confirmed running Node.js >= 22.23.4
+        if ($http_content_encoding = "br") {
+            return 415;
+        }
+
         proxy_pass http://127.0.0.1:3001/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;

@@ -74,6 +74,25 @@ app.use(
 
 
 const payloadLimit = process.env.JSON_PAYLOAD_LIMIT || '2mb';
+
+// ─── CVE-2026-111497 (Node2Shell) Brotli RCE Mitigation ──────────────────────
+// Express 5's express.json() automatically decompresses request bodies with
+// Content-Encoding: br before passing them to Node's Brotli decoder.
+// Node.js 22.x < 22.23.4 has an out-of-bounds write in that decoder (high severity RCE).
+// This middleware rejects Brotli-encoded request bodies before decompression is attempted.
+// REMOVE THIS BLOCK once all servers are confirmed running Node.js >= 22.23.4.
+// Tracked fix: upgrade Node runtime to v22.23.4 (see .nvmrc and package.json engines).
+app.use((req, res, next) => {
+  if (req.headers['content-encoding']?.toLowerCase().includes('br')) {
+    return res.status(415).json({
+      success: false,
+      message: 'Brotli-encoded request bodies are not supported. Please use gzip or no compression.',
+    });
+  }
+  next();
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.use(express.json({
   limit: payloadLimit,
   verify: (req, res, buf) => {
