@@ -45,6 +45,13 @@ export const volunteerCheckinSchema = Joi.object({
   visitRequestId: Joi.string().required(),
   otpCode: Joi.string().required(),
   notes: Joi.string().optional().allow(''),
+  latitude: Joi.number().optional().allow(null),
+  longitude: Joi.number().optional().allow(null),
+});
+
+export const volunteerLocationUpdateSchema = Joi.object({
+  latitude: Joi.number().required(),
+  longitude: Joi.number().required(),
 });
 
 export const volunteerCheckoutSchema = Joi.object({

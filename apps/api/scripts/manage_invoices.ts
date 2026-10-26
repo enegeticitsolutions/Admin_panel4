@@ -24,14 +24,27 @@ async function main() {
   console.log(`Found ${tempInvoices.length} TEMP invoices:`);
   console.log(JSON.stringify(tempInvoices, null, 2));
 
-  // Set lastCount to 9 for 2026-27
+  // Synchronize lastCount for 2026-27 to the highest existing sequence
   const financialYear = '2026-27';
+  const latestInvoice = await prisma.invoice.findFirst({
+    where: { invoiceNumber: { startsWith: `MHN/INV/${financialYear}/` } },
+    orderBy: { invoiceNumber: 'desc' },
+    select: { invoiceNumber: true },
+  });
+
+  let maxSeq = 0;
+  if (latestInvoice?.invoiceNumber) {
+    const parts = latestInvoice.invoiceNumber.split('/');
+    const parsed = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(parsed)) maxSeq = parsed;
+  }
+
   const updatedCounter = await (prisma as any).invoiceCounter.upsert({
     where: { financialYear },
-    update: { lastCount: 9 },
-    create: { financialYear, lastCount: 9 },
+    update: { lastCount: maxSeq },
+    create: { financialYear, lastCount: maxSeq },
   });
-  console.log(`\nUpdated counter for ${financialYear}: lastCount = ${updatedCounter.lastCount} (Next will be MHN/INV/${financialYear}/00010)`);
+  console.log(`\nUpdated counter for ${financialYear}: lastCount = ${updatedCounter.lastCount} (Next will be MHN/INV/${financialYear}/${String(maxSeq + 1).padStart(5, '0')})`);
 }
 
 main()

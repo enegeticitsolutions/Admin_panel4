@@ -79,5 +79,29 @@ export class SupabaseStorage extends StorageService {
     }
     return data.signedUrl;
   }
+
+  /**
+   * Generate signed upload URL for local dev.
+   */
+  async getPresignedUploadUrl(path: string, _mimeType: string, _ttlSeconds = 300): Promise<string> {
+    const { data, error } = await this.client.storage
+      .from(this.bucketName)
+      .createSignedUploadUrl(path);
+
+    if (error || !data?.signedUrl) {
+      throw new Error(`[SupabaseStorage] Presigned upload URL failed: ${error?.message ?? 'no URL returned'}`);
+    }
+    return data.signedUrl;
+  }
+
+  async getFileBuffer(path: string): Promise<Buffer> {
+    const { data, error } = await this.client.storage.from(this.bucketName).download(path);
+    if (error || !data) {
+      throw new Error(`[SupabaseStorage] Download failed: ${error?.message || 'File not found'}`);
+    }
+    const arrayBuffer = await data.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
 }
+
 

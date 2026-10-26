@@ -6,9 +6,15 @@ import {
   volunteerCheckinSchema,
   volunteerCheckoutSchema,
   volunteerRedeemSchema,
+  volunteerLocationUpdateSchema,
 } from '../../schemas/sathi';
 
 const router = Router();
+
+router.post('/location', authenticate, validate(volunteerLocationUpdateSchema), async (req: AuthRequest, res: Response) => {
+  const updated = await sathiService.updateVolunteerLocation(req.userId!, req.body.latitude, req.body.longitude);
+  res.json(new ApiResponse(200, updated, 'Live location updated successfully'));
+});
 
 router.post('/visits/checkin', authenticate, validate(volunteerCheckinSchema), async (req: AuthRequest, res: Response) => {
   const visitLog = await sathiService.checkinVolunteerVisit(req.userId!, req.body);

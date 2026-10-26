@@ -24,6 +24,8 @@ import { NavigationService } from '@/utils/NavigationService';
 import { SathiBottomNav } from '@/components/shared/SathiBottomNav';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
+import * as Location from 'expo-location';
+import { getCurrentLocation } from '@/services/location/getCurrentLocation';
 
 const DEEP_ORANGE = '#FE6700';
 
@@ -133,6 +135,98 @@ export default function SathiHours() {
     return () => clearInterval(interval);
   }, [activeSession]);
 
+  // Real-time GPS location streaming during active companion visit
+  useEffect(() => {
+    if (!activeSession) return;
+
+    let locationSubscription: Location.LocationSubscription | null = null;
+    let syncInterval: any = null;
+    let isCancelled = false;
+
+    const sendLocation = async (lat: number, lng: number) => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) return;
+        await fetch(`${API_URL}/sathi/location`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            latitude: lat,
+            longitude: lng,
+          }),
+        });
+      } catch (err) {
+        console.warn('[hours.tsx] Live location send error:', err);
+      }
+    };
+
+    const startTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.warn('[hours.tsx] Foreground location permission not granted');
+          return;
+        }
+
+        // 1. Send initial immediate position
+        const initial = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        if (initial?.coords && !isCancelled) {
+          sendLocation(initial.coords.latitude, initial.coords.longitude);
+        }
+
+        // 2. Watch location changes continuously (e.g. emulator mock GPS updates)
+        if (!isCancelled) {
+          locationSubscription = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 5000,
+              distanceInterval: 5,
+            },
+            (loc) => {
+              if (loc?.coords && !isCancelled) {
+                sendLocation(loc.coords.latitude, loc.coords.longitude);
+              }
+            }
+          );
+        }
+
+        // 3. Fallback periodic sync every 15s to keep backend heartbeat alive
+        syncInterval = setInterval(async () => {
+          if (isCancelled) return;
+          try {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.High,
+            });
+            if (loc?.coords && !isCancelled) {
+              sendLocation(loc.coords.latitude, loc.coords.longitude);
+            }
+          } catch (e) {
+            // ignore heartbeat errors
+          }
+        }, 15000);
+      } catch (err) {
+        console.warn('[hours.tsx] Live location tracking error:', err);
+      }
+    };
+
+    startTracking();
+
+    return () => {
+      isCancelled = true;
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+      if (syncInterval) {
+        clearInterval(syncInterval);
+      }
+    };
+  }, [activeSession]);
+
   const handleCheckin = async () => {
     if (!targetVisit) {
       Alert.alert('Selection Required', 'No valid visit request selected.');
@@ -145,6 +239,20 @@ export default function SathiHours() {
 
     try {
       const token = await AsyncStorage.getItem('userToken');
+
+      // Fetch authoritative live GPS coordinates from device / emulator
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      try {
+        const loc = await getCurrentLocation();
+        if (loc?.latitude && loc?.longitude) {
+          latitude = loc.latitude;
+          longitude = loc.longitude;
+        }
+      } catch (locErr) {
+        console.warn('[hours.tsx] GPS location capture failed during check-in:', locErr);
+      }
+
       const response = await fetch(`${API_URL}/sathi/visits/checkin`, {
         method: 'POST',
         headers: {
@@ -155,7 +263,9 @@ export default function SathiHours() {
           beneficiaryId: selectedMatch.beneficiary.id,
           assignmentId: selectedMatch.assignmentId,
           visitRequestId: targetVisit.id,
-          otpCode
+          otpCode,
+          latitude,
+          longitude,
         })
       });
 

@@ -31,6 +31,7 @@ import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useAuth } from '@/contexts/AuthContext';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
+import { getCurrentLocation } from '@/services/location/getCurrentLocation';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -348,6 +349,20 @@ export default function SathiDashboard() {
       if (!token) return;
 
       setLoading(true);
+
+      // Fetch authoritative live GPS coordinates
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      try {
+        const loc = await getCurrentLocation();
+        if (loc?.latitude && loc?.longitude) {
+          latitude = loc.latitude;
+          longitude = loc.longitude;
+        }
+      } catch (locErr) {
+        console.warn('[index.tsx] Live GPS capture failed during check-in:', locErr);
+      }
+
       const response = await fetch(`${API_URL}/sathi/visits/checkin`, {
         method: 'POST',
         headers: {
@@ -357,6 +372,8 @@ export default function SathiDashboard() {
         body: JSON.stringify({
           beneficiaryId,
           assignmentId,
+          latitude,
+          longitude,
         }),
       });
 

@@ -78,6 +78,28 @@ const formatCheckInTime = (isoString: string): string => {
   }
 };
 
+// Calculates Great-Circle distance in meters using Haversine formula
+const getDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371e3; // Earth radius in meters
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+};
+
+// Formats distance in meters into human-readable string: "85 m" or "7.1 km"
+const formatDistance = (meters: number): string => {
+  if (meters < 1000) {
+    return `${Math.round(meters)} m`;
+  }
+  return `${(meters / 1000).toFixed(1)} km`;
+};
+
 export const SaathiLiveTrackingPage: React.FC = () => {
   const [visits, setVisits] = useState<OngoingVolunteerVisit[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -215,21 +237,36 @@ export const SaathiLiveTrackingPage: React.FC = () => {
       setSelectedVisitId(visit.id);
       if (!mapInstanceRef.current) return;
 
-      const lat = visit.volunteer?.latitude || visit.beneficiary?.latitude;
-      const lng = visit.volunteer?.longitude || visit.beneficiary?.longitude;
+      const vLat = visit.volunteer?.latitude;
+      const vLng = visit.volunteer?.longitude;
+      const bLat = visit.beneficiary?.latitude;
+      const bLng = visit.beneficiary?.longitude;
 
-      if (lat && lng) {
-        const pos = { lat, lng };
-        mapInstanceRef.current.panTo(pos);
-        mapInstanceRef.current.setZoom(15);
+      const distance =
+        visit.distanceMeters ??
+        (vLat && vLng && bLat && bLng ? getDistanceInMeters(vLat, vLng, bLat, bLng) : null);
+      const isWith = distance !== null ? distance <= 100 : false;
 
-        // Open InfoWindow for this marker
-        const marker = markersRef.current.get(visit.id);
-        if (marker && infoWindowRef.current) {
-          const content = generateInfoWindowHtml(visit, currentTime);
-          infoWindowRef.current.setContent(content);
-          infoWindowRef.current.open(mapInstanceRef.current, marker);
+      if (vLat && vLng && bLat && bLng && !isWith) {
+        const b = new window.google.maps.LatLngBounds();
+        b.extend({ lat: vLat, lng: vLng });
+        b.extend({ lat: bLat, lng: bLng });
+        mapInstanceRef.current.fitBounds(b, { top: 80, right: 80, bottom: 80, left: 80 });
+      } else {
+        const primaryLat = vLat || bLat;
+        const primaryLng = vLng || bLng;
+        if (primaryLat && primaryLng) {
+          mapInstanceRef.current.panTo({ lat: primaryLat, lng: primaryLng });
+          mapInstanceRef.current.setZoom(16);
         }
+      }
+
+      // Open InfoWindow on the Saathi marker
+      const marker = markersRef.current.get(visit.id);
+      if (marker && infoWindowRef.current) {
+        const content = generateInfoWindowHtml(visit, currentTime);
+        infoWindowRef.current.setContent(content);
+        infoWindowRef.current.open(mapInstanceRef.current, marker);
       }
     },
     [currentTime]
@@ -250,30 +287,55 @@ export const SaathiLiveTrackingPage: React.FC = () => {
     const bAddress = visit.beneficiary?.address || 'Saved Address';
     const bPhone = visit.beneficiary?.phone || '';
 
-    const lat = visit.volunteer?.latitude || visit.beneficiary?.latitude;
-    const lng = visit.volunteer?.longitude || visit.beneficiary?.longitude;
-    const navUrl = lat && lng ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}` : '#';
+    const vLat = visit.volunteer?.latitude;
+    const vLng = visit.volunteer?.longitude;
+    const bLat = visit.beneficiary?.latitude;
+    const bLng = visit.beneficiary?.longitude;
+
+    const distance =
+      visit.distanceMeters ??
+      (vLat && vLng && bLat && bLng ? getDistanceInMeters(vLat, vLng, bLat, bLng) : null);
+    const isWith = distance !== null ? distance <= 100 : false;
+
+    const navBenUrl = bLat && bLng ? `https://www.google.com/maps/dir/?api=1&destination=${bLat},${bLng}` : '#';
 
     return `
-      <div style="font-family: system-ui, -apple-system, sans-serif; padding: 6px; max-width: 300px; color: #1e293b;">
+      <div style="font-family: system-ui, -apple-system, sans-serif; padding: 6px; max-width: 320px; color: #1e293b;">
         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 8px;">
           <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
-            <span style="font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase; letter-spacing: 0.5px;">Active Visit</span>
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${isWith ? '#10b981' : '#f97316'};"></span>
+            <span style="font-size: 11px; font-weight: 700; color: ${isWith ? '#059669' : '#ea580c'}; text-transform: uppercase; letter-spacing: 0.5px;">
+              ${isWith ? 'With Beneficiary' : 'Companion Active'}
+            </span>
           </div>
           <div style="background: #fffbeb; color: #b45309; border: 1px solid #fde68a; border-radius: 9999px; font-size: 11px; font-weight: 700; font-family: monospace; padding: 2px 8px;">
             ⏱️ ${durationStr}
           </div>
         </div>
 
+        ${
+          distance !== null
+            ? isWith
+              ? `<div style="background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 6px; padding: 6px 8px; font-size: 11px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                  <span>🟢</span>
+                  <span>Saathi is with beneficiary (&lt;100m • ${Math.round(distance)}m)</span>
+                </div>`
+              : `<div style="background: #fffbeb; color: #92400e; border: 1px solid #fde68a; border-radius: 6px; padding: 6px 8px; font-size: 11px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                  <span>📍 Distance between them:</span>
+                  <span style="background: #fef3c7; padding: 1px 6px; border-radius: 4px; border: 1px solid #fcd34d;">${formatDistance(distance)}</span>
+                </div>`
+            : ''
+        }
+
         <div style="margin-bottom: 10px;">
-          <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Saathi Volunteer</div>
+          <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Saathi Volunteer (Live GPS)</div>
           <div style="font-size: 15px; font-weight: 700; color: #0f172a;">${vName}</div>
           ${vPhone ? `<div style="font-size: 12px; color: #475569; margin-top: 2px;">📞 <a href="tel:${vPhone}" style="color: #2563eb; text-decoration: none; font-weight: 500;">${vPhone}</a></div>` : ''}
+          ${vLat && vLng ? `<div style="font-size: 10px; color: #64748b; margin-top: 2px;">📡 Live GPS: ${vLat.toFixed(5)}, ${vLng.toFixed(5)}</div>` : ''}
         </div>
 
         <div style="margin-bottom: 10px; background: #f8fafc; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0;">
-          <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Beneficiary</div>
+          <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Beneficiary Residence</div>
           <div style="font-size: 14px; font-weight: 700; color: #0f172a;">${bName}</div>
           <div style="font-size: 11px; color: #475569; margin-top: 2px; line-height: 1.3;">📍 ${bAddress}</div>
           ${bPhone ? `<div style="font-size: 11px; color: #475569; margin-top: 3px;">📞 <a href="tel:${bPhone}" style="color: #2563eb; text-decoration: none;">${bPhone}</a></div>` : ''}
@@ -281,7 +343,7 @@ export const SaathiLiveTrackingPage: React.FC = () => {
 
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 6px;">
           <span>Checked In: <strong>${checkInFormatted}</strong></span>
-          ${lat && lng ? `<a href="${navUrl}" target="_blank" rel="noopener noreferrer" style="color: #ea580c; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 2px;">Navigate ↗</a>` : ''}
+          ${bLat && bLng ? `<a href="${navBenUrl}" target="_blank" rel="noopener noreferrer" style="color: #ea580c; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 2px;">Beneficiary Map ↗</a>` : ''}
         </div>
       </div>
     `;
@@ -295,24 +357,12 @@ export const SaathiLiveTrackingPage: React.FC = () => {
     const existingMarkers = markersRef.current;
     const existingPolylines = polylinesRef.current;
 
-    // Clear removed markers
-    const currentVisitIds = new Set(visits.map((v) => v.id));
-    existingMarkers.forEach((marker, id) => {
-      if (!currentVisitIds.has(id)) {
-        marker.setMap(null);
-        existingMarkers.delete(id);
-      }
-    });
-
-    existingPolylines.forEach((line, id) => {
-      if (!currentVisitIds.has(id)) {
-        line.setMap(null);
-        existingPolylines.delete(id);
-      }
-    });
-
     const bounds = new window.google.maps.LatLngBounds();
     let hasValidCoords = false;
+
+    // Track active keys to cleanly garbage collect old markers
+    const activeMarkerKeys = new Set<string>();
+    const activePolylineKeys = new Set<string>();
 
     visits.forEach((visit) => {
       const vLat = visit.volunteer?.latitude;
@@ -320,62 +370,190 @@ export const SaathiLiveTrackingPage: React.FC = () => {
       const bLat = visit.beneficiary?.latitude;
       const bLng = visit.beneficiary?.longitude;
 
-      const primaryLat = vLat || bLat;
-      const primaryLng = vLng || bLng;
+      const distance =
+        visit.distanceMeters ??
+        (vLat && vLng && bLat && bLng ? getDistanceInMeters(vLat, vLng, bLat, bLng) : null);
+      const isWith = distance !== null ? distance <= 100 : false;
 
-      if (!primaryLat || !primaryLng) return;
+      const vName = visit.volunteer?.name || 'Saathi';
+      const bName = visit.beneficiary?.name || 'Beneficiary';
 
-      hasValidCoords = true;
-      const pos = { lat: primaryLat, lng: primaryLng };
-      bounds.extend(pos);
+      // Case 1: Within 100 meters (or only one location exists) -> Unified pin
+      if (isWith || !(vLat && vLng && bLat && bLng)) {
+        const lat = vLat || bLat;
+        const lng = vLng || bLng;
+        if (!lat || !lng) return;
 
-      // Create or update marker
-      let marker = existingMarkers.get(visit.id);
-      if (!marker) {
-        // High visibility custom pulse marker
-        const markerSvg = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="44" height="52" viewBox="0 0 44 52">
+        hasValidCoords = true;
+        const pos = { lat, lng };
+        bounds.extend(pos);
+
+        const markerKey = visit.id;
+        activeMarkerKeys.add(markerKey);
+
+        const markerSvg = isWith
+          ? `
+            <svg xmlns="http://www.w3.org/2000/svg" width="46" height="54" viewBox="0 0 46 54">
+              <defs>
+                <filter id="shadow-green-${visit.id}" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>
+                </filter>
+              </defs>
+              <path d="M23 0C11.4 0 2 9.4 2 21c0 14.8 19.1 31.8 19.9 32.5a1.5 1.5 0 0 0 2.2 0C24.9 52.8 44 35.8 44 21 44 9.4 34.6 0 23 0z" fill="#059669" filter="url(#shadow-green-${visit.id})"/>
+              <circle cx="23" cy="20" r="15" fill="#ffffff"/>
+              <circle cx="23" cy="20" r="12" fill="#10b981"/>
+              <path d="M19.5 24.5l-4-4 1.4-1.4 2.6 2.6 7-7 1.4 1.4z" fill="#ffffff"/>
+            </svg>
+          `
+          : `
+            <svg xmlns="http://www.w3.org/2000/svg" width="46" height="54" viewBox="0 0 46 54">
+              <defs>
+                <filter id="shadow-orange-${visit.id}" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>
+                </filter>
+              </defs>
+              <path d="M23 0C11.4 0 2 9.4 2 21c0 14.8 19.1 31.8 19.9 32.5a1.5 1.5 0 0 0 2.2 0C24.9 52.8 44 35.8 44 21 44 9.4 34.6 0 23 0z" fill="#ea580c" filter="url(#shadow-orange-${visit.id})"/>
+              <circle cx="23" cy="20" r="15" fill="#ffffff"/>
+              <circle cx="23" cy="20" r="12" fill="#f97316"/>
+              <path d="M23 24.5l-1.05-.95C18.2 20 15.7 17.7 15.7 14.9c0-2.3 1.8-4.1 4.1-4.1 1.3 0 2.55.6 3.2 1.55.65-.95 1.9-1.55 3.2-1.55 2.3 0 4.1 1.8 4.1 4.1 0 2.8-2.5 5.1-6.25 8.65L23 24.5z" fill="#ffffff" transform="scale(0.7) translate(10, 9)"/>
+            </svg>
+          `;
+
+        let marker = existingMarkers.get(markerKey);
+        if (!marker) {
+          marker = new window.google.maps.Marker({
+            position: pos,
+            map,
+            title: isWith ? `${vName} is with ${bName} (<100m)` : `${vName} → ${bName}`,
+            icon: {
+              url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(markerSvg)}`,
+              scaledSize: new window.google.maps.Size(46, 54),
+              anchor: new window.google.maps.Point(23, 52),
+            },
+          });
+          marker.addListener('click', () => {
+            setSelectedVisitId(visit.id);
+            if (infoWindowRef.current) {
+              const content = generateInfoWindowHtml(visit, currentTime);
+              infoWindowRef.current.setContent(content);
+              infoWindowRef.current.open(map, marker);
+            }
+          });
+          existingMarkers.set(markerKey, marker);
+        } else {
+          marker.setPosition(pos);
+          marker.setTitle(isWith ? `${vName} is with ${bName} (<100m)` : `${vName} → ${bName}`);
+          marker.setIcon({
+            url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(markerSvg)}`,
+            scaledSize: new window.google.maps.Size(46, 54),
+            anchor: new window.google.maps.Point(23, 52),
+          });
+        }
+      } else {
+        // Case 2: Distance > 100m -> Separate Saathi Live GPS Pin, Beneficiary Residence Pin, and connecting Polyline
+        hasValidCoords = true;
+        bounds.extend({ lat: vLat, lng: vLng });
+        bounds.extend({ lat: bLat, lng: bLng });
+
+        const saathiKey = visit.id;
+        const benKey = `${visit.id}_ben`;
+        activeMarkerKeys.add(saathiKey);
+        activeMarkerKeys.add(benKey);
+        activePolylineKeys.add(visit.id);
+
+        const saathiSvg = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="46" height="54" viewBox="0 0 46 54">
             <defs>
-              <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.3"/>
+              <filter id="shadow-saathi-${visit.id}" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>
               </filter>
             </defs>
-            <path d="M22 0C10.95 0 2 8.95 2 20c0 14.25 18.2 30.6 18.98 31.3a1.49 1.49 0 0 0 2.04 0C23.8 50.6 42 34.25 42 20 42 8.95 33.05 0 22 0z" fill="#ea580c" filter="url(#shadow)"/>
-            <circle cx="22" cy="19" r="14" fill="#ffffff"/>
-            <circle cx="22" cy="19" r="11" fill="#f97316"/>
-            <!-- Heart / Companion Icon -->
-            <path d="M22 23.5l-1.05-.95C17.2 19 14.7 16.7 14.7 13.9c0-2.3 1.8-4.1 4.1-4.1 1.3 0 2.55.6 3.2 1.55.65-.95 1.9-1.55 3.2-1.55 2.3 0 4.1 1.8 4.1 4.1 0 2.8-2.5 5.1-6.25 8.65L22 23.5z" fill="#ffffff" transform="scale(0.7) translate(9, 8)"/>
+            <path d="M23 0C11.4 0 2 9.4 2 21c0 14.8 19.1 31.8 19.9 32.5a1.5 1.5 0 0 0 2.2 0C24.9 52.8 44 35.8 44 21 44 9.4 34.6 0 23 0z" fill="#ea580c" filter="url(#shadow-saathi-${visit.id})"/>
+            <circle cx="23" cy="20" r="15" fill="#ffffff"/>
+            <circle cx="23" cy="20" r="12" fill="#f97316"/>
+            <!-- Companion Icon -->
+            <path d="M23 24.5l-1.05-.95C18.2 20 15.7 17.7 15.7 14.9c0-2.3 1.8-4.1 4.1-4.1 1.3 0 2.55.6 3.2 1.55.65-.95 1.9-1.55 3.2-1.55 2.3 0 4.1 1.8 4.1 4.1 0 2.8-2.5 5.1-6.25 8.65L23 24.5z" fill="#ffffff" transform="scale(0.7) translate(10, 9)"/>
           </svg>
         `;
 
-        marker = new window.google.maps.Marker({
-          position: pos,
-          map,
-          title: `${visit.volunteer?.name || 'Saathi'} → ${visit.beneficiary?.name || 'Beneficiary'}`,
-          icon: {
-            url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(markerSvg)}`,
-            scaledSize: new window.google.maps.Size(44, 52),
-            anchor: new window.google.maps.Point(22, 50),
-          },
-          animation: window.google.maps.Animation.DROP,
-        });
+        const benSvg = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="46" height="54" viewBox="0 0 46 54">
+            <defs>
+              <filter id="shadow-ben-${visit.id}" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>
+              </filter>
+            </defs>
+            <path d="M23 0C11.4 0 2 9.4 2 21c0 14.8 19.1 31.8 19.9 32.5a1.5 1.5 0 0 0 2.2 0C24.9 52.8 44 35.8 44 21 44 9.4 34.6 0 23 0z" fill="#2563eb" filter="url(#shadow-ben-${visit.id})"/>
+            <circle cx="23" cy="20" r="15" fill="#ffffff"/>
+            <circle cx="23" cy="20" r="12" fill="#3b82f6"/>
+            <!-- House Icon -->
+            <path d="M23 12l-7 6v7h4v-4h6v4h4v-7z" fill="#ffffff"/>
+          </svg>
+        `;
 
-        marker.addListener('click', () => {
-          setSelectedVisitId(visit.id);
-          if (infoWindowRef.current) {
-            const content = generateInfoWindowHtml(visit, currentTime);
-            infoWindowRef.current.setContent(content);
-            infoWindowRef.current.open(map, marker);
-          }
-        });
+        // 1. Saathi Live GPS Marker
+        let saathiMarker = existingMarkers.get(saathiKey);
+        if (!saathiMarker) {
+          saathiMarker = new window.google.maps.Marker({
+            position: { lat: vLat, lng: vLng },
+            map,
+            title: `${vName} (Saathi Live GPS • ${formatDistance(distance)} from Beneficiary)`,
+            icon: {
+              url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(saathiSvg)}`,
+              scaledSize: new window.google.maps.Size(46, 54),
+              anchor: new window.google.maps.Point(23, 52),
+            },
+          });
+          saathiMarker.addListener('click', () => {
+            setSelectedVisitId(visit.id);
+            if (infoWindowRef.current) {
+              infoWindowRef.current.setContent(generateInfoWindowHtml(visit, currentTime));
+              infoWindowRef.current.open(map, saathiMarker);
+            }
+          });
+          existingMarkers.set(saathiKey, saathiMarker);
+        } else {
+          saathiMarker.setPosition({ lat: vLat, lng: vLng });
+          saathiMarker.setTitle(`${vName} (Saathi Live GPS • ${formatDistance(distance)} from Beneficiary)`);
+          saathiMarker.setIcon({
+            url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(saathiSvg)}`,
+            scaledSize: new window.google.maps.Size(46, 54),
+            anchor: new window.google.maps.Point(23, 52),
+          });
+        }
 
-        existingMarkers.set(visit.id, marker);
-      } else {
-        marker.setPosition(pos);
-      }
+        // 2. Beneficiary Residence Marker
+        let benMarker = existingMarkers.get(benKey);
+        if (!benMarker) {
+          benMarker = new window.google.maps.Marker({
+            position: { lat: bLat, lng: bLng },
+            map,
+            title: `${bName} (Beneficiary Residence)`,
+            icon: {
+              url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(benSvg)}`,
+              scaledSize: new window.google.maps.Size(46, 54),
+              anchor: new window.google.maps.Point(23, 52),
+            },
+          });
+          benMarker.addListener('click', () => {
+            setSelectedVisitId(visit.id);
+            if (infoWindowRef.current) {
+              infoWindowRef.current.setContent(generateInfoWindowHtml(visit, currentTime));
+              infoWindowRef.current.open(map, benMarker);
+            }
+          });
+          existingMarkers.set(benKey, benMarker);
+        } else {
+          benMarker.setPosition({ lat: bLat, lng: bLng });
+          benMarker.setTitle(`${bName} (Beneficiary Residence)`);
+          benMarker.setIcon({
+            url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(benSvg)}`,
+            scaledSize: new window.google.maps.Size(46, 54),
+            anchor: new window.google.maps.Point(23, 52),
+          });
+        }
 
-      // If both coordinates exist and differ by at least 15m, draw a dotted connection line
-      if (vLat && vLng && bLat && bLng && (Math.abs(vLat - bLat) > 0.0002 || Math.abs(vLng - bLng) > 0.0002)) {
+        // 3. Distance Connection Polyline
         let poly = existingPolylines.get(visit.id);
         const path = [
           { lat: vLat, lng: vLng },
@@ -385,7 +563,7 @@ export const SaathiLiveTrackingPage: React.FC = () => {
           poly = new window.google.maps.Polyline({
             path,
             strokeColor: '#ea580c',
-            strokeOpacity: 0.8,
+            strokeOpacity: 0.85,
             strokeWeight: 3,
             icons: [
               {
@@ -404,6 +582,21 @@ export const SaathiLiveTrackingPage: React.FC = () => {
         } else {
           poly.setPath(path);
         }
+      }
+    });
+
+    // Cleanup markers and polylines that are no longer active
+    existingMarkers.forEach((marker, key) => {
+      if (!activeMarkerKeys.has(key)) {
+        marker.setMap(null);
+        existingMarkers.delete(key);
+      }
+    });
+
+    existingPolylines.forEach((line, key) => {
+      if (!activePolylineKeys.has(key)) {
+        line.setMap(null);
+        existingPolylines.delete(key);
       }
     });
 
@@ -591,10 +784,17 @@ export const SaathiLiveTrackingPage: React.FC = () => {
                 const liveDurationText = formatDuration(elapsedSeconds);
                 const checkInFormatted = formatCheckInTime(visit.checkInTime);
 
-                const hasGps = Boolean(
-                  (visit.volunteer?.latitude && visit.volunteer?.longitude) ||
-                    (visit.beneficiary?.latitude && visit.beneficiary?.longitude)
-                );
+                const vLat = visit.volunteer?.latitude;
+                const vLng = visit.volunteer?.longitude;
+                const bLat = visit.beneficiary?.latitude;
+                const bLng = visit.beneficiary?.longitude;
+
+                const distance =
+                  visit.distanceMeters ??
+                  (vLat && vLng && bLat && bLng ? getDistanceInMeters(vLat, vLng, bLat, bLng) : null);
+                const isWith = distance !== null ? distance <= 100 : false;
+
+                const hasGps = Boolean(vLat && vLng);
 
                 const telHref = visit.volunteer?.phone
                   ? sanitizeTelLink(`tel:${visit.volunteer.phone}`)
@@ -655,8 +855,9 @@ export const SaathiLiveTrackingPage: React.FC = () => {
                             {visit.volunteer?.name || 'Unknown Saathi'}
                           </h4>
                           {hasGps ? (
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                              GPS Active
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                              Live GPS Active
                             </span>
                           ) : (
                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
@@ -682,6 +883,13 @@ export const SaathiLiveTrackingPage: React.FC = () => {
                             </span>
                           )}
                         </div>
+
+                        {vLat && vLng && (
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5 flex items-center gap-1">
+                            <span>📡</span>
+                            <span>{vLat.toFixed(5)}, {vLng.toFixed(5)}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -719,6 +927,34 @@ export const SaathiLiveTrackingPage: React.FC = () => {
                         </span>
                       </div>
                     </div>
+
+                    {/* Proximity / Distance Status Block */}
+                    {distance !== null ? (
+                      isWith ? (
+                        <div className="mt-2.5 bg-emerald-50 border border-emerald-200/90 rounded-lg p-2.5 flex items-center justify-between text-xs shadow-2xs">
+                          <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            <span>Saathi is with beneficiary</span>
+                          </div>
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md font-mono border border-emerald-200">
+                            &lt;100m ({Math.round(distance)}m)
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="mt-2.5 bg-amber-50 border border-amber-200/90 rounded-lg p-2.5 flex items-center justify-between text-xs shadow-2xs">
+                          <div className="flex items-center gap-1.5 font-semibold text-amber-900">
+                            <Navigation size={13} className="text-amber-600 shrink-0" />
+                            <span>Distance between them</span>
+                          </div>
+                          <span className="text-[11px] font-bold text-amber-950 bg-amber-100 px-2 py-0.5 rounded-md font-mono border border-amber-300">
+                            {formatDistance(distance)}
+                          </span>
+                        </div>
+                      )
+                    ) : null}
 
                     {/* Footer / Meta info */}
                     <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
@@ -786,21 +1022,25 @@ export const SaathiLiveTrackingPage: React.FC = () => {
           </div>
 
           {/* Map Legend (Bottom Right) */}
-          <div className="absolute bottom-6 right-4 z-10 bg-white/90 backdrop-blur-xs p-2.5 rounded-xl shadow-md border border-slate-200 text-xs space-y-1.5 hidden sm:block">
-            <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wider mb-1">
+          <div className="absolute bottom-6 right-4 z-10 bg-white/95 backdrop-blur-xs p-3 rounded-xl shadow-lg border border-slate-200 text-xs space-y-2 hidden sm:block">
+            <div className="font-bold text-slate-800 text-[11px] uppercase tracking-wider border-b border-slate-100 pb-1">
               Tracker Legend
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-orange-500 border border-white shadow-xs"></span>
-              <span className="text-slate-600">Active Companion Visit</span>
+              <span className="w-3.5 h-3.5 rounded-full bg-orange-500 border border-white shadow-xs inline-block"></span>
+              <span className="text-slate-700 font-medium">Saathi Live GPS (&gt;100m)</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-1 bg-orange-500 rounded"></span>
-              <span className="text-slate-600">Saathi ↔ Beneficiary</span>
+              <span className="w-3.5 h-3.5 rounded-full bg-blue-600 border border-white shadow-xs inline-block"></span>
+              <span className="text-slate-700 font-medium">Beneficiary Residence</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-slate-600">Real-time GPS Tracking</span>
+              <span className="w-3.5 h-3.5 rounded-full bg-emerald-600 border border-white shadow-xs inline-block"></span>
+              <span className="text-slate-700 font-medium">With Beneficiary (&le;100m)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-0.5 border-t-2 border-dashed border-orange-500 inline-block"></span>
+              <span className="text-slate-700 font-medium">Distance Connection</span>
             </div>
           </div>
         </div>

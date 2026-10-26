@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { getBeneficiarySathiEligibility } from '../beneficiary/beneficiary_sathi_service';
 import { notificationProducer } from '@maihoonna/notifications';
 import { resolveFileUrl, resolveFileUrls } from '../storage';
+import { invalidateBeneficiarySoapContext } from '../ai/beneficiary_context_cache';
 
 // Map free-text frequencies from the mobile UI to valid DB enum values
 const frequencyMap: Record<string, string> = {
@@ -204,7 +205,7 @@ export const getSathiEligibleBeneficiaries = async (subscriberId: string) => {
 export const updateBeneficiary = async (beneficiaryId: string, updates: any) => {
   const { medicalConditions, medications, emergencyContacts, vitalsData, ...coreUpdates } = updates;
 
-  return prisma.$transaction(async (tx) => {
+  const updatedBeneficiary = await prisma.$transaction(async (tx) => {
     // 1. Update Core Beneficiary Fields
     // Sanitize coreUpdates: remove NaN/undefined and normalize enum-like fields
     const sanitizedCore: any = {};
@@ -326,6 +327,13 @@ export const updateBeneficiary = async (beneficiaryId: string, updates: any) => 
 
     return beneficiary;
   });
+
+  // Invalidate Redis SOAP context cache so subsequent visits use updated profile/conditions/meds
+  invalidateBeneficiarySoapContext(beneficiaryId).catch((err) => {
+    console.warn(`[BeneficiaryService] Failed to invalidate SOAP context cache for ${beneficiaryId}:`, err);
+  });
+
+  return updatedBeneficiary;
 };
 
 export const getCareCompanions = async (zone?: string) => {
