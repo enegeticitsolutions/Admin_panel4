@@ -179,8 +179,9 @@ export const FRONTEND_PERMISSIONS: Record<string, UserRole[]> = {
   'callbacks.update': ['admin', 'customer_service_manager', 'customer_service'],
 
   // Volunteers
-  'volunteers.list':             ['admin', 'operations_manager', 'saathi_coordinator'],
-  'volunteers.view':             ['admin', 'operations_manager', 'saathi_coordinator'],
+  'volunteers.list':             ['admin', 'operations_manager', 'field_manager', 'saathi_coordinator'],
+  'volunteers.view':             ['admin', 'operations_manager', 'field_manager', 'saathi_coordinator'],
+  'volunteers.live_tracking':    ['admin', 'operations_manager', 'field_manager', 'saathi_coordinator'],
   'volunteers.verify':           ['admin', 'saathi_coordinator'],
   'volunteers.reject':           ['admin', 'saathi_coordinator'],
   'volunteers.toggle_active':    ['admin', 'saathi_coordinator'],
