@@ -32,6 +32,14 @@ export const config = {
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
-    model: process.env.GEMINI_MODEL || 'gemini-flash-lite-latest',
+    primaryModel: process.env.GEMINI_PRIMARY_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+    fallbackModel1: process.env.GEMINI_FALLBACK_MODEL_1 || 'gemini-3.7-flash',
+    fallbackModel2: process.env.GEMINI_FALLBACK_MODEL_2 || 'gemini-3.5-flash',
+    fallbackModel3: process.env.GEMINI_FALLBACK_MODEL_3 || 'gemini-3.5-flash-lite',
+    transcriptionModel: process.env.GEMINI_TRANSCRIPTION_MODEL || 'gemini-3.5-transcribe',
+    model: process.env.GEMINI_PRIMARY_MODEL || process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+  },
+  cache: {
+    beneficiarySoapTtlSeconds: parseInt(process.env.BENEFICIARY_SOAP_CACHE_TTL_SECONDS || '86400', 10), // 24 hours
   },
 };

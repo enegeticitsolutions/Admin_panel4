@@ -155,6 +155,31 @@ router.get('/ongoing-visits', async (req, res) => {
           ? [b.flatPlot, b.streetArea, b.landmark, b.city, b.pincode].filter(Boolean).join(', ') || b.address || null
           : null;
 
+        let distanceMeters = null;
+        let isWithBeneficiary = false;
+        if (
+          v?.latitude !== null &&
+          v?.latitude !== undefined &&
+          v?.longitude !== null &&
+          v?.longitude !== undefined &&
+          b?.latitude !== null &&
+          b?.latitude !== undefined &&
+          b?.longitude !== null &&
+          b?.longitude !== undefined
+        ) {
+          const R = 6371e3;
+          const toRad = (deg) => (deg * Math.PI) / 180;
+          const dLat = toRad(b.latitude - v.latitude);
+          const dLon = toRad(b.longitude - v.longitude);
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(v.latitude)) * Math.cos(toRad(b.latitude)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          distanceMeters = Math.round(R * c);
+          isWithBeneficiary = distanceMeters <= 100;
+        }
+
         return {
           id: visit.id,
           assignmentId: visit.assignmentId,
@@ -163,6 +188,8 @@ router.get('/ongoing-visits', async (req, res) => {
           elapsedSeconds,
           notes: visit.notes,
           status: visit.status,
+          distanceMeters,
+          isWithBeneficiary,
           volunteer: v
             ? {
                 id: v.id,

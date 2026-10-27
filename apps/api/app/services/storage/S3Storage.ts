@@ -102,5 +102,42 @@ export class S3Storage extends StorageService {
     });
     return getSignedUrl(this.s3, command, { expiresIn: ttlSeconds });
   }
+
+  /**
+   * Generate a pre-signed PUT upload URL for direct mobile audio upload to S3.
+   *
+   * @param path       - storage destination key
+   * @param mimeType   - restricted MIME type
+   * @param ttlSeconds - validity window in seconds. Default: 300 (5 minutes)
+   */
+  async getPresignedUploadUrl(path: string, mimeType: string, ttlSeconds = 300): Promise<string> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: path,
+      ContentType: mimeType,
+    });
+    return getSignedUrl(this.s3, command, { expiresIn: ttlSeconds });
+  }
+
+  /**
+   * Stream and buffer file bytes from S3.
+   */
+  async getFileBuffer(path: string): Promise<Buffer> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: path,
+    });
+    const res = await this.s3.send(command);
+    if (!res.Body) {
+      throw new Error(`[S3Storage] Empty response body for key: ${path}`);
+    }
+    const stream = res.Body as any;
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    }
+    return Buffer.concat(chunks);
+  }
 }
+
 

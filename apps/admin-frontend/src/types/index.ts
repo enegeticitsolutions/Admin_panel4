@@ -641,6 +641,8 @@ export interface OngoingVolunteerVisit {
   elapsedSeconds: number;
   notes?: string | null;
   status: string;
+  distanceMeters?: number | null;
+  isWithBeneficiary?: boolean;
   volunteer: {
     id: string;
     name: string;

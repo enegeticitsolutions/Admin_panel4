@@ -41,12 +41,26 @@ export abstract class StorageService {
    * Generate a short-lived, cryptographically signed URL that allows secure access
    * to a private file without making the bucket public.
    *
-   * The URL is signed — modifying the path or query string invalidates the signature.
-   * After ttlSeconds the URL expires permanently.
-   *
    * @param path       - the storage key/path of the file (from UploadResult.path)
    * @param ttlSeconds - how long the URL is valid. Default: 900 (15 minutes)
    * @returns A signed, time-limited URL safe to hand to a client
    */
   abstract getPresignedUrl(path: string, ttlSeconds?: number): Promise<string>;
+
+  /**
+   * Generate a short-lived, pre-signed upload URL for direct client PUT upload.
+   *
+   * @param path       - the destination key/path inside the bucket
+   * @param mimeType   - restricted MIME type
+   * @param ttlSeconds - validity window in seconds. Default: 300 (5 minutes)
+   * @returns Pre-signed PUT URL
+   */
+  abstract getPresignedUploadUrl(path: string, mimeType: string, ttlSeconds?: number): Promise<string>;
+
+  /**
+   * Retrieve file buffer directly from storage by its key/path.
+   * @param path - storage key/path
+   */
+  abstract getFileBuffer(path: string): Promise<Buffer>;
 }
+

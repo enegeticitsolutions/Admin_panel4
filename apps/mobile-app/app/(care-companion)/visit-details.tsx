@@ -107,6 +107,13 @@ export default function VisitDetailsScreen() {
     const [soapModalVisible, setSoapModalVisible] = useState(false);
     const [soapData, setSoapData] = useState<SoapData | null>(null);
     const [aiSummarizing, setAiSummarizing] = useState(false);
+    const activeSoapSessionRef = useRef<string | null>(null);
+
+    // Instant Deterministic Vitals Alert State (<5ms, clinical safety)
+    const [vitalsAlert, setVitalsAlert] = useState<{
+        level: 'ERC_EMERGENCY' | 'CARE_MANAGER' | 'NORMAL';
+        reasons: string[];
+    }>({ level: 'NORMAL', reasons: [] });
 
     // Geo-fencing state
     const [currentLat, setCurrentLat] = useState<number | null>(null);
@@ -128,6 +135,115 @@ export default function VisitDetailsScreen() {
     const toggleMed = (id: string) => {
         setMeds(meds.map(m => m.id === id ? { ...m, checked: !m.checked } : m));
     };
+
+    // Deterministic Instant Vitals Safety Evaluation (MHN-TPL-SOAP-001)
+    useEffect(() => {
+        const currentList = Object.keys(vitalsValues).map(vid => {
+            const def = requiredVitals.find(rv => rv.id === vid);
+            const val = vitalsValues[vid];
+            let displayVal = '';
+            if (def?.dataType === 'dual_numeric') {
+                displayVal = `${val.valueNumeric || ''}/${val.valueNumeric2 || ''}`;
+            } else if (def?.dataType === 'numeric') {
+                displayVal = val.valueNumeric || '';
+            } else {
+                displayVal = val.valueText || '';
+            }
+            return {
+                name: def?.name || 'Vital',
+                value: displayVal,
+            };
+        }).filter(v => Boolean(v.value && v.value !== '/'));
+
+        const reasons: string[] = [];
+        let isEmergency = false;
+        let isCareManager = false;
+
+        for (const v of currentList) {
+            const nameLower = v.name.toLowerCase();
+            const valStr = v.value.trim();
+
+            // Blood Pressure: >= 180/110 Emergency, >= 160/100 Care Manager
+            if (nameLower.includes('blood pressure') || nameLower.includes('bp')) {
+                const match = valStr.match(/(\d+)\s*[/\\-]\s*(\d+)/);
+                if (match) {
+                    const sys = parseInt(match[1], 10);
+                    const dia = parseInt(match[2], 10);
+                    if (sys >= 180 || dia >= 110) {
+                        isEmergency = true;
+                        reasons.push(`Blood pressure ${sys}/${dia} mmHg exceeds emergency threshold (>= 180/110)`);
+                    } else if (sys >= 160 || dia >= 100) {
+                        isCareManager = true;
+                        reasons.push(`Blood pressure ${sys}/${dia} mmHg is significantly elevated (>= 160/100)`);
+                    }
+                }
+            }
+
+            // Oxygen Saturation: < 92% Emergency, < 95% Care Manager
+            if (nameLower.includes('spo2') || nameLower.includes('oxygen')) {
+                const num = parseFloat(valStr);
+                if (!isNaN(num)) {
+                    if (num < 92) {
+                        isEmergency = true;
+                        reasons.push(`Oxygen saturation (SpO2) ${num}% is critically low (< 92%)`);
+                    } else if (num < 95) {
+                        isCareManager = true;
+                        reasons.push(`Oxygen saturation (SpO2) ${num}% is below normal (< 95%)`);
+                    }
+                }
+            }
+
+            // Glucose: < 70 or > 300 Emergency, > 200 Care Manager
+            if (nameLower.includes('sugar') || nameLower.includes('glucose') || nameLower.includes('rbs') || nameLower.includes('fbs')) {
+                const num = parseFloat(valStr);
+                if (!isNaN(num)) {
+                    if (num < 70) {
+                        isEmergency = true;
+                        reasons.push(`Blood glucose ${num} mg/dL indicates severe hypoglycemia (< 70)`);
+                    } else if (num > 300) {
+                        isEmergency = true;
+                        reasons.push(`Blood glucose ${num} mg/dL is critically high (> 300)`);
+                    } else if (num > 200) {
+                        isCareManager = true;
+                        reasons.push(`Blood glucose ${num} mg/dL is elevated (> 200)`);
+                    }
+                }
+            }
+
+            // Heart Rate / Pulse: < 50 or > 120 Emergency
+            if (nameLower.includes('pulse') || nameLower.includes('heart rate') || nameLower.includes('hr')) {
+                const num = parseFloat(valStr);
+                if (!isNaN(num)) {
+                    if (num < 50 || num > 120) {
+                        isEmergency = true;
+                        reasons.push(`Pulse ${num} bpm is outside safe limits (< 50 or > 120)`);
+                    } else if (num > 100) {
+                        isCareManager = true;
+                        reasons.push(`Pulse ${num} bpm indicates tachycardia (> 100)`);
+                    }
+                }
+            }
+
+            // Temperature: > 102°F or > 38.9°C Care Manager
+            if (nameLower.includes('temp')) {
+                const num = parseFloat(valStr);
+                if (!isNaN(num) && (num > 102 || num > 38.9)) {
+                    isCareManager = true;
+                    reasons.push(`High fever detected (${num})`);
+                }
+            }
+        }
+
+        if (isEmergency) {
+            setVitalsAlert({ level: 'ERC_EMERGENCY', reasons });
+            setEscalateToManager(true);
+            setEscalationReason(reasons.join('; '));
+        } else if (isCareManager) {
+            setVitalsAlert({ level: 'CARE_MANAGER', reasons });
+        } else {
+            setVitalsAlert({ level: 'NORMAL', reasons: [] });
+        }
+    }, [vitalsValues, requiredVitals]);
 
     const fetchVisitDetails = async () => {
         if (!visitId) return;
@@ -471,6 +587,10 @@ export default function VisitDetailsScreen() {
             return;
         }
 
+        const sessionId = `soap_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        activeSoapSessionRef.current = sessionId;
+        const idempotencyKey = `idem_${visitId}_${Date.now()}`;
+
         setAiSummarizing(true);
         try {
             const token = authToken || (await AsyncStorage.getItem('userToken'));
@@ -508,10 +628,18 @@ export default function VisitDetailsScreen() {
                     visitId,
                     rawNotes: visitNotes,
                     mood: mood.toLowerCase(),
+                    sessionId,
+                    idempotencyKey,
                     vitalsList,
                     medicationsList
                 })
             });
+
+            // Discard stale response if a newer request was dispatched
+            if (activeSoapSessionRef.current !== sessionId) {
+                console.log(`[SOAP UI] Ignored stale response for session ${sessionId}`);
+                return;
+            }
 
             const json = await response.json();
             if (json.success && json.data) {
@@ -525,7 +653,9 @@ export default function VisitDetailsScreen() {
             console.error('SOAP generation error:', err);
             showAlert('Network Error', 'Failed to reach AI service. Please check your connection.', 'error');
         } finally {
-            setAiSummarizing(false);
+            if (activeSoapSessionRef.current === sessionId) {
+                setAiSummarizing(false);
+            }
         }
     };
 
@@ -1122,6 +1252,33 @@ export default function VisitDetailsScreen() {
                                         return null;
                                     })}
                                 </View>
+
+                                {vitalsAlert.level === 'ERC_EMERGENCY' && (
+                                    <View style={styles.emergencyAlertBanner}>
+                                        <View style={styles.alertHeaderRow}>
+                                            <Ionicons name="warning" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+                                            <Text style={styles.emergencyAlertTitle}>CRITICAL VITALS (Immediate Escalation)</Text>
+                                        </View>
+                                        {vitalsAlert.reasons.map((r, i) => (
+                                            <Text key={i} style={styles.emergencyAlertText}>• {r}</Text>
+                                        ))}
+                                        <Text style={styles.emergencyAlertFootnote}>
+                                            Automatic ERC escalation triggered. Please attend immediately.
+                                        </Text>
+                                    </View>
+                                )}
+
+                                {vitalsAlert.level === 'CARE_MANAGER' && (
+                                    <View style={styles.warningAlertBanner}>
+                                        <View style={styles.alertHeaderRow}>
+                                            <Ionicons name="alert-circle" size={16} color="#D97706" style={{ marginRight: 6 }} />
+                                            <Text style={styles.warningAlertTitle}>Abnormal Vitals Detected</Text>
+                                        </View>
+                                        {vitalsAlert.reasons.map((r, i) => (
+                                            <Text key={i} style={styles.warningAlertText}>• {r}</Text>
+                                        ))}
+                                    </View>
+                                )}
                             </View>
                         )}
 
@@ -1647,5 +1804,55 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins_600SemiBold',
         fontSize: 13,
         color: '#4F46E5',
+    },
+    emergencyAlertBanner: {
+        backgroundColor: '#FEF2F2',
+        borderWidth: 1.5,
+        borderColor: '#F87171',
+        borderRadius: 10,
+        padding: 12,
+        marginTop: 14,
+    },
+    warningAlertBanner: {
+        backgroundColor: '#FFFBEB',
+        borderWidth: 1.5,
+        borderColor: '#FCD34D',
+        borderRadius: 10,
+        padding: 12,
+        marginTop: 14,
+    },
+    alertHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    emergencyAlertTitle: {
+        fontFamily: 'Poppins_600SemiBold',
+        fontSize: 12,
+        color: '#DC2626',
+    },
+    warningAlertTitle: {
+        fontFamily: 'Poppins_600SemiBold',
+        fontSize: 12,
+        color: '#D97706',
+    },
+    emergencyAlertText: {
+        fontFamily: 'Poppins_500Medium',
+        fontSize: 12,
+        color: '#991B1B',
+        lineHeight: 18,
+    },
+    warningAlertText: {
+        fontFamily: 'Poppins_400Regular',
+        fontSize: 12,
+        color: '#92400E',
+        lineHeight: 18,
+    },
+    emergencyAlertFootnote: {
+        fontFamily: 'Poppins_500Medium',
+        fontSize: 11,
+        color: '#DC2626',
+        marginTop: 6,
+        fontStyle: 'italic',
     },
 });

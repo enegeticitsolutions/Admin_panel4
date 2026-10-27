@@ -12,9 +12,9 @@ export const getCurrentLocation = async (): Promise<{
         throw new Error('Permission to access location was denied');
       }
       
-      // Use high accuracy for real production coordinates
+      // Use high accuracy for real GPS / emulator coordinates
       const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.High,
       });
 
       return {

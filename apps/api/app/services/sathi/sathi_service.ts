@@ -836,6 +836,18 @@ export const checkinVolunteerVisit = async (volunteerId: string, data: any) => {
       data: { status: 'IN_PROGRESS' }
     });
 
+    // Update Saathi live GPS location if provided
+    if (data.latitude !== undefined && data.latitude !== null && data.longitude !== undefined && data.longitude !== null) {
+      const lat = parseFloat(data.latitude);
+      const lng = parseFloat(data.longitude);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        await tx.volunteer.update({
+          where: { id: volunteerId },
+          data: { latitude: lat, longitude: lng },
+        });
+      }
+    }
+
     return log;
   });
 
@@ -1868,6 +1880,23 @@ export const triggerCoordinatorVolunteerInactive30dAlert = async (volunteerId: s
   return dispatchCoordinatorVolunteerInactiveAlert(adminUser.id, {
     volunteerName: vol.name,
     volunteerId
+  });
+};
+
+/**
+ * Updates volunteer's real-time GPS location (called by sathi-app during active companion visits)
+ */
+export const updateVolunteerLocation = async (volunteerId: string, latitude: number, longitude: number) => {
+  const lat = parseFloat(latitude as any);
+  const lng = parseFloat(longitude as any);
+  if (isNaN(lat) || isNaN(lng)) {
+    throw new ApiError(400, 'Invalid latitude or longitude coordinates');
+  }
+
+  return prisma.volunteer.update({
+    where: { id: volunteerId },
+    data: { latitude: lat, longitude: lng },
+    select: { id: true, name: true, latitude: true, longitude: true },
   });
 };
 

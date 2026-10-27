@@ -1,6 +1,9 @@
 import { Stack } from 'expo-router';
+import { useSathiLiveLocation } from '@/hooks/useSathiLiveLocation';
 
 export default function SathiLayout() {
+  useSathiLiveLocation();
+
   return (
     <Stack>
       <Stack.Screen name="index" options={{ headerShown: false, gestureEnabled: false }} />
