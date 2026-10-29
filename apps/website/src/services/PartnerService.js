@@ -71,18 +71,22 @@ export class PartnerService {
    * Fetch approved and published partners & categories for public website display
    */
   async getPublishedPartners() {
+    const ts = Date.now();
     const urls = [
-      `${this.apiBaseUrl}/website/partners`,
-      '/api/website/partners',
-      '/api/partners/public',
-      '/admin-api/api/partners/public',
+      `${this.apiBaseUrl}/website/partners?_t=${ts}`,
+      `/api/website/partners?_t=${ts}`,
+      `/api/partners/public?_t=${ts}`,
+      `/admin-api/api/partners/public?_t=${ts}`,
     ];
 
     if (
       typeof window !== 'undefined' &&
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ) {
-      urls.push('http://localhost:3001/api/partners/public', 'http://127.0.0.1:3001/api/partners/public');
+      urls.push(
+        `http://localhost:3001/api/partners/public?_t=${ts}`,
+        `http://127.0.0.1:3001/api/partners/public?_t=${ts}`
+      );
     }
 
     for (const url of urls) {

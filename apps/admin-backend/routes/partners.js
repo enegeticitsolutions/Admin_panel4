@@ -46,17 +46,35 @@ async function resolvePartnerMedia(partner, ttlSeconds = 86400 * 7) {
     resolved.attachmentUrl = await resolveFileUrl(resolved.attachmentUrl, ttlSeconds);
   }
 
-  // Resolve photos array
+  // Resolve photos array - reuse bannerImageUrl if pointing to the same storage object
+  const rawBannerKey = partner.bannerImageUrl
+    ? (extractStorageKey(partner.bannerImageUrl) || partner.bannerImageUrl.split('?')[0])
+    : null;
+
   if (Array.isArray(resolved.photos) && resolved.photos.length > 0) {
     resolved.photos = await Promise.all(
-      resolved.photos.map(p => resolveFileUrl(p, ttlSeconds))
+      resolved.photos.map(async (p) => {
+        if (!p) return p;
+        const rawPhotoKey = extractStorageKey(p) || p.split('?')[0];
+        if (rawBannerKey && rawPhotoKey && rawBannerKey === rawPhotoKey && resolved.bannerImageUrl) {
+          return resolved.bannerImageUrl;
+        }
+        return resolveFileUrl(p, ttlSeconds);
+      })
     );
   } else if (typeof resolved.photos === 'string' && resolved.photos.trim()) {
     try {
       const parsed = JSON.parse(resolved.photos);
       if (Array.isArray(parsed)) {
         resolved.photos = await Promise.all(
-          parsed.map(p => resolveFileUrl(p, ttlSeconds))
+          parsed.map(async (p) => {
+            if (!p) return p;
+            const rawPhotoKey = extractStorageKey(p) || p.split('?')[0];
+            if (rawBannerKey && rawPhotoKey && rawBannerKey === rawPhotoKey && resolved.bannerImageUrl) {
+              return resolved.bannerImageUrl;
+            }
+            return resolveFileUrl(p, ttlSeconds);
+          })
         );
       }
     } catch {
@@ -426,6 +444,9 @@ router.get('/public', async (req, res) => {
       partners.map(p => resolvePartnerMedia(p, 86400 * 7))
     );
 
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.json({
       success: true,
       data: {
@@ -436,6 +457,34 @@ router.get('/public', async (req, res) => {
   } catch (error) {
     console.error('Error fetching public partners:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch public partners' });
+  }
+});
+
+// ==========================================
+// 2.1 PROXY PARTNER IMAGE FOR CORS-SAFE CROPPING (Public / Media)
+// ==========================================
+router.get('/proxy-image', async (req, res) => {
+  try {
+    const imageUrl = req.query.url;
+    if (!imageUrl) {
+      return res.status(400).json({ success: false, message: 'Image URL query parameter required' });
+    }
+
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      return res.status(response.status).json({ success: false, message: 'Failed to fetch remote image' });
+    }
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+
+    const arrayBuffer = await response.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
+  } catch (error) {
+    console.error('Error proxying partner image:', error);
+    res.status(500).json({ success: false, message: 'Error proxying image' });
   }
 });
 
@@ -739,7 +788,7 @@ router.post('/', async (req, res) => {
     const partnerDocs = Array.isArray(documents) ? documents : (documents ? [documents] : []);
 
     const cleanPhotos = partnerPhotos.map(sanitizeStorageKey);
-    const cleanBanner = mainBanner ? sanitizeStorageKey(mainBanner) : null;
+    const cleanBanner = mainBanner && mainBanner.trim() ? sanitizeStorageKey(mainBanner.trim()) : (cleanPhotos.length > 0 ? cleanPhotos[0] : null);
     const cleanLogo = logoUrl ? sanitizeStorageKey(logoUrl) : null;
     const cleanDocs = partnerDocs.map(doc => {
       if (!doc) return doc;
@@ -831,7 +880,7 @@ router.put('/:id', async (req, res) => {
     const partnerDocs = documents !== undefined ? (Array.isArray(documents) ? documents : [documents]) : undefined;
 
     const cleanPhotos = partnerPhotos !== undefined ? partnerPhotos.map(sanitizeStorageKey) : undefined;
-    const cleanBanner = computedBanner !== undefined ? sanitizeStorageKey(computedBanner) : undefined;
+    const cleanBanner = computedBanner !== undefined ? (computedBanner && computedBanner.trim() ? sanitizeStorageKey(computedBanner.trim()) : null) : undefined;
     const cleanLogo = logoUrl !== undefined ? sanitizeStorageKey(logoUrl) : undefined;
     const cleanDocs = partnerDocs !== undefined ? partnerDocs.map(doc => {
       if (!doc) return doc;
@@ -922,6 +971,7 @@ router.post('/upload-photo', upload.single('file'), async (req, res) => {
     res.status(500).json({ success: false, message: error.message || 'Failed to upload photo' });
   }
 });
+
 
 // ==========================================
 // 6.2 UPLOAD PARTNER DOCUMENT (PDF / DOC / IMAGES)
