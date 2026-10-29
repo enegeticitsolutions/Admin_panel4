@@ -38,8 +38,21 @@ import {
   Download,
   FolderOpen,
   Crop,
+  Save,
 } from 'lucide-react';
 import { ImageCropperModal } from '../components/common/ImageCropperModal';
+
+/**
+ * Helper to reliably compare two photo URLs or storage keys,
+ * ignoring transient query parameters (like presigned signatures/timestamps).
+ */
+export const isSamePhoto = (urlA?: string | null, urlB?: string | null): boolean => {
+  if (!urlA || !urlB) return false;
+  if (urlA === urlB) return true;
+  const cleanA = urlA.split('?')[0].trim();
+  const cleanB = urlB.split('?')[0].trim();
+  return cleanA === cleanB;
+};
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -163,20 +176,27 @@ export default function PartnersPage() {
   };
 
   // Photo Management Handlers
-  const handleAddPhotoUrl = () => {
+  const handleAddPhotoUrl = (asCover: boolean = false) => {
     if (!currentPhotoInput.trim()) return;
     const newPhoto = currentPhotoInput.trim();
     const existingPhotos = partnerFormData.photos || [];
-    if (existingPhotos.includes(newPhoto)) {
-      alert('This photo has already been added to the list.');
-      return;
-    }
-    const updatedPhotos = [...existingPhotos, newPhoto];
+    const filtered = existingPhotos.filter((p) => !isSamePhoto(p, newPhoto));
+    const shouldBeCover = asCover || !partnerFormData.bannerImageUrl || existingPhotos.length === 0;
+    const updatedPhotos = shouldBeCover ? [newPhoto, ...filtered] : [...filtered, newPhoto];
     setPartnerFormData({
       ...partnerFormData,
       photos: updatedPhotos,
-      bannerImageUrl: partnerFormData.bannerImageUrl || newPhoto,
+      bannerImageUrl: shouldBeCover ? newPhoto : partnerFormData.bannerImageUrl,
     });
+    setCurrentPhotoInput('');
+  };
+
+  const handleAddAndCropPhotoUrl = () => {
+    if (!currentPhotoInput.trim()) return;
+    const url = currentPhotoInput.trim();
+    setCropSourceImage(url);
+    setCropTargetIndex(null);
+    setIsCropModalOpen(true);
     setCurrentPhotoInput('');
   };
 
@@ -219,20 +239,25 @@ export default function PartnersPage() {
 
       const existingPhotos = [...(partnerFormData.photos || [])];
       if (cropTargetIndex !== null && cropTargetIndex >= 0 && cropTargetIndex < existingPhotos.length) {
-        const oldPhoto = existingPhotos[cropTargetIndex];
         existingPhotos[cropTargetIndex] = finalUrl;
-        const updatedBanner = partnerFormData.bannerImageUrl === oldPhoto ? finalUrl : partnerFormData.bannerImageUrl;
+        const reordered = [
+          finalUrl,
+          ...existingPhotos.filter((p) => !isSamePhoto(p, finalUrl)),
+        ];
         setPartnerFormData({
           ...partnerFormData,
-          photos: existingPhotos,
-          bannerImageUrl: updatedBanner || finalUrl,
+          photos: reordered,
+          bannerImageUrl: finalUrl,
         });
       } else {
-        existingPhotos.push(finalUrl);
+        const reordered = [
+          finalUrl,
+          ...existingPhotos.filter((p) => !isSamePhoto(p, finalUrl)),
+        ];
         setPartnerFormData({
           ...partnerFormData,
-          photos: existingPhotos,
-          bannerImageUrl: partnerFormData.bannerImageUrl || finalUrl,
+          photos: reordered,
+          bannerImageUrl: finalUrl,
         });
       }
     } catch (err: any) {
@@ -246,9 +271,9 @@ export default function PartnersPage() {
 
   const handleRemovePhoto = (photoToRemove: string) => {
     const existingPhotos = partnerFormData.photos || [];
-    const updatedPhotos = existingPhotos.filter((p) => p !== photoToRemove);
+    const updatedPhotos = existingPhotos.filter((p) => !isSamePhoto(p, photoToRemove));
     let updatedBanner = partnerFormData.bannerImageUrl;
-    if (updatedBanner === photoToRemove) {
+    if (isSamePhoto(updatedBanner, photoToRemove)) {
       updatedBanner = updatedPhotos.length > 0 ? updatedPhotos[0] : '';
     }
     setPartnerFormData({
@@ -259,8 +284,14 @@ export default function PartnersPage() {
   };
 
   const handleSetCoverPhoto = (photoUrl: string) => {
+    const existingPhotos = partnerFormData.photos || [];
+    const reorderedPhotos = [
+      photoUrl,
+      ...existingPhotos.filter((p) => !isSamePhoto(p, photoUrl)),
+    ];
     setPartnerFormData({
       ...partnerFormData,
+      photos: reorderedPhotos,
       bannerImageUrl: photoUrl,
     });
   };
@@ -395,11 +426,16 @@ export default function PartnersPage() {
       ? partner.documents
       : (partner.attachmentUrl ? [{ name: 'Attached Profile / MOU', url: partner.attachmentUrl, documentType: 'Compliance / MOU' }] : []);
 
+    const coverUrl = partner.bannerImageUrl || (existingPhotos.length > 0 ? existingPhotos[0] : '');
+    const synchronizedPhotos = coverUrl
+      ? [coverUrl, ...existingPhotos.filter((p) => !isSamePhoto(p, coverUrl))]
+      : existingPhotos;
+
     setPartnerFormData({
       ...partner,
-      photos: existingPhotos,
+      photos: synchronizedPhotos,
       documents: existingDocs,
-      bannerImageUrl: partner.bannerImageUrl || (existingPhotos.length > 0 ? existingPhotos[0] : ''),
+      bannerImageUrl: coverUrl,
       serviceHighlights: partner.serviceHighlights || [],
     });
     setHighlightsInput((partner.serviceHighlights || []).join(', '));
@@ -427,9 +463,18 @@ export default function PartnersPage() {
       const primaryBanner = partnerFormData.bannerImageUrl || (photosArray.length > 0 ? photosArray[0] : '');
       const docsArray = Array.isArray(partnerFormData.documents) ? partnerFormData.documents : [];
 
+      // Guarantee primaryBanner is always at index 0 of photos array
+      let synchronizedPhotos = photosArray;
+      if (primaryBanner) {
+        synchronizedPhotos = [
+          primaryBanner,
+          ...photosArray.filter((p) => !isSamePhoto(p, primaryBanner)),
+        ];
+      }
+
       const payload = {
         ...partnerFormData,
-        photos: photosArray,
+        photos: synchronizedPhotos,
         documents: docsArray,
         bannerImageUrl: primaryBanner,
         serviceHighlights: highlightsArray,
@@ -881,7 +926,7 @@ export default function PartnersPage() {
               >
                 {/* Optional Cover Banner */}
                 {(partner.bannerImageUrl || (partner.photos && partner.photos.length > 0)) && (
-                  <div className="relative h-32 w-full bg-gray-100 overflow-hidden border-b border-gray-100">
+                  <div className="relative h-32 w-full bg-white overflow-hidden border-b border-gray-100 flex items-center justify-center">
                     <img
                       src={partner.bannerImageUrl || partner.photos?.[0]}
                       alt={partner.organizationName || partner.name}
@@ -890,12 +935,9 @@ export default function PartnersPage() {
                         e.currentTarget.style.display = 'none';
                       }}
                     />
-                    {partner.photos && partner.photos.length > 0 && (
-                      <span className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
-                        <ImageIcon className="w-3 h-3" />
-                        {partner.photos.length} {partner.photos.length === 1 ? 'photo' : 'photos'}
-                      </span>
-                    )}
+                    <span className="absolute top-2 left-2 bg-[#1F8A3E] text-white text-[10px] font-bold px-2 py-0.5 rounded shadow flex items-center gap-1">
+                      <Star className="w-2.5 h-2.5 fill-current" /> Cover Photo
+                    </span>
                   </div>
                 )}
 
@@ -1113,7 +1155,7 @@ export default function PartnersPage() {
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSavePartner} className="p-6 overflow-y-auto space-y-4">
+            <form id="partner-details-form" onSubmit={handleSavePartner} className="p-6 overflow-y-auto space-y-4 flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Organization Name */}
                 <div className="sm:col-span-2">
@@ -1354,16 +1396,27 @@ export default function PartnersPage() {
                             }
                           }}
                           placeholder="Paste image URL (https://... or data:image) and click Add"
-                          className="w-full pl-3 pr-20 py-2 text-xs border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#1F8A3E] focus:outline-none"
+                          className="w-full pl-3 pr-32 py-2 text-xs border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#1F8A3E] focus:outline-none"
                         />
                         {currentPhotoInput && (
-                          <button
-                            type="button"
-                            onClick={handleAddPhotoUrl}
-                            className="absolute right-1 top-1 bottom-1 px-2.5 text-xs font-semibold bg-[#1F8A3E] text-white rounded-md hover:bg-[#186e32] transition flex items-center gap-1"
-                          >
-                            <Plus className="w-3 h-3" /> Add
-                          </button>
+                          <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={handleAddAndCropPhotoUrl}
+                              className="px-2 py-0.5 text-xs font-semibold bg-[#FE6700] hover:bg-[#E05300] text-white rounded transition flex items-center gap-1 shadow-sm"
+                              title="Crop and frame photo manually before adding"
+                            >
+                              <Crop className="w-3 h-3" /> Crop &amp; Add
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleAddPhotoUrl}
+                              className="px-2 py-0.5 text-xs font-semibold bg-gray-600 hover:bg-gray-700 text-white rounded transition"
+                              title="Add directly without cropping"
+                            >
+                              Add
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -1399,80 +1452,109 @@ export default function PartnersPage() {
 
                   {/* Display Added Photos Gallery (Grid of Added Photos) */}
                   {partnerFormData.photos && partnerFormData.photos.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {partnerFormData.photos.map((photoUrl, idx) => {
-                        const isCover = (partnerFormData.bannerImageUrl === photoUrl) || (!partnerFormData.bannerImageUrl && idx === 0);
-                        return (
-                          <div
-                            key={idx}
-                            className={`relative group rounded-xl overflow-hidden border-2 transition-all bg-gray-50 ${
-                              isCover ? 'border-[#1F8A3E] ring-2 ring-[#1F8A3E]/20' : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <div className="aspect-video w-full bg-gray-100 relative overflow-hidden flex items-center justify-center">
+                    <div className="space-y-3">
+                      {/* Active Website Cover Indicator Banner */}
+                      {partnerFormData.bannerImageUrl && (
+                        <div className="p-3 bg-emerald-50/80 border border-emerald-300 rounded-xl flex items-center justify-between gap-3 shadow-xs">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-16 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 border-2 border-emerald-500 shadow-xs">
                               <img
-                                src={photoUrl}
-                                alt={`Photo ${idx + 1}`}
+                                src={partnerFormData.bannerImageUrl}
+                                alt="Active Cover"
                                 className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.src = 'https://placehold.co/400x250?text=Invalid+Image';
-                                }}
                               />
-
-                              {/* Cover Badge */}
-                              {isCover && (
-                                <span className="absolute top-1.5 left-1.5 bg-[#1F8A3E] text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm flex items-center gap-1">
-                                  <Star className="w-2.5 h-2.5 fill-current" /> Cover Banner
-                                </span>
-                              )}
-
-                              {/* Photo Index */}
-                              {!isCover && (
-                                <span className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">
-                                  #{idx + 1}
-                                </span>
-                              )}
-
-                              {/* Crop Button (16:9) */}
-                              <button
-                                type="button"
-                                onClick={() => handleStartCropExisting(photoUrl, idx)}
-                                className="absolute top-1.5 right-8 p-1 bg-black/70 hover:bg-[#FE6700] text-white rounded transition opacity-90 group-hover:opacity-100 shadow"
-                                title="Crop & adjust 16:9 framing"
-                              >
-                                <Crop className="w-3 h-3" />
-                              </button>
-
-                              {/* Delete Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleRemovePhoto(photoUrl)}
-                                className="absolute top-1.5 right-1.5 p-1 bg-rose-600/90 text-white rounded hover:bg-rose-700 transition opacity-90 group-hover:opacity-100 shadow"
-                                title="Remove photo"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
                             </div>
-
-                            {/* Set as Cover Action Bar */}
-                            <div className="p-1.5 bg-white border-t border-gray-100 flex items-center justify-between">
-                              {!isCover ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleSetCoverPhoto(photoUrl)}
-                                  className="w-full text-center text-[11px] font-semibold text-gray-600 hover:text-[#1F8A3E] py-0.5 hover:bg-gray-50 rounded transition flex items-center justify-center gap-1"
-                                >
-                                  <Star className="w-3 h-3" /> Set as Cover
-                                </button>
-                              ) : (
-                                <span className="w-full text-center text-[11px] font-bold text-[#1F8A3E] py-0.5">
-                                  ✓ Active Cover Photo
-                                </span>
-                              )}
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                                <Star className="w-3.5 h-3.5 text-emerald-600 fill-current" />
+                                Active Website Cover Photo
+                              </div>
+                              <p className="text-[11px] text-emerald-700 truncate">
+                                ONLY this photo will appear on the public website for this partner.
+                              </p>
                             </div>
                           </div>
-                        );
-                      })}
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 flex-shrink-0">
+                            ✓ Live on Website
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {partnerFormData.photos.map((photoUrl, idx) => {
+                          const isCover = isSamePhoto(partnerFormData.bannerImageUrl, photoUrl) || (!partnerFormData.bannerImageUrl && idx === 0);
+                          return (
+                            <div
+                              key={idx}
+                              className={`relative group rounded-xl overflow-hidden border-2 transition-all bg-gray-50 ${
+                                isCover ? 'border-[#1F8A3E] ring-2 ring-[#1F8A3E]/20' : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="aspect-video w-full bg-gray-100 relative overflow-hidden flex items-center justify-center">
+                                <img
+                                  src={photoUrl}
+                                  alt={`Photo ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.src = 'https://placehold.co/400x250?text=Invalid+Image';
+                                  }}
+                                />
+
+                                {/* Cover Badge */}
+                                {isCover && (
+                                  <span className="absolute top-1.5 left-1.5 bg-[#1F8A3E] text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm flex items-center gap-1">
+                                    <Star className="w-2.5 h-2.5 fill-current" /> Cover Banner
+                                  </span>
+                                )}
+
+                                {/* Photo Index */}
+                                {!isCover && (
+                                  <span className="absolute top-1.5 left-1.5 bg-black/60 backdrop-blur-sm text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">
+                                    #{idx + 1}
+                                  </span>
+                                )}
+
+                                {/* Crop Button (16:9) */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartCropExisting(photoUrl, idx)}
+                                  className="absolute top-1.5 right-8 p-1 bg-black/70 hover:bg-[#FE6700] text-white rounded transition opacity-90 group-hover:opacity-100 shadow"
+                                  title="Crop & adjust 16:9 framing"
+                                >
+                                  <Crop className="w-3 h-3" />
+                                </button>
+
+                                {/* Delete Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemovePhoto(photoUrl)}
+                                  className="absolute top-1.5 right-1.5 p-1 bg-rose-600/90 text-white rounded hover:bg-rose-700 transition opacity-90 group-hover:opacity-100 shadow"
+                                  title="Remove photo"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+
+                              {/* Set as Cover Action Bar */}
+                              <div className="p-1.5 bg-white border-t border-gray-100 flex items-center justify-between">
+                                {!isCover ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSetCoverPhoto(photoUrl)}
+                                    className="w-full text-center text-[11px] font-semibold text-gray-600 hover:text-[#1F8A3E] py-0.5 hover:bg-gray-50 rounded transition flex items-center justify-center gap-1"
+                                  >
+                                    <Star className="w-3 h-3" /> Set as Cover
+                                  </button>
+                                ) : (
+                                  <span className="w-full text-center text-[11px] font-bold text-[#1F8A3E] py-0.5 flex items-center justify-center gap-1">
+                                    ✓ Active Cover Photo
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : (
                     <div className="p-4 rounded-xl border border-dashed border-gray-300 text-center bg-gray-50/60">
@@ -1674,9 +1756,23 @@ export default function PartnersPage() {
                   />
                 </div>
               </div>
+            </form>
 
-              {/* Modal Actions */}
-              <div className="pt-4 border-t border-gray-200 flex items-center justify-end gap-3">
+            {/* Sticky / Always Visible Modal Actions Footer */}
+            <div className="px-6 py-3.5 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 flex-shrink-0 shadow-xs">
+              <div className="flex items-center gap-2 text-xs">
+                {partnerFormData.bannerImageUrl ? (
+                  <span className="text-emerald-700 font-semibold flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    Cover banner active. Click &ldquo;Save Partner Details&rdquo; to update website.
+                  </span>
+                ) : (
+                  <span className="text-gray-500">
+                    Select or crop a cover photo, then click Save.
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button
                   type="button"
                   onClick={() => {
@@ -1684,18 +1780,20 @@ export default function PartnersPage() {
                     setIsEditModalOpen(false);
                     setSelectedPartner(null);
                   }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                  className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-medium bg-[#1F8A3E] text-white rounded-lg hover:bg-[#186e32] transition shadow-sm"
+                  form="partner-details-form"
+                  className="px-5 py-2 text-xs font-bold bg-[#1F8A3E] hover:bg-[#186e32] text-white rounded-lg transition shadow-md flex items-center gap-1.5 active:scale-95"
                 >
+                  <Save className="w-4 h-4" />
                   Save Partner Details
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

@@ -276,7 +276,6 @@ export default function PartnerPage() {
   const [dbCategories, setDbCategories] = useState([]);
   const [loadingPartners, setLoadingPartners] = useState(true);
   const [selectedModalPartner, setSelectedModalPartner] = useState(null);
-  const [modalActivePhotoIdx, setModalActivePhotoIdx] = useState(0);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -311,6 +310,7 @@ export default function PartnerPage() {
   };
 
   // ONLY live dynamic partners from the database / admin panel (No static mocks)
+  // Shows strictly the active cover photo chosen in the admin panel
   const allFormattedPartners = React.useMemo(() => {
     return dbPartners.map((p) => {
       const catName = p.category?.name || p.type || "Healthcare Partner";
@@ -326,12 +326,12 @@ export default function PartnerPage() {
           photosList = [p.photos.trim()];
         }
       }
-      const primaryImg = p.bannerImageUrl || (photosList.length > 0 ? photosList[0] : null) || p.logoUrl || getCategoryImage(catName);
+      // Strictly the single active cover photo from admin panel (bannerImageUrl or first photo)
+      const activeCoverPhoto = p.bannerImageUrl || (photosList.length > 0 ? photosList[0] : null) || p.logoUrl || getCategoryImage(catName);
 
       return {
         id: p.id,
-        img: primaryImg,
-        photos: photosList,
+        img: activeCoverPhoto,
         category: catName,
         badgeClass: getCategoryBadgeClass(catName),
         name: p.organizationName || p.name,
@@ -715,7 +715,6 @@ export default function PartnerPage() {
                   className="partner-showcase-card"
                   onClick={() => {
                     setSelectedModalPartner(partner);
-                    setModalActivePhotoIdx(0);
                   }}
                 >
                   <div className="partner-showcase-img-wrap">
@@ -734,11 +733,6 @@ export default function PartnerPage() {
                     <span className={`partner-showcase-category-pill ${partner.badgeClass}`}>
                       {partner.category}
                     </span>
-                    {partner.photos && partner.photos.length > 1 && (
-                      <span className="partner-showcase-photo-pill">
-                        📷 {partner.photos.length} photos
-                      </span>
-                    )}
                   </div>
                   <div className="partner-showcase-body">
                     <h3 className="partner-showcase-title">{partner.name}</h3>
@@ -776,7 +770,6 @@ export default function PartnerPage() {
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedModalPartner(partner);
-                          setModalActivePhotoIdx(0);
                         }}
                       >
                         View Profile &rarr;
@@ -812,46 +805,23 @@ export default function PartnerPage() {
               <X style={{ width: "18px", height: "18px" }} />
             </button>
 
-            {/* 16:9 Banner Cover */}
+            {/* 16:9 Banner Cover - ONLY the active cover photo */}
             <div className="partner-profile-modal-banner-wrap">
               <img
-                src={
-                  selectedModalPartner.photos && selectedModalPartner.photos.length > modalActivePhotoIdx
-                    ? selectedModalPartner.photos[modalActivePhotoIdx]
-                    : selectedModalPartner.img
-                }
+                src={selectedModalPartner.img}
                 alt={selectedModalPartner.name}
                 className="partner-profile-modal-banner"
+                onError={(e) => {
+                  const fallback = getCategoryImage(selectedModalPartner.category);
+                  if (e.currentTarget.src !== fallback) {
+                    e.currentTarget.src = fallback;
+                  }
+                }}
               />
               <span className={`partner-showcase-category-pill ${selectedModalPartner.badgeClass}`}>
                 {selectedModalPartner.category}
               </span>
             </div>
-
-            {/* Photo thumbnails if multiple */}
-            {selectedModalPartner.photos && selectedModalPartner.photos.length > 1 && (
-              <div style={{ display: "flex", gap: "8px", padding: "12px 28px 0", overflowX: "auto" }}>
-                {selectedModalPartner.photos.map((ph, pIdx) => (
-                  <button
-                    key={pIdx}
-                    type="button"
-                    onClick={() => setModalActivePhotoIdx(pIdx)}
-                    style={{
-                      width: "60px",
-                      height: "40px",
-                      borderRadius: "6px",
-                      overflow: "hidden",
-                      border: modalActivePhotoIdx === pIdx ? "2px solid #FE6700" : "1px solid #E5E7EB",
-                      padding: 0,
-                      cursor: "pointer",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <img src={ph} alt={`Thumbnail ${pIdx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  </button>
-                ))}
-              </div>
-            )}
 
             {/* Modal Body */}
             <div className="partner-profile-modal-content">

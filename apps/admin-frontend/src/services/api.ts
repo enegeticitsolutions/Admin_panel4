@@ -46,7 +46,7 @@ import type {
 // Simulate network delay for realistic behavior
 const delay = (ms: number = 300) => new Promise(resolve => setTimeout(resolve, ms));
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
+export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3001/api';
 
 const apiFetch = async (url: string, options: RequestInit = {}) => {
   const savedAuth = localStorage.getItem('maihonna_user');
