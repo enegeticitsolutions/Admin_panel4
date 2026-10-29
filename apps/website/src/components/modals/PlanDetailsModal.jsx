@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { X, Check, Info } from "lucide-react";
-import { getPackageDisplayPrice } from "../packages/PackageCard";
+import { getPackageDisplayPrice, getPackageCycleSavings } from "../packages/PackageCard";
 import { BENEFIT_CATEGORIES_CONFIG, detectDefaultBenefitCategory } from "../../constants/benefitCategories";
 
 // Comprehensive care inclusions matching eldercare standards and user reference design
@@ -16,7 +16,23 @@ const STANDARD_INCLUSIONS = [
   "Dedicated Care Mitra Oversight",
 ];
 
-export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle = "3", onSelectPackage }) {
+export default function PlanDetailsModal({
+  isOpen,
+  onClose,
+  plan,
+  selectedCycle = "12",
+  onSelectPackage,
+  onCycleChange,
+}) {
+  const [currentCycle, setCurrentCycle] = useState(selectedCycle || "12");
+
+  // Keep in sync with incoming selectedCycle prop when opened or updated
+  useEffect(() => {
+    if (selectedCycle) {
+      setCurrentCycle(selectedCycle);
+    }
+  }, [selectedCycle, isOpen]);
+
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -36,9 +52,9 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
   const isRegional = !plan.isGlobal;
   const trialDays = plan.trialDurationDays || 7;
 
-  // Always compute price from the live selectedCycle prop (1, 3, 6, or 12)
-  const durNum = isTrial ? 1 : parseInt(selectedCycle, 10);
-  const displayPrice = getPackageDisplayPrice(plan, selectedCycle);
+  // Always compute price from currentCycle (1, 3, 6, or 12)
+  const durNum = isTrial ? 1 : (parseInt(currentCycle, 10) || 12);
+  const displayPrice = getPackageDisplayPrice(plan, String(durNum));
 
   let durationText = "1 Month Billing";
   if (isTrial) durationText = `${trialDays} Days Trial`;
@@ -47,17 +63,46 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
   else if (durNum === 12) durationText = "Annual Billing";
 
   const monthlyRate = isTrial ? displayPrice : (durNum > 0 ? Math.round(displayPrice / durNum) : displayPrice);
-  const basePrice = plan.basePrice || displayPrice;
+  const basePrice = Number(plan.basePrice) || 4999;
   const fullTermCost = basePrice * durNum;
   const savings = isTrial ? 0 : (durNum > 1 ? Math.max(0, fullTermCost - displayPrice) : 0);
+
+  const discountPercent = durNum === 3
+    ? (plan.discountThreeMonths ?? 5)
+    : durNum === 6
+      ? (plan.discountSixMonths ?? 10)
+      : durNum === 12
+        ? (plan.discountAnnual ?? 20)
+        : 0;
+
+  const cycleOptions = [
+    { value: "1", label: "1 Month" },
+    { value: "3", label: "3 Months" },
+    { value: "6", label: "6 Months" },
+    { value: "12", label: "Annual" },
+  ];
+
+  const handleCycleChange = (newCycle) => {
+    setCurrentCycle(newCycle);
+    if (onCycleChange) {
+      onCycleChange(newCycle);
+    }
+  };
 
   // Build the complete feature checklist categorized into Included, Add-on, and We arrange it
   const featuresList = (() => {
     if (Array.isArray(plan.allFormattedBenefits) && plan.allFormattedBenefits.length > 0) {
-      return plan.allFormattedBenefits.map((item) => ({
-        ...item,
-        category: item.category || (item.benefit ? detectDefaultBenefitCategory(item.benefit) : detectDefaultBenefitCategory({ name: item.text })),
-      }));
+      return plan.allFormattedBenefits.map((item) => {
+        let text = item.text || "";
+        text = text.replace(/(\d+)\s*hours?(\/month|\s*per\s*month)/gi, (m, n, p) => {
+          return `${n} ${n === "1" ? "visit hour" : "visit hours"}${p}`;
+        });
+        return {
+          ...item,
+          text,
+          category: item.category || (item.benefit ? detectDefaultBenefitCategory(item.benefit) : detectDefaultBenefitCategory({ name: text })),
+        };
+      });
     }
 
     const list = [];
@@ -67,7 +112,11 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
         const benefitName = pb.benefit.name.trim();
         if (!benefitName || benefitName.toLowerCase() === "included benefit") return;
 
-        const rawLabel = (pb.benefit?.unitLabel || "").replace(/^per\s+/i, "").trim();
+        let rawLabel = (pb.benefit?.unitLabel || "").replace(/^per\s+/i, "").trim();
+        const units = Number(pb.unitsIncluded) || 0;
+        if (/^hours?$/i.test(rawLabel)) {
+          rawLabel = units === 1 ? "visit hour" : "visit hours";
+        }
         const period = pb.unitsPeriod || "monthly";
 
         let displayText = "";
@@ -76,11 +125,11 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
         } else if (pb.isUnlimited) {
           displayText = `24/7 Unlimited ${benefitName}`;
         } else if (period === "yearly") {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "uses"}/year ${benefitName}`;
+          displayText = `${pb.unitsIncluded} ${rawLabel || "uses"}/year • ${benefitName}`;
         } else if (period === "one_time") {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "session"} ${benefitName}`;
+          displayText = `${pb.unitsIncluded} ${rawLabel || "session"} • ${benefitName}`;
         } else {
-          displayText = `${pb.unitsIncluded} ${rawLabel || "visits"}/month ${benefitName}`;
+          displayText = `${pb.unitsIncluded} ${rawLabel || "visit"}/month • ${benefitName}`;
         }
 
         const cat = pb.category || (pb.benefit ? detectDefaultBenefitCategory(pb.benefit) : 'included');
@@ -115,7 +164,16 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
   const handleSelect = () => {
     onClose();
     if (onSelectPackage) {
-      onSelectPackage(plan);
+      const enrichedPlan = {
+        ...plan,
+        selectedDurationMonths: durNum,
+        selectedCycle: isTrial ? "1" : String(durNum),
+        calculatedPrice: displayPrice,
+        cycleLabel: durationText,
+        monthlyRate,
+        savings,
+      };
+      onSelectPackage(enrichedPlan, String(durNum));
     }
   };
 
@@ -180,6 +238,46 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
                 </span>
               )}
             </div>
+
+            {/* Interactive Billing Cycle Selector for non-trial plans */}
+            {!isTrial && (
+              <div className="plan-modal-cycle-container">
+                <div className="plan-modal-cycle-chips" role="radiogroup" aria-label="Select billing cycle">
+                  {cycleOptions.map((opt) => {
+                    const optSavings = getPackageCycleSavings(plan, opt.value);
+                    const isSelected = String(currentCycle) === String(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        className={`plan-modal-cycle-chip ${isSelected ? "plan-modal-cycle-chip--active" : ""}`}
+                        onClick={() => handleCycleChange(opt.value)}
+                      >
+                        <span className="plan-modal-cycle-chip-label">{opt.label}</span>
+                        {optSavings > 0 ? (
+                          <span className="plan-modal-cycle-chip-savings">
+                            Save ₹{optSavings.toLocaleString("en-IN")}
+                          </span>
+                        ) : (
+                          <span className="plan-modal-cycle-chip-standard">
+                            Monthly
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {savings > 0 && (
+                  <div className="plan-modal-savings-highlight">
+                    <span>🎉 You save <strong>₹{savings.toLocaleString("en-IN")}</strong> with {durNum === 12 ? "Annual" : `${durNum}-Month`} Billing ({discountPercent}% OFF)</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {planDesc && <p className="plan-modal-desc">{planDesc}</p>}
           </div>
 
@@ -327,7 +425,13 @@ export default function PlanDetailsModal({ isOpen, onClose, plan, selectedCycle 
             onClick={handleSelect}
             style={isTrial ? { background: "linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)", boxShadow: "0 6px 20px rgba(124, 58, 237, 0.35)" } : {}}
           >
-            <span>{isTrial ? `Start ${trialDays}-Day Trial` : isRegional ? `Select Local Plan` : `Get Started with ${planName}`}</span>
+            <span>
+              {isTrial
+                ? `Start ${trialDays}-Day Trial`
+                : isRegional
+                  ? `Select Local Plan (${durNum === 12 ? "Annual" : `${durNum} Mo`})`
+                  : `Get Started with ${planName} (${durNum === 12 ? "Annual" : `${durNum} Mo`})`}
+            </span>
             <span className="plan-modal-arrow">→</span>
           </button>
         </div>
