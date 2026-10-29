@@ -19,7 +19,7 @@ function formatUnitDisplay(units, rawUnitLabel) {
   if (!rawUnitLabel) return `Units: ${units}`;
   const clean = String(rawUnitLabel).replace(/^per\s+/i, "").trim().toLowerCase();
   let type = clean;
-  if (clean === "hour") type = units === 1 ? "Hour" : "Hours";
+  if (clean === "hour" || clean === "hours") type = units === 1 ? "Visit Hour" : "Visit Hours";
   else if (clean === "visit") type = units === 1 ? "Visit" : "Visits";
   else if (clean === "session") type = units === 1 ? "Session" : "Sessions";
   else if (clean === "test") type = units === 1 ? "Test" : "Tests";
@@ -508,7 +508,7 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
                   </span>
                 </div>
 
-                {/* ── Benefit-by-Benefit Price & GST Breakdown (Excel Spreadsheet Model) ── */}
+                {/* ── Included Benefits List (Without internal cost breakdown) ── */}
                 {serverPricing?.benefitsBreakdown && serverPricing.benefitsBreakdown.length > 0 && (
                   <div style={{
                     margin: "16px 0",
@@ -518,94 +518,80 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
                     background: "#ffffff"
                   }}>
                     <div style={{
-                      padding: "8px 12px",
+                      padding: "10px 14px",
                       background: "#f8fafc",
                       borderBottom: "1px solid #e2e8f0",
-                      fontSize: "0.72rem",
+                      fontSize: "0.75rem",
                       fontWeight: "800",
                       color: "#475569",
                       textTransform: "uppercase",
-                      letterSpacing: "0.05em"
+                      letterSpacing: "0.05em",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center"
                     }}>
-                      Included Benefits &amp; Taxes
+                      <span>Included Package Benefits</span>
+                      <span style={{ fontSize: "0.7rem", color: "#059669", fontWeight: "700", background: "#ecfdf5", padding: "2px 8px", borderRadius: "999px" }}>
+                        {serverPricing.benefitsBreakdown.length} Services
+                      </span>
                     </div>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
-                      <thead>
-                        <tr style={{ background: "#f8fafc", color: "#64748b", borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>
-                          <th style={{ padding: "8px 10px", fontWeight: "600" }}>Benefit Name</th>
-                          <th style={{ padding: "8px 8px", textAlign: "right", fontWeight: "600" }}>Price</th>
-                          <th style={{ padding: "8px 6px", textAlign: "center", fontWeight: "600" }}>GST %</th>
-                          <th style={{ padding: "8px 8px", textAlign: "right", fontWeight: "600" }}>GST ₹</th>
-                          <th style={{ padding: "8px 10px", textAlign: "right", fontWeight: "700", color: "#0f172a" }}>Final Price</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {serverPricing.benefitsBreakdown.map((b, idx) => (
-                          <tr key={idx} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td style={{ padding: "8px 10px", color: "#0f172a", fontWeight: "600" }}>
-                              {b.name}
-                              {b.units > 0 && (
-                                <span style={{ fontSize: "0.72rem", color: "#64748b", display: "block", marginTop: "2px", fontWeight: "500" }}>
-                                  {b.unitDisplay || formatUnitDisplay(b.units, b.unitType || b.unitLabel)}
-                                </span>
-                              )}
-                            </td>
-                            <td style={{ padding: "8px 8px", textAlign: "right", fontFamily: "monospace", color: "#475569" }}>
-                              ₹{b.price?.toLocaleString("en-IN")}
-                            </td>
-                            <td style={{ padding: "8px 6px", textAlign: "center" }}>
-                              <span style={{
-                                padding: "2px 5px",
-                                borderRadius: "4px",
-                                fontSize: "0.68rem",
-                                fontWeight: "700",
-                                background: b.isGstExempt ? "#ecfdf5" : "#eff6ff",
-                                color: b.isGstExempt ? "#059669" : "#1d4ed8",
-                                border: b.isGstExempt ? "1px solid #a7f3d0" : "1px solid #bfdbfe",
-                              }}>
-                                {b.isGstExempt ? "0%" : `${b.gstRate}%`}
-                              </span>
-                            </td>
-                            <td style={{ padding: "8px 8px", textAlign: "right", fontFamily: "monospace", color: "#1e3a8a" }}>
-                              ₹{b.gstAmount?.toLocaleString("en-IN")}
-                            </td>
-                            <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: "700", color: "#0f172a" }}>
-                              ₹{b.finalPrice?.toLocaleString("en-IN")}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot style={{ background: "#f8fafc", borderTop: "1px solid #e2e8f0", fontSize: "0.78rem" }}>
-                        <tr>
-                          <td colSpan={4} style={{ padding: "8px 10px", color: "#475569", fontWeight: "600" }}>
-                            Package Gross Price (Sum of Final Prices):
-                          </td>
-                          <td style={{ padding: "8px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: "800", color: "#0f172a" }}>
-                            ₹{serverPricing.packageGrossPrice?.toLocaleString("en-IN")}
-                          </td>
-                        </tr>
+
+                    <div style={{ padding: "10px 14px" }}>
+                      {serverPricing.benefitsBreakdown.map((b, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 0",
+                            borderBottom: idx < serverPricing.benefitsBreakdown.length - 1 ? "1px solid #f1f5f9" : "none",
+                            fontSize: "0.85rem"
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ color: "#059669", fontWeight: "800", fontSize: "0.9rem" }}>✓</span>
+                            <span style={{ fontWeight: "600", color: "#0f172a" }}>{b.name}</span>
+                          </div>
+                          {b.units > 0 && (
+                            <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#475569", background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px" }}>
+                              {b.unitDisplay || formatUnitDisplay(b.units, b.unitType || b.unitLabel)}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Overall Package Summary (Gross, Tenure Discount, Coupon) */}
+                    {(serverPricing.packageGrossPrice || serverPricing.durationDiscount > 0 || serverPricing.couponDiscount > 0) && (
+                      <div style={{
+                        background: "#f8fafc",
+                        borderTop: "1px solid #e2e8f0",
+                        padding: "10px 14px",
+                        fontSize: "0.82rem"
+                      }}>
+                        {serverPricing.packageGrossPrice && (
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b", marginBottom: "4px" }}>
+                            <span>Package Base Price</span>
+                            <span style={{ fontWeight: "600", color: "#334155" }}>
+                              ₹{serverPricing.packageGrossPrice?.toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                        )}
                         {serverPricing.durationDiscount > 0 && (
-                          <tr style={{ color: "#16a34a" }}>
-                            <td colSpan={4} style={{ padding: "6px 10px", fontWeight: "600" }}>
-                              Tenure Discount ({serverPricing.durationDiscountPct}% off for {serverPricing.durationMonths} {serverPricing.durationMonths === 1 ? "month" : "months"}):
-                            </td>
-                            <td style={{ padding: "6px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>
-                              - ₹{serverPricing.durationDiscount?.toLocaleString("en-IN")}
-                            </td>
-                          </tr>
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a", fontWeight: "600", marginBottom: "4px" }}>
+                            <span>Tenure Savings ({serverPricing.durationDiscountPct}% off)</span>
+                            <span>- ₹{serverPricing.durationDiscount?.toLocaleString("en-IN")}</span>
+                          </div>
                         )}
                         {serverPricing.couponDiscount > 0 && (
-                          <tr style={{ color: "#16a34a" }}>
-                            <td colSpan={4} style={{ padding: "6px 10px", fontWeight: "600" }}>
-                              Coupon Discount:
-                            </td>
-                            <td style={{ padding: "6px 10px", textAlign: "right", fontFamily: "monospace", fontWeight: "700" }}>
-                              - ₹{serverPricing.couponDiscount?.toLocaleString("en-IN")}
-                            </td>
-                          </tr>
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a", fontWeight: "600" }}>
+                            <span>Coupon Savings</span>
+                            <span>- ₹{serverPricing.couponDiscount?.toLocaleString("en-IN")}</span>
+                          </div>
                         )}
-                      </tfoot>
-                    </table>
+                      </div>
+                    )}
                   </div>
                 )}
 

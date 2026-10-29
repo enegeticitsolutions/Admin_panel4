@@ -32,9 +32,19 @@ export function getPackageDisplayPrice(plan, selectedCycle = "3") {
   return base * durNum;
 }
 
+export function getPackageCycleSavings(plan, cycle = "12") {
+  if (!plan || plan.isFreeTrial) return 0;
+  const base = Number(plan.basePrice) || 4999;
+  const durNum = parseInt(cycle, 10) || 1;
+  if (durNum <= 1) return 0;
+  const fullTermCost = base * durNum;
+  const discountedTotal = getPackageDisplayPrice(plan, String(durNum));
+  return Math.max(0, fullTermCost - discountedTotal);
+}
+
 export default function PackageCard({
   plan,
-  selectedCycle = "3",
+  selectedCycle = "12",
   isSelected = false,
   onCardClick,
   onSelectPackage,
@@ -78,7 +88,11 @@ export default function PackageCard({
         const benefitName = pb.benefit.name.trim();
         if (!benefitName || benefitName.toLowerCase() === "included benefit") return;
 
-        const rawLabel = (pb.benefit?.unitLabel || "").replace(/^per\s+/i, "").trim();
+        let rawLabel = (pb.benefit?.unitLabel || "").replace(/^per\s+/i, "").trim();
+        const baseUnits = pb.unitsIncluded ?? 0;
+        if (/^hours?$/i.test(rawLabel)) {
+          rawLabel = baseUnits === 1 ? "visit hour" : "visit hours";
+        }
         const period = pb.unitsPeriod || "monthly";
         let displayText = "";
         if (pb.showUnit === false) {
@@ -86,7 +100,6 @@ export default function PackageCard({
         } else if (pb.isUnlimited) {
           displayText = `Unlimited • ${benefitName}`;
         } else {
-          const baseUnits = pb.unitsIncluded ?? 0;
           let periodText = "";
           if (isTrial) {
             periodText = ` (trial)`;
@@ -251,23 +264,15 @@ export default function PackageCard({
 
         <div className="plan-hours__total-billed">
           {isTrial ? (
-            <>
-              <span className="plan-hours__total-label">Fixed:</span>
-              <strong className="plan-hours__total-amount">
-                ₹{displayPrice.toLocaleString("en-IN")}
-              </strong>
-              <span className="plan-hours__cycle-tag">(One-time trial)</span>
-            </>
-          ) : durNum > 1 ? (
-            <>
-              <span className="plan-hours__total-label">Total:</span>
-              <strong className="plan-hours__total-amount">
-                ₹{displayPrice.toLocaleString("en-IN")}
-              </strong>
-              <span className="plan-hours__cycle-tag">({cycleLabel})</span>
-            </>
+            <span className="plan-hours__cycle-tag">Fixed {trialDays}-day trial</span>
           ) : (
-            <span className="plan-hours__cycle-tag">Billed monthly</span>
+            <span className="plan-hours__cycle-tag">
+              {durNum === 12
+                ? "when billed annually"
+                : durNum > 1
+                  ? `when billed for ${durNum} months`
+                  : "billed monthly"}
+            </span>
           )}
         </div>
 

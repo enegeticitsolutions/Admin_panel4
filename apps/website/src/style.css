@@ -3770,6 +3770,117 @@ a {
   max-width: 90%;
 }
 
+/* ── Modal Billing Cycle Selector ── */
+.plan-modal-cycle-container {
+  width: 100%;
+  margin: 10px 0 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-modal-cycle-chips {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  width: 100%;
+  max-width: 480px;
+  background: #f8fafc;
+  padding: 5px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+}
+
+.plan-modal-cycle-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 6px;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+  user-select: none;
+}
+
+.plan-modal-cycle-chip:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+.plan-modal-cycle-chip--active {
+  background: #ffffff !important;
+  border-color: #FE6700 !important;
+  box-shadow: 0 4px 12px rgba(254, 103, 0, 0.16);
+}
+
+.plan-modal-cycle-chip-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #334155;
+  line-height: 1.2;
+}
+
+.plan-modal-cycle-chip--active .plan-modal-cycle-chip-label {
+  color: #FE6700;
+}
+
+.plan-modal-cycle-chip-savings {
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #059669;
+  background: #ecfdf5;
+  padding: 2px 6px;
+  border-radius: 999px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.plan-modal-cycle-chip--active .plan-modal-cycle-chip-savings {
+  background: #FE6700;
+  color: #ffffff;
+}
+
+.plan-modal-cycle-chip-standard {
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  line-height: 1.1;
+}
+
+.plan-modal-savings-highlight {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+  color: #065f46;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.plan-modal-savings-highlight strong {
+  color: #047857;
+  font-weight: 800;
+}
+
+@media (max-width: 520px) {
+  .plan-modal-cycle-chips {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+}
+
 .plan-modal-close {
   position: absolute;
   top: 18px;

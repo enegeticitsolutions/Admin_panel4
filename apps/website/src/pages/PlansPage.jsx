@@ -31,7 +31,7 @@ export default function PlansPage({
   isSubmitting = false,
   showSuccess = false,
 }) {
-  const [selectedCycle, setSelectedCycle] = useState("1");
+  const [selectedCycle, setSelectedCycle] = useState("12");
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [modalPlan, setModalPlan] = useState(null);
@@ -303,17 +303,20 @@ export default function PlansPage({
     }
   };
 
-  // Enrich selected plan with region metadata before passing to buy handler
-  const handleSelectPlan = (plan) => {
+  // Enrich selected plan with region metadata and selected cycle before passing to buy handler
+  const handleSelectPlan = (plan, cycle = selectedCycle) => {
     const isAllMode = selectedRegion?.id === 'ALL';
     const enrichedPlan = {
       ...plan,
+      selectedCycle: cycle,
+      selectedBillingCycle: cycle,
+      selectedDurationMonths: parseInt(cycle, 10) || 12,
       serviceRegionId: (isAllMode ? null : selectedRegion?.id) || (Array.isArray(plan.regions) && plan.regions[0]?.id) || null,
       selectedRegionName: (isAllMode ? null : selectedRegion?.name) || (Array.isArray(plan.regions) && plan.regions[0]?.name) || null,
       serviceAddress: selectedAddress || ((selectedRegion && !isAllMode) ? `${selectedRegion.name} (${selectedRegion.city})` : null),
     };
     if (onSelectPackage) {
-      onSelectPackage(enrichedPlan);
+      onSelectPackage(enrichedPlan, cycle);
     }
   };
 
@@ -815,6 +818,7 @@ export default function PlansPage({
 
             <div className="pricing-toolbar">
               <strong>All prices on enquiry · GST applicable</strong>
+              {/* Top billing toggle commented out for now - users see Annual by default and can select cycle inside package modal
               <div className="billing-toggle" aria-label="Billing cycle">
                 <button
                   className={selectedCycle === "1" ? "active" : ""}
@@ -841,6 +845,7 @@ export default function PlansPage({
                   Annual <span>Save 20%</span>
                 </button>
               </div>
+              */}
             </div>
 
             {/* ── Card-wise Carousel Slider ── */}
@@ -916,6 +921,24 @@ export default function PlansPage({
               No hidden caps - No surprise renewals - Plans available monthly, quarterly, and annually - Pricing on enquiry
             </p>
 
+            {/* ── Customize Your Own Banner ── */}
+            <div className="bespoke-banner">
+              <div>
+                <span>Bespoke Plans</span>
+                <h2>Customize Your Own</h2>
+                <p>
+                  For families needing a tailored care schedule or specialized support. Custom-built hours, specialist Care Mitra matching, and coordinated multi-disciplinary care - designed together with your family.
+                </p>
+                <ul>
+                  <li>Custom hours &amp; schedule</li>
+                  <li>Specialist Mitra matching</li>
+                  <li>Palliative care coordination</li>
+                  <li>Family counselling support</li>
+                </ul>
+              </div>
+              <button onClick={openForm}>Contact Us</button>
+            </div>
+
             {/* ── Dynamic Feature Comparison Table ── */}
             {comparedPackages && comparedPackages.length > 0 && (
               <div className="comparison">
@@ -981,24 +1004,6 @@ export default function PlansPage({
             )}
           </>
         )}
-
-        {/* ── Bespoke Banner ── */}
-        <div className="bespoke-banner">
-          <div>
-            <span>Bespoke Plans</span>
-            <h2>Bespoke Palliative Plans</h2>
-            <p>
-              For families navigating advanced illness. Custom-built hours, specialist Care Mitra matching, and coordinated multi-disciplinary support - designed together with your family.
-            </p>
-            <ul>
-              <li>Custom hours &amp; schedule</li>
-              <li>Specialist Mitra matching</li>
-              <li>Palliative care coordination</li>
-              <li>Family counselling support</li>
-            </ul>
-          </div>
-          <button onClick={openForm}>Contact Us</button>
-        </div>
       </section>
 
       {/* ── Quote Callback Form ── */}
@@ -1091,6 +1096,7 @@ export default function PlansPage({
         selectedCycle={selectedCycle}
         onClose={() => setModalPlan(null)}
         onSelectPackage={handleSelectPlan}
+        onCycleChange={setSelectedCycle}
       />
 
     </main>
