@@ -389,14 +389,32 @@ export function Step4ReviewPackage({
             <div className="p-3 rounded-lg border border-orange-200 bg-orange-50/30 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="font-bold text-xs text-orange-950">3 Months</span>
-                <span className="text-[10px] text-orange-700 font-semibold">Quarterly</span>
+                <div className="flex items-center gap-1.5">
+                  {isPriceThreeOverridden && (
+                    <span className="text-[9px] text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                      Custom Price
+                    </span>
+                  )}
+                  <span className="text-[10px] text-orange-700 font-semibold">Quarterly</span>
+                </div>
               </div>
               <div className="space-y-1">
                 <Label className="text-[11px] text-gray-600">Discount (%)</Label>
                 <Input
                   type="number"
+                  step="0.1"
                   value={discountThreeMonths}
-                  onChange={(e) => setDiscountThreeMonths(e.target.value)}
+                  onChange={(e) => {
+                    const dVal = e.target.value;
+                    setDiscountThreeMonths(dVal);
+                    const numD = parseFloat(dVal);
+                    const rawBase = (parseFloat(totalCost) || benefitSubtotal) * 3;
+                    if (!isNaN(numD) && rawBase > 0) {
+                      const newP = Math.round(rawBase * (1 - numD / 100));
+                      setPriceThreeMonths(String(newP));
+                      setIsManualPriceThree(false);
+                    }
+                  }}
                   className="h-8 text-xs bg-white"
                   placeholder="5"
                 />
@@ -409,7 +427,9 @@ export function Step4ReviewPackage({
                       type="button"
                       onClick={() => {
                         setIsManualPriceThree(false);
-                        setPriceThreeMonths(String(calculatedPriceThree));
+                        const rawBase = (parseFloat(totalCost) || benefitSubtotal) * 3;
+                        setDiscountThreeMonths('5');
+                        setPriceThreeMonths(String(Math.round(rawBase * 0.95)));
                       }}
                       className="text-[10px] text-orange-600 underline font-semibold cursor-pointer hover:text-orange-700"
                     >
@@ -421,8 +441,15 @@ export function Step4ReviewPackage({
                   type="number"
                   value={priceThreeMonths}
                   onChange={(e) => {
-                    setPriceThreeMonths(e.target.value);
+                    const val = e.target.value;
+                    setPriceThreeMonths(val);
                     setIsManualPriceThree(true);
+                    const numVal = parseFloat(val);
+                    const rawBase = (parseFloat(totalCost) || benefitSubtotal) * 3;
+                    if (!isNaN(numVal) && rawBase > 0) {
+                      const disc = Math.max(0, Math.round(((rawBase - numVal) / rawBase) * 100 * 10) / 10);
+                      setDiscountThreeMonths(String(disc));
+                    }
                   }}
                   className={`h-9 font-bold text-sm ${
                     isPriceThreeOverridden
@@ -431,10 +458,15 @@ export function Step4ReviewPackage({
                   }`}
                 />
               </div>
-              <div className="text-[10px] text-orange-900 pt-1 border-t border-orange-200/60 flex justify-between">
+              <div className="text-[10px] text-orange-900 pt-1 border-t border-orange-200/60 flex justify-between items-center">
                 <span>
                   Monthly Eq: <strong>₹{Math.round((parseFloat(priceThreeMonths) || calculatedPriceThree) / 3)}/mo</strong>
                 </span>
+                {parseFloat(discountThreeMonths) > 0 && (
+                  <span className="text-emerald-700 font-bold">
+                    Save ₹{Math.max(0, Math.round(((parseFloat(totalCost) || benefitSubtotal) * 3) - (parseFloat(priceThreeMonths) || calculatedPriceThree)))} ({discountThreeMonths}% OFF)
+                  </span>
+                )}
               </div>
             </div>
 
@@ -442,14 +474,32 @@ export function Step4ReviewPackage({
             <div className="p-3 rounded-lg border border-orange-200 bg-orange-50/30 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="font-bold text-xs text-orange-950">6 Months</span>
-                <span className="text-[10px] text-orange-700 font-semibold">Half-Yearly</span>
+                <div className="flex items-center gap-1.5">
+                  {isPriceSixOverridden && (
+                    <span className="text-[9px] text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                      Custom Price
+                    </span>
+                  )}
+                  <span className="text-[10px] text-orange-700 font-semibold">Half-Yearly</span>
+                </div>
               </div>
               <div className="space-y-1">
                 <Label className="text-[11px] text-gray-600">Discount (%)</Label>
                 <Input
                   type="number"
+                  step="0.1"
                   value={discountSixMonths}
-                  onChange={(e) => setDiscountSixMonths(e.target.value)}
+                  onChange={(e) => {
+                    const dVal = e.target.value;
+                    setDiscountSixMonths(dVal);
+                    const numD = parseFloat(dVal);
+                    const rawBase = (parseFloat(totalCost) || benefitSubtotal) * 6;
+                    if (!isNaN(numD) && rawBase > 0) {
+                      const newP = Math.round(rawBase * (1 - numD / 100));
+                      setPriceSixMonths(String(newP));
+                      setIsManualPriceSix(false);
+                    }
+                  }}
                   className="h-8 text-xs bg-white"
                   placeholder="10"
                 />
@@ -462,7 +512,9 @@ export function Step4ReviewPackage({
                       type="button"
                       onClick={() => {
                         setIsManualPriceSix(false);
-                        setPriceSixMonths(String(calculatedPriceSix));
+                        const rawBase = (parseFloat(totalCost) || benefitSubtotal) * 6;
+                        setDiscountSixMonths('10');
+                        setPriceSixMonths(String(Math.round(rawBase * 0.9)));
                       }}
                       className="text-[10px] text-orange-600 underline font-semibold cursor-pointer hover:text-orange-700"
                     >
@@ -474,8 +526,15 @@ export function Step4ReviewPackage({
                   type="number"
                   value={priceSixMonths}
                   onChange={(e) => {
-                    setPriceSixMonths(e.target.value);
+                    const val = e.target.value;
+                    setPriceSixMonths(val);
                     setIsManualPriceSix(true);
+                    const numVal = parseFloat(val);
+                    const rawBase = (parseFloat(totalCost) || benefitSubtotal) * 6;
+                    if (!isNaN(numVal) && rawBase > 0) {
+                      const disc = Math.max(0, Math.round(((rawBase - numVal) / rawBase) * 100 * 10) / 10);
+                      setDiscountSixMonths(String(disc));
+                    }
                   }}
                   className={`h-9 font-bold text-sm ${
                     isPriceSixOverridden
@@ -484,10 +543,15 @@ export function Step4ReviewPackage({
                   }`}
                 />
               </div>
-              <div className="text-[10px] text-orange-900 pt-1 border-t border-orange-200/60 flex justify-between">
+              <div className="text-[10px] text-orange-900 pt-1 border-t border-orange-200/60 flex justify-between items-center">
                 <span>
                   Monthly Eq: <strong>₹{Math.round((parseFloat(priceSixMonths) || calculatedPriceSix) / 6)}/mo</strong>
                 </span>
+                {parseFloat(discountSixMonths) > 0 && (
+                  <span className="text-emerald-700 font-bold">
+                    Save ₹{Math.max(0, Math.round(((parseFloat(totalCost) || benefitSubtotal) * 6) - (parseFloat(priceSixMonths) || calculatedPriceSix)))} ({discountSixMonths}% OFF)
+                  </span>
+                )}
               </div>
             </div>
 
@@ -495,14 +559,32 @@ export function Step4ReviewPackage({
             <div className="p-3 rounded-lg border border-orange-200 bg-orange-50/30 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="font-bold text-xs text-orange-950">12 Months (Annual)</span>
-                <span className="text-[10px] text-orange-700 font-semibold">Yearly</span>
+                <div className="flex items-center gap-1.5">
+                  {isPriceTwelveOverridden && (
+                    <span className="text-[9px] text-amber-800 font-bold bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                      Custom Price
+                    </span>
+                  )}
+                  <span className="text-[10px] text-orange-700 font-semibold">Yearly</span>
+                </div>
               </div>
               <div className="space-y-1">
                 <Label className="text-[11px] text-gray-600">Discount (%)</Label>
                 <Input
                   type="number"
+                  step="0.1"
                   value={discountAnnual}
-                  onChange={(e) => setDiscountAnnual(e.target.value)}
+                  onChange={(e) => {
+                    const dVal = e.target.value;
+                    setDiscountAnnual(dVal);
+                    const numD = parseFloat(dVal);
+                    const rawBase = (parseFloat(totalCost) || benefitSubtotal) * 12;
+                    if (!isNaN(numD) && rawBase > 0) {
+                      const newP = Math.round(rawBase * (1 - numD / 100));
+                      setPriceTwelveMonths(String(newP));
+                      setIsManualPriceTwelve(false);
+                    }
+                  }}
                   className="h-8 text-xs bg-white"
                   placeholder="20"
                 />
@@ -515,7 +597,9 @@ export function Step4ReviewPackage({
                       type="button"
                       onClick={() => {
                         setIsManualPriceTwelve(false);
-                        setPriceTwelveMonths(String(calculatedPriceTwelve));
+                        const rawBase = (parseFloat(totalCost) || benefitSubtotal) * 12;
+                        setDiscountAnnual('20');
+                        setPriceTwelveMonths(String(Math.round(rawBase * 0.8)));
                       }}
                       className="text-[10px] text-orange-600 underline font-semibold cursor-pointer hover:text-orange-700"
                     >
@@ -527,8 +611,15 @@ export function Step4ReviewPackage({
                   type="number"
                   value={priceTwelveMonths}
                   onChange={(e) => {
-                    setPriceTwelveMonths(e.target.value);
+                    const val = e.target.value;
+                    setPriceTwelveMonths(val);
                     setIsManualPriceTwelve(true);
+                    const numVal = parseFloat(val);
+                    const rawBase = (parseFloat(totalCost) || benefitSubtotal) * 12;
+                    if (!isNaN(numVal) && rawBase > 0) {
+                      const disc = Math.max(0, Math.round(((rawBase - numVal) / rawBase) * 100 * 10) / 10);
+                      setDiscountAnnual(String(disc));
+                    }
                   }}
                   className={`h-9 font-bold text-sm ${
                     isPriceTwelveOverridden
@@ -537,10 +628,15 @@ export function Step4ReviewPackage({
                   }`}
                 />
               </div>
-              <div className="text-[10px] text-orange-900 pt-1 border-t border-orange-200/60 flex justify-between">
+              <div className="text-[10px] text-orange-900 pt-1 border-t border-orange-200/60 flex justify-between items-center">
                 <span>
                   Monthly Eq: <strong>₹{Math.round((parseFloat(priceTwelveMonths) || calculatedPriceTwelve) / 12)}/mo</strong>
                 </span>
+                {parseFloat(discountAnnual) > 0 && (
+                  <span className="text-emerald-700 font-bold">
+                    Save ₹{Math.max(0, Math.round(((parseFloat(totalCost) || benefitSubtotal) * 12) - (parseFloat(priceTwelveMonths) || calculatedPriceTwelve)))} ({discountAnnual}% OFF)
+                  </span>
+                )}
               </div>
             </div>
           </div>

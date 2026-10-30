@@ -397,19 +397,38 @@ export default function SubscriptionsPage() {
       };
     });
 
+    const baseP = parseFloat(totalCost) || 0;
+    let discThree = parseFloat(discountThreeMonths) || 0;
+    let discSix = parseFloat(discountSixMonths) || 0;
+    let discAnnual = parseFloat(discountAnnual) || 0;
+
+    const pThree = parseFloat(priceThreeMonths) || null;
+    const pSix = parseFloat(priceSixMonths) || null;
+    const pTwelve = parseFloat(priceTwelveMonths) || null;
+
+    if (pThree !== null && baseP > 0) {
+      discThree = Math.max(0, Math.round(((baseP * 3 - pThree) / (baseP * 3)) * 100 * 10) / 10);
+    }
+    if (pSix !== null && baseP > 0) {
+      discSix = Math.max(0, Math.round(((baseP * 6 - pSix) / (baseP * 6)) * 100 * 10) / 10);
+    }
+    if (pTwelve !== null && baseP > 0) {
+      discAnnual = Math.max(0, Math.round(((baseP * 12 - pTwelve) / (baseP * 12)) * 100 * 10) / 10);
+    }
+
     const payload = {
       name: packageName,
       description,
       benefits: packageBenefits,
-      packageCost: parseFloat(totalCost),
+      packageCost: baseP,
       mrp: parseFloat(mrp),
       discountPercentage: parseFloat(discountPercentage),
-      discountThreeMonths: parseFloat(discountThreeMonths) || 0,
-      discountSixMonths: parseFloat(discountSixMonths) || 0,
-      discountAnnual: parseFloat(discountAnnual) || 0,
-      priceThreeMonths: parseFloat(priceThreeMonths) || null,
-      priceSixMonths: parseFloat(priceSixMonths) || null,
-      priceTwelveMonths: parseFloat(priceTwelveMonths) || null,
+      discountThreeMonths: discThree,
+      discountSixMonths: discSix,
+      discountAnnual: discAnnual,
+      priceThreeMonths: pThree,
+      priceSixMonths: pSix,
+      priceTwelveMonths: pTwelve,
       miscellaneousCost: parseFloat(miscellaneousCost),
       isActive: true,
       activeFrom: new Date(activeFrom).toISOString(),
@@ -452,17 +471,34 @@ export default function SubscriptionsPage() {
     setDescription(pkg.description || '');
     setMrp(String(pkg.mrp || 0));
     setDiscountPercentage(String(pkg.discountPercentage || 0));
-    setDiscountThreeMonths(String(pkg.discountThreeMonths ?? 5));
-    setDiscountSixMonths(String(pkg.discountSixMonths ?? 10));
-    setDiscountAnnual(String(pkg.discountAnnual ?? 20));
-    setPriceThreeMonths(pkg.priceThreeMonths ? String(pkg.priceThreeMonths) : String(Math.round(((pkg.basePrice || pkg.totalCost) * 3 * (1 - (pkg.discountThreeMonths ?? 5) / 100)))));
-    setPriceSixMonths(pkg.priceSixMonths ? String(pkg.priceSixMonths) : String(Math.round(((pkg.basePrice || pkg.totalCost) * 6 * (1 - (pkg.discountSixMonths ?? 10) / 100)))));
-    setPriceTwelveMonths(pkg.priceTwelveMonths ? String(pkg.priceTwelveMonths) : String(Math.round(((pkg.basePrice || pkg.totalCost) * 12 * (1 - (pkg.discountAnnual ?? 20) / 100)))));
+
+    const baseVal = Number(pkg.basePrice || pkg.totalCost || 0);
+    let dThree = pkg.discountThreeMonths != null ? Number(pkg.discountThreeMonths) : 5;
+    let dSix = pkg.discountSixMonths != null ? Number(pkg.discountSixMonths) : 10;
+    let dAnnual = pkg.discountAnnual != null ? Number(pkg.discountAnnual) : 20;
+
+    // Reverse calculate discounts if manual prices were set on this package
+    if (pkg.priceThreeMonths && baseVal > 0) {
+      dThree = Math.max(0, Math.round(((baseVal * 3 - Number(pkg.priceThreeMonths)) / (baseVal * 3)) * 100 * 10) / 10);
+    }
+    if (pkg.priceSixMonths && baseVal > 0) {
+      dSix = Math.max(0, Math.round(((baseVal * 6 - Number(pkg.priceSixMonths)) / (baseVal * 6)) * 100 * 10) / 10);
+    }
+    if (pkg.priceTwelveMonths && baseVal > 0) {
+      dAnnual = Math.max(0, Math.round(((baseVal * 12 - Number(pkg.priceTwelveMonths)) / (baseVal * 12)) * 100 * 10) / 10);
+    }
+
+    setDiscountThreeMonths(String(dThree));
+    setDiscountSixMonths(String(dSix));
+    setDiscountAnnual(String(dAnnual));
+    setPriceThreeMonths(pkg.priceThreeMonths ? String(pkg.priceThreeMonths) : String(Math.round(baseVal * 3 * (1 - dThree / 100))));
+    setPriceSixMonths(pkg.priceSixMonths ? String(pkg.priceSixMonths) : String(Math.round(baseVal * 6 * (1 - dSix / 100))));
+    setPriceTwelveMonths(pkg.priceTwelveMonths ? String(pkg.priceTwelveMonths) : String(Math.round(baseVal * 12 * (1 - dAnnual / 100))));
     setIsManualPriceThree(!!pkg.priceThreeMonths);
     setIsManualPriceSix(!!pkg.priceSixMonths);
     setIsManualPriceTwelve(!!pkg.priceTwelveMonths);
     setMiscellaneousCost(String(pkg.miscellaneousCost || 0));
-    setTotalCost(String(pkg.basePrice || pkg.totalCost));
+    setTotalCost(String(baseVal));
     setIsManualPrice(true); // Don't auto-recalculate when editing existing
     // Date strings for input[type="date"] need to be YYYY-MM-DD
     setActiveFrom(pkg.activeFrom ? pkg.activeFrom.split('T')[0] : '');
@@ -518,25 +554,39 @@ export default function SubscriptionsPage() {
     // 3. Clone financial & duration pricing
     setMrp(String(pkg.mrp || 0));
     setDiscountPercentage(String(pkg.discountPercentage || 0));
-    setDiscountThreeMonths(String(pkg.discountThreeMonths ?? 5));
-    setDiscountSixMonths(String(pkg.discountSixMonths ?? 10));
-    setDiscountAnnual(String(pkg.discountAnnual ?? 20));
 
-    const baseVal = pkg.basePrice || pkg.totalCost || 0;
+    const baseVal = Number(pkg.basePrice || pkg.totalCost || 0);
+    let dThree = pkg.discountThreeMonths != null ? Number(pkg.discountThreeMonths) : 5;
+    let dSix = pkg.discountSixMonths != null ? Number(pkg.discountSixMonths) : 10;
+    let dAnnual = pkg.discountAnnual != null ? Number(pkg.discountAnnual) : 20;
+
+    if (pkg.priceThreeMonths && baseVal > 0) {
+      dThree = Math.max(0, Math.round(((baseVal * 3 - Number(pkg.priceThreeMonths)) / (baseVal * 3)) * 100 * 10) / 10);
+    }
+    if (pkg.priceSixMonths && baseVal > 0) {
+      dSix = Math.max(0, Math.round(((baseVal * 6 - Number(pkg.priceSixMonths)) / (baseVal * 6)) * 100 * 10) / 10);
+    }
+    if (pkg.priceTwelveMonths && baseVal > 0) {
+      dAnnual = Math.max(0, Math.round(((baseVal * 12 - Number(pkg.priceTwelveMonths)) / (baseVal * 12)) * 100 * 10) / 10);
+    }
+
+    setDiscountThreeMonths(String(dThree));
+    setDiscountSixMonths(String(dSix));
+    setDiscountAnnual(String(dAnnual));
     setPriceThreeMonths(
       pkg.priceThreeMonths
         ? String(pkg.priceThreeMonths)
-        : String(Math.round(baseVal * 3 * (1 - (pkg.discountThreeMonths ?? 5) / 100)))
+        : String(Math.round(baseVal * 3 * (1 - dThree / 100)))
     );
     setPriceSixMonths(
       pkg.priceSixMonths
         ? String(pkg.priceSixMonths)
-        : String(Math.round(baseVal * 6 * (1 - (pkg.discountSixMonths ?? 10) / 100)))
+        : String(Math.round(baseVal * 6 * (1 - dSix / 100)))
     );
     setPriceTwelveMonths(
       pkg.priceTwelveMonths
         ? String(pkg.priceTwelveMonths)
-        : String(Math.round(baseVal * 12 * (1 - (pkg.discountAnnual ?? 20) / 100)))
+        : String(Math.round(baseVal * 12 * (1 - dAnnual / 100)))
     );
     setIsManualPriceThree(!!pkg.priceThreeMonths);
     setIsManualPriceSix(!!pkg.priceSixMonths);

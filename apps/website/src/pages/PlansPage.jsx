@@ -15,10 +15,55 @@ const defaultFaqs = [
   "What happens if I am not happy with my Care Mitra?",
   "How does the Happiness Score work?",
   "Can I manage care from abroad as an NRI?",
-  "Is MaiHoonNa available outside Gurugram?",
   "What does the Saathi Network do?",
   "Can I change or cancel my plan?",
 ];
+
+// Helper: Filter packages for Saathi vs Care Mitra categories while preserving trials and neutral packages
+export const matchesPackageCategory = (pkg, category = "saathi") => {
+  if (!pkg) return false;
+  if (!category || category === "all") return true;
+
+  const rawName = (pkg.name || "").trim().toLowerCase();
+
+  // Keyword identification (case-insensitive)
+  const isSaathi = rawName.startsWith("saathi") || rawName.includes("saathi");
+  const isCareMitra =
+    rawName.startsWith("care mitra") ||
+    rawName.startsWith("caremitra") ||
+    rawName.startsWith("care-mitra") ||
+    rawName.includes("care mitra") ||
+    rawName.includes("care-mitra") ||
+    rawName.includes("caremitra");
+
+  // Trial check: flagged trial, trialDays set, or trial/trail in name
+  const isTrial = !!pkg.isFreeTrial || !!pkg.trialDays || rawName.includes("trial") || rawName.includes("trail");
+
+  // Neutral packages: packages that don't have "saathi" or "care mitra" in their name ("so we don't miss them showing")
+  const isNeutral = !isSaathi && !isCareMitra;
+
+  if (category === "saathi") {
+    // Never show explicit Care Mitra packages under Saathi
+    if (isCareMitra) return false;
+    // Show if starts with or contains saathi
+    if (isSaathi) return true;
+    // Show neutral packages and neutral trials so we don't miss them
+    if (isNeutral || isTrial) return true;
+    return false;
+  }
+
+  if (category === "care_mitra") {
+    // Never show explicit Saathi packages under Care Mitra
+    if (isSaathi) return false;
+    // Show if starts with or contains care mitra
+    if (isCareMitra) return true;
+    // Show neutral packages and neutral trials so we don't miss them
+    if (isNeutral || isTrial) return true;
+    return false;
+  }
+
+  return true;
+};
 
 export default function PlansPage({
   livePackages = [],
@@ -36,6 +81,7 @@ export default function PlansPage({
   const [isPaused, setIsPaused] = useState(false);
   const [modalPlan, setModalPlan] = useState(null);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState("saathi");
 
   // Regional & Location states
   const [packages, setPackages] = useState(livePackages);
@@ -320,10 +366,34 @@ export default function PlansPage({
     }
   };
 
+  // Category switch handler: switch tab and reset slide position & selected plan focus
+  const handleCategoryChange = (cat) => {
+    setSelectedCategory(cat);
+    setSelectedPlanId(null);
+    setCurrentSlide(0);
+  };
+
+  // Pre-calculate category counts for badges
+  const saathiCount = useMemo(() => {
+    if (!Array.isArray(packages)) return 0;
+    return packages.filter((p) => matchesPackageCategory(p, "saathi")).length;
+  }, [packages]);
+
+  const careMitraCount = useMemo(() => {
+    if (!Array.isArray(packages)) return 0;
+    return packages.filter((p) => matchesPackageCategory(p, "care_mitra")).length;
+  }, [packages]);
+
+  // Filter packages based on active category switch (Saathi vs Care Mitra)
+  const filteredPackages = useMemo(() => {
+    if (!Array.isArray(packages)) return [];
+    return packages.filter((pkg) => matchesPackageCategory(pkg, selectedCategory));
+  }, [packages, selectedCategory]);
+
   // Sort packages from low to high price, prioritizing regional packages when region selected
   const packagesToDisplay = useMemo(() => {
-    if (!Array.isArray(packages)) return [];
-    return [...packages].sort((a, b) => {
+    if (!Array.isArray(filteredPackages)) return [];
+    return [...filteredPackages].sort((a, b) => {
       if (selectedRegion) {
         const aRegional = !a.isGlobal;
         const bRegional = !b.isGlobal;
@@ -337,7 +407,7 @@ export default function PlansPage({
       }
       return (a.name || "").localeCompare(b.name || "");
     });
-  }, [packages, selectedCycle, selectedRegion]);
+  }, [filteredPackages, selectedCycle, selectedRegion]);
 
   // Detect if ALL loaded packages are regional (isGlobal: false) — no global packages configured
   const isRegionalOnlyMode = useMemo(() => {
@@ -742,6 +812,55 @@ export default function PlansPage({
           )}
         </div>
 
+        {/* ── Package Category Switcher (Saathi vs Care Mitra) ── */}
+        <div className="plans-category-switch-wrap">
+          <div className="plans-category-switch" role="tablist" aria-label="Select Package Type">
+            <button
+              type="button"
+              role="tab"
+              id="tab-saathi-packages"
+              aria-selected={selectedCategory === "saathi"}
+              className={`plans-category-switch__btn ${selectedCategory === "saathi" ? "plans-category-switch__btn--active" : ""}`}
+              onClick={() => handleCategoryChange("saathi")}
+            >
+              <span className="plans-category-switch__icon">🤝</span>
+              <span className="plans-category-switch__label">Saathi Packages</span>
+              {saathiCount > 0 && (
+                <span className="plans-category-switch__badge">{saathiCount}</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              id="tab-care-mitra-packages"
+              aria-selected={selectedCategory === "care_mitra"}
+              className={`plans-category-switch__btn ${selectedCategory === "care_mitra" ? "plans-category-switch__btn--active" : ""}`}
+              onClick={() => handleCategoryChange("care_mitra")}
+            >
+              <span className="plans-category-switch__icon">🩺</span>
+              <span className="plans-category-switch__label">Care Mitra Packages</span>
+              {careMitraCount > 0 && (
+                <span className="plans-category-switch__badge">{careMitraCount}</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              id="tab-all-packages"
+              aria-selected={selectedCategory === "all"}
+              className={`plans-category-switch__btn plans-category-switch__btn--all ${selectedCategory === "all" ? "plans-category-switch__btn--active" : ""}`}
+              onClick={() => handleCategoryChange("all")}
+            >
+              <span className="plans-category-switch__label">All Packages</span>
+              {packages.length > 0 && (
+                <span className="plans-category-switch__badge">{packages.length}</span>
+              )}
+            </button>
+          </div>
+        </div>
+
         {isLoading || isCheckingLocation ? (
           <div className="plans-loading-skeleton" aria-label="Loading plans...">
             <div className="plans-skeleton-card" />
@@ -766,11 +885,30 @@ export default function PlansPage({
               <span>Updates in progress</span>
             </div>
 
-            <h2 className="plans-empty-state__title">Custom Plans Arriving Shortly</h2>
+            <h2 className="plans-empty-state__title">
+              {selectedCategory === "care_mitra"
+                ? "No Care Mitra Packages Found"
+                : selectedCategory === "saathi"
+                ? "No Saathi Packages Found"
+                : "Custom Plans Arriving Shortly"}
+            </h2>
 
             <p className="plans-empty-state__subtext">
-              Our standard plans are currently being updated.
+              {selectedCategory !== "all"
+                ? "No packages matching this category in your selected area. Try viewing all plans."
+                : "Our standard plans are currently being updated."}
             </p>
+
+            {selectedCategory !== "all" && (
+              <button
+                type="button"
+                className="plans-category-switch__btn plans-category-switch__btn--active"
+                style={{ marginTop: "16px", cursor: "pointer", display: "inline-flex" }}
+                onClick={() => handleCategoryChange("all")}
+              >
+                View All Packages →
+              </button>
+            )}
           </div>
         ) : (
           <>
