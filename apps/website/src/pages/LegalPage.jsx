@@ -30,6 +30,12 @@ const ROUTE_TO_TAB_MAP = {
   saathi: "saathi-tc",
 };
 
+// Sanitizes any unpopulated placeholder dates (e.g. [insert date on publish]) to the official release date
+const sanitizeLegalContent = (text) => {
+  if (!text || typeof text !== "string") return text;
+  return text.replace(/\[insert date on publish\]/gi, "1 Oct 2026");
+};
+
 export default function LegalPage({ initialTab = "terms", setActivePage }) {
   const normalizeTab = (raw) => {
     const clean = (raw || "").toLowerCase().replace(/^[#/]+|[#/]+$/g, "");
@@ -224,7 +230,7 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
 
               <p style={{ fontSize: "0.95rem", color: "#64748b", margin: 0, lineHeight: "1.6" }}>
                 {currentPolicy.summary ||
-                  `Last revised: ${currentPolicy.lastUpdated || "January 2026"}. Please read these terms carefully before using MaiHoonNa's senior care services, mobile apps, or digital platforms.`}
+                  `Last revised: ${currentPolicy.lastUpdated || "1 Oct 2026"}. Please read these terms carefully before using MaiHoonNa's senior care services, mobile apps, or digital platforms.`}
               </p>
 
               {/* Meta Details Pills (Effective Date, Operated by) */}
@@ -327,11 +333,11 @@ export default function LegalPage({ initialTab = "terms", setActivePage }) {
                       <div 
                         className="legal-html-content"
                         style={{ color: "#334155" }}
-                        dangerouslySetInnerHTML={{ __html: section.content }} 
+                        dangerouslySetInnerHTML={{ __html: sanitizeLegalContent(section.content) }} 
                       />
                     ) : section.content && (
                       <div style={{ whiteSpace: "pre-line", color: "#334155" }}>
-                        {section.content}
+                        {sanitizeLegalContent(section.content)}
                       </div>
                     )}
 

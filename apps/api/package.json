@@ -13,7 +13,8 @@
     "prisma:push": "prisma db push --schema=../../packages/database/prisma/schema.prisma",
     "db:sync": "prisma db push --schema=../../packages/database/prisma/schema.prisma && prisma generate --schema=../../packages/database/prisma/schema.prisma",
     "invoices:reconcile": "tsx scripts/reconcile_invoices.ts",
-    "invoices:reconcile:dry-run": "tsx scripts/reconcile_invoices.ts --dry-run"
+    "invoices:reconcile:dry-run": "tsx scripts/reconcile_invoices.ts --dry-run",
+    "legal:update-dates": "tsx scripts/update_legal_dates.ts"
   },
   "dependencies": {
     "@aws-sdk/s3-request-presigner": "^3.1127.0",
