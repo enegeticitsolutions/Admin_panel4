@@ -1,3 +1,15 @@
+import path from 'path';
+import * as dotenv from 'dotenv';
+
+// Explicitly load .env from apps/api, apps/admin-backend, or cwd
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+if (!process.env.DATABASE_URL) {
+  dotenv.config({ path: path.resolve(__dirname, '../../admin-backend/.env') });
+}
+if (!process.env.DATABASE_URL) {
+  dotenv.config();
+}
+
 import prisma from '../app/core/database';
 
 async function main() {

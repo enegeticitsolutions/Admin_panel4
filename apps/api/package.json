@@ -14,6 +14,7 @@
     "db:sync": "prisma db push --schema=../../packages/database/prisma/schema.prisma && prisma generate --schema=../../packages/database/prisma/schema.prisma",
     "invoices:reconcile": "tsx scripts/reconcile_invoices.ts",
     "invoices:reconcile:dry-run": "tsx scripts/reconcile_invoices.ts --dry-run",
+    "invoices:sync-counter": "tsx scripts/manage_invoices.ts",
     "legal:update-dates": "tsx scripts/update_legal_dates.ts"
   },
   "dependencies": {
