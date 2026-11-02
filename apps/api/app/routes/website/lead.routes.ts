@@ -158,7 +158,7 @@ router.post('/custom-plan', async (req: Request, res: Response) => {
   console.log('📩 [Custom Plan Inquiry] Received payload:', req.body);
 
   try {
-    const { name, phone, pincode, email, services } = req.body;
+    const { name, phone, pincode, email, services, source } = req.body;
 
     if (!name || !phone || !pincode || !email) {
       return res.status(400).json({
@@ -167,6 +167,8 @@ router.post('/custom-plan', async (req: Request, res: Response) => {
       });
     }
 
+    const leadOrigin = (typeof source === 'string' && source.trim()) || 'Website Inquiry';
+
     // 1. Forward directly to Zoho CRM Leads WebToLeadForm endpoint using dedicated 'contact' credentials
     await ZohoCrmService.createLead({
       formType: 'contact',
@@ -174,9 +176,9 @@ router.post('/custom-plan', async (req: Request, res: Response) => {
       phone,
       pincode,
       email,
-      description: services || '',
+      description: `[MaiHoonNa - ${leadOrigin}]\n${services ? `Services Requested: ${services}` : 'General inquiry / waitlist signup'}`,
       leadSource: 'Web Research',
-      company: 'Custom Care Plan Lead',
+      company: `MaiHoonNa (${leadOrigin})`,
     });
 
     // 2. Also save to internal database for persistence & reporting
@@ -187,7 +189,7 @@ router.post('/custom-plan', async (req: Request, res: Response) => {
           phone,
           pincode,
           email,
-          notes: services ? `Custom Eldercare Plan Inquiry: ${services}` : 'Custom Eldercare Plan Inquiry',
+          notes: `[SECTION: ${leadOrigin}] ${services ? `Services: ${services}` : ''}`,
           source: 'website',
           status: 'new',
         },
