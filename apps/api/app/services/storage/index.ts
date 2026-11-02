@@ -20,12 +20,13 @@ export function getStorageService(): StorageService {
 
   const rawProvider = (process.env.STORAGE_PROVIDER || '').replace(/['"]/g, '').trim().toLowerCase();
 
-  // In AWS environments (Staging / Production), use S3Storage.
-  // Auto-detect S3 if explicitly requested, or if STORAGE_BUCKET is configured, or if Supabase is not configured.
+  // If STORAGE_PROVIDER is explicitly set:
+  //   - 'supabase' forces SupabaseStorage
+  //   - 's3' forces S3Storage
+  // When unset, auto-detect: S3 if Supabase URL is missing and S3 bucket is configured.
   const isS3 =
     rawProvider === 's3' ||
-    Boolean(process.env.STORAGE_BUCKET) ||
-    !process.env.SUPABASE_URL;
+    (rawProvider !== 'supabase' && (!process.env.SUPABASE_URL && (process.env.STORAGE_BUCKET || '').toLowerCase().includes('maihoonna')));
 
   if (isS3) {
     instance = new S3Storage();

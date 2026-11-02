@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const { calculateAge } = require('../utils/age');
 const { publishPackageVersion } = require('../utils/packageVersionHelper');
 const { invoiceService } = require('../modules/invoices/invoice.service');
+const { BillingCalculator } = require('@maihoonna/billing');
 const { notificationService } = require('@maihoonna/notifications');
 
 function normalizeUnit(unitLabel) {
@@ -411,18 +412,8 @@ router.post('/calculate-price', async (req, res) => {
       });
     }
 
-    totalPackageBase = Math.round(totalPackageBase * 100) / 100;
-    totalPackageTax = Math.round(totalPackageTax * 100) / 100;
-    const packageGrossPrice = Math.round((totalPackageBase + totalPackageTax) * 100) / 100;
-
-    const packageDiscount = 0;
-    const packageFinalPayable = packageGrossPrice;
-
-    // 2. Add-ons breakdown with their own database-configured GST rates
-    let addonsBasePrice = 0;
-    let addonsTax = 0;
-    const addonsBreakdown = [];
-
+    // 2. Add-ons resolution with their database-configured GST rates
+    const rawAddons = [];
     if (Array.isArray(addons) && addons.length > 0) {
       for (const item of addons) {
         const bId = item.benefitId || item.benefit?.id;
@@ -438,46 +429,31 @@ router.post('/calculate-price', async (req, res) => {
           // item.totalAmount from frontend is POST-TAX
           const postTaxAmount = Number(item.totalAmount) || 0;
           let baseAmount = 0;
-          let lineTax = 0;
-          let finalPrice = postTaxAmount;
-          
           if (postTaxAmount > 0) {
-             baseAmount = Math.round((postTaxAmount / (1 + rate / 100)) * 100) / 100;
-             lineTax = Math.round((postTaxAmount - baseAmount) * 100) / 100;
+            baseAmount = Math.round((postTaxAmount / (1 + rate / 100)) * 100) / 100;
           } else {
-             // Fallback to calculate normally if totalAmount wasn't provided correctly
-             const unitPrice = benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0;
-             baseAmount = unitPrice * q;
-             lineTax = Math.round((baseAmount * rate) / 100 * 100) / 100;
-             finalPrice = Math.round((baseAmount + lineTax) * 100) / 100;
+            const unitPrice = benefit.addonDiscountPrice ?? benefit.addonPrice ?? 0;
+            baseAmount = unitPrice * q;
           }
 
-          addonsBasePrice += baseAmount;
-          addonsTax += lineTax;
-
-          const unitType = formatUnitType(benefit.unitLabel, q);
-
-          addonsBreakdown.push({
+          const unitPrice = q > 0 ? Math.round((baseAmount / q) * 100) / 100 : baseAmount;
+          rawAddons.push({
             benefitId: benefit.id,
             name: benefit.name,
             units: q,
             unitLabel: benefit.unitLabel || 'units',
-            unitType,
-            unitDisplay: `Units: ${q} ${unitType}`,
-            price: baseAmount,
+            unitPrice,
+            baseAmount,
             gstRate: rate,
-            gstAmount: lineTax,
-            finalPrice: finalPrice,
             isGstExempt: benefit.isGstExempt || false,
-            hsnSacCode: benefit.hsnSacCode || '',
+            hsnSacCode: benefit.hsnSacCode || '998399',
           });
         }
       }
     }
 
-    addonsBasePrice = Math.round(addonsBasePrice * 100) / 100;
-    addonsTax = Math.round(addonsTax * 100) / 100;
-    const addonsFinalTotal = Math.round((addonsBasePrice + addonsTax) * 100) / 100;
+    const addonsGrossTotal = rawAddons.reduce((sum, a) => sum + a.baseAmount, 0);
+    const grossOrderAmount = Math.round((finalBaseRateToDistribute + addonsGrossTotal) * 100) / 100;
 
     // 3. Coupon Discount Calculation (if couponCode provided)
     let couponDiscount = 0;
@@ -502,7 +478,7 @@ router.post('/calculate-price', async (req, res) => {
           couponError = 'This coupon is expired or not yet valid.';
         } else if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
           couponError = 'This coupon has reached its maximum usage limit.';
-        } else if (coupon.minOrderAmount !== null && packageGrossPrice < coupon.minOrderAmount) {
+        } else if (coupon.minOrderAmount !== null && grossOrderAmount < coupon.minOrderAmount) {
           couponError = `Minimum order amount of ₹${coupon.minOrderAmount} required for this coupon.`;
         } else if (
           coupon.allowedPackages &&
@@ -513,13 +489,13 @@ router.post('/calculate-price', async (req, res) => {
           couponError = `This coupon is not applicable to package "${pkg.name}".`;
         } else {
           if (coupon.type === 'percentage') {
-            let disc = Math.round(((packageGrossPrice * coupon.discountValue) / 100) * 100) / 100;
+            let disc = Math.round(((grossOrderAmount * coupon.discountValue) / 100) * 100) / 100;
             if (coupon.maxDiscountAmount !== null && disc > coupon.maxDiscountAmount) {
               disc = coupon.maxDiscountAmount;
             }
-            couponDiscount = Math.min(disc, packageFinalPayable);
+            couponDiscount = Math.min(disc, grossOrderAmount);
           } else {
-            couponDiscount = Math.min(coupon.discountValue, packageFinalPayable);
+            couponDiscount = Math.min(coupon.discountValue, grossOrderAmount);
           }
 
           appliedCouponData = {
@@ -543,7 +519,7 @@ router.post('/calculate-price', async (req, res) => {
           } else if (giftCoupon.status !== 'ACTIVE') {
             couponError = 'This MHN gift card is no longer active.';
           } else {
-            couponDiscount = Math.min(giftCoupon.valueRs, packageFinalPayable);
+            couponDiscount = Math.min(giftCoupon.valueRs, grossOrderAmount);
             appliedCouponData = {
               id: giftCoupon.id,
               code: giftCoupon.code,
@@ -560,17 +536,71 @@ router.post('/calculate-price', async (req, res) => {
       }
     }
 
-    // 4. Overall Totals
-    const totalBaseAmount = Math.round((totalPackageBase + addonsBasePrice) * 100) / 100;
-    const totalTaxAmount = Math.round((totalPackageTax + addonsTax) * 100) / 100;
-    const finalTotalAmount = Math.max(0, Math.round((packageFinalPayable - couponDiscount + addonsFinalTotal) * 100) / 100);
-
-    // POS Split (Intra-state vs Inter-state)
+    // 4. Authoritative Billing calculation via @maihoonna/billing (Exact same engine as statutory invoices)
     const companyState = process.env.COMPANY_STATE || 'Haryana';
-    const isInterState = Boolean(customerState) && (customerState || '').trim().toLowerCase() !== companyState.toLowerCase();
-    const cgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
-    const sgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
-    const igstAmount = isInterState ? totalTaxAmount : 0;
+    const pkgTaxRate = pkg.isGstExempt ? 0 : Number(pkg.gstRate !== null && pkg.gstRate !== undefined ? pkg.gstRate : 18);
+    const pkgHsn = pkg.hsnSacCode || (pkg.isGstExempt ? '999312' : '998399');
+
+    const billingItems = [
+      {
+        benefitId: null,
+        name: pkg.name,
+        quantity: 1,
+        unitPrice: finalBaseRateToDistribute,
+        nominalCost: finalBaseRateToDistribute,
+        gstRate: pkgTaxRate,
+        hsnSacCode: pkgHsn,
+        isGstExempt: Boolean(pkg.isGstExempt),
+      },
+      ...rawAddons.map(a => ({
+        benefitId: a.benefitId,
+        name: a.name,
+        quantity: a.units,
+        unitPrice: a.unitPrice,
+        nominalCost: a.unitPrice,
+        gstRate: a.gstRate,
+        hsnSacCode: a.hsnSacCode,
+        isGstExempt: a.isGstExempt,
+      })),
+    ];
+
+    const billingResult = BillingCalculator.calculate({
+      customerState,
+      companyState,
+      couponDiscountAmount: couponDiscount,
+      items: billingItems,
+    });
+
+    const pkgBillingItem = billingResult.items[0];
+    const packageBasePrice = pkgBillingItem.grossAmount;
+    const packageDiscount = pkgBillingItem.allocatedDiscount;
+    const packageTax = pkgBillingItem.taxAmount;
+    const packageGrossPrice = pkgBillingItem.totalAmount;
+
+    const addonsBreakdown = rawAddons.map((a, i) => {
+      const lineResult = billingResult.items[1 + i];
+      const unitType = formatUnitType(a.unitLabel, a.units);
+      return {
+        benefitId: a.benefitId,
+        name: a.name,
+        units: a.units,
+        unitLabel: a.unitLabel || 'units',
+        unitType,
+        unitDisplay: `Units: ${a.units} ${unitType}`,
+        price: lineResult.grossAmount,
+        discount: lineResult.allocatedDiscount,
+        taxableAmount: lineResult.taxableAmount,
+        gstRate: lineResult.taxRate,
+        gstAmount: lineResult.taxAmount,
+        finalPrice: lineResult.totalAmount,
+        isGstExempt: lineResult.isGstExempt,
+        hsnSacCode: lineResult.hsnSacCode,
+      };
+    });
+
+    const addonsBasePrice = Math.round((billingResult.baseAmount - packageBasePrice) * 100) / 100;
+    const addonsTax = Math.round((billingResult.taxAmount - packageTax) * 100) / 100;
+    const addonsFinalTotal = Math.round((billingResult.totalAmount - packageGrossPrice) * 100) / 100;
 
     return res.json({
       success: true,
@@ -587,12 +617,14 @@ router.post('/calculate-price', async (req, res) => {
         baseMonthlyRate: baseRate,
         benefitsBreakdown,
         addonsBreakdown,
-        totalPackageBase,
-        totalPackageTax,
-        packageGrossPrice,
-        discountPercent,
+        packageBasePrice,
+        totalPackageBase: packageBasePrice,
         packageDiscount,
-        packageFinalPayable,
+        packageTax,
+        totalPackageTax: packageTax,
+        packageGrossPrice,
+        packageFinalPayable: packageGrossPrice,
+        discountPercent,
         couponCode: appliedCouponData?.code || null,
         couponDiscount,
         couponDetails: appliedCouponData,
@@ -600,15 +632,16 @@ router.post('/calculate-price', async (req, res) => {
         addonsBasePrice,
         addonsTax,
         addonsFinalTotal,
-        totalBaseAmount,
-        totalTaxAmount,
-        isInterState,
+        totalDiscount: billingResult.discountAmount,
+        totalBaseAmount: billingResult.taxableAmount,
+        totalTaxAmount: billingResult.taxAmount,
+        isInterState: billingResult.isInterState,
         customerState,
-        taxLabel: isInterState ? 'IGST' : 'CGST + SGST',
-        cgstAmount,
-        sgstAmount,
-        igstAmount,
-        finalTotalAmount,
+        taxLabel: billingResult.isInterState ? 'IGST' : 'CGST + SGST',
+        cgstAmount: billingResult.cgstAmount,
+        sgstAmount: billingResult.sgstAmount,
+        igstAmount: billingResult.igstAmount,
+        finalTotalAmount: billingResult.totalAmount,
       }
     });
   } catch (err) {
@@ -681,6 +714,7 @@ router.post('/admin-enroll', async (req, res) => {
     // which breaks when addons/tax are included in amountPaid.
     packageDiscount: inputPackageDiscount,
     couponDiscount: inputCouponDiscount,
+    totalDiscount: inputTotalDiscount,
   } = req.body;
 
   if (!subscriberPhone || typeof subscriberPhone !== 'string' || !subscriberName || typeof subscriberName !== 'string' || !packageId) {
@@ -1114,6 +1148,9 @@ router.post('/admin-enroll', async (req, res) => {
         // Use explicit discount amounts passed from the frontend (which has server-computed
         // pricing values already shown to the customer). This prevents the broken inference
         // of `max(0, pkgGrossBase - amountPaid)` which goes negative when addons are included.
+        const explicitTotalDiscount = inputTotalDiscount !== undefined && inputTotalDiscount !== null
+          ? Math.max(0, parseFloat(inputTotalDiscount) || 0)
+          : null;
         const explicitPackageDiscount = inputPackageDiscount !== undefined && inputPackageDiscount !== null
           ? Math.max(0, parseFloat(inputPackageDiscount) || 0)
           : null;
@@ -1124,9 +1161,16 @@ router.post('/admin-enroll', async (req, res) => {
         let discount;
         if (isFree) {
           discount = 0;
+        } else if (explicitTotalDiscount !== null) {
+          // Frontend sent explicit total order discount
+          discount = explicitTotalDiscount;
+        } else if (explicitCouponDiscount > 0) {
+          // Total coupon discount across the entire order.
+          // Note: explicitPackageDiscount is already the package's pro-rata share of this coupon discount;
+          // do NOT add explicitPackageDiscount + explicitCouponDiscount as that would double-count!
+          discount = explicitCouponDiscount;
         } else if (explicitPackageDiscount !== null) {
-          // Frontend sent explicit values — use them as the total pre-tax discount
-          discount = Math.round((explicitPackageDiscount + explicitCouponDiscount) * 100) / 100;
+          discount = explicitPackageDiscount;
         } else {
           // Fallback: computed duration discount + coupon discount
           discount = Math.round((computedDurDiscount + explicitCouponDiscount) * 100) / 100;
@@ -3199,6 +3243,9 @@ router.post('/:id/renew', async (req, res) => {
       // Use explicit discount amounts from the payment object when provided (sent from
       // the frontend's server-computed pricing). Prevents the broken inference of
       // pkgGrossBase - amountPaid which goes negative when addons are included.
+      const renewalExplicitTotalDiscount = payment.totalDiscount !== undefined && payment.totalDiscount !== null
+        ? Math.max(0, parseFloat(payment.totalDiscount) || 0)
+        : null;
       const renewalExplicitPkgDiscount = payment.packageDiscount !== undefined && payment.packageDiscount !== null
         ? Math.max(0, parseFloat(payment.packageDiscount) || 0)
         : null;
@@ -3206,9 +3253,16 @@ router.post('/:id/renew', async (req, res) => {
         ? Math.max(0, parseFloat(payment.couponDiscount) || 0)
         : 0;
 
-      const discount = renewalExplicitPkgDiscount !== null
-        ? Math.round((renewalExplicitPkgDiscount + renewalExplicitCouponDiscount) * 100) / 100
-        : Math.round((computedDurDiscount + renewalExplicitCouponDiscount) * 100) / 100;
+      let discount = 0;
+      if (renewalExplicitTotalDiscount !== null) {
+        discount = renewalExplicitTotalDiscount;
+      } else if (renewalExplicitCouponDiscount > 0) {
+        discount = renewalExplicitCouponDiscount;
+      } else if (renewalExplicitPkgDiscount !== null) {
+        discount = renewalExplicitPkgDiscount;
+      } else {
+        discount = Math.round((computedDurDiscount + renewalExplicitCouponDiscount) * 100) / 100;
+      }
       const customerState = currentSub.beneficiary?.state || currentSub.subscriber?.state || '';
 
       // Resolve any add-on benefits selected during renewal
