@@ -25,6 +25,9 @@ export interface WizardPricingBreakdown {
   packageBasePrice: number;
   packageDiscount: number;
   discountPercent?: number;
+  netPackageBase?: number;
+  netTaxablePackageBase?: number;
+  totalDiscount?: number;
   addonsBasePrice: number;
   addonsTax: number;
   addonsBreakdown?: any[];
@@ -218,6 +221,34 @@ export function calculateWizardPricing(
   // Inter-state determination (Haryana is company POS)
   const isInterState = Boolean(customerState) && (customerState || '').trim().toLowerCase() !== (companyState || 'Haryana').trim().toLowerCase();
 
+  // 1. Resolve raw Add-ons base amounts first so we know total gross order value
+  let rawAddonsBaseTotal = 0;
+  const rawAddons: any[] = [];
+  for (const a of (addons || [])) {
+    const rate = (a.benefit?.isGstExempt || a.benefit?.gstRate === 0) ? 0 : Number(a.benefit?.gstRate ?? 18);
+    const postTaxAmount = Number(a.totalAmount) || 0;
+    const baseAmount = postTaxAmount > 0
+      ? Math.round((postTaxAmount / (1 + rate / 100)) * 100) / 100
+      : (Number(a.benefit?.addonDiscountPrice ?? a.benefit?.addonPrice ?? 0) * (a.units || 1));
+    rawAddonsBaseTotal += baseAmount;
+    rawAddons.push({
+      benefit: a.benefit,
+      units: a.units || 1,
+      baseAmount,
+      rate,
+      isGstExempt: a.benefit?.isGstExempt || false,
+    });
+  }
+
+  const grossOrderTotal = Math.round((packageBasePrice + rawAddonsBaseTotal) * 100) / 100;
+  const totalDiscount = Math.round(((packageDiscount || 0) + (couponDiscount || 0)) * 100) / 100;
+
+  // Pro-rata discount distribution across package and add-ons (identical to statutory invoice)
+  const packageAllocatedDiscount = grossOrderTotal > 0
+    ? Math.round(((packageBasePrice / grossOrderTotal) * totalDiscount) * 100) / 100
+    : totalDiscount;
+  const netPackageBase = Math.max(0, Math.round((packageBasePrice - packageAllocatedDiscount) * 100) / 100);
+
   // Benefit-level tax calculation (supports mixed tax brackets within the same package)
   const packageBenefits: any[] = pkg.packageBenefits || pkg.benefits || [];
   let packageTax = 0;
@@ -230,7 +261,7 @@ export function calculateWizardPricing(
       return sum + (uCost * count);
     }, 0) || 1;
 
-    let remainingBase = packageBasePrice;
+    let remainingBase = netPackageBase;
     packageBenefits.forEach((pb, idx) => {
       const b = pb.benefit || pb;
       const count = (pb.unitsIncluded || 1) * (isDays ? 1 : months);
@@ -241,7 +272,7 @@ export function calculateWizardPricing(
       if (idx === packageBenefits.length - 1) {
         allocatedBase = remainingBase;
       } else {
-        allocatedBase = Math.round(((lineWeight / totalWeight) * packageBasePrice) * 100) / 100;
+        allocatedBase = Math.round(((lineWeight / totalWeight) * netPackageBase) * 100) / 100;
         remainingBase -= allocatedBase;
       }
 
@@ -267,52 +298,56 @@ export function calculateWizardPricing(
     });
   } else {
     const pkgGstRate = isFree ? 0 : Number(pkg.gstRate ?? 18);
-    packageTax = isFree ? 0 : Math.round((packageBasePrice * pkgGstRate) / 100);
+    // Tax calculated on the discounted net taxable base
+    packageTax = isFree ? 0 : Math.round((netPackageBase * pkgGstRate) / 100);
   }
 
+  // 2. Addons breakdown with proportional discount applied pre-tax
   let addonsBasePrice = 0;
   let addonsTax = 0;
   const addonsBreakdown: any[] = [];
   
-  for (const a of (addons || [])) {
-    const rate = (a.benefit?.isGstExempt || a.benefit?.gstRate === 0) ? 0 : Number(a.benefit?.gstRate ?? 18);
-    // If a.totalAmount is the post-tax amount from the modal, we need to extract the base amount
-    // Wait, the modal gives us post-tax. Base = Post / (1 + Rate / 100).
-    const postTaxAmount = Number(a.totalAmount) || 0;
-    const baseAmount = Math.round((postTaxAmount / (1 + rate / 100)) * 100) / 100;
-    const taxAmount = Math.round((postTaxAmount - baseAmount) * 100) / 100;
+  for (const a of rawAddons) {
+    const addonDiscount = grossOrderTotal > 0
+      ? Math.round(((a.baseAmount / grossOrderTotal) * totalDiscount) * 100) / 100
+      : 0;
+    const netAddonBase = Math.max(0, Math.round((a.baseAmount - addonDiscount) * 100) / 100);
+    const lineTax = a.isGstExempt ? 0 : Math.round((netAddonBase * a.rate) / 100 * 100) / 100;
+    const finalPrice = Math.round((netAddonBase + lineTax) * 100) / 100;
     
-    addonsBasePrice += baseAmount;
-    addonsTax += taxAmount;
+    addonsBasePrice += a.baseAmount;
+    addonsTax += lineTax;
     
     addonsBreakdown.push({
       benefitId: a.benefit?.id,
       name: a.benefit?.name,
-      units: a.units || 1,
+      units: a.units,
       unitLabel: a.benefit?.unitLabel || 'units',
-      price: baseAmount,
-      gstRate: rate,
-      gstAmount: taxAmount,
-      finalPrice: postTaxAmount,
-      isGstExempt: a.benefit?.isGstExempt || false,
+      price: a.baseAmount,
+      discount: addonDiscount,
+      taxableAmount: netAddonBase,
+      gstRate: a.rate,
+      gstAmount: lineTax,
+      finalPrice,
+      isGstExempt: a.isGstExempt,
     });
   }
 
-  const totalBaseAmount = packageBasePrice + addonsBasePrice;
+  const totalBaseAmount = Math.round((netPackageBase + (grossOrderTotal - packageBasePrice - (totalDiscount - packageAllocatedDiscount))) * 100) / 100;
   const totalTaxAmount = Math.round((packageTax + addonsTax) * 100) / 100;
   
-  const packageGrossPrice = Math.round((packageBasePrice + packageTax) * 100) / 100;
-  const packageFinalPayable = packageGrossPrice;
+  // Package payable = discounted net taxable base + GST
+  const packageFinalPayable = Math.round((netPackageBase + packageTax) * 100) / 100;
+  const packageGrossPrice = packageFinalPayable;
 
-  const addonsFinalTotal = Math.round((addonsBasePrice + addonsTax) * 100) / 100;
+  const addonsFinalTotal = Math.round((addonsBreakdown.reduce((sum, a) => sum + a.finalPrice, 0)) * 100) / 100;
 
   const cgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
   const sgstAmount = isInterState ? 0 : Math.round((totalTaxAmount / 2) * 100) / 100;
   const igstAmount = isInterState ? totalTaxAmount : 0;
   
-  let finalTotalAmount = Math.round((packageFinalPayable + addonsFinalTotal) * 100) / 100;
-  // Deduct all discounts post-tax
-  finalTotalAmount = Math.max(0, finalTotalAmount - packageDiscount - couponDiscount);
+  // Final total amount = package payable + addons payable
+  const finalTotalAmount = Math.round((packageFinalPayable + addonsFinalTotal) * 100) / 100;
 
   const dominantRate = pkg.gstRate ?? 18;
   const taxLabel = isInterState ? `IGST` : `CGST + SGST`;
@@ -326,8 +361,11 @@ export function calculateWizardPricing(
     baseMonthlyRate: baseRate,
     undiscountedPackageTotal,
     packageBasePrice,
-    packageDiscount,
+    packageDiscount: packageAllocatedDiscount,
     discountPercent,
+    netPackageBase,
+    netTaxablePackageBase: netPackageBase,
+    totalDiscount,
     addonsBasePrice,
     addonsTax,
     totalBaseAmount,

@@ -1342,6 +1342,7 @@ export const subscriptionApi = {
       paymentNote?: string;
       packageDiscount?: number;
       couponDiscount?: number;
+      totalDiscount?: number;
     };
     addons?: any[];
   }): Promise<{
@@ -1414,6 +1415,7 @@ export const subscriptionApi = {
     igstAmount: number;
     couponCode?: string | null;
     couponDiscount?: number;
+    totalDiscount?: number;
     finalTotalAmount: number;
     benefitsBreakdown?: any[];
   }> {
@@ -1738,6 +1740,7 @@ export const enrollmentApi = {
     couponCode?: string;
     packageDiscount?: number;
     couponDiscount?: number;
+    totalDiscount?: number;
     csaMode?: boolean;
     subscriberPassword?: string;
     addons?: any[];

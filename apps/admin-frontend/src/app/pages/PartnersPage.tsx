@@ -1410,7 +1410,7 @@ export default function PartnersPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={handleAddPhotoUrl}
+                              onClick={() => handleAddPhotoUrl()}
                               className="px-2 py-0.5 text-xs font-semibold bg-gray-600 hover:bg-gray-700 text-white rounded transition"
                               title="Add directly without cropping"
                             >

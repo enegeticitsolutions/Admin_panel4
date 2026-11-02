@@ -67,7 +67,7 @@ export class BillingCalculator {
       const qty = Math.max(1, raw.quantity || 1);
       const grossPaise = lineGrossPaise[i] || 0;
       const discountPaise = discountResult.lineDiscountPaise[i] || 0;
-      const taxablePaise = grossPaise;
+      const taxablePaise = Math.max(0, grossPaise - discountPaise);
 
       const isExempt = Boolean(raw.isGstExempt);
       const rate = isExempt ? 0 : (raw.gstRate !== undefined && raw.gstRate !== null ? raw.gstRate : 18);
@@ -118,8 +118,7 @@ export class BillingCalculator {
     }
 
     const miscPaise = Money.toPaise(input.miscellaneousCost || 0);
-    const totalDiscountPaise = Money.toPaise(discountResult.discountsBreakdown.totalDiscount);
-    const grandTotalPaise = totalTaxablePaise + totalTaxPaise + miscPaise - totalDiscountPaise;
+    const grandTotalPaise = totalTaxablePaise + totalTaxPaise + miscPaise;
 
     const taxSummary = TaxEngine.buildTaxSummary(taxSummaryRows);
 

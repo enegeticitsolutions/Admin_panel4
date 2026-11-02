@@ -1271,6 +1271,26 @@ export default function CheckoutScreen() {
                                         </>
                                     ) : (
                                         <>
+                                            {/* Itemized Table Breakdown */}
+                                            <View style={{ backgroundColor: '#F9FAFB', borderRadius: 8, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: '#F3F4F6' }}>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#6B7280', flex: 2 }}>Item</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#6B7280', flex: 1.2, textAlign: 'right' }}>Price</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669', flex: 1.2, textAlign: 'right' }}>Discount</Text>
+                                                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#6B7280', flex: 1.1, textAlign: 'right' }}>Tax</Text>
+                                                </View>
+                                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 6, alignItems: 'center' }}>
+                                                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#111827', flex: 2 }} numberOfLines={1}>{pricing.packageName}</Text>
+                                                    <Text style={{ fontSize: 12, color: '#374151', flex: 1.2, textAlign: 'right' }}>₹{(pricing.basePrice || 0).toFixed(2)}</Text>
+                                                    <Text style={{ fontSize: 12, color: '#059669', fontWeight: '600', flex: 1.2, textAlign: 'right' }}>
+                                                        {((pricing.durationDiscount || 0) + (pricing.couponDiscount || 0) + (pricing.saathiDiscountApplied || 0)) > 0
+                                                            ? `-₹${((pricing.durationDiscount || 0) + (pricing.couponDiscount || 0) + (pricing.saathiDiscountApplied || 0)).toFixed(2)}`
+                                                            : '₹0.00'}
+                                                    </Text>
+                                                    <Text style={{ fontSize: 12, color: '#374151', flex: 1.1, textAlign: 'right' }}>₹{(pricing.tax || 0).toFixed(2)}</Text>
+                                                </View>
+                                            </View>
+
                                             <View style={styles.priceRow}>
                                                 <Text style={styles.priceLabel}>Subtotal</Text>
                                                 <Text style={styles.priceValue}>₹{(pricing.basePrice || 0).toFixed(2)}</Text>
@@ -1293,8 +1313,16 @@ export default function CheckoutScreen() {
                                                     <Text style={[styles.priceValue, { color: '#FE6700' }]}>-₹{(pricing.saathiDiscountApplied || 0).toFixed(2)}</Text>
                                                 </View>
                                             )}
+                                            {((pricing.durationDiscount || 0) + (pricing.couponDiscount || 0) + (pricing.saathiDiscountApplied || 0)) > 0 && (
+                                                <View style={styles.priceRow}>
+                                                    <Text style={[styles.priceLabel, { color: '#4B5563' }]}>Taxable Amount</Text>
+                                                    <Text style={[styles.priceValue, { color: '#111827', fontWeight: '600' }]}>
+                                                        ₹{Math.max(0, (pricing.basePrice || 0) - (pricing.durationDiscount || 0) - (pricing.couponDiscount || 0) - (pricing.saathiDiscountApplied || 0)).toFixed(2)}
+                                                    </Text>
+                                                </View>
+                                            )}
                                             <View style={styles.priceRow}>
-                                                <Text style={styles.priceLabel}>Tax</Text>
+                                                <Text style={styles.priceLabel}>Tax (GST 18%)</Text>
                                                 <Text style={styles.priceValue}>₹{(pricing.tax || 0).toFixed(2)}</Text>
                                             </View>
 

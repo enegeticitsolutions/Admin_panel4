@@ -590,6 +590,7 @@ export default function RenewalWizardPage() {
           // from amountPaid subtraction (which breaks when addons are included).
           packageDiscount: serverPricing?.packageDiscount ?? 0,
           couponDiscount: serverPricing?.couponDiscount ?? 0,
+          totalDiscount: serverPricing?.totalDiscount ?? serverPricing?.couponDiscount ?? 0,
         },
         addons: selectedAddons.map(a => ({
           benefitId: a.benefit.id,
@@ -1694,6 +1695,7 @@ export default function RenewalWizardPage() {
                             <th className="py-2.5 px-3">Name</th>
                             <th className="py-2.5 px-3 text-center">Unit</th>
                             <th className="py-2.5 px-3 text-right">Price</th>
+                            <th className="py-2.5 px-3 text-right text-emerald-700">Discount</th>
                             <th className="py-2.5 px-3 text-center">Tax %</th>
                             <th className="py-2.5 px-3 text-right">Tax Amount</th>
                             <th className="py-2.5 px-3 text-right font-bold">Total Price</th>
@@ -1706,7 +1708,14 @@ export default function RenewalWizardPage() {
                               <div>{pricing.packageName || selectedPackage?.name}</div>
                             </td>
                             <td className="py-2 px-3 text-center">1</td>
-                            <td className="py-2 px-3 text-right font-mono">₹{pricing.totalPackageBase?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                            <td className="py-2 px-3 text-right font-mono">₹{(pricing.packageBasePrice ?? pricing.totalPackageBase ?? 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                            <td className="py-2 px-3 text-right font-mono text-emerald-700 font-semibold">
+                              {(pricing.packageDiscount && pricing.packageDiscount > 0)
+                                ? `- ₹${pricing.packageDiscount.toLocaleString('en-IN', {minimumFractionDigits: 2})}`
+                                : (pricing.couponDiscount && pricing.couponDiscount > 0)
+                                ? `- ₹${pricing.couponDiscount.toLocaleString('en-IN', {minimumFractionDigits: 2})}`
+                                : '₹0.00'}
+                            </td>
                             <td className="py-2 px-3 text-center">
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                                 {pricing.gstRate ?? 18}%
@@ -1724,7 +1733,7 @@ export default function RenewalWizardPage() {
                           {pricing.addonsBreakdown && pricing.addonsBreakdown.length > 0 && (
                             <>
                               <tr className="bg-orange-50/50 font-semibold border-t border-orange-200">
-                                <td colSpan={6} className="py-1 px-3 text-[10px] uppercase tracking-wider text-[#FF7A00]">
+                                <td colSpan={7} className="py-1 px-3 text-[10px] uppercase tracking-wider text-[#FF7A00]">
                                   Selected Add-on Benefits
                                 </td>
                               </tr>
@@ -1735,6 +1744,9 @@ export default function RenewalWizardPage() {
                                   </td>
                                   <td className="py-2 px-3 text-center text-orange-900">{ao.units}</td>
                                   <td className="py-2 px-3 text-right font-mono text-orange-900">₹{ao.price?.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                                  <td className="py-2 px-3 text-right font-mono text-emerald-700 font-semibold">
+                                    {(ao.discount && ao.discount > 0) ? `- ₹${ao.discount.toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '₹0.00'}
+                                  </td>
                                   <td className="py-2 px-3 text-center">
                                     <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
                                       {ao.isGstExempt ? '0%' : `${ao.gstRate}%`}
@@ -1752,7 +1764,7 @@ export default function RenewalWizardPage() {
                         <tfoot className="bg-slate-50/90 font-medium border-t-2 border-slate-300 text-slate-800">
                           {pricing.couponDiscount > 0 && (
                             <tr className="text-emerald-700 bg-emerald-50/30">
-                              <td colSpan={5} className="py-1.5 px-3">
+                              <td colSpan={6} className="py-1.5 px-3">
                                 Coupon Discount ({pricing.couponCode || 'PROMO'})
                               </td>
                               <td className="py-1.5 px-3 text-right font-mono font-bold">
@@ -1761,7 +1773,7 @@ export default function RenewalWizardPage() {
                             </tr>
                           )}
                           <tr className="bg-slate-100 border-t-2 border-slate-300 text-base">
-                            <td colSpan={5} className="py-3 px-3 font-bold text-slate-900">
+                            <td colSpan={6} className="py-3 px-3 font-bold text-slate-900">
                               Total Payable Amount
                             </td>
                             <td className="py-3 px-3 text-right font-mono font-bold text-slate-900">

@@ -41,18 +41,31 @@ export function renderInvoiceHtml(opts: RenderInvoiceOptions): string {
   const itemsRows = items
     .map((item, idx) => {
       const taxRateLabel = item.isGstExempt ? '0% (Exempt)' : `${item.taxRate}%`;
+      const grossAmount  = item.unitPrice * item.quantity;
+      const itemDiscount = Math.max(0, grossAmount - item.taxableAmount);
+      let taxTypeHtml: string;
+      if (item.isGstExempt || item.taxRate === 0) {
+        taxTypeHtml = 'Exempt';
+      } else if (isInterState) {
+        taxTypeHtml = `IGST (${item.taxRate}%)`;
+      } else {
+        const half = item.taxRate / 2;
+        taxTypeHtml = `CGST (${half}%)<br/>+ SGST (${half}%)`;
+      }
       return `
       <tr>
         <td class="text-center">${idx + 1}</td>
         <td>
-          <div class="font-semibold text-gray-900">${esc(item.name)}</div>
-          ${item.description && item.description !== item.name ? `<div class="text-xs text-gray-500">${esc(item.description)}</div>` : ''}
+          <div class="desc-title">${esc(item.name)}</div>
+          ${item.description && item.description !== item.name ? `<div class="desc-sub">${esc(item.description)}</div>` : ''}
+          <div class="desc-sub">SAC / HSN: ${esc(item.hsnSacCode)}</div>
         </td>
-        <td class="text-center font-mono">${esc(item.hsnSacCode)}</td>
-        <td class="text-center">${item.quantity}</td>
         <td class="text-right font-mono">₹${item.unitPrice.toFixed(2)}</td>
+        <td class="text-right font-mono">₹${itemDiscount.toFixed(2)}</td>
+        <td class="text-center">${item.quantity}</td>
         <td class="text-right font-mono">₹${item.taxableAmount.toFixed(2)}</td>
         <td class="text-center">${taxRateLabel}</td>
+        <td class="text-center">${taxTypeHtml}</td>
         <td class="text-right font-mono">₹${item.taxAmount.toFixed(2)}</td>
         <td class="text-right font-mono font-semibold">₹${item.totalAmount.toFixed(2)}</td>
       </tr>
@@ -261,11 +274,12 @@ export function renderInvoiceHtml(opts: RenderInvoiceOptions): string {
         <tr>
           <th style="width: 30px;">#</th>
           <th>Item / Benefit Description</th>
-          <th style="width: 70px;">HSN/SAC</th>
-          <th style="width: 45px;">Qty</th>
           <th style="width: 80px;" class="text-right">Unit Price</th>
-          <th style="width: 90px;" class="text-right">Taxable Amt</th>
+          <th style="width: 70px;" class="text-right">Discount</th>
+          <th style="width: 45px;" class="text-center">Qty</th>
+          <th style="width: 90px;" class="text-right">Net Amount</th>
           <th style="width: 65px;" class="text-center">GST Rate</th>
+          <th style="width: 90px;" class="text-center">Tax Type</th>
           <th style="width: 80px;" class="text-right">Tax Amt</th>
           <th style="width: 90px;" class="text-right">Total</th>
         </tr>
