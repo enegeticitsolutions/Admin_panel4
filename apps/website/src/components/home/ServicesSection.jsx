@@ -214,7 +214,7 @@ const ServicesSection = ({ openForm }) => {
             <p>
               Real-time visit logs, WhatsApp alerts, vitals trends, and a Happiness Score that tells you how your parent is actually feeling today — not just informed after something goes wrong.
             </p>
-            <button onClick={openForm}>Join as NRI Family &rarr;</button>
+            <button onClick={() => openForm("", "NRI Family Section")}>Join as NRI Family &rarr;</button>
           </div>
           <ul className="nri-list" style={{ listStyle: "none", padding: 0 }}>
             {visitFeatures.map((feature) => (

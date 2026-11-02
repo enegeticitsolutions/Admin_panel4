@@ -248,8 +248,15 @@ const App = () => {
   };
 
   const [initialEmail, setInitialEmail] = useState("");
-  const openForm = (email = "") => {
-    setInitialEmail(typeof email === "string" ? email : "");
+  const [modalSource, setModalSource] = useState("Join the Waitlist");
+
+  const openForm = (emailOrSource = "", sourceTag = "") => {
+    const isEmail = typeof emailOrSource === "string" && emailOrSource.includes("@");
+    const email = isEmail ? emailOrSource : "";
+    const source = (isEmail ? sourceTag : emailOrSource) || sourceTag || "Join the Waitlist";
+
+    setInitialEmail(email);
+    setModalSource(source);
     setIsModalOpen(true);
   };
   const closeForm = () => setIsModalOpen(false);
@@ -323,7 +330,20 @@ const App = () => {
 
         <Footer setActivePage={setActivePage} />
 
-        <CustomizePlanModal isOpen={isModalOpen} onClose={closeForm} initialEmail={initialEmail} title="Join the Waitlist" badge="Early Access" subtitle="Tell us about your eldercare needs and we'll reach out within 24 hours to get you started." successMsg="You're on the list! Our care advisory team will call you shortly to understand your requirements." />
+        <CustomizePlanModal
+          isOpen={isModalOpen}
+          onClose={closeForm}
+          initialEmail={initialEmail}
+          source={modalSource}
+          title={modalSource.includes("NRI") ? "Join as NRI Family" : "Join the Waitlist"}
+          badge={modalSource.includes("NRI") ? "NRI Eldercare" : "Early Access"}
+          subtitle={
+            modalSource.includes("NRI")
+              ? "Stay actively involved in your parents' daily care from anywhere in the world. Our team will reach out within 24 hours."
+              : "Tell us about your eldercare needs and we'll reach out within 24 hours to get you started."
+          }
+          successMsg="You're on the list! Our care advisory team will call you shortly to understand your requirements."
+        />
       </div>
     );
   };
