@@ -6,3 +6,4 @@ export * from './QuickActionsSection';
 export * from './FamilyConnectIntroModal';
 export * from './CareCircleModal';
 export * from './JoinCareCircleModal';
+export * from './RenewOrLinkModal';

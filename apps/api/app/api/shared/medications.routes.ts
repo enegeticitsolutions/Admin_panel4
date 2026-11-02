@@ -1,18 +1,53 @@
 import { Router, Request, Response } from 'express';
 import { authenticate, validate } from './deps';
-import { createMedicationSchema, createAdherenceSchema } from '../../schemas/medication';
+import { createMedicationSchema, updateMedicationSchema, createAdherenceSchema } from '../../schemas/medication';
 import * as medicationService from '../../services/shared/medication_service';
 
 const router = Router();
 
+/**
+ * GET /api/shared/medications/presets
+ * Returns curated common medication presets (BP, Diabetes, Acidity, etc.) for quick selection.
+ */
+router.get('/presets', (req: Request, res: Response) => {
+  const presets = medicationService.getMedicationPresets();
+  res.json({ success: true, data: presets });
+});
+
 router.get('/beneficiary/:beneficiaryId', authenticate, async (req: Request, res: Response) => {
-  const meds = await medicationService.getBeneficiaryMedications(req.params.beneficiaryId as string);
-  res.json({ success: true, data: meds });
+  try {
+    const meds = await medicationService.getBeneficiaryMedications(req.params.beneficiaryId as string);
+    res.json({ success: true, data: meds });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 router.post('/', authenticate, validate(createMedicationSchema), async (req: Request, res: Response) => {
-  const med = await medicationService.createMedication(req.body);
-  res.status(201).json({ success: true, data: med });
+  try {
+    const med = await medicationService.createMedication(req.body);
+    res.status(201).json({ success: true, data: med });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.put('/:id', authenticate, validate(updateMedicationSchema), async (req: Request, res: Response) => {
+  try {
+    const med = await medicationService.updateMedication(req.params.id as string, req.body);
+    res.json({ success: true, data: med });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.delete('/:id', authenticate, async (req: Request, res: Response) => {
+  try {
+    await medicationService.deleteMedication(req.params.id as string);
+    res.json({ success: true, message: 'Medication removed successfully' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 router.post('/adherence', authenticate, validate(createAdherenceSchema), async (req: Request, res: Response) => {
@@ -69,4 +104,4 @@ router.get('/beneficiary/:beneficiaryId/metrics', authenticate, async (req: Requ
   }
 });
 
-export default router;
+export default router;

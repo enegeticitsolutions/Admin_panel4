@@ -2,25 +2,242 @@ import prisma from '../../core/database';
 import { generateUUID } from '../../utils/helpers';
 import { MedicationAdherenceManager } from './MedicationAdherenceManager';
 
+export interface MedicationPreset {
+  id: string;
+  name: string;
+  genericName: string;
+  category: string;
+  dosage: string;
+  route: string;
+  frequency: string;
+  timeSlots: string[];
+  instructions: string;
+}
+
+export const COMMON_MEDICATION_PRESETS: MedicationPreset[] = [
+  {
+    id: 'preset-amlodipine',
+    name: 'Amlodipine',
+    genericName: 'Amlodipine Besylate',
+    category: 'Blood Pressure',
+    dosage: '5mg',
+    route: 'oral',
+    frequency: 'once_daily',
+    timeSlots: ['08:00 AM'],
+    instructions: 'After breakfast for Blood Pressure control',
+  },
+  {
+    id: 'preset-metformin',
+    name: 'Metformin',
+    genericName: 'Metformin Hydrochloride',
+    category: 'Diabetes',
+    dosage: '500mg',
+    route: 'oral',
+    frequency: 'twice_daily',
+    timeSlots: ['08:00 AM', '08:00 PM'],
+    instructions: 'With or immediately after meals',
+  },
+  {
+    id: 'preset-pantoprazole',
+    name: 'Pantoprazole (Pan-40)',
+    genericName: 'Pantoprazole Sodium',
+    category: 'Acidity & Digestion',
+    dosage: '40mg',
+    route: 'oral',
+    frequency: 'once_daily',
+    timeSlots: ['07:30 AM'],
+    instructions: 'Empty stomach 30 mins before breakfast',
+  },
+  {
+    id: 'preset-atorvastatin',
+    name: 'Atorvastatin',
+    genericName: 'Atorvastatin Calcium',
+    category: 'Heart & Cholesterol',
+    dosage: '10mg',
+    route: 'oral',
+    frequency: 'once_daily',
+    timeSlots: ['09:00 PM'],
+    instructions: 'At bedtime after dinner',
+  },
+  {
+    id: 'preset-telmisartan',
+    name: 'Telmisartan (Telma-40)',
+    genericName: 'Telmisartan',
+    category: 'Blood Pressure',
+    dosage: '40mg',
+    route: 'oral',
+    frequency: 'once_daily',
+    timeSlots: ['08:00 AM'],
+    instructions: 'Morning after food',
+  },
+  {
+    id: 'preset-shelcal',
+    name: 'Shelcal 500',
+    genericName: 'Calcium 500mg + Vitamin D3',
+    category: 'Bone & Supplements',
+    dosage: '500mg',
+    route: 'oral',
+    frequency: 'once_daily',
+    timeSlots: ['01:30 PM'],
+    instructions: 'After lunch with a glass of water',
+  },
+  {
+    id: 'preset-ecosprin',
+    name: 'Ecosprin 75',
+    genericName: 'Aspirin (Enteric Coated)',
+    category: 'Heart',
+    dosage: '75mg',
+    route: 'oral',
+    frequency: 'once_daily',
+    timeSlots: ['01:30 PM'],
+    instructions: 'After lunch (Blood Thinner)',
+  },
+  {
+    id: 'preset-dolo',
+    name: 'Dolo 650',
+    genericName: 'Paracetamol',
+    category: 'Pain & Fever',
+    dosage: '650mg',
+    route: 'oral',
+    frequency: 'as_needed',
+    timeSlots: ['08:00 AM'],
+    instructions: 'When needed for fever or body pain (after food)',
+  },
+];
+
+export const getMedicationPresets = () => {
+  return COMMON_MEDICATION_PRESETS;
+};
+
 export const getBeneficiaryMedications = async (beneficiaryId: string) => {
-  return prisma.medication.findMany({ where: { beneficiaryId, isActive: true } });
+  // Resolve beneficiary ID if user ID was passed
+  const beneficiary = await prisma.beneficiary.findFirst({
+    where: {
+      OR: [
+        { id: beneficiaryId },
+        { userId: beneficiaryId }
+      ]
+    }
+  });
+  const actualId = beneficiary ? beneficiary.id : beneficiaryId;
+
+  return prisma.medication.findMany({
+    where: { beneficiaryId: actualId, isActive: true },
+    orderBy: { createdAt: 'desc' }
+  });
 };
 
 export const createMedication = async (data: {
   beneficiaryId: string;
   name: string;
+  genericName?: string | null;
   dosage: string;
-  frequency: string;
-  timeSlots: string[];
-  startDate: Date;
-  endDate?: Date;
+  route?: string;
+  frequency?: string;
+  timeSlots?: string[];
+  instructions?: string | null;
+  sideEffects?: string | null;
+  prescribedBy?: string | null;
+  startDate?: Date | string;
+  endDate?: Date | string | null;
+  totalDays?: number | null;
+  refillReminderDays?: number | null;
+  setReminders?: boolean;
+  isActive?: boolean;
 }) => {
+  // Resolve actual beneficiary profile ID if given a User ID
+  let targetBeneficiaryId = data.beneficiaryId;
+  const beneficiary = await prisma.beneficiary.findFirst({
+    where: {
+      OR: [
+        { id: data.beneficiaryId },
+        { userId: data.beneficiaryId }
+      ]
+    }
+  });
+  if (beneficiary) {
+    targetBeneficiaryId = beneficiary.id;
+  }
+
+  // Calculate default time slots if missing or empty
+  let timeSlots = data.timeSlots || [];
+  if (timeSlots.length === 0) {
+    const freq = data.frequency || 'once_daily';
+    if (freq === 'once_daily') timeSlots = ['08:00 AM'];
+    else if (freq === 'twice_daily') timeSlots = ['08:00 AM', '08:00 PM'];
+    else if (freq === 'thrice_daily') timeSlots = ['08:00 AM', '02:00 PM', '08:00 PM'];
+    else if (freq === 'four_times_daily') timeSlots = ['08:00 AM', '01:00 PM', '06:00 PM', '10:00 PM'];
+    else timeSlots = ['08:00 AM'];
+  }
+
+  // Calculate startDate and endDate
+  const startDate = data.startDate ? new Date(data.startDate) : new Date();
+  let endDate = data.endDate ? new Date(data.endDate) : null;
+  if (!endDate && data.totalDays && data.totalDays > 0) {
+    endDate = new Date(startDate.getTime() + data.totalDays * 24 * 60 * 60 * 1000);
+  }
+
   return prisma.medication.create({
     data: {
       id: generateUUID(),
-      ...data,
-      frequency: data.frequency as any,
+      beneficiaryId: targetBeneficiaryId,
+      name: data.name,
+      genericName: data.genericName || null,
+      dosage: data.dosage,
+      route: (data.route || 'oral') as any,
+      frequency: (data.frequency || 'once_daily') as any,
+      timeSlots,
+      instructions: data.instructions || null,
+      sideEffects: data.sideEffects || null,
+      prescribedBy: data.prescribedBy || null,
+      startDate,
+      endDate,
+      totalDays: data.totalDays || null,
+      refillReminderDays: data.refillReminderDays || null,
+      setReminders: data.setReminders ?? true,
+      isActive: data.isActive ?? true,
     },
+  });
+};
+
+export const updateMedication = async (
+  id: string,
+  data: {
+    name?: string;
+    genericName?: string | null;
+    dosage?: string;
+    route?: string;
+    frequency?: string;
+    timeSlots?: string[];
+    instructions?: string | null;
+    sideEffects?: string | null;
+    prescribedBy?: string | null;
+    startDate?: Date | string;
+    endDate?: Date | string | null;
+    totalDays?: number | null;
+    refillReminderDays?: number | null;
+    setReminders?: boolean;
+    isActive?: boolean;
+  }
+) => {
+  const updateData: any = { ...data };
+  if (data.startDate) updateData.startDate = new Date(data.startDate);
+  if (data.endDate !== undefined) {
+    updateData.endDate = data.endDate ? new Date(data.endDate) : null;
+  }
+  if (data.frequency) updateData.frequency = data.frequency as any;
+  if (data.route) updateData.route = data.route as any;
+
+  return prisma.medication.update({
+    where: { id },
+    data: updateData,
+  });
+};
+
+export const deleteMedication = async (id: string) => {
+  return prisma.medication.update({
+    where: { id },
+    data: { isActive: false },
   });
 };
 
@@ -63,4 +280,4 @@ export const logAdherence = async (
 export const getMedicationMetrics = async (beneficiaryId: string) => {
   const manager = new MedicationAdherenceManager(beneficiaryId);
   return manager.getOverallMetrics();
-};
+};

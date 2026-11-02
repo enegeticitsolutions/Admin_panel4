@@ -1,13 +1,66 @@
 import Joi from 'joi';
 
+const ROUTE_ENUMS = [
+  'oral',
+  'sublingual',
+  'topical',
+  'inhaled',
+  'injectable',
+  'nasal',
+  'ophthalmic',
+  'otic',
+  'rectal'
+];
+
+const FREQUENCY_ENUMS = [
+  'once_daily',
+  'twice_daily',
+  'thrice_daily',
+  'four_times_daily',
+  'every_6_hours',
+  'every_8_hours',
+  'every_12_hours',
+  'weekly',
+  'fortnightly',
+  'monthly',
+  'as_needed'
+];
+
 export const createMedicationSchema = Joi.object({
   beneficiaryId: Joi.string().uuid().required(),
   name: Joi.string().required(),
+  genericName: Joi.string().allow('', null).optional(),
   dosage: Joi.string().required(),
-  frequency: Joi.string().required(),
-  timeSlots: Joi.array().items(Joi.string()).required(),
-  startDate: Joi.date().required(),
-  endDate: Joi.date().optional(),
+  route: Joi.string().valid(...ROUTE_ENUMS).default('oral'),
+  frequency: Joi.string().valid(...FREQUENCY_ENUMS).default('once_daily'),
+  timeSlots: Joi.array().items(Joi.string()).optional(),
+  instructions: Joi.string().allow('', null).optional(),
+  sideEffects: Joi.string().allow('', null).optional(),
+  prescribedBy: Joi.string().allow('', null).optional(),
+  startDate: Joi.date().optional(),
+  endDate: Joi.date().allow(null).optional(),
+  totalDays: Joi.number().integer().positive().allow(null).optional(),
+  refillReminderDays: Joi.number().integer().positive().allow(null).optional(),
+  setReminders: Joi.boolean().default(true),
+  isActive: Joi.boolean().default(true),
+});
+
+export const updateMedicationSchema = Joi.object({
+  name: Joi.string().optional(),
+  genericName: Joi.string().allow('', null).optional(),
+  dosage: Joi.string().optional(),
+  route: Joi.string().valid(...ROUTE_ENUMS).optional(),
+  frequency: Joi.string().valid(...FREQUENCY_ENUMS).optional(),
+  timeSlots: Joi.array().items(Joi.string()).optional(),
+  instructions: Joi.string().allow('', null).optional(),
+  sideEffects: Joi.string().allow('', null).optional(),
+  prescribedBy: Joi.string().allow('', null).optional(),
+  startDate: Joi.date().optional(),
+  endDate: Joi.date().allow(null).optional(),
+  totalDays: Joi.number().integer().positive().allow(null).optional(),
+  refillReminderDays: Joi.number().integer().positive().allow(null).optional(),
+  setReminders: Joi.boolean().optional(),
+  isActive: Joi.boolean().optional(),
 });
 
 export const createAdherenceSchema = Joi.object({
