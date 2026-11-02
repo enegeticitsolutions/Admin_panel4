@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Header from "./components/layout/Header";
 import Footer from "./components/layout/Footer";
-import WaitlistModal from "./components/modals/WaitlistModal";
+import CustomizePlanModal from "./components/modals/CustomizePlanModal";
 import HomePage from "./pages/HomePage";
 import ServicesPage from "./pages/ServicesPage";
 import SaathiPage from "./pages/SaathiPage";
@@ -323,7 +323,7 @@ const App = () => {
 
         <Footer setActivePage={setActivePage} />
 
-        <WaitlistModal isOpen={isModalOpen} onClose={closeForm} initialEmail={initialEmail} />
+        <CustomizePlanModal isOpen={isModalOpen} onClose={closeForm} initialEmail={initialEmail} title="Join the Waitlist" badge="Early Access" subtitle="Tell us about your eldercare needs and we'll reach out within 24 hours to get you started." successMsg="You're on the list! Our care advisory team will call you shortly to understand your requirements." />
       </div>
     );
   };

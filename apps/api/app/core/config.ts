@@ -9,6 +9,7 @@ export const config = {
     if (!secret && process.env.NODE_ENV === 'production') {
       throw new Error('FATAL: JWT_SECRET environment variable is missing in production mode!');
     }
+    
     return secret || 'fallback-secret-dev-only';
   })(),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
@@ -25,10 +26,37 @@ export const config = {
     maxCelebrationsDashboard: parseInt(process.env.MAX_CELEBRATIONS_DASHBOARD || '5', 10),
   },
   zohoCrm: {
+    // Default fallback
     xnQsjsdp: process.env.ZOHO_CRM_XNQSJSDP || '',
     xmIwtLD: process.env.ZOHO_CRM_XMIWTLD || '',
     actionType: process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=',
     returnURL: process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you',
+    // 1. Partner Form
+    partner: {
+      xnQsjsdp: process.env.ZOHO_CRM_PARTNER_XNQSJSDP || process.env.ZOHO_CRM_XNQSJSDP || '',
+      xmIwtLD: process.env.ZOHO_CRM_PARTNER_XMIWTLD || process.env.ZOHO_CRM_XMIWTLD || '',
+      actionType: process.env.ZOHO_CRM_PARTNER_ACTION_TYPE || process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=',
+      returnURL: process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you',
+    },
+    // 2. Contact Us / Custom Plan Modal Form
+    contact: {
+      xnQsjsdp: process.env.ZOHO_CRM_CONTACT_XNQSJSDP || process.env.ZOHO_CONTACT_US_XNQSJSDP || '',
+      xmIwtLD: process.env.ZOHO_CRM_CONTACT_XMIWTLD || process.env.ZOHO_CONTACT_US_XMIWTLD || '',
+      actionType: process.env.ZOHO_CRM_CONTACT_ACTION_TYPE || process.env.ZOHO_CONTACT_US_ACTION_TYPE || 'TGVhZHM=',
+      returnURL: 'null',
+    },
+    // 3. Saathi Volunteer Enrollment Form
+    saathi: {
+      xnQsjsdp: process.env.ZOHO_CRM_SAATHI_XNQSJSDP || '',
+      xmIwtLD: process.env.ZOHO_CRM_SAATHI_XMIWTLD || '',
+      actionType: process.env.ZOHO_CRM_SAATHI_ACTION_TYPE || 'TGVhZHM=',
+      returnURL: 'null',
+    },
+  },
+  zohoContactUs: {
+    xnQsjsdp: process.env.ZOHO_CRM_CONTACT_XNQSJSDP || process.env.ZOHO_CONTACT_US_XNQSJSDP || '',
+    xmIwtLD: process.env.ZOHO_CRM_CONTACT_XMIWTLD || process.env.ZOHO_CONTACT_US_XMIWTLD || '',
+    actionType: process.env.ZOHO_CRM_CONTACT_ACTION_TYPE || process.env.ZOHO_CONTACT_US_ACTION_TYPE || 'TGVhZHM=',
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
