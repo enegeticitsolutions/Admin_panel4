@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import NotificationBell from '@/components/shared/NotificationBell';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import { RenewOrLinkModal } from '@/components/dashboard';
 
 const { width, height } = Dimensions.get('window');
 const DRAWER_WIDTH = width * 0.75;
@@ -42,6 +43,8 @@ export default function SubscriberDashboardScreen() {
     const [activateModalVisible, setActivateModalVisible] = useState(false);
     const [selectedQueuedSub, setSelectedQueuedSub] = useState<any | null>(null);
     const [isActivating, setIsActivating] = useState(false);
+    const [showRenewalModal, setShowRenewalModal] = useState<boolean>(false);
+    const [renewalTargetBen, setRenewalTargetBen] = useState<any | null>(null);
     const pullAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -587,7 +590,15 @@ export default function SubscriberDashboardScreen() {
                                                 params: { isVerificationFlow: 'true', beneficiaryId: b.id }
                                             });
                                         } else if (isExpired) {
-                                            router.push('/(setup)/subscription-packages');
+                                            if (unlinkedSubs.length > 0) {
+                                                setRenewalTargetBen(b);
+                                                setShowRenewalModal(true);
+                                            } else {
+                                                router.push({
+                                                    pathname: '/(setup)/subscription-packages',
+                                                    params: { beneficiaryId: b.id, beneficiaryName: b.name }
+                                                });
+                                            }
                                         } else if (isSelected) {
                                             // Tap on active card → open beneficiary profile details
                                             console.log('[Dashboard] Navigating to beneficiary-profile with id:', b.id);
@@ -867,6 +878,32 @@ export default function SubscriberDashboardScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* Renew / Link Unassigned Care Plan Modal */}
+            <RenewOrLinkModal
+                visible={showRenewalModal}
+                beneficiary={renewalTargetBen}
+                unassignedPackages={unlinkedSubs}
+                onClose={() => {
+                    setShowRenewalModal(false);
+                    setRenewalTargetBen(null);
+                }}
+                onBrowseNew={() => {
+                    const benId = renewalTargetBen?.id;
+                    const benName = renewalTargetBen?.name;
+                    setShowRenewalModal(false);
+                    setRenewalTargetBen(null);
+                    router.push({
+                        pathname: '/(setup)/subscription-packages',
+                        params: { beneficiaryId: benId, beneficiaryName: benName }
+                    });
+                }}
+                onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: ['subscriberDashboard'] });
+                    queryClient.invalidateQueries({ queryKey: ['subscriberSummary'] });
+                    refetch();
+                }}
+            />
 
         </SafeAreaView>
     );

@@ -1,5 +1,19 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Platform, Animated, TouchableWithoutFeedback, Alert, Image, useWindowDimensions, RefreshControl } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    ActivityIndicator,
+    ScrollView,
+    Platform,
+    Animated,
+    TouchableWithoutFeedback,
+    Alert,
+    Image,
+    useWindowDimensions,
+    RefreshControl,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,6 +22,9 @@ import { API_URL } from '@/constants/api';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
+import { DefaultMedsPresets } from '@/components/medications/DefaultMedsPresets';
+import { AddMedicationModal, MedicationFormPayload } from '@/components/medications/AddMedicationModal';
+import { MedicationPresetItem } from '@/constants/medicationPresets';
 
 const bellIcon = require('../../assets/icons/bell.png');
 const calendarIcon = require('../../assets/icons/calendar.png');
@@ -116,6 +133,13 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
     const [remindersActive, setRemindersActive] = useState(true);
     const [submittingId, setSubmittingId] = useState<string | null>(null);
 
+    // Modal & Quick Add state
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [selectedPreset, setSelectedPreset] = useState<MedicationPresetItem | null>(null);
+    const [editingMed, setEditingMed] = useState<MedicationFormPayload | null>(null);
+    const [modalLoading, setModalLoading] = useState(false);
+    const [quickAddingId, setQuickAddingId] = useState<string | null>(null);
+
     useFocusEffect(useCallback(() => { loadData(); }, [propBeneficiaryId]));
     useGlobalRefresh(() => { loadData(); });
 
@@ -166,7 +190,9 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
             if (scheduleData.success) {
                 const items: MedScheduleItem[] = scheduleData.data || [];
                 setSchedule(items);
-                scheduleLocalReminders(items);
+                if (remindersActive) {
+                    scheduleLocalReminders(items);
+                }
             }
             if (metricsData.success) {
                 setMetrics(metricsData.data || { average: 100, taken: 0, missed: 0 });
@@ -185,6 +211,13 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
         try {
             // Clear existing scheduled local notifications to avoid duplicates on refetch
             await Notifications.cancelAllScheduledNotificationsAsync();
+            if (!remindersActive) return;
+
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status !== 'granted') {
+                const req = await Notifications.requestPermissionsAsync();
+                if (req.status !== 'granted') return;
+            }
 
             const now = new Date();
             for (const item of items) {
@@ -195,7 +228,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                     await Notifications.scheduleNotificationAsync({
                         content: {
                             title: `💊 Medication Reminder: ${item.name}`,
-                            body: `Time to take your ${item.dosage || ''} dose (${item.scheduleTimeText}). ${item.instructions}`,
+                            body: `Time to take your ${item.dosage || ''} dose (${item.scheduleTimeText}). ${item.instructions || ''}`,
                             data: { medicationId: item.id, scheduleTimeText: item.scheduleTimeText }
                         },
                         trigger: {
@@ -209,6 +242,169 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
         } catch (err) {
             console.log('Failed to schedule local reminders', err);
         }
+    };
+
+    const handleToggleReminders = async (active: boolean) => {
+        setRemindersActive(active);
+        if (!active) {
+            if (Platform.OS !== 'web') {
+                await Notifications.cancelAllScheduledNotificationsAsync();
+            }
+            Alert.alert('Reminders Paused', 'Medication reminder notifications have been paused.');
+        } else {
+            await scheduleLocalReminders(schedule);
+            Alert.alert('Reminders Active', 'Medication reminders are now active for your scheduled timings.');
+        }
+    };
+
+    const handleSelectPreset = (preset: MedicationPresetItem) => {
+        setSelectedPreset(preset);
+        setEditingMed(null);
+        setShowAddModal(true);
+    };
+
+    const handleQuickAddPreset = async (preset: MedicationPresetItem) => {
+        try {
+            setQuickAddingId(preset.id);
+            let targetBeneficiaryId = propBeneficiaryId;
+            if (!targetBeneficiaryId) {
+                const userStr = await AsyncStorage.getItem('userData');
+                if (userStr) targetBeneficiaryId = JSON.parse(userStr).id;
+            }
+            const token = await AsyncStorage.getItem('userToken');
+            if (!token || !targetBeneficiaryId) {
+                Alert.alert('Error', 'Please sign in to add medication.');
+                return;
+            }
+
+            const res = await fetch(`${API_URL}/shared/medications`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    beneficiaryId: targetBeneficiaryId,
+                    name: preset.name,
+                    genericName: preset.genericName,
+                    dosage: preset.dosage,
+                    route: preset.route,
+                    frequency: preset.frequency,
+                    timeSlots: preset.timeSlots,
+                    instructions: preset.instructions,
+                    setReminders: true,
+                    isActive: true,
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                await loadData();
+                emitGlobalRefresh();
+                Alert.alert('Added', `${preset.name} (${preset.dosage}) has been added to your medication schedule.`);
+            } else {
+                Alert.alert('Error', data.message || 'Failed to add medication.');
+            }
+        } catch (err: any) {
+            Alert.alert('Error', err.message || 'Failed to add medication.');
+        } finally {
+            setQuickAddingId(null);
+        }
+    };
+
+    const handleSaveMedication = async (payload: MedicationFormPayload) => {
+        try {
+            setModalLoading(true);
+            let targetBeneficiaryId = propBeneficiaryId;
+            if (!targetBeneficiaryId) {
+                const userStr = await AsyncStorage.getItem('userData');
+                if (userStr) targetBeneficiaryId = JSON.parse(userStr).id;
+            }
+            const token = await AsyncStorage.getItem('userToken');
+            if (!token || !targetBeneficiaryId) {
+                Alert.alert('Error', 'Please sign in to add medication.');
+                return;
+            }
+
+            const isEdit = !!payload.id;
+            const url = isEdit
+                ? `${API_URL}/shared/medications/${payload.id}`
+                : `${API_URL}/shared/medications`;
+            const method = isEdit ? 'PUT' : 'POST';
+
+            const body: any = {
+                beneficiaryId: targetBeneficiaryId,
+                name: payload.name,
+                genericName: payload.genericName,
+                dosage: payload.dosage,
+                route: payload.route,
+                frequency: payload.frequency,
+                timeSlots: payload.timeSlots,
+                instructions: payload.instructions,
+                totalDays: payload.totalDays,
+                setReminders: payload.setReminders,
+                isActive: true,
+            };
+
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                setShowAddModal(false);
+                setSelectedPreset(null);
+                setEditingMed(null);
+                await loadData();
+                emitGlobalRefresh();
+                Alert.alert('Saved', `${payload.name} has been added to your schedule.`);
+            } else {
+                Alert.alert('Error', data.message || 'Failed to save medication.');
+            }
+        } catch (err: any) {
+            Alert.alert('Error', err.message || 'Failed to save medication.');
+        } finally {
+            setModalLoading(false);
+        }
+    };
+
+    const handleDeleteMedication = (medicationId: string, medicationName: string) => {
+        Alert.alert(
+            'Remove Medication',
+            `Are you sure you want to remove ${medicationName} from your active schedule?`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            const token = await AsyncStorage.getItem('userToken');
+                            const res = await fetch(`${API_URL}/shared/medications/${medicationId}`, {
+                                method: 'DELETE',
+                                headers: {
+                                    Authorization: `Bearer ${token}`
+                                }
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                await loadData();
+                                emitGlobalRefresh();
+                            } else {
+                                Alert.alert('Error', data.message || 'Failed to remove medication');
+                            }
+                        } catch (err: any) {
+                            Alert.alert('Error', err.message || 'Failed to remove medication');
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const loadMocks = () => {
@@ -346,6 +542,18 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                     <Text style={styles.headerTitle}>Medications</Text>
                     <Text style={styles.headerSub}>Today's medication schedule</Text>
                 </View>
+                <TouchableOpacity
+                    onPress={() => {
+                        setSelectedPreset(null);
+                        setEditingMed(null);
+                        setShowAddModal(true);
+                    }}
+                    style={styles.addHeaderBtn}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name="add" size={18} color="#FF6900" />
+                    <Text style={styles.addHeaderBtnText}>Add</Text>
+                </TouchableOpacity>
             </View>
 
             <ScrollView 
@@ -360,7 +568,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                     <Text style={styles.topTitle}>Medications</Text>
                     <View style={styles.toggleContainer}>
                         <Text style={styles.toggleLabel}>Reminders</Text>
-                        <CustomSwitch value={remindersActive} onValueChange={setRemindersActive} />
+                        <CustomSwitch value={remindersActive} onValueChange={handleToggleReminders} />
                     </View>
                 </View>
 
@@ -390,12 +598,49 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                     </View>
                 </View>
 
-                <Text style={styles.sectionTitle}>Your Medications</Text>
+                {/* Presets Component */}
+                <DefaultMedsPresets
+                    onSelectPreset={handleSelectPreset}
+                    onQuickAddPreset={handleQuickAddPreset}
+                    addingId={quickAddingId}
+                />
+
+                {/* Section Title with Add Custom Link */}
+                <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionTitle}>Your Medications</Text>
+                    <TouchableOpacity
+                        onPress={() => {
+                            setSelectedPreset(null);
+                            setEditingMed(null);
+                            setShowAddModal(true);
+                        }}
+                        style={styles.addCustomLink}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="add-circle-outline" size={16} color="#FE6700" />
+                        <Text style={styles.addCustomLinkText}>Add Custom</Text>
+                    </TouchableOpacity>
+                </View>
 
                 {schedule.length === 0 ? (
                     <View style={styles.emptyContainer}>
                         <CustomShieldIcon size={42} color="#9CA3AF" />
                         <Text style={styles.emptyText}>No medications scheduled for today.</Text>
+                        <Text style={styles.emptySubText}>
+                            Quickly pick from the common presets above or add your own medication to begin tracking.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.emptyAddBtn}
+                            onPress={() => {
+                                setSelectedPreset(null);
+                                setEditingMed(null);
+                                setShowAddModal(true);
+                            }}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="add" size={18} color="#FFFFFF" />
+                            <Text style={styles.emptyAddBtnText}>Add Medication</Text>
+                        </TouchableOpacity>
                     </View>
                 ) : (
                     schedule.map((item, index) => {
@@ -409,8 +654,6 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                             schedTime.getFullYear() === now.getFullYear()
                         );
                         const canMarkItem = item.canMark ?? (isItemToday && !item.isFutureSchedule);
-                        // Once marked, lock both buttons — no further changes allowed
-                        const isMarked = item.status === 'taken' || item.status === 'missed';
 
                         return (
                             <View key={`${item.id}-${index}`} style={styles.medCard}>
@@ -420,13 +663,24 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                                     </View>
 
                                     <View style={styles.medDetails}>
-                                        <Text style={styles.medName}>{item.name}</Text>
+                                        <View style={styles.medNameRow}>
+                                            <Text style={styles.medName}>{item.name}</Text>
+                                            <TouchableOpacity
+                                                onPress={() => handleDeleteMedication(item.id, item.name)}
+                                                style={styles.trashBtn}
+                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            >
+                                                <Ionicons name="trash-outline" size={16} color="#9CA3AF" />
+                                            </TouchableOpacity>
+                                        </View>
                                         <Text style={styles.medSub}>
-                                            {item.dosage} - {item.frequency}
+                                            {item.dosage} - {item.frequency?.replace('_', ' ')}
                                         </Text>
-                                        <Text style={styles.medInstructions}>
-                                            For: {item.instructions}
-                                        </Text>
+                                        {item.instructions ? (
+                                            <Text style={styles.medInstructions}>
+                                                For: {item.instructions}
+                                            </Text>
+                                        ) : null}
                                     </View>
 
                                     <View style={styles.actionColumn}>
@@ -516,6 +770,20 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
 
                 <View style={{ height: 40 }} />
             </ScrollView>
+
+            {/* Add / Edit Medication Modal */}
+            <AddMedicationModal
+                visible={showAddModal}
+                onClose={() => {
+                    setShowAddModal(false);
+                    setSelectedPreset(null);
+                    setEditingMed(null);
+                }}
+                onSave={handleSaveMedication}
+                initialPreset={selectedPreset}
+                initialData={editingMed}
+                loading={modalLoading}
+            />
         </SafeAreaView>
     );
 }
@@ -558,6 +826,26 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: 'rgba(255,255,255,0.9)',
         marginTop: 1,
+    },
+    addHeaderBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 14,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    addHeaderBtnText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#FF6900',
     },
     container: {
         flex: 1,
@@ -636,7 +924,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FE6700',
         borderRadius: 14,
         padding: 20,
-        marginBottom: 24,
+        marginBottom: 16,
         shadowColor: '#FE6700',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.15,
@@ -682,12 +970,31 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
 
+    sectionHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+        marginTop: 10,
+        paddingHorizontal: 4,
+    },
     sectionTitle: {
         fontFamily: 'Poppins-Medium',
         fontSize: 16,
         color: '#111827',
-        marginBottom: 12,
-        marginLeft: 4,
+    },
+    addCustomLink: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+    },
+    addCustomLinkText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#FE6700',
     },
 
     medCard: {
@@ -718,16 +1025,27 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
     },
+    medNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingRight: 6,
+    },
     medName: {
         fontFamily: 'Poppins-Medium',
         fontSize: 16,
         color: '#111827',
+        flex: 1,
+    },
+    trashBtn: {
+        padding: 4,
     },
     medSub: {
         fontFamily: 'Poppins-Regular',
         fontSize: 13,
         color: '#6B7280',
         marginTop: 2,
+        textTransform: 'capitalize',
     },
     medInstructions: {
         fontFamily: 'Poppins-Regular',
@@ -852,15 +1170,43 @@ const styles = StyleSheet.create({
     emptyContainer: {
         backgroundColor: '#FFFFFF',
         borderRadius: 14,
-        padding: 40,
+        padding: 28,
         alignItems: 'center',
         marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
     },
     emptyText: {
         marginTop: 12,
+        fontFamily: 'Poppins-Medium',
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#111827',
+        textAlign: 'center',
+    },
+    emptySubText: {
+        marginTop: 6,
         fontFamily: 'Poppins-Regular',
-        fontSize: 14,
+        fontSize: 13,
         color: '#6B7280',
         textAlign: 'center',
+        lineHeight: 18,
+        paddingHorizontal: 12,
+    },
+    emptyAddBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#FE6700',
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 12,
+        marginTop: 16,
+    },
+    emptyAddBtnText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
 });

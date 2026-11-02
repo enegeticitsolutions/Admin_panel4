@@ -33,6 +33,7 @@ import {
     FamilyConnectIntroModal,
     CareCircleModal,
     JoinCareCircleModal,
+    RenewOrLinkModal,
 } from '@/components/dashboard';
 
 
@@ -100,6 +101,8 @@ export default function BeneficiaryDashboard() {
     const [showCareCircleModal, setShowCareCircleModal] = useState<boolean>(false);
     const [selectedCircleBen, setSelectedCircleBen] = useState<{ id: string; name: string } | null>(null);
     const [showJoinCircleModal, setShowJoinCircleModal] = useState<boolean>(false);
+    const [showRenewalModal, setShowRenewalModal] = useState<boolean>(false);
+    const [renewalTargetBen, setRenewalTargetBen] = useState<{ id: string; name: string; relationship?: string } | null>(null);
 
     // Pulsing animation for the SOS button while triggering
     const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -428,7 +431,15 @@ export default function BeneficiaryDashboard() {
                                 params: { isVerificationFlow: 'true', beneficiaryId: b.id }
                             });
                         } else if (isExpired) {
-                            router.push('/(setup)/subscription-packages');
+                            if (unlinkedSubs.length > 0) {
+                                setRenewalTargetBen(b);
+                                setShowRenewalModal(true);
+                            } else {
+                                router.push({
+                                    pathname: '/(setup)/subscription-packages',
+                                    params: { beneficiaryId: b.id, beneficiaryName: b.name }
+                                });
+                            }
                         } else {
                             AsyncStorage.setItem('selectedBeneficiaryId', b.id);
                             router.push(`/(subscriber)/beneficiary-profile?id=${b.id}`);
@@ -556,6 +567,30 @@ export default function BeneficiaryDashboard() {
                 visible={showJoinCircleModal}
                 onClose={() => setShowJoinCircleModal(false)}
                 onSuccess={() => refetchSubscriberData()}
+            />
+
+            {/* Renew / Link Unassigned Care Plan Modal */}
+            <RenewOrLinkModal
+                visible={showRenewalModal}
+                beneficiary={renewalTargetBen}
+                unassignedPackages={unlinkedSubs}
+                onClose={() => {
+                    setShowRenewalModal(false);
+                    setRenewalTargetBen(null);
+                }}
+                onBrowseNew={() => {
+                    const benId = renewalTargetBen?.id;
+                    const benName = renewalTargetBen?.name;
+                    setShowRenewalModal(false);
+                    setRenewalTargetBen(null);
+                    router.push({
+                        pathname: '/(setup)/subscription-packages',
+                        params: { beneficiaryId: benId, beneficiaryName: benName }
+                    });
+                }}
+                onSuccess={() => {
+                    refetchSubscriberData();
+                }}
             />
         </ScrollView>
     );
