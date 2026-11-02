@@ -21,7 +21,7 @@ const HeroSection = ({ openForm }) => {
       return;
     }
     setError("");
-    openForm(email);
+    openForm(email, "Waitlist - Hero Section");
   };
   return (
     <section className="hero" id="home">

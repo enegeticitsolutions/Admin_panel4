@@ -4,10 +4,31 @@ import { API_BASE } from "../../services/api";
 
 /**
  * CustomizePlanModal Component
- * Opens when the user clicks 'Contact Us' on the 'Customize Your Own' card on /plans.
- * Maps and submits data directly to Zoho CRM Leads Module WebToLeadForm.
+ *
+ * A unified modal for all "Join Waitlist" / "Contact Us" / "Custom Plan" entry points.
+ * Submits data server-side via POST /api/website/custom-plan — no Zoho credentials
+ * are ever exposed to the browser.
+ *
+ * Props:
+ *  - isOpen        {boolean}  Whether the modal is visible.
+ *  - onClose       {Function} Called when the user dismisses the modal.
+ *  - initialEmail  {string}   Optional pre-filled email (e.g. from hero form capture).
+ *  - source        {string}   Specific origin section (e.g. 'Join the Waitlist', 'NRI Family Section', 'View Plans Page').
+ *  - title         {string}   Optional custom modal heading.
+ *  - subtitle      {string}   Optional custom subtitle text.
+ *  - badge         {string}   Optional badge label shown above the heading.
+ *  - successMsg    {string}   Optional custom success body text.
  */
-export default function CustomizePlanModal({ isOpen, onClose }) {
+export default function CustomizePlanModal({
+  isOpen,
+  onClose,
+  initialEmail = "",
+  source = "Customize Plan Page",
+  title = "Customize Your Eldercare Plan",
+  subtitle = "Tell us about your family's unique requirements. Our care advisory team will design a customized care plan and reach out to you within 24 hours.",
+  badge = "Bespoke Care Plan",
+  successMsg = "Your care request has been submitted directly to our Care Advisory Team. We will review your requirements and call you shortly to formulate the perfect care plan.",
+}) {
   const [formData, setFormData] = useState({
     "Last Name": "",
     "Phone": "",
@@ -19,8 +40,22 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const formRef = useRef(null);
   const initialInputRef = useRef(null);
+
+  // Sync initialEmail and reset state when the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setIsSubmitted(false);
+      setErrorMessage("");
+      setFormData((prev) => ({
+        ...prev,
+        Email: typeof initialEmail === "string" ? initialEmail : "",
+      }));
+      setTimeout(() => {
+        initialInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen, initialEmail]);
 
   // Close on Escape key
   useEffect(() => {
@@ -31,26 +66,6 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
-
-  // Focus first input on open & inject Zoho tracking script
-  useEffect(() => {
-    if (isOpen) {
-      setIsSubmitted(false);
-      setErrorMessage("");
-      setTimeout(() => {
-        initialInputRef.current?.focus();
-      }, 100);
-
-      const trackingScriptId = "zoho-webform-tracking-1342119000000860003";
-      if (!document.getElementById(trackingScriptId)) {
-        const script = document.createElement("script");
-        script.id = trackingScriptId;
-        script.src = "https://crm.zohopublic.in/crm/WebFormServlet?rid=3726c403d1129a389a455d3000a07f5e639d049388a9c9093b2a0331ac418381";
-        script.async = true;
-        document.body.appendChild(script);
-      }
-    }
-  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -89,36 +104,30 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
     e.preventDefault();
     setErrorMessage("");
 
-    // 1. Validate Name
+    // Validate Name
     if (!formData["Last Name"].trim()) {
       setErrorMessage("Please enter your Contact Name.");
       return;
     }
 
-    // 2. Validate Phone
+    // Validate Phone
     const cleanPhone = formData["Phone"].trim();
     if (!cleanPhone || cleanPhone.length !== 10 || !/^[6-9]\d{9}$/.test(cleanPhone)) {
       setErrorMessage("Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).");
       return;
     }
 
-    // 3. Validate Pin Code
+    // Validate Pin Code
     const cleanPincode = formData["Address - Zip / Postal Code"].trim();
     if (!cleanPincode || cleanPincode.length !== 6 || !/^\d{6}$/.test(cleanPincode)) {
       setErrorMessage("Please enter a valid 6-digit pin code (e.g. 122002).");
       return;
     }
 
-    // 4. Validate Email
+    // Validate Email
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!formData["Email"].trim() || !emailRegex.test(formData["Email"].trim())) {
       setErrorMessage("Please enter a valid email address.");
-      return;
-    }
-
-    // 5. Validate Required Services
-    if (!formData["Description"].trim()) {
-      setErrorMessage("Please describe your required services or care schedule.");
       return;
     }
 
@@ -131,14 +140,13 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
         pincode: formData["Address - Zip / Postal Code"].trim(),
         email: formData["Email"].trim(),
         services: formData["Description"].trim(),
+        source: source,
       };
 
-      // 1. Send via Backend API relay (Bypasses localhost/CORS restrictions and syncs to Zoho CRM server-side)
+      // Submit via server-side relay — Zoho credentials never touch the browser
       const endpoints = [
         `${API_BASE}/website/custom-plan`,
         "/api/website/custom-plan",
-        "http://localhost:8001/api/website/custom-plan",
-        "http://127.0.0.1:8001/api/website/custom-plan",
       ].filter(Boolean);
 
       let apiSynced = false;
@@ -156,32 +164,19 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
               break;
             }
           }
-        } catch (apiErr) {
-          // Continue fallback
+        } catch (_) {
+          // Try next endpoint
         }
       }
 
-      // 2. Direct browser WebToLeadForm submit as fallback / parallel sync
-      if (!apiSynced && formRef.current) {
-        try {
-          const zohoData = new FormData(formRef.current);
-          await fetch("https://crm.zoho.in/crm/WebToLeadForm", {
-            method: "POST",
-            body: zohoData,
-            cache: "no-cache",
-          });
-        } catch (fetchErr) {
-          // If browser CORS prevents reading response, trigger iframe submit
-          if (formRef.current) {
-            formRef.current.submit();
-          }
-        }
+      if (!apiSynced) {
+        throw new Error("All submission endpoints failed.");
       }
 
       setIsSubmitted(true);
       handleReset();
     } catch (err) {
-      console.error("Zoho form submission error:", err);
+      console.error("Form submission error:", err);
       setErrorMessage("Unable to submit right now. Please call us directly or try again.");
     } finally {
       setIsSubmitting(false);
@@ -196,38 +191,26 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
       aria-labelledby="customize-modal-title"
       onClick={onClose}
     >
-      {/* Invisible target iframe for safe cross-origin Zoho CRM POST without page reload */}
-      <iframe
-        name="zoho_crm_custom_module_target"
-        id="zoho_crm_custom_module_target"
-        title="Zoho CRM Submission Target"
-        style={{ display: "none", width: 0, height: 0, border: 0 }}
-      />
-
       <div
         className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden my-8"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.25)",
-        }}
+        style={{ boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.25)" }}
       >
         {/* Modal Header */}
         <div className="relative px-6 pt-7 pb-5 bg-gradient-to-br from-orange-50/80 via-white to-amber-50/40 border-b border-orange-100/60">
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#FE6700]/10 text-[#FE6700]">
               <Sparkles className="w-3.5 h-3.5" />
-              Bespoke Care Plan
+              {badge}
             </span>
           </div>
 
           <h2 id="customize-modal-title" className="text-2xl font-bold text-slate-900 tracking-tight">
-            Customize Your Eldercare Plan
+            {title}
           </h2>
-          <p className="mt-1 text-sm text-slate-600 leading-relaxed">
-            Tell us about your family’s unique requirements. Our care advisory team will design a customized care plan and reach out to you within 24 hours.
-          </p>
+          <p className="mt-1 text-sm text-slate-600 leading-relaxed">{subtitle}</p>
 
-          {/* Close Button (✕) */}
+          {/* Close Button */}
           <button
             type="button"
             onClick={onClose}
@@ -245,11 +228,9 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
               <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-4 border border-emerald-200/80 shadow-sm">
                 <CheckCircle2 className="w-9 h-9" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">
-                Thank You for Contacting Us!
-              </h3>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Thank You!</h3>
               <p className="text-sm text-slate-600 max-w-md mx-auto mb-6 leading-relaxed">
-                Your custom care request has been submitted directly to our Care Advisory Team. We will review your requirements and call you shortly to formulate the perfect care plan.
+                {successMsg}
               </p>
               <button
                 type="button"
@@ -260,43 +241,16 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
               </button>
             </div>
           ) : (
-            <form
-              ref={formRef}
-              id="webform1342119000000860003"
-              name="WebToLeads1342119000000860003"
-              action="https://crm.zoho.in/crm/WebToLeadForm"
-              method="POST"
-              target="zoho_crm_custom_module_target"
-              acceptCharset="UTF-8"
-              onSubmit={handleSubmit}
-              className="space-y-4"
-            >
-              {/* ─── Mandatory Zoho CRM Leads Hidden Form Fields ─── */}
-              <input
-                type="hidden"
-                name="xnQsjsdp"
-                value="e9bb59978558fff5a7af05ce70e669bad0582f4d338dbfd3fa36b7273b8cf81b"
-              />
-              <input type="hidden" name="zc_gad" id="zc_gad" value="" />
-              <input
-                type="hidden"
-                name="xmIwtLD"
-                value="63178c43656bc8013a95b39f3827bfd32ca4c92efa41726aade16b71622b264ae96bb3372767efb4ecfb6a400d917f84"
-              />
-              <input type="hidden" name="actionType" value="TGVhZHM=" />
-              <input type="hidden" name="returnURL" value="null" />
-              <input type="hidden" name="Lead Source" value="Web Research" />
-              <input type="hidden" name="aG9uZXlwb3Q" value="" />
-
+            <form onSubmit={handleSubmit} className="space-y-4">
               {/* Error Banner */}
               {errorMessage && (
-                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm animate-fadeIn">
+                <div className="flex items-center gap-2.5 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
                   <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-600" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
-              {/* Contact Name (Last Name in Zoho Leads) */}
+              {/* Contact Name */}
               <div>
                 <label htmlFor="Last_Name" className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Contact Name <span className="text-red-500">*</span>
@@ -315,17 +269,14 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
                 />
               </div>
 
-              {/* Phone & Pin Code in Grid */}
+              {/* Phone & Pin Code */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Phone Number (Phone in Zoho Leads) */}
                 <div>
                   <label htmlFor="Phone" className="block text-xs font-semibold text-slate-700 mb-1.5">
                     Phone Number <span className="text-red-500">*</span>
                   </label>
                   <div className="relative flex items-center">
-                    <span className="absolute left-3.5 text-xs font-semibold text-slate-500 select-none">
-                      +91
-                    </span>
+                    <span className="absolute left-3.5 text-xs font-semibold text-slate-500 select-none">+91</span>
                     <input
                       type="tel"
                       id="Phone"
@@ -340,14 +291,13 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
                   </div>
                 </div>
 
-                {/* Pin Code (Address - Zip / Postal Code in Zoho Leads) */}
                 <div>
-                  <label htmlFor="Address_-_Zip_/_Postal_Code" className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  <label htmlFor="Address_Zip" className="block text-xs font-semibold text-slate-700 mb-1.5">
                     Pin Code <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    id="Address_-_Zip_/_Postal_Code"
+                    id="Address_Zip"
                     name="Address - Zip / Postal Code"
                     maxLength={6}
                     required
@@ -359,7 +309,7 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* Email Address (Email in Zoho Leads) */}
+              {/* Email */}
               <div>
                 <label htmlFor="Email" className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Email Address <span className="text-red-500">*</span>
@@ -377,23 +327,20 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
                 />
               </div>
 
-              {/* Required Services (Description in Zoho Leads) */}
+              {/* Required Services (optional) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label htmlFor="Description" className="block text-xs font-semibold text-slate-700">
-                    Required Services &amp; Schedule <span className="text-red-500">*</span>
+                    Required Services &amp; Schedule
                   </label>
-                  <span className="text-[11px] text-slate-400">
-                    {formData["Description"].length}/255
-                  </span>
+                  <span className="text-[11px] text-slate-400">{formData["Description"].length}/255</span>
                 </div>
                 <textarea
                   id="Description"
                   name="Description"
                   rows={3}
                   maxLength={255}
-                  required
-                  placeholder="e.g., Daily 4 hours companionship for elderly mother in Gurugram, vitals monitoring, hospital assistance, physiotherapy coordination..."
+                  placeholder="e.g., Daily 4 hours companionship for elderly mother in Gurugram, vitals monitoring, hospital assistance..."
                   value={formData["Description"]}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 text-sm bg-slate-50/60 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#FE6700] focus:ring-2 focus:ring-[#FE6700]/20 transition-all resize-none"
@@ -412,7 +359,6 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
                 </button>
                 <button
                   type="submit"
-                  id="formsubmit"
                   disabled={isSubmitting}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-[#FE6700] to-[#EA580C] hover:from-[#EA580C] hover:to-[#C2410C] shadow-lg shadow-orange-500/30 hover:shadow-orange-500/40 disabled:opacity-60 disabled:cursor-not-allowed transition-all transform active:scale-[0.98]"
                 >
@@ -440,4 +386,3 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
     </div>
   );
 }
-

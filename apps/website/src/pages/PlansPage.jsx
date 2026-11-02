@@ -1249,6 +1249,10 @@ export default function PlansPage({
       <CustomizePlanModal
         isOpen={isCustomizeModalOpen}
         onClose={() => setIsCustomizeModalOpen(false)}
+        source="View Plans Page - Bespoke Plan"
+        title="Customize Your Eldercare Plan"
+        badge="Bespoke Care Plan"
+        subtitle="Tell us about your family's unique requirements. Our care advisory team will design a customized care plan and reach out to you within 24 hours."
       />
 
     </main>
