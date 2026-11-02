@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { validateCouponCode, createRazorpayOrder, purchaseSubscription, fetchCheckoutPreview } from "../services/api";
 import InvoiceModal from "../components/modals/InvoiceModal";
 import logo from "../assets/logo.svg";
@@ -14,21 +14,22 @@ const fallbackPackage = {
   discountAnnual: 20,
 };
 
+function cleanUnitLabel(qty, rawUnitLabel) {
+  if (!rawUnitLabel) return qty === 1 ? "Unit" : "Units";
+  const clean = String(rawUnitLabel).replace(/^per\s+/i, "").trim().toLowerCase();
+  if (clean === "hour" || clean === "hours") return qty === 1 ? "Hour" : "Hours";
+  if (clean === "visit" || clean === "visits") return qty === 1 ? "Visit" : "Visits";
+  if (clean === "session" || clean === "sessions") return qty === 1 ? "Session" : "Sessions";
+  if (clean === "test" || clean === "tests") return qty === 1 ? "Test" : "Tests";
+  if (clean === "day" || clean === "days") return qty === 1 ? "Day" : "Days";
+  if (clean === "month" || clean === "months") return qty === 1 ? "Month" : "Months";
+  const cap = clean.charAt(0).toUpperCase() + clean.slice(1);
+  return qty > 1 && !cap.endsWith("s") ? `${cap}s` : cap;
+}
+
 function formatUnitDisplay(units, rawUnitLabel) {
   if (!units) return "";
-  if (!rawUnitLabel) return `Units: ${units}`;
-  const clean = String(rawUnitLabel).replace(/^per\s+/i, "").trim().toLowerCase();
-  let type = clean;
-  if (clean === "hour" || clean === "hours") type = units === 1 ? "Visit Hour" : "Visit Hours";
-  else if (clean === "visit") type = units === 1 ? "Visit" : "Visits";
-  else if (clean === "session") type = units === 1 ? "Session" : "Sessions";
-  else if (clean === "test") type = units === 1 ? "Test" : "Tests";
-  else if (clean === "day") type = units === 1 ? "Day" : "Days";
-  else if (clean === "month") type = units === 1 ? "Month" : "Months";
-  else {
-    const cap = clean.charAt(0).toUpperCase() + clean.slice(1);
-    type = units > 1 && !cap.endsWith("s") ? `${cap}s` : cap;
-  }
+  const type = cleanUnitLabel(units, rawUnitLabel);
   return `Units: ${units} ${type}`;
 }
 
@@ -91,30 +92,111 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
 
   const baseMonthlyPrice = pkg.basePrice || pkg.price || 4999;
 
+  // Calculates savings in Rupees and discount percentage for each duration option
+  const getCycleSavings = (durKey, fallbackDisc) => {
+    const durNum = parseInt(durKey, 10);
+    if (durNum <= 1) return { savingsRs: 0, discPct: 0 };
+    const rawBase = baseMonthlyPrice * durNum;
+    let explicitPrice = null;
+    if (durNum === 3 && pkg.priceThreeMonths) explicitPrice = Number(pkg.priceThreeMonths);
+    if (durNum === 6 && pkg.priceSixMonths) explicitPrice = Number(pkg.priceSixMonths);
+    if (durNum === 12 && pkg.priceTwelveMonths) explicitPrice = Number(pkg.priceTwelveMonths);
+
+    if (explicitPrice !== null) {
+      const savingsRs = Math.max(0, rawBase - explicitPrice);
+      const discPct = rawBase > 0 ? Math.round((savingsRs / rawBase) * 100) : 0;
+      return { savingsRs, discPct };
+    }
+    const savingsRs = Math.round(rawBase * ((fallbackDisc || 0) / 100));
+    return { savingsRs, discPct: fallbackDisc || 0 };
+  };
+
   const calcDurationPricing = () => {
     if (isTrial) {
-      return { total: baseMonthlyPrice, discountPct: 0, durationMonths: 1 };
+      return { total: baseMonthlyPrice, discountPct: 0, durationMonths: 1, savingsRs: 0, rawTotal: baseMonthlyPrice };
     }
     const durNum = parseInt(duration, 10);
     let rawTotal = baseMonthlyPrice * durNum;
     let discPct = 0;
+    let explicitPrice = null;
 
     if (durNum === 3) {
       discPct = pkg.discountThreeMonths ?? 5;
-      if (pkg.priceThreeMonths) return { total: pkg.priceThreeMonths, discountPct: discPct, durationMonths: 3 };
+      if (pkg.priceThreeMonths) explicitPrice = Number(pkg.priceThreeMonths);
     } else if (durNum === 6) {
       discPct = pkg.discountSixMonths ?? 10;
-      if (pkg.priceSixMonths) return { total: pkg.priceSixMonths, discountPct: discPct, durationMonths: 6 };
+      if (pkg.priceSixMonths) explicitPrice = Number(pkg.priceSixMonths);
     } else if (durNum === 12) {
       discPct = pkg.discountAnnual ?? 20;
-      if (pkg.priceTwelveMonths) return { total: pkg.priceTwelveMonths, discountPct: discPct, durationMonths: 12 };
+      if (pkg.priceTwelveMonths) explicitPrice = Number(pkg.priceTwelveMonths);
     }
 
-    const calculatedTotal = Math.round(rawTotal * (1 - discPct / 100));
-    return { total: calculatedTotal, discountPct: discPct, durationMonths: durNum };
+    const calculatedTotal = explicitPrice !== null ? explicitPrice : Math.round(rawTotal * (1 - discPct / 100));
+    const savingsRs = Math.max(0, rawTotal - calculatedTotal);
+    if (explicitPrice !== null && rawTotal > 0) {
+      discPct = Math.round((savingsRs / rawTotal) * 100);
+    }
+    return { total: calculatedTotal, discountPct: discPct, durationMonths: durNum, rawTotal, savingsRs };
   };
 
   const pricing = calcDurationPricing();
+
+  // Normalized package benefits with rollover & monthly allocation clarity
+  const effectiveBenefits = useMemo(() => {
+    if (serverPricing?.benefitsBreakdown && serverPricing.benefitsBreakdown.length > 0) {
+      return serverPricing.benefitsBreakdown.map((b) => {
+        const period = b.unitsPeriod || "monthly";
+        const durNum = pricing.durationMonths || 1;
+        const baseUnits = b.unitsIncluded || (durNum > 1 && period === "monthly" ? Math.max(1, Math.round(b.units / durNum)) : b.units) || 1;
+        return {
+          ...b,
+          unitsIncluded: baseUnits,
+          unitsPeriod: period,
+          allowRollover: Boolean(b.allowRollover),
+          maxRolloverUnits: b.maxRolloverUnits != null ? Number(b.maxRolloverUnits) : null,
+          isUnlimited: Boolean(b.isUnlimited),
+          showUnit: b.showUnit !== false,
+        };
+      });
+    }
+
+    const rawList = pkg.packageBenefits || pkg.benefits || [];
+    if (Array.isArray(rawList) && rawList.length > 0) {
+      const durNum = parseInt(duration, 10) || 1;
+      return rawList
+        .filter((pb) => pb.benefit && pb.benefit.isActive !== false)
+        .map((pb) => {
+          const b = pb.benefit || pb;
+          const baseUnits = pb.unitsIncluded ?? pb.monthlyUnits ?? 1;
+          const period = pb.unitsPeriod || "monthly";
+          const isUnlimited = Boolean(pb.isUnlimited);
+          const allowRollover = Boolean(pb.allowRollover);
+          const maxRolloverUnits = pb.maxRolloverUnits != null ? Number(pb.maxRolloverUnits) : null;
+          let count = baseUnits * durNum;
+          if (isUnlimited) count = 0;
+          else if (period === "one_time" || pb.allocationBasis === "per_subscription_term") count = baseUnits;
+          else if (period === "yearly") count = Math.max(1, Math.round(durNum / 12)) * baseUnits;
+
+          return {
+            benefitId: b.id || pb.id,
+            name: b.name || pb.name || "Benefit",
+            units: count,
+            unitsIncluded: baseUnits,
+            unitsPeriod: period,
+            allocationBasis: pb.allocationBasis || "per_billing_cycle",
+            allowRollover,
+            maxRolloverUnits,
+            isUnlimited,
+            showUnit: pb.showUnit !== false,
+            category: pb.category || "included",
+            unitLabel: b.unitLabel || pb.unit || "units",
+            unitType: cleanUnitLabel(count || baseUnits, b.unitLabel || pb.unit),
+          };
+        });
+    }
+
+    return [];
+  }, [serverPricing, pkg, duration, pricing.durationMonths]);
 
   // Authoritative server-side fetch on duration or coupon change
   useEffect(() => {
@@ -421,37 +503,61 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
                       { key: "3", label: "3 Months", disc: pkg.discountThreeMonths ?? 5 },
                       { key: "6", label: "6 Months", disc: pkg.discountSixMonths ?? 10 },
                       { key: "12", label: "1 Year", disc: pkg.discountAnnual ?? 20 },
-                    ].map((item) => (
-                      <button 
-                        key={item.key} 
-                        type="button" 
-                        onClick={() => !isPaymentBusy && setDuration(item.key)}
-                        disabled={isPaymentBusy}
-                        style={{
-                          padding: "20px 14px", borderRadius: "16px",
-                          border: duration === item.key ? "2.5px solid #fe6700" : "1.5px solid #e2e8f0",
-                          background: duration === item.key ? "#fff8f3" : "#ffffff",
-                          textAlign: "left", 
-                          cursor: isPaymentBusy ? "not-allowed" : "pointer",
-                          opacity: isPaymentBusy ? 0.7 : 1,
-                          display: "flex", flexDirection: "column", justifyContent: "space-between",
-                          transition: "all 0.15s ease",
-                        }}
-                      >
-                        <div style={{ fontSize: "1.05rem", fontWeight: "800", color: "#0f172a" }}>{item.label}</div>
-                        {item.disc > 0
-                          ? <div style={{ fontSize: "0.82rem", color: "#16a34a", fontWeight: "700", marginTop: "6px" }}>Save {item.disc}% Extra</div>
-                          : <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "6px" }}>Standard Plan</div>
-                        }
-                      </button>
-                    ))}
+                    ].map((item) => {
+                      const isSelected = duration === item.key;
+                      const { savingsRs, discPct } = getCycleSavings(item.key, item.disc);
+                      return (
+                        <button 
+                          key={item.key} 
+                          type="button" 
+                          onClick={() => !isPaymentBusy && setDuration(item.key)}
+                          disabled={isPaymentBusy}
+                          style={{
+                            padding: "18px 16px", borderRadius: "16px",
+                            border: isSelected ? "2.5px solid #fe6700" : "1.5px solid #e2e8f0",
+                            background: isSelected ? "#fff8f3" : "#ffffff",
+                            textAlign: "left", 
+                            cursor: isPaymentBusy ? "not-allowed" : "pointer",
+                            opacity: isPaymentBusy ? 0.7 : 1,
+                            display: "flex", flexDirection: "column", justifyContent: "space-between",
+                            transition: "all 0.15s ease",
+                            boxShadow: isSelected ? "0 4px 12px rgba(254,103,0,0.12)" : "none",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", marginBottom: "6px" }}>
+                            <span style={{ fontSize: "1.05rem", fontWeight: "800", color: isSelected ? "#c2410c" : "#0f172a" }}>
+                              {item.label}
+                            </span>
+                            {isSelected && (
+                              <span style={{ fontSize: "0.68rem", fontWeight: "800", color: "#fe6700", background: "#ffedd5", padding: "2px 8px", borderRadius: "999px" }}>
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          {savingsRs > 0 ? (
+                            <div>
+                              <div style={{ fontSize: "0.92rem", color: "#16a34a", fontWeight: "800" }}>
+                                Save ₹{savingsRs.toLocaleString("en-IN")}
+                              </div>
+                              <div style={{ fontSize: "0.75rem", color: "#059669", fontWeight: "600", marginTop: "1px" }}>
+                                {discPct}% Extra Savings
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: "0.82rem", color: "#64748b", fontWeight: "500", marginTop: "4px" }}>
+                              Standard Monthly Plan
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
                 <div style={{ marginTop: "28px", padding: "16px", background: "#f8fafc", borderRadius: "14px", border: "1px solid #e2e8f0" }}>
-                  <div style={{ fontWeight: "700", color: "#0f172a", fontSize: "0.9rem", marginBottom: "4px" }}>📱 About Beneficiary Setup</div>
+                  <div style={{ fontWeight: "700", color: "#0f172a", fontSize: "0.9rem", marginBottom: "4px" }}>📱 Beneficiary Setup &amp; Activation</div>
                   <p style={{ fontSize: "0.84rem", color: "#64748b", margin: 0, lineHeight: "1.5" }}>
-                    Senior beneficiary details (name, age, address, doctor contacts) are enrolled inside the <strong>MaiHoonNa Mobile App</strong> after purchase — this keeps data accurate and private.
+                    Senior beneficiary details (name, age, address, emergency doctor) are linked inside the <strong>MaiHoonNa Mobile App</strong> after purchase. <strong>Your care plan and its start date are officially activated in the system when attached to your beneficiary.</strong>
                   </p>
                 </div>
 
@@ -508,90 +614,220 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
                   </span>
                 </div>
 
-                {/* ── Included Benefits List (Without internal cost breakdown) ── */}
-                {serverPricing?.benefitsBreakdown && serverPricing.benefitsBreakdown.length > 0 && (
+                {/* ── Included Benefits List with Rollover & Monthly Quota Clarity ── */}
+                {effectiveBenefits.length > 0 && (
                   <div style={{
                     margin: "16px 0",
                     border: "1px solid #e2e8f0",
-                    borderRadius: "12px",
+                    borderRadius: "14px",
                     overflow: "hidden",
-                    background: "#ffffff"
+                    background: "#ffffff",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.02)"
                   }}>
                     <div style={{
-                      padding: "10px 14px",
+                      padding: "12px 16px",
                       background: "#f8fafc",
                       borderBottom: "1px solid #e2e8f0",
-                      fontSize: "0.75rem",
-                      fontWeight: "800",
-                      color: "#475569",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center"
                     }}>
-                      <span>Included Package Benefits</span>
-                      <span style={{ fontSize: "0.7rem", color: "#059669", fontWeight: "700", background: "#ecfdf5", padding: "2px 8px", borderRadius: "999px" }}>
-                        {serverPricing.benefitsBreakdown.length} Services
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "0.78rem", fontWeight: "800", color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                          Included Package Benefits
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "0.72rem", color: "#059669", fontWeight: "700", background: "#ecfdf5", border: "1px solid #a7f3d0", padding: "3px 9px", borderRadius: "999px" }}>
+                        {effectiveBenefits.length} Services Included
                       </span>
                     </div>
 
-                    <div style={{ padding: "10px 14px" }}>
-                      {serverPricing.benefitsBreakdown.map((b, idx) => (
-                        <div
-                          key={idx}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "8px 0",
-                            borderBottom: idx < serverPricing.benefitsBreakdown.length - 1 ? "1px solid #f1f5f9" : "none",
-                            fontSize: "0.85rem"
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ color: "#059669", fontWeight: "800", fontSize: "0.9rem" }}>✓</span>
-                            <span style={{ fontWeight: "600", color: "#0f172a" }}>{b.name}</span>
+                    <div>
+                      {effectiveBenefits.map((b, idx) => {
+                        const uLabel = cleanUnitLabel(b.unitsIncluded || b.units, b.unitLabel || b.unitType);
+                        const totalULabel = cleanUnitLabel(b.units, b.unitLabel || b.unitType);
+                        const isMonthly = b.unitsPeriod === "monthly" || !b.unitsPeriod;
+
+                        return (
+                          <div
+                            key={b.benefitId || idx}
+                            style={{
+                              padding: "12px 16px",
+                              borderBottom: idx < effectiveBenefits.length - 1 ? "1px solid #f1f5f9" : "none",
+                              background: idx % 2 === 0 ? "#ffffff" : "#fafcff",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "5px",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                                <span style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  width: "18px",
+                                  height: "18px",
+                                  borderRadius: "50%",
+                                  background: "#dcfce7",
+                                  color: "#166534",
+                                  fontSize: "0.72rem",
+                                  fontWeight: "900",
+                                  flexShrink: 0,
+                                }}>✓</span>
+                                <span style={{ fontWeight: "700", color: "#0f172a", fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {b.name}
+                                </span>
+                              </div>
+
+                              {/* Units / Quota Badge */}
+                              <div style={{ flexShrink: 0 }}>
+                                {b.isUnlimited ? (
+                                  <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#6b21a8", background: "#f3e8ff", border: "1px solid #e9d5ff", padding: "3px 8px", borderRadius: "6px" }}>
+                                    24/7 Unlimited
+                                  </span>
+                                ) : (
+                                  <span style={{ fontSize: "0.76rem", fontWeight: "700", color: "#1e293b", background: "#f1f5f9", border: "1px solid #e2e8f0", padding: "3px 9px", borderRadius: "6px" }}>
+                                    {isMonthly ? (
+                                      pricing.durationMonths > 1 ? (
+                                        <>
+                                          <span>{b.unitsIncluded} {uLabel}/mo</span>
+                                          <span style={{ color: "#64748b", fontWeight: "500", marginLeft: "4px" }}>
+                                            ({b.units} total)
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <span>{b.unitsIncluded || b.units} {uLabel}/month</span>
+                                      )
+                                    ) : b.unitsPeriod === "yearly" ? (
+                                      <span>{b.units} {totalULabel}/year</span>
+                                    ) : b.unitsPeriod === "one_time" ? (
+                                      <span>{b.unitsIncluded || b.units} {uLabel} (One-Time)</span>
+                                    ) : (
+                                      <span>{b.units} {totalULabel}</span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Rollover status badge row */}
+                            {!b.isUnlimited && b.unitsPeriod !== "one_time" && (
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", paddingLeft: "26px" }}>
+                                {b.allowRollover ? (
+                                  <span style={{
+                                    fontSize: "0.7rem",
+                                    fontWeight: "700",
+                                    color: "#047857",
+                                    background: "#ecfdf5",
+                                    border: "1px solid #a7f3d0",
+                                    padding: "2px 8px",
+                                    borderRadius: "5px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}>
+                                    <span>🔄</span>
+                                    <span>
+                                      Rollover Included
+                                      {b.maxRolloverUnits ? ` (max ${b.maxRolloverUnits} ${cleanUnitLabel(b.maxRolloverUnits, b.unitLabel)})` : ""}
+                                    </span>
+                                  </span>
+                                ) : (
+                                  <span style={{
+                                    fontSize: "0.7rem",
+                                    fontWeight: "600",
+                                    color: "#64748b",
+                                    background: "#f8fafc",
+                                    border: "1px solid #e2e8f0",
+                                    padding: "2px 8px",
+                                    borderRadius: "5px",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}>
+                                    <span>⏳</span>
+                                    <span>Monthly Quota (Expires monthly)</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          {b.units > 0 && (
-                            <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#475569", background: "#f1f5f9", padding: "3px 8px", borderRadius: "6px" }}>
-                              {b.unitDisplay || formatUnitDisplay(b.units, b.unitType || b.unitLabel)}
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
-                    {/* Overall Package Summary (Gross, Tenure Discount, Coupon) */}
-                    {(serverPricing.packageGrossPrice || serverPricing.durationDiscount > 0 || serverPricing.couponDiscount > 0) && (
-                      <div style={{
-                        background: "#f8fafc",
-                        borderTop: "1px solid #e2e8f0",
-                        padding: "10px 14px",
-                        fontSize: "0.82rem"
-                      }}>
-                        {serverPricing.packageGrossPrice && (
-                          <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b", marginBottom: "4px" }}>
-                            <span>Package Base Price</span>
-                            <span style={{ fontWeight: "600", color: "#334155" }}>
-                              ₹{serverPricing.packageGrossPrice?.toLocaleString("en-IN")}
-                            </span>
-                          </div>
-                        )}
-                        {serverPricing.durationDiscount > 0 && (
-                          <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a", fontWeight: "600", marginBottom: "4px" }}>
-                            <span>Tenure Savings ({serverPricing.durationDiscountPct}% off)</span>
-                            <span>- ₹{serverPricing.durationDiscount?.toLocaleString("en-IN")}</span>
-                          </div>
-                        )}
-                        {serverPricing.couponDiscount > 0 && (
-                          <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a", fontWeight: "600" }}>
-                            <span>Coupon Savings</span>
-                            <span>- ₹{serverPricing.couponDiscount?.toLocaleString("en-IN")}</span>
-                          </div>
-                        )}
+                    {/* Transparency explanatory footer */}
+                    <div style={{
+                      padding: "10px 14px",
+                      background: "#f8fafc",
+                      borderTop: "1px solid #e2e8f0",
+                      fontSize: "0.75rem",
+                      color: "#64748b",
+                      lineHeight: "1.45",
+                      display: "flex",
+                      gap: "6px",
+                      alignItems: "flex-start",
+                    }}>
+                      <span style={{ fontSize: "0.85rem", marginTop: "-1px" }}>💡</span>
+                      <span>
+                        <strong>Benefit Allocation:</strong> Quotas are distributed per monthly cycle ({pricing.durationMonths} month{pricing.durationMonths > 1 ? "s" : ""}). Services marked <em>Rollover Included</em> roll over unspent units into the next month; standard <em>Monthly Quota</em> services reset each billing cycle.
+                      </span>
+                    </div>
+
+                    {/* Overall Package Summary (Base, Addons, Coupon, GST) */}
+                    <div style={{
+                      background: "#f8fafc",
+                      borderTop: "1px solid #e2e8f0",
+                      padding: "12px 14px",
+                      fontSize: "0.84rem"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b", marginBottom: "5px" }}>
+                        <span>Package Price ({pricing.durationMonths} Month{pricing.durationMonths > 1 ? "s" : ""})</span>
+                        <span style={{ fontWeight: "700", color: "#0f172a" }}>
+                          ₹{(serverPricing?.packageBasePrice || pricing.total)?.toLocaleString("en-IN")}
+                        </span>
                       </div>
-                    )}
+
+                      {(serverPricing?.durationDiscount > 0 || pricing.savingsRs > 0) && (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a", fontWeight: "600", marginBottom: "5px" }}>
+                          <span>Tenure Savings ({serverPricing?.durationDiscountPct || pricing.discountPct}% off)</span>
+                          <span>- ₹{(serverPricing?.durationDiscount || pricing.savingsRs)?.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+
+                      {serverPricing?.addonsTotalPrice > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b", marginBottom: "5px" }}>
+                          <span>Add-on Benefits</span>
+                          <span style={{ fontWeight: "600", color: "#0f172a" }}>
+                            + ₹{serverPricing.addonsTotalPrice?.toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                      )}
+
+                      {serverPricing?.couponDiscount > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#16a34a", fontWeight: "600", marginBottom: "5px" }}>
+                          <span>Coupon Discount</span>
+                          <span>- ₹{serverPricing.couponDiscount?.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+
+                      {(serverPricing?.addonsTotalPrice > 0 || serverPricing?.couponDiscount > 0) && (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#334155", fontWeight: "700", marginBottom: "5px", paddingTop: "5px", borderTop: "1px dashed #cbd5e1" }}>
+                          <span>Net Taxable Base</span>
+                          <span>₹{(serverPricing?.netTaxableAmount ?? (pricing.total + (serverPricing?.addonsTotalPrice || 0) - (serverPricing?.couponDiscount || 0)))?.toLocaleString("en-IN")}</span>
+                        </div>
+                      )}
+
+                      {serverPricing?.totalTaxAmount > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#64748b", marginBottom: "2px", paddingTop: (serverPricing?.addonsTotalPrice > 0 || serverPricing?.couponDiscount > 0) ? "2px" : "5px", borderTop: (serverPricing?.addonsTotalPrice > 0 || serverPricing?.couponDiscount > 0) ? "none" : "1px dashed #cbd5e1" }}>
+                          <span>Statutory GST ({serverPricing.gstRate || 18}%)</span>
+                          <span style={{ fontWeight: "600", color: "#334155" }}>
+                            + ₹{serverPricing.totalTaxAmount?.toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -645,8 +881,8 @@ export default function CheckoutPage({ selectedPackage, token, user, onSuccess, 
                     </span>
                   </div>
                   {pricing.discountPct > 0 && (
-                    <div style={{ fontSize: "0.8rem", color: "#16a34a", textAlign: "right", marginTop: "2px" }}>
-                      You save {pricing.discountPct}% on this plan
+                    <div style={{ fontSize: "0.82rem", color: "#16a34a", textAlign: "right", marginTop: "4px", fontWeight: "700" }}>
+                      🎉 You save ₹{(serverPricing?.durationDiscount || pricing.savingsRs).toLocaleString("en-IN")} ({pricing.discountPct}% OFF) on this plan
                     </div>
                   )}
                 </div>

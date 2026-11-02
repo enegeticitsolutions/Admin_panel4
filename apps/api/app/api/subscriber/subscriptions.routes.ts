@@ -144,16 +144,64 @@ async function calculatePricing(
       totalPackageBase += benefitTermBase;
       totalPackageTax += gstAmount;
 
-      const count = uCount * months;
-      const unitType = formatUnitType(b.unitLabel, count);
+      const baseUnits = pb.unitsIncluded || 1;
+      const period = pb.unitsPeriod || 'monthly';
+      const isUnlimited = Boolean(pb.isUnlimited);
+      const allowRollover = Boolean(pb.allowRollover);
+      const maxRolloverUnits = pb.maxRolloverUnits != null ? Number(pb.maxRolloverUnits) : null;
+      const showUnit = pb.showUnit !== false;
+
+      let count = baseUnits * months;
+      if (isUnlimited) {
+        count = 0;
+      } else if (period === 'one_time' || pb.allocationBasis === 'per_subscription_term') {
+        count = baseUnits;
+      } else if (period === 'yearly') {
+        count = Math.max(1, Math.round(months / 12)) * baseUnits;
+      } else if (period === 'quarterly' || period === '3_months') {
+        count = Math.max(1, Math.round(months / 3)) * baseUnits;
+      }
+
+      const baseUnitType = formatUnitType(b.unitLabel, baseUnits);
+      const unitType = formatUnitType(b.unitLabel, count || baseUnits);
+
+      let cadenceLabel = '/month';
+      if (period === 'yearly') cadenceLabel = '/year';
+      else if (period === 'weekly') cadenceLabel = '/week';
+      else if (period === 'quarterly' || period === '3_months') cadenceLabel = '/quarter';
+      else if (period === 'half_yearly' || period === '6_months') cadenceLabel = '/half-year';
+      else if (period === 'one_time') cadenceLabel = ' (One-Time)';
+
+      let unitDisplay = `Units: ${count} ${unitType}`;
+      if (isUnlimited) {
+        unitDisplay = 'Unlimited';
+      } else if (months > 1 && (period === 'monthly' || !period)) {
+        unitDisplay = `${baseUnits} ${baseUnitType}/mo (${count} total)`;
+      } else if (period === 'yearly') {
+        unitDisplay = `${count} ${unitType}/year`;
+      } else if (period === 'one_time') {
+        unitDisplay = `${baseUnits} ${baseUnitType} (One-Time)`;
+      }
 
       benefitsBreakdown.push({
         benefitId: b.id,
         name: b.name,
+        description: b.description || null,
         units: count,
+        unitsIncluded: baseUnits,
+        unitsPeriod: period,
+        allocationBasis: pb.allocationBasis || 'per_billing_cycle',
+        allowRollover,
+        maxRolloverUnits,
+        isUnlimited,
+        showUnit,
+        category: pb.category || 'included',
+        minSubscriptionMonths: pb.minSubscriptionMonths || 1,
+        cadenceLabel,
+        baseUnitDisplay: isUnlimited ? 'Unlimited' : `${baseUnits} ${baseUnitType}${cadenceLabel}`,
         unitLabel: b.unitLabel || 'units',
         unitType,
-        unitDisplay: `Units: ${count} ${unitType}`,
+        unitDisplay,
         unitPrice: count > 0 ? Math.round((benefitTermBase / count) * 100) / 100 : 0,
         price: benefitTermBase,
         gstRate,
@@ -177,6 +225,17 @@ async function calculatePricing(
     benefitsBreakdown.push({
       name: pkg.name,
       units: 1,
+      unitsIncluded: 1,
+      unitsPeriod: 'monthly',
+      allocationBasis: 'per_billing_cycle',
+      allowRollover: false,
+      maxRolloverUnits: null,
+      isUnlimited: false,
+      showUnit: true,
+      category: 'included',
+      minSubscriptionMonths: 1,
+      cadenceLabel: '/month',
+      baseUnitDisplay: '1 Package',
       unitLabel: 'package',
       unitType: 'Package',
       unitDisplay: 'Units: 1 Package',
@@ -190,14 +249,28 @@ async function calculatePricing(
     });
   }
 
-  totalPackageBase = Math.round(totalPackageBase * 100) / 100;
-  totalPackageTax = Math.round(totalPackageTax * 100) / 100;
-  const packageGrossPrice = Math.round((totalPackageBase + totalPackageTax) * 100) / 100;
+  if (overridePrice !== null && packageBenefits.length > 0) {
+    const roundingDiff = Math.round((overridePrice - totalPackageBase) * 100) / 100;
+    if (roundingDiff !== 0 && benefitsBreakdown.length > 0) {
+      const lastBenefit = benefitsBreakdown[benefitsBreakdown.length - 1];
+      lastBenefit.price = Math.round((lastBenefit.price + roundingDiff) * 100) / 100;
+      lastBenefit.gstAmount = Math.round((lastBenefit.price * (lastBenefit.gstRate || 0) / 100) * 100) / 100;
+      lastBenefit.finalPrice = Math.round((lastBenefit.price + lastBenefit.gstAmount) * 100) / 100;
+    }
+    totalPackageBase = overridePrice;
+  } else {
+    totalPackageBase = Math.round(totalPackageBase * 100) / 100;
+  }
 
-  // Tenure / duration discount is now baked into the base price for explicit overrides.
-  // We still need to handle proportional percentage discounts if override is not used.
-  // Actually, we baked proportional percentage discounts into benefitTermBase above, so packageGrossPrice is final!
-  const packageFinalPayable = packageGrossPrice;
+  totalPackageTax = Math.round(totalPackageTax * 100) / 100;
+  const packageFinalPayable = Math.round((totalPackageBase + totalPackageTax) * 100) / 100;
+
+  const undiscountedBase = Math.round(baseMonthlyRate * months * 100) / 100;
+  const durationDiscount = Math.max(0, Math.round((undiscountedBase - totalPackageBase) * 100) / 100);
+  if (overridePrice !== null && undiscountedBase > 0) {
+    durationDiscountPct = Math.round((durationDiscount / undiscountedBase) * 100);
+  }
+  const packageGrossPrice = undiscountedBase;
 
   // 2. Add-ons breakdown
   let addonsTotalPrice = 0;
@@ -244,9 +317,11 @@ async function calculatePricing(
   }
 
   const addonsFinalTotal = Math.round((addonsTotalPrice + addonsTax) * 100) / 100;
-  let subtotalPayable = Math.round((packageFinalPayable + addonsFinalTotal) * 100) / 100;
 
-  // 3. Coupon validation
+  // 3. Gross Taxable Subtotal (Package Price + Add-ons)
+  const grossTaxableAmount = Math.round((totalPackageBase + addonsTotalPrice) * 100) / 100;
+
+  // 4. Coupon validation (applied pre-tax on taxable amount)
   let couponDiscount = 0;
   let couponValid = false;
   let couponId: string | null = null;
@@ -262,11 +337,10 @@ async function calculatePricing(
       isFirstTime = previousSubs === 0;
     }
 
-    const validation = await validateCoupon(code, userId || 'guest', (pkg as any).type, subtotalPayable, isFirstTime);
+    const validation = await validateCoupon(code, userId || 'guest', (pkg as any).type, grossTaxableAmount, isFirstTime);
 
     if (validation.isValid) {
       couponDiscount = validation.discountApplied;
-      subtotalPayable = validation.finalAmount;
       couponValid = true;
       couponId = validation.couponId || null;
     } else {
@@ -274,11 +348,12 @@ async function calculatePricing(
     }
   }
 
-  // 4. Saathi Coupon validation
+  // 5. Saathi Coupon validation
   let saathiDiscountApplied = 0;
   let saathiCouponValid = false;
   let saathiCouponMessage: string | undefined;
 
+  const remainingAfterCoupon = Math.max(0, grossTaxableAmount - couponDiscount);
   if (saathiCouponCode && saathiCouponCode.trim()) {
     const code = saathiCouponCode.trim().toUpperCase();
     const saathiCoupon = await prisma.volunteerRewardCoupon.findUnique({
@@ -291,14 +366,17 @@ async function calculatePricing(
       saathiCouponMessage = `Coupon is ${saathiCoupon.status.toLowerCase()}`;
     } else {
       saathiCouponValid = true;
-      saathiDiscountApplied = Math.min(saathiCoupon.valueRs, subtotalPayable);
-      subtotalPayable -= saathiDiscountApplied;
+      saathiDiscountApplied = Math.min(saathiCoupon.valueRs, remainingAfterCoupon);
     }
   }
 
-  const totalTaxAmount = Math.round((totalPackageTax + addonsTax) * 100) / 100;
-  const tax = totalTaxAmount;
-  const total = Math.max(0, Math.round(subtotalPayable * 100) / 100);
+  // 6. Net Taxable Base: Package Price + Add-ons - Discounts
+  const netTaxableAmount = Math.max(0, Math.round((grossTaxableAmount - couponDiscount - saathiDiscountApplied) * 100) / 100);
+
+  // 7. Statutory GST (18%) applied on the Net Taxable Amount
+  const effectiveGstRate = pkg.isGstExempt ? 0 : Number(pkg.gstRate !== null && pkg.gstRate !== undefined ? pkg.gstRate : 18);
+  const totalTaxAmount = Math.round((netTaxableAmount * effectiveGstRate / 100) * 100) / 100;
+  const total = Math.max(0, Math.round((netTaxableAmount + totalTaxAmount) * 100) / 100);
 
   // Dates
   const now = new Date();
@@ -316,7 +394,7 @@ async function calculatePricing(
     pkg,
     durationMonths: months,
     durationDiscountPct,
-    durationDiscount: 0,
+    durationDiscount,
     packageBasePrice: totalPackageBase,
     packageGrossPrice,
     packageFinalPayable,
@@ -325,8 +403,11 @@ async function calculatePricing(
     addonsTax,
     addonsFinalTotal,
     addonsBreakdown,
-    basePrice: Math.round((totalPackageBase + addonsTotalPrice) * 100) / 100,
-    totalTaxAmount: Math.round((totalPackageTax + addonsTax) * 100) / 100,
+    grossTaxableAmount,
+    netTaxableAmount,
+    gstRate: effectiveGstRate,
+    basePrice: grossTaxableAmount,
+    totalTaxAmount,
     couponDiscount,
     couponValid,
     couponId,
@@ -373,6 +454,9 @@ router.post('/checkout/preview', optionalAuthenticate, async (req: AuthRequest, 
         addonsTax: pricing.addonsTax,
         addonsFinalTotal: pricing.addonsFinalTotal,
         addonsBreakdown: pricing.addonsBreakdown,
+        grossTaxableAmount: pricing.grossTaxableAmount,
+        netTaxableAmount: pricing.netTaxableAmount,
+        gstRate: pricing.gstRate,
         basePrice: pricing.basePrice,
         totalTaxAmount: pricing.totalTaxAmount,
         couponDiscount: pricing.couponDiscount,
@@ -538,6 +622,39 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
           isSubscriptionActive: isActive,
         }
       });
+
+      // Synchronize BenefitPeriods with the official activation date (newStart)
+      await tx.benefitPeriod.deleteMany({
+        where: { subscriptionId: subscriptionId }
+      });
+
+      const subWithVersion = await tx.subscription.findUnique({
+        where: { id: subscriptionId },
+        include: {
+          packageVersion: {
+            include: { versionBenefits: { include: { benefit: true } } }
+          }
+        }
+      });
+
+      if (subWithVersion?.packageVersion?.versionBenefits && subWithVersion.packageVersion.versionBenefits.length > 0) {
+        const periodBenefits = subWithVersion.packageVersion.versionBenefits.map((vb: any) => ({
+          benefitId: vb.benefitId,
+          name: vb.snapshotName || 'Benefit',
+          unitLabel: vb.snapshotUnitLabel || null,
+          monthlyUnits: vb.unitsIncluded || 1,
+          allowRollover: vb.allowRollover ?? false,
+          maxRolloverUnits: vb.maxRolloverUnits ?? null,
+        }));
+
+        await benefitPeriodManager.generatePeriodsForSubscription(
+          subscriptionId,
+          months,
+          newStart,
+          periodBenefits,
+          tx
+        );
+      }
     });
 
     res.json({

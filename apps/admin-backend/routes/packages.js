@@ -45,19 +45,39 @@ router.get('/', async (req, res) => {
       },
     });
 
-    // Map fields for frontend compatibility
-    const mappedPackages = packages.map((pkg) => ({
-      ...pkg,
-      totalCost: pkg.basePrice,
-      regionIds: (pkg.packageRegions || []).map(pr => pr.regionId),
-      regions: (pkg.packageRegions || []).map(pr => pr.region),
-      benefits: (pkg.packageBenefits || [])
-        .filter(pb => pb.benefit && pb.benefit.isActive !== false)
-        .map((pb) => ({
-          ...pb,
-          monthlyUnits: pb.unitsIncluded,
-        })),
-    }));
+    // Map fields for frontend compatibility and reverse-calculate discounts if final prices exist
+    const mappedPackages = packages.map((pkg) => {
+      const bPrice = Number(pkg.basePrice || 0);
+      let disc3 = pkg.discountThreeMonths !== null && pkg.discountThreeMonths !== undefined ? Number(pkg.discountThreeMonths) : 5;
+      let disc6 = pkg.discountSixMonths !== null && pkg.discountSixMonths !== undefined ? Number(pkg.discountSixMonths) : 10;
+      let disc12 = pkg.discountAnnual !== null && pkg.discountAnnual !== undefined ? Number(pkg.discountAnnual) : 20;
+
+      if (pkg.priceThreeMonths && bPrice > 0) {
+        disc3 = Math.max(0, Math.round(((bPrice * 3 - Number(pkg.priceThreeMonths)) / (bPrice * 3)) * 100 * 10) / 10);
+      }
+      if (pkg.priceSixMonths && bPrice > 0) {
+        disc6 = Math.max(0, Math.round(((bPrice * 6 - Number(pkg.priceSixMonths)) / (bPrice * 6)) * 100 * 10) / 10);
+      }
+      if (pkg.priceTwelveMonths && bPrice > 0) {
+        disc12 = Math.max(0, Math.round(((bPrice * 12 - Number(pkg.priceTwelveMonths)) / (bPrice * 12)) * 100 * 10) / 10);
+      }
+
+      return {
+        ...pkg,
+        discountThreeMonths: disc3,
+        discountSixMonths: disc6,
+        discountAnnual: disc12,
+        totalCost: pkg.basePrice,
+        regionIds: (pkg.packageRegions || []).map(pr => pr.regionId),
+        regions: (pkg.packageRegions || []).map(pr => pr.region),
+        benefits: (pkg.packageBenefits || [])
+          .filter(pb => pb.benefit && pb.benefit.isActive !== false)
+          .map((pb) => ({
+            ...pb,
+            monthlyUnits: pb.unitsIncluded,
+          })),
+      };
+    });
 
     res.json({ success: true, data: mappedPackages });
   } catch (err) {
@@ -94,9 +114,27 @@ router.get('/:id', async (req, res) => {
         .status(404)
         .json({ success: false, message: 'Package not found' });
 
+    const bPrice = Number(pkg.basePrice || 0);
+    let disc3 = pkg.discountThreeMonths !== null && pkg.discountThreeMonths !== undefined ? Number(pkg.discountThreeMonths) : 5;
+    let disc6 = pkg.discountSixMonths !== null && pkg.discountSixMonths !== undefined ? Number(pkg.discountSixMonths) : 10;
+    let disc12 = pkg.discountAnnual !== null && pkg.discountAnnual !== undefined ? Number(pkg.discountAnnual) : 20;
+
+    if (pkg.priceThreeMonths && bPrice > 0) {
+      disc3 = Math.max(0, Math.round(((bPrice * 3 - Number(pkg.priceThreeMonths)) / (bPrice * 3)) * 100 * 10) / 10);
+    }
+    if (pkg.priceSixMonths && bPrice > 0) {
+      disc6 = Math.max(0, Math.round(((bPrice * 6 - Number(pkg.priceSixMonths)) / (bPrice * 6)) * 100 * 10) / 10);
+    }
+    if (pkg.priceTwelveMonths && bPrice > 0) {
+      disc12 = Math.max(0, Math.round(((bPrice * 12 - Number(pkg.priceTwelveMonths)) / (bPrice * 12)) * 100 * 10) / 10);
+    }
+
     // Map fields for frontend compatibility
     const mappedPackage = {
       ...pkg,
+      discountThreeMonths: disc3,
+      discountSixMonths: disc6,
+      discountAnnual: disc12,
       totalCost: pkg.basePrice,
       regionIds: (pkg.packageRegions || []).map(pr => pr.regionId),
       regions: (pkg.packageRegions || []).map(pr => pr.region),
@@ -155,37 +193,58 @@ router.post('/', async (req, res) => {
     const typeCode = name.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
     const pkg = await prisma.$transaction(async (tx) => {
+      const basePriceVal =
+        packageCost ??
+        (req.body.totalCost ? parseFloat(req.body.totalCost) : 0);
+
+      const parsedPriceThree = priceThreeMonths !== undefined && priceThreeMonths !== null && priceThreeMonths !== ''
+        ? parseFloat(priceThreeMonths)
+        : null;
+      const parsedPriceSix = priceSixMonths !== undefined && priceSixMonths !== null && priceSixMonths !== ''
+        ? parseFloat(priceSixMonths)
+        : null;
+      const parsedPriceTwelve = priceTwelveMonths !== undefined && priceTwelveMonths !== null && priceTwelveMonths !== ''
+        ? parseFloat(priceTwelveMonths)
+        : null;
+
+      let finalDiscThree = discountThreeMonths !== undefined && discountThreeMonths !== null
+        ? parseFloat(discountThreeMonths)
+        : 5;
+      let finalDiscSix = discountSixMonths !== undefined && discountSixMonths !== null
+        ? parseFloat(discountSixMonths)
+        : 10;
+      let finalDiscAnnual = discountAnnual !== undefined && discountAnnual !== null
+        ? parseFloat(discountAnnual)
+        : 20;
+
+      // Reverse calculate discount if final price is explicitly provided
+      if (parsedPriceThree !== null && basePriceVal > 0) {
+        finalDiscThree = Math.max(0, Math.round(((basePriceVal * 3 - parsedPriceThree) / (basePriceVal * 3)) * 100 * 10) / 10);
+      }
+      if (parsedPriceSix !== null && basePriceVal > 0) {
+        finalDiscSix = Math.max(0, Math.round(((basePriceVal * 6 - parsedPriceSix) / (basePriceVal * 6)) * 100 * 10) / 10);
+      }
+      if (parsedPriceTwelve !== null && basePriceVal > 0) {
+        finalDiscAnnual = Math.max(0, Math.round(((basePriceVal * 12 - parsedPriceTwelve) / (basePriceVal * 12)) * 100 * 10) / 10);
+      }
+
       // 1. Create the package header
       const created = await tx.subscriptionPackage.create({
         data: {
           type: typeCode + '_' + Date.now(), // Append timestamp for uniqueness
           name,
           description: description || name,
-          basePrice:
-            packageCost ??
-            (req.body.totalCost ? parseFloat(req.body.totalCost) : 0),
+          basePrice: basePriceVal,
           mrp: mrp ? parseFloat(mrp) : 0,
           discountPercentage: discountPercentage
             ? parseFloat(discountPercentage)
             : 0,
-          discountThreeMonths: discountThreeMonths !== undefined && discountThreeMonths !== null
-            ? parseFloat(discountThreeMonths)
-            : 5,
-          discountSixMonths: discountSixMonths !== undefined && discountSixMonths !== null
-            ? parseFloat(discountSixMonths)
-            : 10,
-          discountAnnual: discountAnnual !== undefined && discountAnnual !== null
-            ? parseFloat(discountAnnual)
-            : 20,
-          priceThreeMonths: priceThreeMonths !== undefined && priceThreeMonths !== null
-            ? parseFloat(priceThreeMonths)
-            : null,
-          priceSixMonths: priceSixMonths !== undefined && priceSixMonths !== null
-            ? parseFloat(priceSixMonths)
-            : null,
-          priceTwelveMonths: priceTwelveMonths !== undefined && priceTwelveMonths !== null
-            ? parseFloat(priceTwelveMonths)
-            : null,
+          discountThreeMonths: finalDiscThree,
+          discountSixMonths: finalDiscSix,
+          discountAnnual: finalDiscAnnual,
+          priceThreeMonths: parsedPriceThree,
+          priceSixMonths: parsedPriceSix,
+          priceTwelveMonths: parsedPriceTwelve,
           miscellaneousCost: miscellaneousCost
             ? parseFloat(miscellaneousCost)
             : 0,
@@ -391,6 +450,45 @@ router.put('/:id', async (req, res) => {
 
   try {
     const updated = await prisma.$transaction(async (tx) => {
+      const currentPkg = await tx.subscriptionPackage.findUnique({
+        where: { id },
+        select: { basePrice: true }
+      });
+      const effectiveBase = packageCost !== undefined && packageCost !== null
+        ? parseFloat(packageCost)
+        : (req.body.totalCost ? parseFloat(req.body.totalCost) : (currentPkg?.basePrice || 0));
+
+      const parsedPriceThree = priceThreeMonths !== undefined && priceThreeMonths !== null && priceThreeMonths !== ''
+        ? parseFloat(priceThreeMonths)
+        : (priceThreeMonths === null ? null : undefined);
+      const parsedPriceSix = priceSixMonths !== undefined && priceSixMonths !== null && priceSixMonths !== ''
+        ? parseFloat(priceSixMonths)
+        : (priceSixMonths === null ? null : undefined);
+      const parsedPriceTwelve = priceTwelveMonths !== undefined && priceTwelveMonths !== null && priceTwelveMonths !== ''
+        ? parseFloat(priceTwelveMonths)
+        : (priceTwelveMonths === null ? null : undefined);
+
+      let finalDiscThree = discountThreeMonths !== undefined && discountThreeMonths !== null
+        ? parseFloat(discountThreeMonths)
+        : undefined;
+      let finalDiscSix = discountSixMonths !== undefined && discountSixMonths !== null
+        ? parseFloat(discountSixMonths)
+        : undefined;
+      let finalDiscAnnual = discountAnnual !== undefined && discountAnnual !== null
+        ? parseFloat(discountAnnual)
+        : undefined;
+
+      // Reverse calculate discount if final price is explicitly provided
+      if (parsedPriceThree !== undefined && parsedPriceThree !== null && effectiveBase > 0) {
+        finalDiscThree = Math.max(0, Math.round(((effectiveBase * 3 - parsedPriceThree) / (effectiveBase * 3)) * 100 * 10) / 10);
+      }
+      if (parsedPriceSix !== undefined && parsedPriceSix !== null && effectiveBase > 0) {
+        finalDiscSix = Math.max(0, Math.round(((effectiveBase * 6 - parsedPriceSix) / (effectiveBase * 6)) * 100 * 10) / 10);
+      }
+      if (parsedPriceTwelve !== undefined && parsedPriceTwelve !== null && effectiveBase > 0) {
+        finalDiscAnnual = Math.max(0, Math.round(((effectiveBase * 12 - parsedPriceTwelve) / (effectiveBase * 12)) * 100 * 10) / 10);
+      }
+
       // 1. Update the package header
       const pkg = await tx.subscriptionPackage.update({
         where: { id },
@@ -399,29 +497,17 @@ router.put('/:id', async (req, res) => {
           description: description || name,
           basePrice:
             packageCost ??
-            (req.body.totalCost ? parseFloat(req.body.totalCost) : 0),
-          mrp: mrp ? parseFloat(mrp) : 0,
+            (req.body.totalCost ? parseFloat(req.body.totalCost) : undefined),
+          mrp: mrp ? parseFloat(mrp) : undefined,
           discountPercentage: discountPercentage !== undefined && discountPercentage !== null
             ? parseFloat(discountPercentage)
-            : 0,
-          discountThreeMonths: discountThreeMonths !== undefined && discountThreeMonths !== null
-            ? parseFloat(discountThreeMonths)
             : undefined,
-          discountSixMonths: discountSixMonths !== undefined && discountSixMonths !== null
-            ? parseFloat(discountSixMonths)
-            : undefined,
-          discountAnnual: discountAnnual !== undefined && discountAnnual !== null
-            ? parseFloat(discountAnnual)
-            : undefined,
-          priceThreeMonths: priceThreeMonths !== undefined && priceThreeMonths !== null
-            ? parseFloat(priceThreeMonths)
-            : undefined,
-          priceSixMonths: priceSixMonths !== undefined && priceSixMonths !== null
-            ? parseFloat(priceSixMonths)
-            : undefined,
-          priceTwelveMonths: priceTwelveMonths !== undefined && priceTwelveMonths !== null
-            ? parseFloat(priceTwelveMonths)
-            : undefined,
+          discountThreeMonths: finalDiscThree,
+          discountSixMonths: finalDiscSix,
+          discountAnnual: finalDiscAnnual,
+          priceThreeMonths: parsedPriceThree,
+          priceSixMonths: parsedPriceSix,
+          priceTwelveMonths: parsedPriceTwelve,
           miscellaneousCost: miscellaneousCost !== undefined && miscellaneousCost !== null
             ? parseFloat(miscellaneousCost)
             : 0,

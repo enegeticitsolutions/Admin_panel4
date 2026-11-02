@@ -1,3 +1,15 @@
+import path from 'path';
+import * as dotenv from 'dotenv';
+
+// Explicitly load .env from apps/api, apps/admin-backend, or cwd
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+if (!process.env.DATABASE_URL) {
+  dotenv.config({ path: path.resolve(__dirname, '../../admin-backend/.env') });
+}
+if (!process.env.DATABASE_URL) {
+  dotenv.config();
+}
+
 import prisma from '../app/core/database';
 
 async function main() {
@@ -24,19 +36,27 @@ async function main() {
   console.log(`Found ${tempInvoices.length} TEMP invoices:`);
   console.log(JSON.stringify(tempInvoices, null, 2));
 
-  // Synchronize lastCount for 2026-27 to the highest existing sequence
+  // Synchronize lastCount for 2026-27 to the highest existing sequence (at least 10 for older manual invoices)
   const financialYear = '2026-27';
-  const latestInvoice = await prisma.invoice.findFirst({
+  const existingInvoices = await prisma.invoice.findMany({
     where: { invoiceNumber: { startsWith: `MHN/INV/${financialYear}/` } },
-    orderBy: { invoiceNumber: 'desc' },
-    select: { invoiceNumber: true },
+    select: { invoiceNumber: true, totalAmount: true, createdAt: true },
+    orderBy: { invoiceNumber: 'asc' },
   });
 
-  let maxSeq = 0;
-  if (latestInvoice?.invoiceNumber) {
-    const parts = latestInvoice.invoiceNumber.split('/');
-    const parsed = parseInt(parts[parts.length - 1], 10);
-    if (!isNaN(parsed)) maxSeq = parsed;
+  console.log(`\nFound ${existingInvoices.length} existing invoices for ${financialYear}:`);
+  existingInvoices.forEach((inv) => console.log(` - ${inv.invoiceNumber} (${inv.createdAt.toISOString()})`));
+
+  let maxSeq = 10; // Default minimum: 1..10 reserved for manual older invoices
+  for (const inv of existingInvoices) {
+    if (!inv.invoiceNumber) continue;
+    const match = inv.invoiceNumber.match(/\/(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxSeq) {
+        maxSeq = num;
+      }
+    }
   }
 
   const updatedCounter = await (prisma as any).invoiceCounter.upsert({
@@ -44,7 +64,11 @@ async function main() {
     update: { lastCount: maxSeq },
     create: { financialYear, lastCount: maxSeq },
   });
-  console.log(`\nUpdated counter for ${financialYear}: lastCount = ${updatedCounter.lastCount} (Next will be MHN/INV/${financialYear}/${String(maxSeq + 1).padStart(5, '0')})`);
+  console.log(`\n======================================================`);
+  console.log(`Updated counter for ${financialYear}: lastCount = ${updatedCounter.lastCount}`);
+  console.log(`Next automatic invoice will be: MHN/INV/${financialYear}/${String(maxSeq + 1).padStart(5, '0')}`);
+  console.log(`(Invoices 00001 to 00010 remain safely reserved for manual management)`);
+  console.log(`======================================================\n`);
 }
 
 main()

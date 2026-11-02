@@ -98,14 +98,70 @@ class InvoiceCalculator {
  */
 class InvoiceNumberGenerator {
   /**
-   * Generates the next sequential invoice number using canonical @maihoonna/billing engine.
+   * Generates the next sequential invoice number using canonical @maihoonna/billing engine,
+   * with full collision-resilience and database sequence synchronization.
    *
    * @param {Object} tx      - Prisma transaction client (MUST be inside a transaction)
    * @param {Date} [forDate] - Date to derive FY from. Defaults to today (new Date()).
-   * @returns {Promise<string>}  e.g. "MHN/INV/2026-27/00001"
+   * @returns {Promise<string>}  e.g. "MHN/INV/2026-27/00011"
    */
   static async next(tx, forDate = new Date()) {
-    return billingGenerateInvoiceNumber(tx, forDate instanceof Date ? forDate : new Date());
+    const candidate = await billingGenerateInvoiceNumber(tx, forDate instanceof Date ? forDate : new Date());
+
+    // Defensive check: ensure candidate never collides with an existing DB invoice
+    if (tx.invoice && typeof tx.invoice.findUnique === 'function') {
+      const exists = await tx.invoice.findUnique({
+        where: { invoiceNumber: candidate },
+        select: { id: true },
+      });
+
+      if (exists) {
+        const fy = currentIndianFinancialYear(forDate instanceof Date ? forDate : new Date());
+        const prefix = 'MHN/INV';
+
+        const existingInvoices = await tx.invoice.findMany({
+          where: { invoiceNumber: { startsWith: `${prefix}/${fy}/` } },
+          select: { invoiceNumber: true },
+        });
+
+        let maxSeq = 10; // Preserves 1..10 for manual invoices if counter was set to 10
+        for (const inv of existingInvoices) {
+          if (!inv.invoiceNumber) continue;
+          const match = inv.invoiceNumber.match(/\/(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num) && num > maxSeq) {
+              maxSeq = num;
+            }
+          }
+        }
+
+        let nextSeq = maxSeq + 1;
+        let safeCandidate = `${prefix}/${fy}/${String(nextSeq).padStart(5, '0')}`;
+
+        while (true) {
+          const collision = await tx.invoice.findUnique({
+            where: { invoiceNumber: safeCandidate },
+            select: { id: true },
+          });
+          if (!collision) break;
+          nextSeq++;
+          safeCandidate = `${prefix}/${fy}/${String(nextSeq).padStart(5, '0')}`;
+        }
+
+        if (tx.invoiceCounter && typeof tx.invoiceCounter.upsert === 'function') {
+          await tx.invoiceCounter.upsert({
+            where: { financialYear: fy },
+            update: { lastCount: nextSeq },
+            create: { financialYear: fy, lastCount: nextSeq },
+          });
+        }
+
+        return safeCandidate;
+      }
+    }
+
+    return candidate;
   }
 }
 

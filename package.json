@@ -25,6 +25,7 @@
     "db:sync": "npm run db:sync --workspace=@maihoonna/database",
     "invoices:reconcile": "npm run invoices:reconcile --workspace=apps/api",
     "invoices:reconcile:dry-run": "npm run invoices:reconcile:dry-run --workspace=apps/api",
+    "invoices:sync-counter": "npm run invoices:sync-counter --workspace=apps/api",
     "seed:config": "npm run seed:config --workspace=@maihoonna/database",
     "seed:sathi-guide": "npm run seed:sathi-guide --workspace=@maihoonna/database",
     "seed:benefit-types": "npm run seed:benefit-types --workspace=@maihoonna/database",

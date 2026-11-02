@@ -47,8 +47,8 @@ export async function generateInvoiceNumber(
       });
 
       if (latestInvoice?.invoiceNumber) {
-        const parts = latestInvoice.invoiceNumber.split('/');
-        const maxSeq = parseInt(parts[parts.length - 1], 10);
+        const match = latestInvoice.invoiceNumber.match(/\/(\d+)$/);
+        const maxSeq = match ? parseInt(match[1], 10) : NaN;
         if (!isNaN(maxSeq) && maxSeq >= nextCount) {
           nextCount = maxSeq + 1;
         } else {
