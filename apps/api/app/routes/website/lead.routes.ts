@@ -3,6 +3,7 @@ import prisma from '../../core/database';
 import { createTransporter, isEmailConfigured, formatISTTimestamp } from './utils/mailer';
 import { ZohoCrmService } from '../../services/crm/zoho_crm_service';
 import { parsePhoneNumberWithError } from 'libphonenumber-js';
+import { config } from '../../core/config';
 
 const router = Router();
 
@@ -142,6 +143,65 @@ router.post('/submit-form', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('❌ [Website Lead Error]:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error. Please try again.',
+    });
+  }
+});
+
+/**
+ * POST /api/website/custom-plan
+ * Handles bespoke care plan inquiries from the Plans page modal and pushes to Zoho CRM Leads Module
+ */
+router.post('/custom-plan', async (req: Request, res: Response) => {
+  console.log('📩 [Custom Plan Inquiry] Received payload:', req.body);
+
+  try {
+    const { name, phone, pincode, email, services } = req.body;
+
+    if (!name || !phone || !pincode || !email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, phone, pincode, and email are required',
+      });
+    }
+
+    // 1. Forward directly to Zoho CRM Leads WebToLeadForm endpoint using dedicated 'contact' credentials
+    await ZohoCrmService.createLead({
+      formType: 'contact',
+      lastName: name,
+      phone,
+      pincode,
+      email,
+      description: services || '',
+      leadSource: 'Web Research',
+      company: 'Custom Care Plan Lead',
+    });
+
+    // 2. Also save to internal database for persistence & reporting
+    try {
+      await (prisma as any).marketingLead.create({
+        data: {
+          name,
+          phone,
+          pincode,
+          email,
+          notes: services ? `Custom Eldercare Plan Inquiry: ${services}` : 'Custom Eldercare Plan Inquiry',
+          source: 'website',
+          status: 'new',
+        },
+      });
+    } catch (dbErr: any) {
+      console.warn('⚠️ [Custom Plan DB insert note]:', dbErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Custom plan inquiry submitted successfully',
+    });
+  } catch (error: any) {
+    console.error('❌ [Custom Plan Error]:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error. Please try again.',

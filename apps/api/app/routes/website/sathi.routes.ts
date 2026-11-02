@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../../core/database';
 import { createTransporter, isEmailConfigured, formatISTTimestamp } from './utils/mailer';
+import { ZohoCrmService } from '../../services/crm/zoho_crm_service';
 
 const router = Router();
 
@@ -118,6 +119,20 @@ router.post('/saathi-enrollment', async (req: Request, res: Response) => {
         console.error('⚠️ Saathi notification email failed:', e.message)
       );
     }
+
+    // 3. Optional Zoho CRM sync for Saathi (active once ZOHO_CRM_SAATHI_* is populated)
+    ZohoCrmService.createLead({
+      formType: 'saathi',
+      firstName: firstName || '',
+      lastName: lastName || firstName || 'Volunteer',
+      email: email || '',
+      phone,
+      pincode: pincode || undefined,
+      description: `Saathi Volunteer Application | City: ${city}, State: ${state} | Area: ${area || 'N/A'}\nWhy Join: ${whyJoin || 'N/A'}`,
+      company: 'Saathi Volunteer Lead',
+    }).catch((zohoErr: any) =>
+      console.warn('⚠️ [Saathi Enrollment] Zoho CRM sync skipped or failed:', zohoErr.message)
+    );
 
     return res.status(200).json({
       success: true,

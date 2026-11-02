@@ -188,6 +188,7 @@ Service Details: ${serviceDetails ? serviceDetails.trim() : 'None provided'}`,
     const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
 
     ZohoCrmService.createLead({
+      formType: 'partner',
       firstName,
       lastName,
       email,

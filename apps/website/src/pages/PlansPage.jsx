@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import PackageCard, { getPackageDisplayPrice } from "../components/packages/PackageCard";
 import PlanDetailsModal from "../components/modals/PlanDetailsModal";
+import CustomizePlanModal from "../components/modals/CustomizePlanModal";
 import planBgVideo from "../assets/Plan-Header-Background-Video.mp4";
 import {
   fetchActiveRegions,
@@ -81,6 +82,7 @@ export default function PlansPage({
   const [isPaused, setIsPaused] = useState(false);
   const [modalPlan, setModalPlan] = useState(null);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
+  const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("saathi");
 
   // Regional & Location states
@@ -1074,7 +1076,13 @@ export default function PlansPage({
                   <li>Family counselling support</li>
                 </ul>
               </div>
-              <button onClick={openForm}>Contact Us</button>
+              <button
+                type="button"
+                onClick={() => setIsCustomizeModalOpen(true)}
+                aria-label="Open custom plan consultation form"
+              >
+                Contact Us
+              </button>
             </div>
 
             {/* ── Dynamic Feature Comparison Table ── */}
@@ -1235,6 +1243,12 @@ export default function PlansPage({
         onClose={() => setModalPlan(null)}
         onSelectPackage={handleSelectPlan}
         onCycleChange={setSelectedCycle}
+      />
+
+      {/* ── Customize Your Own Care Plan / Zoho CRM Modal ── */}
+      <CustomizePlanModal
+        isOpen={isCustomizeModalOpen}
+        onClose={() => setIsCustomizeModalOpen(false)}
       />
 
     </main>
