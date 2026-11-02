@@ -180,7 +180,7 @@ export default function SchedulePreferencesScreen() {
                     }
                     if (Platform.OS === 'web') {
                         alert(`Beneficiary enrolled successfully!\n\n${result.beneficiaryName || 'Beneficiary'} has been linked to your subscription.`);
-                        router.replace('/(subscriber)');
+                        router.replace('/(beneficiary)');
                     } else {
                         setEnrolledName(result.beneficiaryName || 'Beneficiary');
                         setShowSuccessModal(true);
@@ -379,7 +379,7 @@ export default function SchedulePreferencesScreen() {
                         <Text style={styles.modalDesc}>{enrolledName} has been linked to your subscription.</Text>
                         <TouchableOpacity style={styles.modalBtn} onPress={() => {
                             setShowSuccessModal(false);
-                            router.replace('/(subscriber)');
+                            router.replace('/(beneficiary)');
                         }}>
                             <Text style={styles.modalBtnText}>Go to Dashboard</Text>
                         </TouchableOpacity>

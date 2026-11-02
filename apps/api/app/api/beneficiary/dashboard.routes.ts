@@ -41,8 +41,11 @@ async function handleBeneficiaryDashboard(req: AuthRequest, res: Response) {
         const isSelf = req.userId === beneficiary.userId || req.userId === beneficiary.id;
         const isOwnerSubscriber = req.userId === beneficiary.subscriberId;
         const isStaff = ['admin', 'super_admin', 'field_manager', 'care_companion'].includes(req.userRole || '');
+        const isCareCircle = await prisma.careCircleMember.findFirst({
+            where: { beneficiaryId: beneficiary.id, userId: req.userId, status: 'active' }
+        });
 
-        if (!isSelf && !isOwnerSubscriber && !isStaff) {
+        if (!isSelf && !isOwnerSubscriber && !isStaff && !isCareCircle) {
             return res.status(403).json({ success: false, message: 'Unauthorized access to beneficiary dashboard' });
         }
 
@@ -117,6 +120,8 @@ async function handleBeneficiaryDashboard(req: AuthRequest, res: Response) {
         res.json({
             success: true,
             data: {
+                beneficiaryId: beneficiary.id,
+                beneficiaryName: beneficiary.name,
                 greeting,
                 firstName: beneficiary.name.split(' ')[0], // Assuming first part of name
                 emotionalScore: beneficiary.emotionalScore === 8.0 ? 85 : beneficiary.emotionalScore,

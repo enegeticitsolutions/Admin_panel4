@@ -88,6 +88,7 @@ model User {
   serviceRequests                ServiceRequest[]         @relation("SubscriberServiceRequests")
   requestedServiceRequests       ServiceRequest[]         @relation("RequestedByServiceRequests")
   invoices                       Invoice[]                @relation("SubscriberInvoices")
+  careCircleMemberships          CareCircleMember[]       @relation("CareCircleUser")
 
   @@index([name])
   @@index([role])
@@ -309,6 +310,7 @@ model Beneficiary {
   invoices             Invoice[]                @relation("BeneficiaryInvoices")
   volunteerReviews     VolunteerReview[]
   legacyCircleProfile  LegacyCircleProfile?
+  careCircleMembers    CareCircleMember[]
 
   @@index([name])
   @@index([city])
@@ -2398,9 +2400,9 @@ model Invoice {
   sgstAmount    Float   @default(0.0)
   igstAmount    Float   @default(0.0)
 
-  issuedAt DateTime  @default(now())
-  dueDate  DateTime?
-  paidAt   DateTime?
+  issuedAt       DateTime  @default(now())
+  dueDate        DateTime?
+  paidAt         DateTime?
 
   pdfUrl         String?   // S3 file key: e.g. "invoices/MHN-INV-2026-27-00001.pdf"
   pdfGeneratedAt DateTime?
@@ -2559,5 +2561,28 @@ model Partner {
   @@map("partners")
 }
 
+model CareCircleMember {
+  id             String    @id @default(uuid())
+  beneficiaryId  String
+  userId         String
+  role           String    @default("caregiver") // "primary_sponsor" | "caregiver" | "family_member" | "viewer"
+  relationship   String?   // "daughter", "son", "spouse", "sibling", etc.
+  canRenew       Boolean   @default(true)
+  canViewVitals  Boolean   @default(true)
+  canBookVisits  Boolean   @default(true)
+  canEditDetails Boolean   @default(false)
+  status         String    @default("active") // "active" | "invited" | "declined" | "removed"
+  inviteCode     String?   @unique
+  invitedBy      String?   // userId of primary sponsor who invited them
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
+  beneficiary    Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  user           User        @relation("CareCircleUser", fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([beneficiaryId, userId])
+  @@index([beneficiaryId])
+  @@index([userId])
+  @@index([inviteCode])
+  @@map("care_circle_members")
+}

@@ -19,19 +19,28 @@ import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import { API_URL } from '@/constants/api';
-import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
 import NotificationBell from '@/components/shared/NotificationBell';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
-import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { useAuth } from '@/contexts/AuthContext';
 import { triggerEmergencyAlert, dialEmergencyHelpline, EMERGENCY_HELPLINE_NUMBER } from '@/services/emergencyTrigger';
 import { useCustomAlert } from '@/contexts/CustomAlertContext';
+import {
+    UnlinkedPlansBanner,
+    FamilyCareSection,
+    PersonalCareOverview,
+    PersonalCarePromoCard,
+    QuickActionsSection,
+    FamilyConnectIntroModal,
+    CareCircleModal,
+    JoinCareCircleModal,
+} from '@/components/dashboard';
 
-const MOCK_BENEFICIARY_ID = '8340d860-2641-479c-b26a-8b9a71bcec29';
 
 const headerPattern = require('@/assets/images/header-pattern.png');
 
 interface DashboardData {
+    beneficiaryId?: string;
+    beneficiaryName?: string;
     greeting: string;
     firstName: string;
     emotionalScore: number;
@@ -74,18 +83,7 @@ export default function BeneficiaryDashboard() {
     const actionCardWidth = Math.floor((availableGridWidth - ((numColumns - 1) * 16)) / numColumns);
     useExitOnBack();
     const { showConfirm, showAlert } = useCustomAlert();
-
-    const { availableRoles, switchRole, isSwitchingRole } = useAuth();
-    const isDualRole = availableRoles.includes('subscriber') && availableRoles.includes('beneficiary');
-
-    const handleSwitchToSubscriber = async () => {
-        try {
-            await switchRole('subscriber');
-            router.replace('/(subscriber)');
-        } catch (err: any) {
-            Alert.alert('Switch Failed', err?.message || 'Could not switch to subscriber view.');
-        }
-    };
+    const { user } = useAuth();
 
     const [triggeringEmergency, setTriggeringEmergency] = useState(false);
     const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'done'>('idle');
@@ -98,6 +96,10 @@ export default function BeneficiaryDashboard() {
     } | null>(null);
     const [emergencyEligible, setEmergencyEligible] = useState<boolean>(true);
     const [sathiEligible, setSathiEligible] = useState<boolean>(true);
+    const [showFamilyIntroModal, setShowFamilyIntroModal] = useState<boolean>(false);
+    const [showCareCircleModal, setShowCareCircleModal] = useState<boolean>(false);
+    const [selectedCircleBen, setSelectedCircleBen] = useState<{ id: string; name: string } | null>(null);
+    const [showJoinCircleModal, setShowJoinCircleModal] = useState<boolean>(false);
 
     // Pulsing animation for the SOS button while triggering
     const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -150,20 +152,15 @@ export default function BeneficiaryDashboard() {
         fetchEligibility();
     }, []);
 
-    const {
-        data,
-        isLoading: loading,
-    } = useQuery({
-        queryKey: ['beneficiaryDashboardInfo', MOCK_BENEFICIARY_ID],
-        queryFn: async () => {
-            const [storedUser, storedToken] = await Promise.all([
-                AsyncStorage.getItem('userData'),
-                AsyncStorage.getItem('userToken'),
-            ]);
 
-            if (!storedUser || !storedToken) {
-                throw new Error('Auth missing');
-            }
+    const {
+        data: personalData,
+        isLoading: personalLoading,
+    } = useQuery({
+        queryKey: ['beneficiaryDashboardInfo', user?.id],
+        queryFn: async () => {
+            const storedToken = await AsyncStorage.getItem('userToken');
+            if (!storedToken) return null;
 
             const response = await fetch(`${API_URL}/beneficiary/dashboard/dashboard/me`, {
                 headers: {
@@ -172,16 +169,35 @@ export default function BeneficiaryDashboard() {
                 },
             });
 
-            if (!response.ok) {
-                throw new Error('Backend error');
+            if (response.status === 404 || !response.ok) {
+                return null;
             }
 
             const res = await response.json();
-            if (res.success) {
-                return res.data;
-            }
+            return res.success ? (res.data as DashboardData) : null;
+        },
+    });
 
-            throw new Error('API returned false success');
+    const {
+        data: subscriberData,
+        isLoading: subscriberLoading,
+        refetch: refetchSubscriberData,
+    } = useQuery({
+        queryKey: ['subscriberSummary', user?.id],
+        queryFn: async () => {
+            const storedToken = await AsyncStorage.getItem('userToken');
+            if (!storedToken) return null;
+
+            const response = await fetch(`${API_URL}/subscriber/dashboard/me`, {
+                headers: {
+                    Authorization: `Bearer ${storedToken}`,
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) return null;
+            const res = await response.json();
+            return res.success ? (res.data || res) : null;
         },
     });
 
@@ -237,7 +253,7 @@ export default function BeneficiaryDashboard() {
         }
     };
 
-    if (loading) {
+    if (personalLoading && subscriberLoading) {
         return (
             <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#FE6700" />
@@ -245,52 +261,47 @@ export default function BeneficiaryDashboard() {
         );
     }
 
-    const displayData: DashboardData = data || {
-        greeting: 'Good Morning',
-        firstName: 'User',
-        emotionalScore: 8,
-        nextVisit: 'Feb 27',
-        adherence: '95%',
-        careCoordinator: {
-            id: '1',
-            name: 'Dr. Sarah Johnson',
-            role: 'Primary Care Coordinator',
-            bio: 'Board-certified nurse practitioner with 15+ years of experience in geriatric care.',
-            photo: null,
-            phone: '+91 98765 43210',
-        },
-        todaysMedications: [
-            {
-                id: '1',
-                name: 'Lisinopril',
-                dosage: '10mg',
-                condition: 'Blood Pressure',
-                time: '08:00 AM',
-                completed: false,
-                adherenceScore: 95,
-            },
-            {
-                id: '2',
-                name: 'Metformin',
-                dosage: '500mg',
-                condition: 'Diabetes',
-                time: '08:00 AM',
-                completed: false,
-                adherenceScore: 92,
-            },
-        ],
-    };
+    const hasPersonalCarePlan = Boolean(personalData);
+
+    const currentHour = new Date().getHours();
+    let defaultGreeting = 'Good Evening';
+    if (currentHour < 12) defaultGreeting = 'Good Morning';
+    else if (currentHour < 17) defaultGreeting = 'Good Afternoon';
+
+    const greeting = personalData?.greeting || defaultGreeting;
+    const firstName = user?.name ? user.name.split(' ')[0] : (personalData?.firstName || 'there');
+    const familyBeneficiaries: any[] = subscriberData?.beneficiaries || subscriberData?.data?.beneficiaries || [];
+    const activeSubscriptions: any[] = subscriberData?.activeSubscriptions || subscriberData?.data?.activeSubscriptions || [];
+    const unlinkedSubs: any[] = activeSubscriptions.filter((sub: any) => !sub.beneficiaryId);
+    const hasFamilyOrPlans = familyBeneficiaries.length > 0 || hasPersonalCarePlan || unlinkedSubs.length > 0;
+    const topStats = subscriberData?.topStats || subscriberData?.data?.topStats || {};
+    const remainingHours = topStats?.activeHours?.remaining ?? 0;
+    const visitsThisWeek = topStats?.visitsThisWeek?.total ?? 0;
 
     const formatDate = (dateString: string | null) => {
         if (!dateString) return 'Not Scheduled';
-
         const date = new Date(dateString);
         if (Number.isNaN(date.getTime())) return dateString;
-
         return date.toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
         });
+    };
+
+    const getDisplayAge = (b: any): string => {
+        if (b.dateOfBirth) {
+            try {
+                const dob = new Date(b.dateOfBirth);
+                if (!isNaN(dob.getTime())) {
+                    const today = new Date();
+                    let age = today.getFullYear() - dob.getFullYear();
+                    const m = today.getMonth() - dob.getMonth();
+                    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+                    return `${age} yrs`;
+                }
+            } catch (_) { }
+        }
+        return b.age ? `${b.age} yrs` : '';
     };
 
     return (
@@ -310,30 +321,27 @@ export default function BeneficiaryDashboard() {
                     <View style={{ paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 40 : 20), paddingBottom: 20 }}>
                         <View style={[styles.headerContent, responsiveContentStyle]}>
                             <View>
-                                <Text style={styles.greetingTitle}>{displayData.greeting}</Text>
+                                <Text style={styles.greetingTitle}>{greeting}, {firstName}!</Text>
                                 <Text style={styles.greetingSubtitle}>
                                     How are you feeling today?
                                 </Text>
                             </View>
 
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                {isDualRole && (
-                                    <TouchableOpacity
-                                        style={styles.switchHeaderPill}
-                                        onPress={handleSwitchToSubscriber}
-                                        disabled={isSwitchingRole}
-                                        activeOpacity={0.8}
-                                    >
-                                        {isSwitchingRole ? (
-                                            <ActivityIndicator size="small" color="#FF6A00" />
-                                        ) : (
-                                            <>
-                                                <Ionicons name="swap-horizontal" size={14} color="#FF6A00" style={{ marginRight: 4 }} />
-                                                <Text style={styles.switchHeaderPillText}>Subscriber View</Text>
-                                            </>
-                                        )}
-                                    </TouchableOpacity>
-                                )}
+                                <TouchableOpacity
+                                    style={styles.switchHeaderPill}
+                                    onPress={() => {
+                                        if (!hasFamilyOrPlans) {
+                                            setShowFamilyIntroModal(true);
+                                        } else {
+                                            router.push('/(subscriber)');
+                                        }
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="people-outline" size={14} color="#FF6A00" style={{ marginRight: 4 }} />
+                                    <Text style={styles.switchHeaderPillText}>Family</Text>
+                                </TouchableOpacity>
 
                                 <View style={styles.notificationWrapper}>
                                     <NotificationBell />
@@ -373,171 +381,99 @@ export default function BeneficiaryDashboard() {
             </View>
 
             <View style={[styles.mainContent, responsiveContentStyle]}>
-                <View style={styles.statsRow}>
-                    <View style={styles.statCard}>
-                        <View style={[styles.statIconBadge, { backgroundColor: '#DBEAFE' }]}>
-                            <Feather name="calendar" size={20} color="#155DFC" />
-                        </View>
+                {/* ── Unlinked Care Plans Alert (High Priority Action) ── */}
+                <UnlinkedPlansBanner
+                    unlinkedCount={unlinkedSubs.length}
+                    packageName={unlinkedSubs[0]?.package?.name}
+                    onAssignPress={() => router.push('/(subscriber)')}
+                />
 
-                        <Text style={styles.statLabel}>Next Visit</Text>
-                        <Text style={styles.statValue}>
-                            {formatDate(displayData.nextVisit)}
-                        </Text>
-                    </View>
-
-                    <View style={styles.statCard}>
-                        <View style={[styles.statIconBadge, { backgroundColor: '#DCFCE7' }]}>
-                            <Feather name="trending-up" size={20} color="#00A63E" />
-                        </View>
-
-                        <Text style={styles.statLabel}>Adherence</Text>
-                        <Text style={styles.statValue}>{displayData.adherence}</Text>
-                    </View>
-                </View>
-
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Your Care Coordinator</Text>
-                    <TouchableOpacity onPress={() => router.push('/(beneficiary)/team')}>
-                        <Text style={styles.linkText}>View Team</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {displayData.careCoordinator && (
-                    <View style={styles.card}>
-                        <View style={styles.ccHeader}>
-                            <View style={styles.ccAvatar}>
-                                {displayData.careCoordinator.photo ? (
-                                    <Image
-                                        source={{ uri: sanitizeImageUri(displayData.careCoordinator.photo) }}
-                                        style={styles.ccImage}
-                                    />
-
-                                ) : (
-                                    <AntDesign name="user" size={30} color="#AAAAAA" />
-                                )}
-                            </View>
-
-                            <View style={styles.ccInfo}>
-                                <Text style={styles.ccName}>
-                                    {displayData.careCoordinator.name}
-                                </Text>
-                                <Text style={styles.ccRole}>
-                                    {displayData.careCoordinator.role}
-                                </Text>
-                            </View>
-                        </View>
-
-                        <Text style={styles.ccBio} numberOfLines={2}>
-                            {displayData.careCoordinator.bio}
-                        </Text>
-
-                        <ConnectContactButton
-                            name={displayData.careCoordinator.name}
-                            role={displayData.careCoordinator.role}
-                            phone={displayData.careCoordinator.phone || null}
-                            photo={displayData.careCoordinator.photo}
-                            trigger={
-                                <View style={styles.primaryBtn}>
-                                    <Text style={styles.primaryBtnText}>Call Now</Text>
-                                </View>
+                {/* ── Personal Care Plan (If Active) ── */}
+                {hasPersonalCarePlan && personalData && (
+                    <PersonalCareOverview
+                        data={personalData}
+                        onViewTeam={() => router.push('/(beneficiary)/team')}
+                        onViewAllMeds={() => router.push('/(beneficiary)/meds' as any)}
+                        onOpenCareCircle={() => {
+                            if (personalData.beneficiaryId) {
+                                setSelectedCircleBen({
+                                    id: personalData.beneficiaryId,
+                                    name: personalData.beneficiaryName ? `${personalData.beneficiaryName} (My Care)` : 'My Profile (Self)'
+                                });
+                                setShowCareCircleModal(true);
                             }
-                        />
-                    </View>
+                        }}
+                    />
                 )}
 
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Today's Medications</Text>
-                    <TouchableOpacity onPress={() => router.push('/(beneficiary)/meds' as any)}>
-                        <Text style={styles.linkText}>View All</Text>
-                    </TouchableOpacity>
-                </View>
+                {/* ── Brand-New User with No Plan AND No Family Members Added ── */}
+                {!hasPersonalCarePlan && familyBeneficiaries.length === 0 && (
+                    <PersonalCarePromoCard
+                        isCompact={false}
+                        onExplorePress={() => router.push('/(setup)/subscription-packages')}
+                    />
+                )}
 
-                {displayData.todaysMedications.map((med) => (
-                    <View key={med.id} style={styles.medCard}>
-                        <View style={styles.medHeader}>
-                            <View style={styles.medIconBadge}>
-                                <MaterialCommunityIcons
-                                    name="pill"
-                                    size={20}
-                                    color="#FE6700"
-                                />
-                            </View>
+                {/* ── Family Care Activity ── */}
+                <FamilyCareSection
+                    beneficiaries={familyBeneficiaries}
+                    remainingHours={remainingHours}
+                    visitsThisWeek={visitsThisWeek}
+                    onSelectBeneficiary={(b) => {
+                        const isPending = b.packageStatus === 'pending' || b.verificationStatus === 'pending';
+                        const isExpired = b.packageStatus === 'expired';
+                        if (isPending) {
+                            router.push({
+                                pathname: '/(setup)/beneficiary-info',
+                                params: { isVerificationFlow: 'true', beneficiaryId: b.id }
+                            });
+                        } else if (isExpired) {
+                            router.push('/(setup)/subscription-packages');
+                        } else {
+                            AsyncStorage.setItem('selectedBeneficiaryId', b.id);
+                            router.push(`/(subscriber)/beneficiary-profile?id=${b.id}`);
+                        }
+                    }}
+                    onAddMember={() => router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } })}
+                    onOpenFamilyConnect={() => {
+                        if (!hasFamilyOrPlans) {
+                            setShowFamilyIntroModal(true);
+                        } else {
+                            router.push('/(subscriber)');
+                        }
+                    }}
+                    onOpenCareCircle={(b) => {
+                        setSelectedCircleBen({ id: b.id, name: b.name });
+                        setShowCareCircleModal(true);
+                    }}
+                    onOpenJoinCircle={() => setShowJoinCircleModal(true)}
+                />
 
-                            <View style={styles.medInfo}>
-                                <Text style={styles.medName}>{med.name}</Text>
-                                <Text style={styles.medDosage}>
-                                    {med.dosage} • {med.condition}
-                                </Text>
-                            </View>
-                        </View>
+                {/* ── Personal Wellness Card (when user manages family but has no personal plan yet) ── */}
+                {!hasPersonalCarePlan && familyBeneficiaries.length > 0 && (
+                    <PersonalCarePromoCard
+                        isCompact={true}
+                        onExplorePress={() => router.push('/(setup)/subscription-packages')}
+                    />
+                )}
 
-                        <View style={styles.medFooter}>
-                            <Text style={styles.medTime}>⏰ {med.time}</Text>
-
-                            <View style={styles.adherenceBadge}>
-                                <Text style={styles.adherenceBadgeText}>
-                                    Adherence {med.adherenceScore}%
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-                ))}
-
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Quick Actions</Text>
-                </View>
-
-                <View style={styles.quickActionsGrid}>
-                    <TouchableOpacity
-                        style={[styles.actionCard, { width: actionCardWidth }]}
-                        onPress={() => router.push('/(beneficiary)/vitals')}
-                    >
-                        <View style={[styles.actionIconBadge, { backgroundColor: '#FEE2E2' }]}>
-                            <Feather name="heart" size={24} color="#EF4444" />
-                        </View>
-
-                        <Text style={styles.actionTitle} numberOfLines={1} adjustsFontSizeToFit>Log Vitals</Text>
-                        <Text style={styles.actionSubtitle} numberOfLines={2}>Track blood pressure & more</Text>
-                    </TouchableOpacity>
-
-                    {sathiEligible && (
-                        <TouchableOpacity
-                            style={[styles.actionCard, { width: actionCardWidth }]}
-                            onPress={() => router.push('/(beneficiary)/sathi-request')}
-                        >
-                            <View style={[styles.actionIconBadge, { backgroundColor: '#FFF7ED' }]}>
-                                <Feather name="users" size={24} color="#FF6A00" />
-                            </View>
-
-                            <Text style={styles.actionTitle} numberOfLines={1} adjustsFontSizeToFit>Saathi Companion</Text>
-                            <Text style={styles.actionSubtitle} numberOfLines={2}>Request visit & help</Text>
-                        </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                        style={[styles.actionCard, { width: actionCardWidth }]}
-                        onPress={() => router.push('/(beneficiary)/meds' as any)}
-                    >
-                        <View style={[styles.actionIconBadge, { backgroundColor: '#FEF3C7' }]}>
-                            <MaterialCommunityIcons name="pill" size={24} color="#D97706" />
-                        </View>
-
-                        <Text style={styles.actionTitle} numberOfLines={1} adjustsFontSizeToFit>Medications</Text>
-                        <Text style={styles.actionSubtitle} numberOfLines={2}>View schedule & details</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.actionCard, { width: actionCardWidth }]}
-                        onPress={() => router.push('/package-utilization' as any)}
-                    >
-                        <View style={[styles.actionIconBadge, { backgroundColor: '#FFF3EB' }]}>
-                            <Feather name="package" size={24} color="#F97316" />
-                        </View>
-
-                        <Text style={styles.actionTitle} numberOfLines={1} adjustsFontSizeToFit>Package Utilization</Text>
-                        <Text style={styles.actionSubtitle} numberOfLines={2}>Track your benefits</Text>
-                    </TouchableOpacity>
-                </View>
+                {/* ── Quick Actions Grid ── */}
+                <QuickActionsSection
+                    actionCardWidth={actionCardWidth}
+                    sathiEligible={sathiEligible}
+                    hasFamilyOrPlans={hasFamilyOrPlans}
+                    onFamilyConnectPress={() => {
+                        if (!hasFamilyOrPlans) {
+                            setShowFamilyIntroModal(true);
+                        } else {
+                            router.push('/(subscriber)');
+                        }
+                    }}
+                    onLogVitalsPress={() => {
+                        router.push('/(beneficiary)/vitals');
+                    }}
+                    onActionPress={(route) => router.push(route as any)}
+                />
 
                 <View style={{ height: 40 }} />
             </View>
@@ -591,6 +527,36 @@ export default function BeneficiaryDashboard() {
                     </View>
                 </View>
             )}
+
+            {/* Family Connect Educational Intro Modal (when user has no family/plans) */}
+            <FamilyConnectIntroModal
+                visible={showFamilyIntroModal}
+                onClose={() => setShowFamilyIntroModal(false)}
+                onExplorePackages={() => router.push('/(setup)/subscription-packages')}
+                onAddFamilyMember={() => router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } })}
+                onJoinWithCode={() => setShowJoinCircleModal(true)}
+            />
+
+            {/* Care Circle Management Modal */}
+            {selectedCircleBen && (
+                <CareCircleModal
+                    visible={showCareCircleModal}
+                    beneficiaryId={selectedCircleBen.id}
+                    beneficiaryName={selectedCircleBen.name}
+                    onClose={() => {
+                        setShowCareCircleModal(false);
+                        setSelectedCircleBen(null);
+                    }}
+                    onMembersChanged={() => refetchSubscriberData()}
+                />
+            )}
+
+            {/* Join Care Circle Modal via Invite Code */}
+            <JoinCareCircleModal
+                visible={showJoinCircleModal}
+                onClose={() => setShowJoinCircleModal(false)}
+                onSuccess={() => refetchSubscriberData()}
+            />
         </ScrollView>
     );
 }
@@ -683,222 +649,23 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingTop: 20, // Reduced from hypothetical 40 back to 20 because we kept paddingBottom on headerCurve
     },
-    statsRow: {
+    switchHeaderPill: {
         flexDirection: 'row',
-        gap: 12,
-        marginBottom: 24,
-    },
-    statCard: {
-        flex: 1,
+        alignItems: 'center',
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
-    statIconBadge: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    statLabel: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        lineHeight: 16,
-        color: '#64748B',
-    },
-    statValue: {
-        fontFamily: 'Poppins-Bold',
-        fontSize: 16,
-        lineHeight: 24,
-        color: '#0F172A',
-        marginTop: 2,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 12,
-        marginTop: 8,
-    },
-    sectionTitle: {
+    switchHeaderPillText: {
         fontFamily: 'Poppins-SemiBold',
-        fontSize: 18,
-        lineHeight: 24,
-        color: '#0F172A',
-    },
-    linkText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 14,
-        lineHeight: 20,
+        fontSize: 12,
         color: '#FF6A00',
-    },
-    card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 20,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    ccHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    ccAvatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#F1F5F9',
-        justifyContent: 'center',
-        alignItems: 'center',
-        overflow: 'hidden',
-    },
-    ccImage: {
-        width: 48,
-        height: 48,
-    },
-    ccInfo: {
-        marginLeft: 12,
-        flex: 1,
-    },
-    ccName: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 16,
-        lineHeight: 22,
-        color: '#0F172A',
-    },
-    ccRole: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        lineHeight: 16,
-        color: '#64748B',
-    },
-    ccBio: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 13,
-        lineHeight: 18,
-        color: '#334155',
-        marginBottom: 14,
-    },
-    primaryBtn: {
-        backgroundColor: '#FF6A00',
-        borderRadius: 12,
-        paddingVertical: 10,
-        alignItems: 'center',
-    },
-    primaryBtnText: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 14,
-        color: '#FFFFFF',
-    },
-    medCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    medHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    medIconBadge: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: '#FFF7ED',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    medInfo: {
-        marginLeft: 12,
-        flex: 1,
-    },
-    medName: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 15,
-        color: '#0F172A',
-    },
-    medDosage: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        color: '#64748B',
-    },
-    medFooter: {
-        marginTop: 12,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    medTime: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 13,
-        color: '#334155',
-    },
-    adherenceBadge: {
-        backgroundColor: '#F0FDF4',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    adherenceBadgeText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 12,
-        color: '#16A34A',
-    },
-    quickActionsGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        rowGap: 16,
-    },
-    actionCard: {
-        height: 132,
-        borderRadius: 16,
-        backgroundColor: '#FFFFFF',
-        padding: 16,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    actionIconBadge: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    actionTitle: {
-        marginTop: 8,
-        fontFamily: 'Poppins-Medium',
-        fontSize: 13,
-        color: '#000000',
-    },
-    actionSubtitle: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 11,
-        color: '#4B5563',
-        marginTop: 2,
     },
     modalOverlay: {
         position: 'absolute',
@@ -1012,23 +779,5 @@ const styles = StyleSheet.create({
         color: '#B91C1C',
         flex: 1,
         lineHeight: 16,
-    },
-    switchHeaderPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    switchHeaderPillText: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 12,
-        color: '#FF6A00',
     },
 });

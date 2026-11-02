@@ -133,10 +133,8 @@ export default function VerifyOtpScreen() {
                     const role = result.user.role;
                     if (role === "care_companion") {
                         replace("/(care-companion)");
-                    } else if (role === "beneficiary") {
-                        replace("/(beneficiary)");
                     } else {
-                        replace("/(subscriber)");
+                        replace("/(beneficiary)");
                     }
                 }
             } else if (response.status === 429) {

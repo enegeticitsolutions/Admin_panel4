@@ -16,6 +16,7 @@ import { VitalsTab } from './components/beneficiary/VitalsTab';
 import { MedicalTab } from './components/beneficiary/MedicalTab';
 
 import { NextVisitCard } from './components/beneficiary/NextVisitCard';
+import { CareCircleModal } from '@/components/dashboard/CareCircleModal';
 import GlobalDrawer from './components/shared/GlobalDrawer';
 import { Animated, Dimensions } from 'react-native';
 import { useSafeBack } from '@/hooks/useSafeBack';
@@ -35,7 +36,6 @@ export default function BeneficiaryProfileScreen() {
     const rawId = params.id;
     const id = Array.isArray(rawId) ? rawId[0] : rawId;
 
-
     const rawTab = params.tab;
     const initialTab: TabType = (typeof rawTab === 'string' && ['Timeline', 'Vitals', 'Medical'].includes(rawTab))
         ? (rawTab as TabType)
@@ -43,6 +43,7 @@ export default function BeneficiaryProfileScreen() {
 
     const [activeTab, setActiveTab] = useState<TabType>(initialTab);
     const [userData, setUserData] = useState<any>(null);
+    const [showCareCircleModal, setShowCareCircleModal] = useState(false);
     const scrollViewRef = React.useRef<ScrollView>(null);
     const [tabSectionY, setTabSectionY] = useState<number | null>(null);
 
@@ -208,9 +209,16 @@ export default function BeneficiaryProfileScreen() {
                     <Ionicons name="arrow-back" size={scale(24)} color="#111827" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Beneficiary Details</Text>
-                <TouchableOpacity onPress={() => push({ pathname: '/(subscriber)/beneficiary-edit', params: { id } })} style={styles.iconBtn}>
-                    <Ionicons name="pencil-outline" size={scale(22)} color="#FE6700" />
-                </TouchableOpacity>
+                {beneficiary.canEditDetails !== false ? (
+                    <TouchableOpacity onPress={() => push({ pathname: '/(subscriber)/beneficiary-edit', params: { id } })} style={styles.iconBtn}>
+                        <Ionicons name="pencil-outline" size={scale(22)} color="#FE6700" />
+                    </TouchableOpacity>
+                ) : (
+                    <View style={styles.viewOnlyBadge}>
+                        <Ionicons name="eye-outline" size={scale(13)} color="#6B7280" style={{ marginRight: 3 }} />
+                        <Text style={styles.viewOnlyBadgeText}>View Only</Text>
+                    </View>
+                )}
                 <TouchableOpacity onPress={openDrawer} style={styles.iconBtn}>
                     <Ionicons name="menu-outline" size={scale(28)} color="#111827" />
                 </TouchableOpacity>
@@ -236,7 +244,7 @@ export default function BeneficiaryProfileScreen() {
                                 targetId: beneficiary.id,
                                 currentPhotoUrl: beneficiary.photo || null,
                                 size: 90,
-                                editable: true,
+                                editable: beneficiary.canEditDetails !== false,
                                 initials: (beneficiary.name || 'B').split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2),
                                 accentColor: '#F97316',
                                 onSuccess: (url) => {
@@ -250,8 +258,20 @@ export default function BeneficiaryProfileScreen() {
                     </View>
 
                     <View style={styles.profileCard}>
-                        <Text style={styles.heroName}>{beneficiary.name}</Text>
-                        <Text style={styles.heroMeta}>{beneficiary.age ? `${beneficiary.age} years` : ''}{beneficiary.relationship ? ` • ${beneficiary.relationship}` : ''}</Text>
+                        <View style={styles.profileCardHeader}>
+                            <View style={{ flex: 1, marginRight: scale(8) }}>
+                                <Text style={styles.heroName}>{beneficiary.name}</Text>
+                                <Text style={styles.heroMeta}>{beneficiary.age ? `${beneficiary.age} years` : ''}{beneficiary.relationship ? ` • ${beneficiary.relationship}` : ''}</Text>
+                            </View>
+                            <TouchableOpacity
+                                style={styles.careCircleHeroBtn}
+                                onPress={() => setShowCareCircleModal(true)}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="people" size={scale(14)} color="#FE6700" style={{ marginRight: scale(4) }} />
+                                <Text style={styles.careCircleHeroBtnText}>Care Circle</Text>
+                            </TouchableOpacity>
+                        </View>
 
                         {/* ── Stats Row ── */}
                         <View style={styles.statsRow}>
@@ -371,6 +391,16 @@ export default function BeneficiaryProfileScreen() {
 
             </ScrollView>
 
+            {beneficiary && (
+                <CareCircleModal
+                    visible={showCareCircleModal}
+                    beneficiaryId={beneficiary.id}
+                    beneficiaryName={beneficiary.name}
+                    onClose={() => setShowCareCircleModal(false)}
+                    onMembersChanged={refetch}
+                />
+            )}
+
             <GlobalDrawer
                 isOpen={drawerOpen}
                 onClose={closeDrawer}
@@ -389,6 +419,41 @@ const styles = StyleSheet.create({
     },
     headerTitle: { flex: 1, fontSize: scale(17), fontWeight: '600', color: '#111827', marginLeft: scale(6) },
     iconBtn: { width: scale(36), height: scale(36), justifyContent: 'center', alignItems: 'center' },
+    viewOnlyBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3F4F6',
+        paddingHorizontal: scale(8),
+        paddingVertical: scale(4),
+        borderRadius: scale(6),
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    viewOnlyBadgeText: {
+        fontSize: scale(11),
+        fontWeight: '600',
+        color: '#6B7280',
+    },
+    profileCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    careCircleHeroBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF5ED',
+        borderWidth: 1,
+        borderColor: '#FED7AA',
+        paddingHorizontal: scale(10),
+        paddingVertical: scale(6),
+        borderRadius: scale(8),
+    },
+    careCircleHeroBtnText: {
+        fontSize: scale(12),
+        fontWeight: '700',
+        color: '#FE6700',
+    },
     centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF2E8' },
     notFoundText: { fontSize: scale(16), color: '#6B7280', marginBottom: scale(16) },
     backBtn: { backgroundColor: '#F97316', paddingHorizontal: scale(20), paddingVertical: scale(10), borderRadius: scale(8) },

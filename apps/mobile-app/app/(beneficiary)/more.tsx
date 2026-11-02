@@ -42,23 +42,19 @@ export default function MoreOptionsScreen() {
     const safeBack = useSafeBack();
     const logoutWithConfirm = useLogoutWithConfirm();
     const deleteAccountWithConfirm = useDeleteAccountWithConfirm();
-    const { user, availableRoles, isSwitchingRole, switchRole } = useAuth();
-    const isDualRole = availableRoles.includes('subscriber') && availableRoles.includes('beneficiary');
+    const { user } = useAuth();
     const [supportModalVisible, setSupportModalVisible] = useState(false);
 
-    const profileName = user?.name || 'Margaret Williams';
+    const profileName = user?.name || 'Care Member';
     const profilePhoto = user?.photo || user?.profilePhoto || null;
 
-    const handleSwitchToSubscriber = async () => {
-        try {
-            await switchRole('subscriber');
-            router.replace('/(subscriber)');
-        } catch (err: any) {
-            Alert.alert('Switch Failed', err?.message || 'Could not switch profile. Please try again.');
-        }
-    };
-
     const menuItems: MenuItemProps[] = [
+        {
+            icon: <Feather name="shopping-bag" size={18} color="#FE6700" />,
+            label: 'Browse Care Packages',
+            iconBg: '#FFF5ED',
+            onPress: () => router.push('/(setup)/subscription-packages'),
+        },
         {
             icon: <FontAwesome5 name="user-friends" size={16} color="#3B82F6" />,
             label: 'Care Team',
@@ -141,29 +137,28 @@ export default function MoreOptionsScreen() {
                     <Feather name="chevron-right" size={20} color="#FFFFFF" />
                 </TouchableOpacity>
 
-                {isDualRole && (
-                    <TouchableOpacity
-                        style={styles.switchRoleCard}
-                        onPress={handleSwitchToSubscriber}
-                        activeOpacity={0.85}
-                        disabled={isSwitchingRole}
-                    >
-                        <View style={styles.switchRoleLeft}>
-                            <View style={styles.switchRoleIconBox}>
-                                {isSwitchingRole ? (
-                                    <ActivityIndicator size="small" color="#FF5C00" />
-                                ) : (
-                                    <Ionicons name="shield-checkmark-outline" size={18} color="#FF5C00" />
-                                )}
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.switchRoleTitle}>Switch to Subscriber Dashboard</Text>
-                                <Text style={styles.switchRoleSub}>Manage plans, payments & beneficiaries</Text>
-                            </View>
+                {/* ── Family Connect Hub (Always accessible) ── */}
+                <TouchableOpacity
+                    style={styles.familyConnectCard}
+                    onPress={() => router.push('/(subscriber)')}
+                    activeOpacity={0.88}
+                >
+                    <View style={styles.familyConnectLeft}>
+                        <View style={styles.familyConnectIconBox}>
+                            <Ionicons name="people" size={20} color="#FE6700" />
                         </View>
-                        <Ionicons name="swap-horizontal-outline" size={20} color="#FF5C00" />
-                    </TouchableOpacity>
-                )}
+                        <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={styles.familyConnectTitle}>Family Connect</Text>
+                                <View style={styles.familyConnectBadge}>
+                                    <Text style={styles.familyConnectBadgeText}>FAMILY CARE</Text>
+                                </View>
+                            </View>
+                            <Text style={styles.familyConnectSub}>Monitor family reports, care hours & beneficiaries</Text>
+                        </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color="#FE6700" />
+                </TouchableOpacity>
 
                 <View style={styles.card}>
                     {menuItems.map((item, index) => (
@@ -221,11 +216,13 @@ const styles = StyleSheet.create({
     profileTextWrap: { flex: 1 },
     profileName: { fontSize: 18, color: '#FFFFFF', fontFamily: 'Poppins-Medium', marginBottom: 2 },
     profileSubtitle: { fontSize: 13, color: 'rgba(255, 255, 255, 0.9)', fontFamily: 'Poppins-Regular' },
-    switchRoleCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7ED', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20, borderWidth: 1.5, borderColor: '#FFEDD5' },
-    switchRoleLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    switchRoleIconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FFF1E6', justifyContent: 'center', alignItems: 'center', marginRight: 10, borderWidth: 1, borderColor: '#FFEDD5' },
-    switchRoleTitle: { fontSize: 13, fontWeight: '700', color: '#111827' },
-    switchRoleSub: { fontSize: 11, color: '#6B7280', marginTop: 1 },
+    familyConnectCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 20, borderWidth: 1.5, borderColor: '#FFE4D2', shadowColor: '#FE6700', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
+    familyConnectLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 },
+    familyConnectIconBox: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#FFF5ED', justifyContent: 'center', alignItems: 'center', marginRight: 14, borderWidth: 1, borderColor: '#FFD7BC' },
+    familyConnectTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+    familyConnectBadge: { backgroundColor: '#FFEDD5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    familyConnectBadgeText: { color: '#C2410C', fontSize: 9.5, fontWeight: '800' },
+    familyConnectSub: { fontSize: 12, color: '#6B7280', marginTop: 2, lineHeight: 16 },
     card: { backgroundColor: '#FFFFFF', borderRadius: 16, paddingVertical: 8, shadowColor: '#000000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2, marginBottom: 20, borderWidth: 1, borderColor: '#F3F4F6' },
     menuItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
     iconWrap: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 16 },

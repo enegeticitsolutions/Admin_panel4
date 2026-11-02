@@ -124,9 +124,33 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
 
     const now = new Date();
 
-    // ── Single query for all subscriptions with packages and benefit balances ──
+    // ── Accessible beneficiaries: Direct subscriber OR active Care Circle member ──
+    const beneficiaries = await prisma.beneficiary.findMany({
+      where: {
+        OR: [
+          { subscriberId: userId },
+          { careCircleMembers: { some: { userId: userId, status: 'active' } } }
+        ],
+        status: { not: 'deleted' }
+      },
+      include: {
+        careCircleMembers: {
+          where: { status: 'active' },
+          select: { id: true, userId: true, role: true, relationship: true, canRenew: true, canViewVitals: true }
+        }
+      }
+    });
+
+    const accessibleBenIds = beneficiaries.map((b: any) => b.id);
+
+    // ── Subscriptions: Direct purchases OR active plans belonging to accessible beneficiaries ──
     const allUserSubscriptions = await prisma.subscription.findMany({
-      where: { subscriberId: userId },
+      where: {
+        OR: [
+          { subscriberId: userId },
+          ...(accessibleBenIds.length > 0 ? [{ beneficiaryId: { in: accessibleBenIds } }] : [])
+        ]
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         package: true,
@@ -138,7 +162,7 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
       }
     });
 
-    // Derive active and queued subscriptions in memory (eliminating redundant DB roundtrip)
+    // Derive active and queued subscriptions in memory
     // NOTE: Unassigned subscriptions (beneficiaryId = null) never expire until assigned to a beneficiary
     const allActiveSubscriptions = allUserSubscriptions.filter((s: any) =>
       s.isActive &&
@@ -166,10 +190,6 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
         }
       }).catch((e: any) => console.warn('[Dashboard] Auto-deactivate sub error:', e.message));
     }
-
-    const beneficiaries = await prisma.beneficiary.findMany({
-      where: { subscriberId: userId, status: { not: 'deleted' } }
-    });
 
     let effectiveBeneficiaryId = targetBeneficiaryId;
     if (!effectiveBeneficiaryId && beneficiaries.length === 1) {
@@ -228,10 +248,20 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
       }
 
       const resolvedPhoto = b.photo ? await resolveFileUrl(b.photo, 1800) : null;
+      const isCareCircle = b.subscriberId !== userId;
+      const membership = isCareCircle ? (b.careCircleMembers || []).find((m: any) => m.userId === userId) : null;
+      const careCircleRole = isCareCircle ? (membership?.role || 'caregiver') : 'primary_sponsor';
+      const canRenew = isCareCircle ? (membership?.canRenew ?? true) : true;
+      const canViewVitals = isCareCircle ? (membership?.canViewVitals ?? true) : true;
 
       return {
         ...b,
         photo: resolvedPhoto,
+        isCareCircleMember: isCareCircle,
+        careCircleRole,
+        canRenew,
+        canViewVitals,
+        careCircleMembersCount: (b.careCircleMembers?.length || 0) + 1,
         packageStatus,
         isExpired: packageStatus === 'expired',
         subscriptionEndDate: activeSub?.endDate || expiredSub?.endDate || null,

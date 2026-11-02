@@ -342,7 +342,7 @@ export default function SubscriptionPackagesScreen() {
                             <>
                                 <TouchableOpacity
                                     style={styles.menuItem}
-                                    onPress={() => { setMenuOpen(false); router.replace('/(subscriber)' as any); }}
+                                    onPress={() => { setMenuOpen(false); router.replace('/(beneficiary)' as any); }}
                                 >
                                     <Ionicons name="home-outline" size={20} color="#111827" />
                                     <Text style={styles.menuItemText}>Dashboard</Text>
