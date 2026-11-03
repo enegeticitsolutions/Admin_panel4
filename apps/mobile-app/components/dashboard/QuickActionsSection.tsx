@@ -8,6 +8,7 @@ interface QuickActionsSectionProps {
     hasFamilyOrPlans?: boolean;
     onFamilyConnectPress?: () => void;
     onLogVitalsPress?: () => void;
+    onSaathiPress?: () => void;
     onActionPress: (route: string) => void;
 }
 
@@ -17,6 +18,7 @@ export const QuickActionsSection: React.FC<QuickActionsSectionProps> = ({
     hasFamilyOrPlans = false,
     onFamilyConnectPress,
     onLogVitalsPress,
+    onSaathiPress,
     onActionPress,
 }) => {
     return (
@@ -88,19 +90,25 @@ export const QuickActionsSection: React.FC<QuickActionsSectionProps> = ({
                     <Text style={styles.cardSubtitle} numberOfLines={2}>View schedule & details</Text>
                 </TouchableOpacity>
 
-                {sathiEligible && (
-                    <TouchableOpacity
-                        style={[styles.card, { width: actionCardWidth }]}
-                        onPress={() => onActionPress('/(beneficiary)/sathi-request')}
-                        activeOpacity={0.8}
-                    >
-                        <View style={[styles.iconBadge, { backgroundColor: '#FFF7ED' }]}>
-                            <Feather name="users" size={24} color="#FF6A00" />
-                        </View>
-                        <Text style={styles.cardTitle} numberOfLines={1} adjustsFontSizeToFit>Saathi Companion</Text>
-                        <Text style={styles.cardSubtitle} numberOfLines={2}>Request visit & help</Text>
-                    </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                    style={[styles.card, { width: actionCardWidth }]}
+                    onPress={() => {
+                        if (onSaathiPress) {
+                            onSaathiPress();
+                        } else {
+                            onActionPress('/(beneficiary)/sathi-request');
+                        }
+                    }}
+                    activeOpacity={0.8}
+                >
+                    <View style={[styles.iconBadge, { backgroundColor: '#FFF7ED' }]}>
+                        <Feather name="users" size={24} color="#FF6A00" />
+                    </View>
+                    <Text style={styles.cardTitle} numberOfLines={1} adjustsFontSizeToFit>Saathi Companion</Text>
+                    <Text style={styles.cardSubtitle} numberOfLines={2}>
+                        {sathiEligible ? 'Request visit & help' : 'Learn & explore service'}
+                    </Text>
+                </TouchableOpacity>
 
                 <TouchableOpacity
                     style={[styles.card, { width: actionCardWidth }]}

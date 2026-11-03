@@ -14,21 +14,25 @@ import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import HeaderSpacer from '@/components/HeaderSpacer';
-import { AddMedicineModal } from '@/components/ui/AddMedicineModal';
+import { AddMedicationModal, MedicationFormPayload } from '@/components/medications/AddMedicationModal';
 import NotificationBell from '@/components/shared/NotificationBell';
 import { getSetupDraft, saveSetupDraft } from '@/services/setupDraftService';
 
 
 type Medication = {
+    id?: string;
     name: string;
     dosage: string;
+    route?: string;
+    cadence?: string;
     frequency: string;
     timesPerDay: string[];
+    timeSlots?: string[];
     setReminders: boolean;
-    totalDays?: string;
+    totalDays?: number | string | null;
     instructions?: string;
     startDate?: string;
-    endDate?: string;
+    endDate?: string | null;
 };
 
 export default function MedicalInfoScreen() {
@@ -358,7 +362,7 @@ export default function MedicalInfoScreen() {
             frequency: med.frequency,
             timesPerDay: med.timesPerDay,
             setReminders: med.setReminders,
-            totalDays: med.totalDays || '',
+            totalDays: med.totalDays ?? null,
             instructions: med.instructions || ''
         });
         setEditingIndex(index);
@@ -431,13 +435,20 @@ export default function MedicalInfoScreen() {
         setHobbiesText(updatedHobbies.join(', '));
     };
 
-    const formatFrequency = (frequency: string) => {
-        const labels: Record<string, string> = {
-            once_daily: 'Once Daily',
-            twice_daily: 'Twice Daily',
-            thrice_daily: 'Thrice Daily'
-        };
-        return labels[frequency] || frequency;
+    const formatFrequency = (frequency?: string, cadence?: string) => {
+        let label = 'Once Daily';
+        switch (frequency) {
+            case 'once_daily': label = 'Once Daily'; break;
+            case 'twice_daily': label = 'Twice Daily'; break;
+            case 'thrice_daily': label = 'Thrice Daily'; break;
+            case 'four_times_daily': label = '4 Times Daily'; break;
+            default: label = frequency ? frequency.replace(/_/g, ' ') : 'Once Daily';
+        }
+        if (cadence && cadence !== 'daily') {
+            const cadLabel = cadence === 'alternate' ? 'Alternate Days' : cadence.charAt(0).toUpperCase() + cadence.slice(1);
+            return `${cadLabel} • ${label}`;
+        }
+        return label;
     };
 
     const Checkbox = ({ label, checked, onPress }: { label: string, checked: boolean, onPress: () => void }) => (
@@ -522,7 +533,7 @@ export default function MedicalInfoScreen() {
                                 >
                                     <View style={styles.medicineInfo}>
                                         <Text style={styles.medicineName}>{med.name}</Text>
-                                        <Text style={styles.medicineSub}>{med.dosage} • {formatFrequency(med.frequency)}</Text>
+                                        <Text style={styles.medicineSub}>{med.dosage} • {formatFrequency(med.frequency, med.cadence)}</Text>
                                         <Text style={[styles.medicineSub, { fontSize: 11, color: '#4B5563', marginTop: 1 }]}>
                                             Duration: {med.startDate || 'Today'}{med.endDate ? ` to ${med.endDate}` : ' (Ongoing)'}
                                         </Text>
@@ -532,9 +543,9 @@ export default function MedicalInfoScreen() {
                                     </View>
                                     <View style={styles.medicineRight}>
                                         {/* Shows the first selected time as pill, if any */}
-                                        {med.timesPerDay.length > 0 && (
+                                        {(med.timeSlots || med.timesPerDay || []).length > 0 && (
                                             <View style={styles.timePill}>
-                                                <Text style={styles.timePillText}>{med.timesPerDay[0]}</Text>
+                                                <Text style={styles.timePillText}>{(med.timeSlots || med.timesPerDay || [])[0]}</Text>
                                             </View>
                                         )}
                                         <TouchableOpacity onPress={() => removeMedicine(index)} style={{ marginLeft: 8 }}>
@@ -683,40 +694,37 @@ export default function MedicalInfoScreen() {
                 </View>
             </Modal>
 
-            {/* Modal: Add Medicine */}
-            <AddMedicineModal
+            {/* Modal: Add Medication */}
+            <AddMedicationModal
                 visible={showMedicineModal}
                 onClose={cancelModal}
                 onSave={async (medData) => {
+                    const newMed: Medication = {
+                        id: medData.id,
+                        name: medData.name,
+                        dosage: medData.dosage,
+                        route: medData.route,
+                        cadence: medData.cadence,
+                        frequency: medData.frequency,
+                        instructions: medData.instructions || '',
+                        startDate: medData.startDate || getTodayFormatted(),
+                        endDate: medData.endDate || '',
+                        timeSlots: medData.timeSlots || [],
+                        timesPerDay: medData.timeSlots || [],
+                        totalDays: medData.totalDays,
+                        setReminders: !!medData.setReminders
+                    };
                     if (editingIndex !== null) {
                         const updated = [...medications];
-                        updated[editingIndex] = {
-                            name: medData.name,
-                            dosage: medData.dosage,
-                            frequency: medData.frequency,
-                            instructions: medData.instructions || '',
-                            startDate: medData.startDate || getTodayFormatted(),
-                            endDate: medData.endDate || '',
-                            timesPerDay: medData.timesPerDay || [],
-                            setReminders: !!medData.setReminders
-                        };
+                        updated[editingIndex] = newMed;
                         setMedications(updated);
                     } else {
-                        setMedications([...medications, {
-                            name: medData.name,
-                            dosage: medData.dosage,
-                            frequency: medData.frequency,
-                            instructions: medData.instructions || '',
-                            startDate: medData.startDate || getTodayFormatted(),
-                            endDate: medData.endDate || '',
-                            timesPerDay: medData.timesPerDay || [],
-                            setReminders: !!medData.setReminders
-                        }]);
+                        setMedications([...medications, newMed]);
                     }
                     setShowMedicineModal(false);
                     setEditingIndex(null);
                 }}
-                initialData={editingIndex !== null ? medications[editingIndex] : null}
+                initialData={editingIndex !== null ? (medications[editingIndex] as any) : null}
             />
 
             <DateTimePickerModal

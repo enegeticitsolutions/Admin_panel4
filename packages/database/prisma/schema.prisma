@@ -179,6 +179,7 @@ model Medication {
   genericName        String?
   dosage             String
   route              MedicationRoute       @default(oral)
+  cadence            MedicationCadence     @default(daily)
   frequency          MedicationFrequency   @default(twice_daily)
   timeSlots          String[]              @default([])
   instructions       String?
@@ -1649,6 +1650,13 @@ enum RecordType {
   other
 }
 
+enum MedicationCadence {
+  daily
+  alternate
+  weekly
+  monthly
+}
+
 enum MedicationFrequency {
   once_daily
   twice_daily
@@ -1657,6 +1665,7 @@ enum MedicationFrequency {
   every_6_hours
   every_8_hours
   every_12_hours
+  alternate_days
   weekly
   fortnightly
   monthly

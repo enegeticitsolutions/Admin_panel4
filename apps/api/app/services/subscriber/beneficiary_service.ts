@@ -1,3 +1,4 @@
+import { createMedication } from '../shared/medication_service';
 import prisma from '../../core/database';
 import { generateUUID, generateRandomPhone } from '../../utils/helpers';
 import { Prisma } from '@prisma/client';
@@ -22,6 +23,9 @@ const frequencyMap: Record<string, string> = {
   'every 6 hours': 'every_6_hours',
   'every 8 hours': 'every_8_hours',
   'every 12 hours': 'every_12_hours',
+  'alternate': 'alternate_days',
+  'alternate days': 'alternate_days',
+  'alternate_days': 'alternate_days',
   'weekly': 'weekly',
   'fortnightly': 'fortnightly',
   'monthly': 'monthly',
@@ -948,37 +952,23 @@ export const getBeneficiaryPendingDetails = async (beneficiaryId: string) => {
   };
 };
 
-export const addMedication = async (beneficiaryId: string, data: {
-  name: string;
-  dosage: string;
-  frequency?: string;
-  instructions?: string;
-  startDate?: string;
-  endDate?: string;
-}) => {
-  // Helper: parse dates in either DD-MM-YYYY or ISO (YYYY-MM-DD) format safely
-  const parseDate = (raw: string): Date => {
-    // DD-MM-YYYY → YYYY-MM-DD
+export const addMedication = async (beneficiaryId: string, data: any) => {
+  const parseDate = (raw?: string | Date | null): Date | undefined => {
+    if (!raw) return undefined;
+    if (raw instanceof Date) return raw;
     const ddmmyyyy = /^(\d{2})-(\d{2})-(\d{4})$/;
-    const match = raw.match(ddmmyyyy);
+    const match = String(raw).match(ddmmyyyy);
     if (match) {
       return new Date(`${match[3]}-${match[2]}-${match[1]}`);
     }
     return new Date(raw);
   };
 
-  return prisma.medication.create({
-    data: {
-      id: generateUUID(),
-      beneficiaryId,
-      name: data.name.trim(),
-      dosage: (data.dosage || 'Take as directed').trim(),
-      frequency: (data.frequency as any) || 'once_daily',
-      instructions: data.instructions ? data.instructions.trim() : null,
-      startDate: data.startDate ? parseDate(data.startDate) : new Date(),
-      endDate: data.endDate ? parseDate(data.endDate) : null,
-      isActive: true,
-    }
+  return createMedication({
+    ...data,
+    beneficiaryId,
+    startDate: data.startDate ? parseDate(data.startDate) : undefined,
+    endDate: data.endDate ? parseDate(data.endDate) : undefined,
   });
 };
 

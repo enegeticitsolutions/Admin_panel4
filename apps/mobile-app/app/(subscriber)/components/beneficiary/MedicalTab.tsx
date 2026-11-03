@@ -5,7 +5,7 @@ import { API_URL } from '@/constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
-import { AddMedicineModal, MedicationFormData } from '@/components/ui/AddMedicineModal';
+import { AddMedicationModal, MedicationFormPayload } from '@/components/medications/AddMedicationModal';
 import { scale } from '@/utils/responsive';
 
 const { width } = Dimensions.get('window');
@@ -263,20 +263,23 @@ export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary
         }
     };
 
-    const formatFrequency = (freq?: string) => {
-        if (!freq) return 'Once Daily';
+    const formatFrequency = (freq?: string, cadence?: string) => {
+        let text = 'Once Daily';
         switch (freq) {
-            case 'once_daily': return 'Once Daily';
-            case 'twice_daily': return 'Twice Daily';
-            case 'thrice_daily': return 'Thrice Daily';
-            case 'four_times_daily': return '4 Times Daily';
-            case 'as_needed': return 'As Needed';
-            case 'weekly': return 'Weekly';
-            default: return freq.replace(/_/g, ' ');
+            case 'once_daily': text = 'Once Daily'; break;
+            case 'twice_daily': text = 'Twice Daily'; break;
+            case 'thrice_daily': text = 'Thrice Daily'; break;
+            case 'four_times_daily': text = '4 Times Daily'; break;
+            default: text = freq ? freq.replace(/_/g, ' ') : 'Once Daily';
         }
+        if (cadence && cadence !== 'daily') {
+            const cadLabel = cadence === 'alternate' ? 'Alternate Days' : cadence.charAt(0).toUpperCase() + cadence.slice(1);
+            return `${cadLabel} • ${text}`;
+        }
+        return text;
     };
 
-    const handleAddMedication = async (medData: MedicationFormData) => {
+    const handleAddMedication = async (payload: MedicationFormPayload) => {
         try {
             setAddingMed(true);
             const token = await AsyncStorage.getItem('userToken');
@@ -287,12 +290,15 @@ export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    name: medData.name.trim(),
-                    dosage: medData.dosage?.trim() || 'Take as directed',
-                    frequency: medData.frequency || 'twice_daily',
-                    instructions: medData.instructions?.trim() || undefined,
-                    startDate: medData.startDate || undefined,
-                    endDate: medData.endDate || undefined,
+                    name: payload.name.trim(),
+                    dosage: payload.dosage.trim(),
+                    route: payload.route,
+                    cadence: payload.cadence,
+                    frequency: payload.frequency,
+                    timeSlots: payload.timeSlots,
+                    instructions: payload.instructions?.trim() || undefined,
+                    totalDays: payload.totalDays,
+                    setReminders: payload.setReminders,
                 })
             });
 
@@ -448,7 +454,7 @@ export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary
                                     • {m.name} <Text style={styles.medDosageText}>{m.dosage}</Text>
                                 </Text>
                                 <Text style={styles.medSubDetail}>
-                                    Frequency: {formatFrequency(m.frequency)} {m.instructions ? `• ${m.instructions}` : ''}
+                                    Frequency: {formatFrequency(m.frequency, m.cadence)} {m.instructions ? `• ${m.instructions}` : ''}
                                 </Text>
                             </View>
                             {canEdit && (
@@ -467,7 +473,7 @@ export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary
             </View>
 
             {/* Add Medication Modal */}
-            <AddMedicineModal
+            <AddMedicationModal
                 visible={isMedModalVisible}
                 onClose={() => setIsMedModalVisible(false)}
                 onSave={handleAddMedication}

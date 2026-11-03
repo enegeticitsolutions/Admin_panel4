@@ -5,6 +5,7 @@ export interface MedicationPresetItem {
   category: string;
   dosage: string;
   route: string;
+  cadence?: string;
   frequency: string;
   timeSlots: string[];
   instructions: string;
@@ -50,7 +51,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPresetItem[] = [
     dosage: '40mg',
     route: 'oral',
     frequency: 'once_daily',
-    timeSlots: ['07:30 AM'],
+    timeSlots: ['08:00 AM'],
     instructions: 'Empty stomach 30 mins before breakfast',
     badgeColor: '#FFF7ED',
     badgeTextColor: '#C2410C',
@@ -64,7 +65,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPresetItem[] = [
     dosage: '10mg',
     route: 'oral',
     frequency: 'once_daily',
-    timeSlots: ['09:00 PM'],
+    timeSlots: ['08:00 PM'],
     instructions: 'At bedtime after dinner',
     badgeColor: '#F5F3FF',
     badgeTextColor: '#6D28D9',
@@ -92,7 +93,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPresetItem[] = [
     dosage: '500mg',
     route: 'oral',
     frequency: 'once_daily',
-    timeSlots: ['01:30 PM'],
+    timeSlots: ['02:00 PM'],
     instructions: 'After lunch with a glass of water',
     badgeColor: '#FEF3C7',
     badgeTextColor: '#B45309',
@@ -106,7 +107,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPresetItem[] = [
     dosage: '75mg',
     route: 'oral',
     frequency: 'once_daily',
-    timeSlots: ['01:30 PM'],
+    timeSlots: ['02:00 PM'],
     instructions: 'After lunch (Blood Thinner)',
     badgeColor: '#FEE2E2',
     badgeTextColor: '#B91C1C',
@@ -119,7 +120,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPresetItem[] = [
     category: 'Pain & Fever',
     dosage: '650mg',
     route: 'oral',
-    frequency: 'as_needed',
+    frequency: 'once_daily',
     timeSlots: ['08:00 AM'],
     instructions: 'When needed for fever or pain (SOS)',
     badgeColor: '#FEF2F2',

@@ -1,6 +1,7 @@
 import prisma from '../../core/database';
 import { NotificationType, NotificationChannel } from '@prisma/client';
 import { PushNotificationDispatcher } from '../notifications/PushNotificationDispatcher';
+import { MedicationAdherenceManager } from '../shared/MedicationAdherenceManager';
 
 export interface NormalizedSlot {
   slotText: string;
@@ -88,6 +89,11 @@ export class MedicationReminderService {
       let dispatchCount = 0;
 
       for (const med of activeMedications) {
+        // Only trigger reminders if the medication is due on this day (e.g., alternate days, weekly, monthly)
+        if (!MedicationAdherenceManager.isMedicationDueOnDate(med, now)) {
+          continue;
+        }
+
         const beneficiary = med.beneficiary;
         if (!beneficiary) continue;
 
@@ -219,9 +225,9 @@ export class MedicationReminderService {
     let slots = [...rawSlots];
 
     if (slots.length === 0) {
-      if (frequency === 'once_daily') slots = ['08:00 AM'];
-      else if (frequency === 'twice_daily') slots = ['08:00 AM', '08:00 PM'];
+      if (frequency === 'twice_daily') slots = ['08:00 AM', '08:00 PM'];
       else if (frequency === 'thrice_daily') slots = ['08:00 AM', '02:00 PM', '08:00 PM'];
+      else if (frequency === 'four_times_daily') slots = ['08:00 AM', '02:00 PM', '06:00 PM', '08:00 PM'];
       else slots = ['08:00 AM'];
     }
 
@@ -256,7 +262,10 @@ export class MedicationReminderService {
       hours = 18;
       minutes = 0;
     } else if (cleaned === 'NIGHT') {
-      hours = 21;
+      hours = 20; // 08:00 PM
+      minutes = 0;
+    } else if (cleaned === 'BEDTIME') {
+      hours = 21; // 09:30 PM
       minutes = 30;
     } else {
       const match = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
