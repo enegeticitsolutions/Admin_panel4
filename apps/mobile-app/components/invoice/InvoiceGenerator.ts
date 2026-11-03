@@ -236,10 +236,6 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
       </tbody>
     </table>` : '';
 
-  const demandNote = isPaid
-    ? '<p class="footer-demand">This invoice is not a demand for payment.</p>'
-    : '';
-
   const html = `
     <!DOCTYPE html>
     <html lang="en">
@@ -308,8 +304,7 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
             <div class="tagline">Eldercare Services &amp; Assistance</div>
           </td>
           <td class="invoice-title">
-            <h2>Tax Invoice / Bill of Supply / Cash Memo</h2>
-            <div class="subtitle">(Original for Recipient)</div>
+            <h2>Tax Invoice</h2>
           </td>
         </tr>
       </table>
@@ -404,10 +399,7 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
       ${paymentSection}
 
       <div class="footer-section">
-        ${demandNote}
-        <p><strong>${data.companyName}</strong> | Regd. Office: ${data.companyAddress}</p>
-        <p>Website: www.maihoonna.com | Support Email: ${data.companyEmail} | Phone: +91 ${data.companyPhone}</p>
-        <p style="margin-top:4px; color:#777;">This is a computer-generated statutory tax invoice and does not require a physical signature.</p>
+        <p style="color:#777;">This is a computer-generated statutory tax invoice and does not require a physical signature.</p>
       </div>
 
     </body>

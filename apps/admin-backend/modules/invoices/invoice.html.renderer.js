@@ -276,10 +276,6 @@ function render(invoice, company = {}) {
   </table>`;
   }
 
-  const demandNote = invoice.status === 'PAID'
-    ? '<p class="footer-demand">This invoice is not a demand for payment.</p>'
-    : '';
-
   const beneficiarySection = invoice.beneficiary ? `
         <div class="address-sep"></div>
         <div class="section-heading">Service Address:</div>
@@ -371,8 +367,7 @@ function render(invoice, company = {}) {
         <div class="tagline">Eldercare Services &amp; Assistance</div>
       </td>
       <td class="invoice-title">
-        <h2>Tax Invoice / Bill of Supply / Cash Memo</h2>
-        <div class="subtitle">(Original for Recipient)</div>
+        <h2>Tax Invoice</h2>
       </td>
     </tr>
   </table>
@@ -469,10 +464,7 @@ function render(invoice, company = {}) {
   ${paymentsHtml}
 
   <div class="footer-section">
-    ${demandNote}
-    <p><strong>${esc(co.name)}</strong> | Regd. Office: ${esc(co.address)}</p>
-    <p>Website: www.maihoonna.com | Support Email: ${esc(co.email)} | Phone: +91 ${esc(co.phone)}</p>
-    <p style="margin-top:4px; color:#777;">This is a computer-generated statutory tax invoice and does not require a physical signature.</p>
+    <p style="color:#777;">This is a computer-generated statutory tax invoice and does not require a physical signature.</p>
   </div>
 
 </body>

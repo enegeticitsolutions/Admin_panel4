@@ -1362,12 +1362,20 @@ export const subscriptionApi = {
   },
   /** Allocate add-on benefit units to subscription */
   async allocateAddon(subscriptionId: string, payload: {
-    benefitId: string;
+    benefitId?: string;
     units?: number;
+    unitPrice?: number;
     amountPaid?: number;
     paymentMethod?: string;
     transactionId?: string;
     paymentNote?: string;
+    items?: Array<{
+      benefitId: string;
+      units: number;
+      unitPrice?: number;
+      amount?: number;
+      name?: string;
+    }>;
   }): Promise<any> {
     return apiJson(`/subscriptions/${subscriptionId}/addons/allocate`, {
       method: 'POST',

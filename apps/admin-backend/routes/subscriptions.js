@@ -1821,10 +1821,20 @@ router.post('/:id/consume', async (req, res) => {
 
 // ── POST /api/subscriptions/:id/addons/allocate ──────────────────────────────
 router.post('/:id/addons/allocate', async (req, res) => {
-  const { benefitId, units = 1, amountPaid = 0, paymentMethod = 'Cash', transactionId, paymentNote } = req.body;
+  const {
+    benefitId,
+    units = 1,
+    items,
+    amountPaid = 0,
+    paymentMethod = 'Cash',
+    transactionId,
+    paymentNote,
+  } = req.body;
+
   try {
-    if (!benefitId) {
-      return res.status(400).json({ success: false, message: 'benefitId is required' });
+    const hasItemsArray = Array.isArray(items) && items.length > 0;
+    if (!hasItemsArray && !benefitId) {
+      return res.status(400).json({ success: false, message: 'benefitId or items array is required' });
     }
 
     let subscriptionId = req.params.id;
@@ -1851,6 +1861,125 @@ router.post('/:id/addons/allocate', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Active subscription not found' });
     }
 
+    const customerState = subscription.beneficiary?.state || subscription.subscriber?.state || '';
+    const numericAmount = parseFloat(amountPaid) || 0;
+
+    // ── CASE 1: MULTI-ITEM ADDON ALLOCATION (SINGLE CONSOLIDATED INVOICE) ──
+    if (hasItemsArray) {
+      const result = await prisma.$transaction(async (tx) => {
+        const balances = [];
+        const invoiceInputItems = [];
+        const itemNames = [];
+
+        for (const item of items) {
+          const itemBenefitId = item.benefitId || item.id;
+          const itemUnits = Math.max(1, parseInt(item.units, 10) || 1);
+
+          const benefit = await tx.benefit.findUnique({
+            where: { id: itemBenefitId }
+          });
+          if (!benefit) {
+            throw new Error(`Benefit with ID "${itemBenefitId}" not found`);
+          }
+
+          // 1. Upsert SubscriptionBenefitBalance
+          let balance = await tx.subscriptionBenefitBalance.findUnique({
+            where: {
+              subscriptionId_benefitId: {
+                subscriptionId,
+                benefitId: itemBenefitId,
+              },
+            },
+          });
+
+          if (balance) {
+            balance = await tx.subscriptionBenefitBalance.update({
+              where: { id: balance.id },
+              data: {
+                totalUnits: { increment: itemUnits },
+                availableUnits: { increment: itemUnits },
+              },
+            });
+          } else {
+            balance = await tx.subscriptionBenefitBalance.create({
+              data: {
+                subscriptionId,
+                benefitId: itemBenefitId,
+                totalUnits: itemUnits,
+                availableUnits: itemUnits,
+                usedUnits: 0,
+                reservedUnits: 0,
+              },
+            });
+          }
+          balances.push(balance);
+          itemNames.push(`${benefit.name} (${itemUnits} units)`);
+
+          // Prepare item for consolidated invoice
+          invoiceInputItems.push({
+            benefit,
+            benefitId: benefit.id,
+            name: benefit.name,
+            units: itemUnits,
+            unitPrice: item.unitPrice,
+          });
+        }
+
+        // 2. Record Single Consolidated Invoice and Payment if numericAmount > 0
+        let invoice = null;
+        if (numericAmount > 0) {
+          invoice = await invoiceService.generateAddonInvoice(tx, {
+            subscriptionId,
+            items: invoiceInputItems,
+            customerState,
+            subscriberId: subscription.subscriberId,
+            beneficiaryId: subscription.beneficiaryId || undefined,
+            status: 'PAID',
+          });
+
+          await tx.payment.create({
+            data: {
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.invoiceNumber,
+              subscriptionId,
+              subscriberId: subscription.subscriberId,
+              beneficiaryId: subscription.beneficiaryId || undefined,
+              packageType: subscription.packageType || 'addon',
+              baseAmount: invoice.baseAmount || numericAmount,
+              taxAmount: invoice.taxAmount || 0,
+              amountPaid: invoice.totalAmount || numericAmount,
+              paymentMethod: paymentMethod || 'Cash',
+              paymentStatus: 'success',
+              paidAt: new Date(),
+              planStartDate: subscription.startDate || new Date(),
+              planEndDate: subscription.endDate || new Date(),
+              transactionId: transactionId || `ADDON-TXN-${Date.now()}`,
+              gatewayName: 'admin_addon',
+              failureReason: paymentNote || `Add-on Purchase: ${itemNames.join(', ')}`,
+              isSubscriptionActive: true,
+            },
+          }).catch(err => {
+            console.warn('[Addon Payment Record Warning]:', err.message);
+          });
+        }
+
+        return {
+          balances,
+          invoiceNumber: invoice?.invoiceNumber || null,
+          invoiceId: invoice?.id || null,
+          invoiceTotal: invoice?.totalAmount || numericAmount,
+          itemCount: items.length,
+        };
+      });
+
+      return res.json({
+        success: true,
+        data: result,
+        message: `Successfully allocated ${items.length} add-on services on a single invoice (${result.invoiceNumber || 'No invoice'})`,
+      });
+    }
+
+    // ── CASE 2: SINGLE ADDON ALLOCATION (BACKWARD COMPATIBLE) ───────────────
     const benefit = await prisma.benefit.findUnique({
       where: { id: benefitId }
     });
@@ -1892,10 +2021,8 @@ router.post('/:id/addons/allocate', async (req, res) => {
       }
 
       // 2. Record Statutory Invoice and Payment if amountPaid > 0
-      const numericAmount = parseFloat(amountPaid);
       let invoice = null;
       if (numericAmount > 0) {
-        const customerState = subscription.beneficiary?.state || subscription.subscriber?.state || '';
         const qty = Number(units) || 1;
 
         // Resolve statutory tax info
