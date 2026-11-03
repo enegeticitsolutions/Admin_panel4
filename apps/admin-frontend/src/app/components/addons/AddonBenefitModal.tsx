@@ -260,35 +260,39 @@ export const AddonBenefitModal: React.FC<AddonBenefitModalProps> = ({
 
     setSubmitting(true);
     try {
-      // Allocate each selected benefit sequentially
-      const results: any[] = [];
-      for (const [benefitId, multiplier] of selectedBenefits.entries()) {
+      // Build items array to allocate all selected add-ons in ONE consolidated transaction
+      const items = [...selectedBenefits.entries()].map(([benefitId, multiplier]) => {
         const addon = allAddons.find((b) => b.id === benefitId);
-        if (!addon) continue;
-        const p = getAddonPricing(addon, multiplier);
-
-        const payload = {
-          benefitId: addon.id,
-          units: p.totalUnits,
-          amountPaid: p.totalAmount,
-          unitPrice: p.finalUnitPrice,
-          paymentMethod: completedPaymentDetails?.paymentMethod || (paymentMode === 'online_link' ? 'Razorpay Online' : offlineMethod),
-          transactionId: completedPaymentDetails?.orderId || transactionId || undefined,
-          paymentNote: paymentNote || `Add-on: ${addon.name} (${p.totalUnits} ${addon.unitLabel || 'units'})`,
+        const p = addon ? getAddonPricing(addon, multiplier) : null;
+        const totalUnits = p?.totalUnits || (multiplier * (addon?.addonIncludedUnits || addon?.defaultUnits || 1));
+        return {
+          benefitId,
+          name: addon?.name || 'Add-on Benefit',
+          units: totalUnits,
+          unitPrice: p?.finalUnitPrice || (addon?.addonDiscountPrice || addon?.addonPrice || 0),
+          amount: p?.totalAmount || 0,
         };
+      });
 
-        const result = await subscriptionApi.allocateAddon(targetSubId, payload);
-        results.push(result);
-      }
+      const totalAmountToPay = parseFloat(amountPaid) || totalPricing.totalAmount;
+      const paymentMethod = completedPaymentDetails?.paymentMethod || (paymentMode === 'online_link' ? 'Razorpay Online' : offlineMethod);
+      const txnId = completedPaymentDetails?.orderId || transactionId || undefined;
+      const names = items.map((i) => i.name).filter(Boolean).join(', ');
 
-      const names = [...selectedBenefits.keys()]
-        .map((id) => allAddons.find((b) => b.id === id)?.name)
-        .filter(Boolean)
-        .join(', ');
+      const payload = {
+        items,
+        amountPaid: totalAmountToPay,
+        paymentMethod,
+        transactionId: txnId,
+        paymentNote: paymentNote || `Add-on Purchase: ${items.map((i) => `${i.name} (${i.units} units)`).join(', ')}`,
+      };
+
+      const result = await subscriptionApi.allocateAddon(targetSubId, payload);
+
       toast.success(`🎉 ${selectedCount} add-on${selectedCount > 1 ? 's' : ''} (${names}) added successfully!`);
 
       if (onSuccess) {
-        onSuccess(results);
+        onSuccess(result);
       }
       onClose();
     } catch (err: any) {

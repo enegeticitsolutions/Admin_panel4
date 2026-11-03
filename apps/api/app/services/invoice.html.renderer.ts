@@ -308,10 +308,6 @@ export class InvoiceHtmlRenderer {
   </table>`;
     }
 
-    // ── "This invoice is not a demand for payment" — only for PAID invoices ──
-    const demandNote = status === 'PAID'
-      ? '<p class="footer-demand">This invoice is not a demand for payment.</p>'
-      : '';
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -542,8 +538,7 @@ export class InvoiceHtmlRenderer {
         <div class="tagline">Eldercare Services &amp; Assistance</div>
       </td>
       <td class="invoice-title">
-        <h2>Tax Invoice / Bill of Supply / Cash Memo</h2>
-        <div class="subtitle">(Original for Recipient)</div>
+        <h2>Tax Invoice</h2>
       </td>
     </tr>
   </table>
@@ -672,10 +667,7 @@ export class InvoiceHtmlRenderer {
 
   <!-- ── Statutory Footer ── -->
   <div class="footer-section">
-    ${demandNote}
-    <p><strong>${escapeHtml(co.name)}</strong> | Regd. Office: ${escapeHtml(co.address)}</p>
-    <p>Website: www.maihoonna.com | Support Email: ${escapeHtml(co.email)} | Phone: +91 ${escapeHtml(co.phone)}</p>
-    <p style="margin-top:4px; color:#777;">This is a computer-generated statutory tax invoice and does not require a physical signature.</p>
+    <p style="color:#777;">This is a computer-generated statutory tax invoice and does not require a physical signature.</p>
   </div>
 
 </body>
