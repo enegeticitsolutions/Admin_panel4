@@ -98,6 +98,7 @@ type MedScheduleItem = {
     logId: string | null;
     name: string;
     dosage: string;
+    cadence?: string;
     frequency: string;
     instructions: string;
     scheduleTimeText: string;
@@ -114,6 +115,22 @@ type Metrics = {
     average: number;
     taken: number;
     missed: number;
+};
+
+const formatScheduleSubtitle = (cadence?: string, freq?: string) => {
+    const cad = (cadence || '').toLowerCase().trim();
+    const cadText = cad && cad !== 'daily' 
+        ? (cad === 'alternate' || cad === 'alternate_days' ? 'Alternate days' : cad.charAt(0).toUpperCase() + cad.slice(1))
+        : '';
+    const cleanFreq = (freq || '').toLowerCase().trim();
+    let freqText = 'Once daily';
+    if (cleanFreq === 'twice_daily') freqText = 'Twice daily';
+    else if (cleanFreq === 'thrice_daily') freqText = 'Thrice daily';
+    else if (cleanFreq === 'four_times_daily') freqText = '4x daily';
+    else if (cleanFreq === 'once_daily' || cleanFreq === 'daily') freqText = 'Once daily';
+    else if (cleanFreq) freqText = cleanFreq.replace(/_/g, ' ');
+
+    return cadText ? `${cadText} • ${freqText}` : freqText;
 };
 
 type Props = {
@@ -289,6 +306,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                     genericName: preset.genericName,
                     dosage: preset.dosage,
                     route: preset.route,
+                    cadence: preset.cadence || 'daily',
                     frequency: preset.frequency,
                     timeSlots: preset.timeSlots,
                     instructions: preset.instructions,
@@ -338,6 +356,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                 genericName: payload.genericName,
                 dosage: payload.dosage,
                 route: payload.route,
+                cadence: payload.cadence,
                 frequency: payload.frequency,
                 timeSlots: payload.timeSlots,
                 instructions: payload.instructions,
@@ -674,7 +693,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                                             </TouchableOpacity>
                                         </View>
                                         <Text style={styles.medSub}>
-                                            {item.dosage} - {item.frequency?.replace('_', ' ')}
+                                            {item.dosage} - {formatScheduleSubtitle(item.cadence, item.frequency)}
                                         </Text>
                                         {item.instructions ? (
                                             <Text style={styles.medInstructions}>

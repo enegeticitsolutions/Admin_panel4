@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { MedicationPresetItem } from '@/constants/medicationPresets';
 
 export interface MedicationFormPayload {
@@ -22,6 +23,7 @@ export interface MedicationFormPayload {
   genericName?: string;
   dosage: string;
   route: string;
+  cadence: string;
   frequency: string;
   timeSlots: string[];
   instructions?: string;
@@ -40,12 +42,26 @@ interface AddMedicationModalProps {
   loading?: boolean;
 }
 
+const CADENCE_OPTIONS = [
+  { label: 'Daily', value: 'daily' },
+  { label: 'Alternate', value: 'alternate' },
+  { label: 'Weekly', value: 'weekly' },
+  { label: 'Monthly', value: 'monthly' },
+];
+
+export const WORKER_TIME_SLOTS = [
+  { label: 'Morning', time: '08:00 AM' },
+  { label: 'Afternoon', time: '02:00 PM' },
+  { label: 'Evening', time: '06:00 PM' },
+  { label: 'Night', time: '08:00 PM' },
+  { label: 'Bedtime', time: '09:30 PM' },
+];
+
 const FREQUENCY_OPTIONS = [
-  { label: 'Once daily', value: 'once_daily', slots: ['08:00 AM'] },
-  { label: 'Twice daily', value: 'twice_daily', slots: ['08:00 AM', '08:00 PM'] },
-  { label: 'Thrice daily', value: 'thrice_daily', slots: ['08:00 AM', '02:00 PM', '08:00 PM'] },
-  { label: '4x daily', value: 'four_times_daily', slots: ['08:00 AM', '01:00 PM', '06:00 PM', '10:00 PM'] },
-  { label: 'As needed', value: 'as_needed', slots: ['08:00 AM'] },
+  { label: 'Once daily', value: 'once_daily', maxSlots: 1, defaultSlots: ['08:00 AM'] },
+  { label: 'Twice daily', value: 'twice_daily', maxSlots: 2, defaultSlots: ['08:00 AM', '08:00 PM'] },
+  { label: 'Thrice daily', value: 'thrice_daily', maxSlots: 3, defaultSlots: ['08:00 AM', '02:00 PM', '08:00 PM'] },
+  { label: '4x daily', value: 'four_times_daily', maxSlots: 4, defaultSlots: ['08:00 AM', '02:00 PM', '06:00 PM', '08:00 PM'] },
 ];
 
 const ROUTE_OPTIONS = [
@@ -65,16 +81,16 @@ const QUICK_INSTRUCTIONS = [
   'At bedtime',
 ];
 
-const TIME_PRESET_SLOTS = [
-  '07:30 AM',
-  '08:00 AM',
-  '09:00 AM',
-  '01:30 PM',
-  '06:00 PM',
-  '08:00 PM',
-  '09:30 PM',
-  '10:00 PM',
-];
+const formatTimeToSlot = (date: Date): string => {
+  let hours = date.getHours();
+  const minutes = date.getMinutes();
+  const meridiem = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours === 0 ? 12 : hours;
+  const hStr = hours < 10 ? `0${hours}` : `${hours}`;
+  const mStr = minutes < 10 ? `0${minutes}` : `${minutes}`;
+  return `${hStr}:${mStr} ${meridiem}`;
+};
 
 export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
   visible,
@@ -83,15 +99,17 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
   initialPreset,
   initialData,
   loading = false,
-}) => {
+}): React.ReactElement | null => {
   const [name, setName] = useState('');
   const [dosage, setDosage] = useState('');
   const [route, setRoute] = useState('oral');
+  const [cadence, setCadence] = useState('daily');
   const [frequency, setFrequency] = useState('once_daily');
   const [timeSlots, setTimeSlots] = useState<string[]>(['08:00 AM']);
   const [instructions, setInstructions] = useState('');
   const [totalDays, setTotalDays] = useState<number | null>(null);
   const [setReminders, setSetReminders] = useState(true);
+  const [isTimePickerVisible, setTimePickerVisible] = useState(false);
 
   // Sync state when modal opens or initial data/preset changes
   useEffect(() => {
@@ -101,8 +119,19 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
       setName(initialPreset.name);
       setDosage(initialPreset.dosage);
       setRoute(initialPreset.route || 'oral');
-      setFrequency(initialPreset.frequency || 'once_daily');
-      setTimeSlots(initialPreset.timeSlots || ['08:00 AM']);
+      setCadence(initialPreset.cadence || 'daily');
+      const validFreq = FREQUENCY_OPTIONS.find((f) => f.value === initialPreset.frequency)?.value || 'once_daily';
+      setFrequency(validFreq);
+      const targetOpt = FREQUENCY_OPTIONS.find((f) => f.value === validFreq) || FREQUENCY_OPTIONS[0];
+      let initialSlots = initialPreset.timeSlots && initialPreset.timeSlots.length > 0 ? [...initialPreset.timeSlots] : [...targetOpt.defaultSlots];
+      if (initialSlots.length < targetOpt.maxSlots) {
+        for (const defSlot of targetOpt.defaultSlots) {
+          if (!initialSlots.includes(defSlot) && initialSlots.length < targetOpt.maxSlots) {
+            initialSlots.push(defSlot);
+          }
+        }
+      }
+      setTimeSlots(initialSlots.slice(0, targetOpt.maxSlots));
       setInstructions(initialPreset.instructions || '');
       setTotalDays(null);
       setSetReminders(true);
@@ -110,8 +139,38 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
       setName(initialData.name || '');
       setDosage(initialData.dosage || '');
       setRoute(initialData.route || 'oral');
-      setFrequency(initialData.frequency || 'once_daily');
-      setTimeSlots(initialData.timeSlots || ['08:00 AM']);
+
+      // Resolve cadence and frequency with backward-compat
+      let initCadence = (initialData as any).cadence || 'daily';
+      let initFreq = initialData.frequency || 'once_daily';
+      if (initFreq === 'alternate' || initFreq === 'alternate_days') {
+        initCadence = 'alternate';
+        initFreq = 'once_daily';
+      } else if (initFreq === 'weekly') {
+        initCadence = 'weekly';
+        initFreq = 'once_daily';
+      } else if (initFreq === 'monthly') {
+        initCadence = 'monthly';
+        initFreq = 'once_daily';
+      } else if (initFreq === 'daily') {
+        initCadence = 'daily';
+        initFreq = 'once_daily';
+      } else if (!FREQUENCY_OPTIONS.some((f) => f.value === initFreq)) {
+        initFreq = 'once_daily';
+      }
+
+      setCadence(initCadence);
+      setFrequency(initFreq);
+      const targetOpt = FREQUENCY_OPTIONS.find((f) => f.value === initFreq) || FREQUENCY_OPTIONS[0];
+      let initialSlots = initialData.timeSlots && initialData.timeSlots.length > 0 ? [...initialData.timeSlots] : [...targetOpt.defaultSlots];
+      if (initialSlots.length < targetOpt.maxSlots) {
+        for (const defSlot of targetOpt.defaultSlots) {
+          if (!initialSlots.includes(defSlot) && initialSlots.length < targetOpt.maxSlots) {
+            initialSlots.push(defSlot);
+          }
+        }
+      }
+      setTimeSlots(initialSlots.slice(0, targetOpt.maxSlots));
       setInstructions(initialData.instructions || '');
       setTotalDays(initialData.totalDays ?? null);
       setSetReminders(initialData.setReminders ?? true);
@@ -119,32 +178,81 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
       setName('');
       setDosage('');
       setRoute('oral');
+      setCadence('daily');
       setFrequency('once_daily');
       setTimeSlots(['08:00 AM']);
       setInstructions('');
       setTotalDays(null);
       setSetReminders(true);
     }
+    setTimePickerVisible(false);
   }, [visible, initialPreset, initialData]);
+
+  const currentFreqOpt = FREQUENCY_OPTIONS.find((f) => f.value === frequency) || FREQUENCY_OPTIONS[0];
+  const maxSlots = currentFreqOpt.maxSlots;
 
   const handleFrequencySelect = (val: string) => {
     setFrequency(val);
     const opt = FREQUENCY_OPTIONS.find((f) => f.value === val);
     if (opt) {
-      setTimeSlots(opt.slots);
+      setTimeSlots([...opt.defaultSlots]);
     }
   };
 
-  const toggleTimeSlot = (slot: string) => {
-    if (timeSlots.includes(slot)) {
+  const toggleTimeSlot = (slotTime: string) => {
+    const matchedSlot = WORKER_TIME_SLOTS.find(
+      (w) => w.time === slotTime || w.label.toLowerCase() === slotTime.toLowerCase()
+    );
+    const matchTime = matchedSlot?.time || slotTime;
+    const matchLabel = matchedSlot?.label;
+
+    const isCurrentSelected = timeSlots.some(
+      (s) => s === matchTime || (matchLabel && s.toLowerCase() === matchLabel.toLowerCase())
+    );
+
+    if (isCurrentSelected) {
       if (timeSlots.length <= 1) {
         Alert.alert('Required', 'At least one time slot is required.');
         return;
       }
-      setTimeSlots(timeSlots.filter((s) => s !== slot));
+      setTimeSlots(
+        timeSlots.filter(
+          (s) => s !== matchTime && (!matchLabel || s.toLowerCase() !== matchLabel.toLowerCase())
+        )
+      );
     } else {
-      setTimeSlots([...timeSlots, slot]);
+      if (maxSlots === 1) {
+        setTimeSlots([matchTime]);
+      } else if (timeSlots.length >= maxSlots) {
+        // Replace last slot to maintain maxSlots for this frequency
+        setTimeSlots([...timeSlots.slice(0, maxSlots - 1), matchTime]);
+      } else {
+        setTimeSlots([...timeSlots, matchTime]);
+      }
     }
+  };
+
+  const handleConfirmCustomTime = (date: Date) => {
+    const formatted = formatTimeToSlot(date);
+    if (timeSlots.includes(formatted)) {
+      return;
+    }
+    if (maxSlots === 1) {
+      setTimeSlots([formatted]);
+    } else if (timeSlots.length >= maxSlots) {
+      setTimeSlots([...timeSlots.slice(0, maxSlots - 1), formatted]);
+    } else {
+      setTimeSlots([...timeSlots, formatted]);
+    }
+  };
+
+  const handleTimePickerConfirm = (date: Date) => {
+    setTimePickerVisible(false);
+    handleConfirmCustomTime(date);
+  };
+
+  const handleTimePickerCancel = () => {
+    setTimePickerVisible(false);
   };
 
   const handleSave = async () => {
@@ -166,6 +274,7 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
       name: name.trim(),
       dosage: dosage.trim(),
       route,
+      cadence,
       frequency,
       timeSlots,
       instructions: instructions.trim(),
@@ -249,46 +358,87 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
               </View>
             </View>
 
-            {/* Frequency */}
-            <Text style={styles.fieldLabel}>Frequency</Text>
+            {/* Schedule Cadence */}
+            <Text style={styles.fieldLabel}>Schedule</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-              {FREQUENCY_OPTIONS.map((f) => (
+              {CADENCE_OPTIONS.map((c) => (
                 <TouchableOpacity
-                  key={f.value}
+                  key={c.value}
                   style={[
                     styles.chip,
-                    frequency === f.value ? styles.chipActive : styles.chipInactive,
+                    cadence === c.value ? styles.chipActive : styles.chipInactive,
                   ]}
-                  onPress={() => handleFrequencySelect(f.value)}
+                  onPress={() => setCadence(c.value)}
                 >
                   <Text
                     style={[
                       styles.chipText,
-                      frequency === f.value ? styles.chipTextActive : styles.chipTextInactive,
+                      cadence === c.value ? styles.chipTextActive : styles.chipTextInactive,
                     ]}
                   >
-                    {f.label}
+                    {c.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            {/* Time Slots */}
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.fieldLabel}>Time Slots ({timeSlots.length})</Text>
-              <Text style={styles.fieldSubHint}>Tap to toggle</Text>
-            </View>
-            <View style={styles.timeSlotsWrap}>
-              {TIME_PRESET_SLOTS.map((slot) => {
-                const isSelected = timeSlots.includes(slot);
+            {/* Frequency */}
+            <Text style={styles.fieldLabel}>Frequency (Doses per day)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+              {FREQUENCY_OPTIONS.map((f) => {
+                const isSelected = frequency === f.value;
                 return (
                   <TouchableOpacity
-                    key={slot}
+                    key={f.value}
+                    style={[
+                      styles.chip,
+                      isSelected ? styles.chipActive : styles.chipInactive,
+                    ]}
+                    onPress={() => handleFrequencySelect(f.value)}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        isSelected ? styles.chipTextActive : styles.chipTextInactive,
+                      ]}
+                    >
+                      {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Time Slots */}
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.fieldLabel}>
+                Time Slots ({timeSlots.length} of {maxSlots} selected)
+              </Text>
+              <TouchableOpacity
+                onPress={() => setTimePickerVisible(true)}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={styles.customTimeActionBtn}
+              >
+                <Ionicons name="time-outline" size={14} color="#FE6700" style={{ marginRight: 4 }} />
+                <Text style={styles.customTimeAction}>+ Custom Time</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.timeSlotsWrap}>
+              {WORKER_TIME_SLOTS.map((item) => {
+                const isSelected = timeSlots.some(
+                  (s) =>
+                    s === item.time ||
+                    s.toLowerCase() === item.label.toLowerCase()
+                );
+                return (
+                  <TouchableOpacity
+                    key={item.time}
                     style={[
                       styles.slotChip,
                       isSelected ? styles.slotChipSelected : styles.slotChipUnselected,
                     ]}
-                    onPress={() => toggleTimeSlot(slot)}
+                    onPress={() => toggleTimeSlot(item.time)}
                   >
                     <Ionicons
                       name={isSelected ? 'checkmark-circle' : 'time-outline'}
@@ -301,11 +451,30 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
                         isSelected ? styles.slotTextSelected : styles.slotTextUnselected,
                       ]}
                     >
-                      {slot}
+                      {item.label} ({item.time})
                     </Text>
                   </TouchableOpacity>
                 );
               })}
+              {timeSlots
+                .filter(
+                  (s) =>
+                    !WORKER_TIME_SLOTS.some(
+                      (w) => w.time === s || w.label.toLowerCase() === s.toLowerCase()
+                    )
+                )
+                .map((custom) => (
+                  <TouchableOpacity
+                    key={custom}
+                    style={[styles.slotChip, styles.slotChipSelected]}
+                    onPress={() => toggleTimeSlot(custom)}
+                  >
+                    <Ionicons name="checkmark-circle" size={14} color="#FE6700" />
+                    <Text style={[styles.slotText, styles.slotTextSelected]}>
+                      {custom}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
             </View>
 
             {/* Meal & Schedule Instructions */}
@@ -417,6 +586,14 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+
+        <DateTimePickerModal
+          isVisible={isTimePickerVisible}
+          mode="time"
+          is24Hour={false}
+          onConfirm={handleTimePickerConfirm}
+          onCancel={handleTimePickerCancel}
+        />
       </View>
     </Modal>
   );
@@ -522,6 +699,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
     marginBottom: 6,
+  },
+  customTimeActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#FFF7ED',
+  },
+  customTimeAction: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FE6700',
   },
   timeSlotsWrap: {
     flexDirection: 'row',

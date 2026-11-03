@@ -9,6 +9,7 @@ export interface MedicationPreset {
   category: string;
   dosage: string;
   route: string;
+  cadence?: string;
   frequency: string;
   timeSlots: string[];
   instructions: string;
@@ -45,7 +46,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPreset[] = [
     dosage: '40mg',
     route: 'oral',
     frequency: 'once_daily',
-    timeSlots: ['07:30 AM'],
+    timeSlots: ['08:00 AM'],
     instructions: 'Empty stomach 30 mins before breakfast',
   },
   {
@@ -56,7 +57,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPreset[] = [
     dosage: '10mg',
     route: 'oral',
     frequency: 'once_daily',
-    timeSlots: ['09:00 PM'],
+    timeSlots: ['08:00 PM'],
     instructions: 'At bedtime after dinner',
   },
   {
@@ -78,7 +79,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPreset[] = [
     dosage: '500mg',
     route: 'oral',
     frequency: 'once_daily',
-    timeSlots: ['01:30 PM'],
+    timeSlots: ['02:00 PM'],
     instructions: 'After lunch with a glass of water',
   },
   {
@@ -89,7 +90,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPreset[] = [
     dosage: '75mg',
     route: 'oral',
     frequency: 'once_daily',
-    timeSlots: ['01:30 PM'],
+    timeSlots: ['02:00 PM'],
     instructions: 'After lunch (Blood Thinner)',
   },
   {
@@ -99,7 +100,7 @@ export const COMMON_MEDICATION_PRESETS: MedicationPreset[] = [
     category: 'Pain & Fever',
     dosage: '650mg',
     route: 'oral',
-    frequency: 'as_needed',
+    frequency: 'once_daily',
     timeSlots: ['08:00 AM'],
     instructions: 'When needed for fever or body pain (after food)',
   },
@@ -159,15 +160,40 @@ export const createMedication = async (data: {
     targetBeneficiaryId = beneficiary.id;
   }
 
-  // Calculate default time slots if missing or empty
+  // Resolve cadence (Daily, Alternate, Weekly, Monthly)
+  let cadence = (data as any).cadence || 'daily';
+  if (cadence === 'alternate_days') cadence = 'alternate';
+
+  // Normalize frequency (Once daily, Twice daily, Thrice daily, 4x daily)
+  let normalizedFreq = data.frequency || 'once_daily';
+  if (normalizedFreq === 'daily') {
+    cadence = 'daily';
+    normalizedFreq = 'once_daily';
+  } else if (normalizedFreq === 'alternate' || normalizedFreq === 'alternate_days') {
+    cadence = 'alternate';
+    normalizedFreq = 'once_daily';
+  } else if (normalizedFreq === 'weekly') {
+    cadence = 'weekly';
+    normalizedFreq = 'once_daily';
+  } else if (normalizedFreq === 'monthly') {
+    cadence = 'monthly';
+    normalizedFreq = 'once_daily';
+  }
+
+  // Calculate default time slots if missing or empty, aligned with worker schedules
   let timeSlots = data.timeSlots || [];
   if (timeSlots.length === 0) {
-    const freq = data.frequency || 'once_daily';
-    if (freq === 'once_daily') timeSlots = ['08:00 AM'];
-    else if (freq === 'twice_daily') timeSlots = ['08:00 AM', '08:00 PM'];
-    else if (freq === 'thrice_daily') timeSlots = ['08:00 AM', '02:00 PM', '08:00 PM'];
-    else if (freq === 'four_times_daily') timeSlots = ['08:00 AM', '01:00 PM', '06:00 PM', '10:00 PM'];
-    else timeSlots = ['08:00 AM'];
+    if (normalizedFreq === 'once_daily') {
+      timeSlots = ['08:00 AM'];
+    } else if (normalizedFreq === 'twice_daily') {
+      timeSlots = ['08:00 AM', '08:00 PM'];
+    } else if (normalizedFreq === 'thrice_daily') {
+      timeSlots = ['08:00 AM', '02:00 PM', '08:00 PM'];
+    } else if (normalizedFreq === 'four_times_daily') {
+      timeSlots = ['08:00 AM', '02:00 PM', '06:00 PM', '08:00 PM'];
+    } else {
+      timeSlots = ['08:00 AM'];
+    }
   }
 
   // Calculate startDate and endDate
@@ -185,7 +211,8 @@ export const createMedication = async (data: {
       genericName: data.genericName || null,
       dosage: data.dosage,
       route: (data.route || 'oral') as any,
-      frequency: (data.frequency || 'once_daily') as any,
+      cadence: cadence as any,
+      frequency: normalizedFreq as any,
       timeSlots,
       instructions: data.instructions || null,
       sideEffects: data.sideEffects || null,
@@ -196,7 +223,7 @@ export const createMedication = async (data: {
       refillReminderDays: data.refillReminderDays || null,
       setReminders: data.setReminders ?? true,
       isActive: data.isActive ?? true,
-    },
+    } as any,
   });
 };
 
@@ -207,6 +234,7 @@ export const updateMedication = async (
     genericName?: string | null;
     dosage?: string;
     route?: string;
+    cadence?: string;
     frequency?: string;
     timeSlots?: string[];
     instructions?: string | null;
@@ -225,12 +253,22 @@ export const updateMedication = async (
   if (data.endDate !== undefined) {
     updateData.endDate = data.endDate ? new Date(data.endDate) : null;
   }
-  if (data.frequency) updateData.frequency = data.frequency as any;
+  if (data.cadence) {
+    let c = data.cadence;
+    if (c === 'alternate_days') c = 'alternate';
+    updateData.cadence = c as any;
+  }
+  if (data.frequency) {
+    let freq = data.frequency;
+    if (freq === 'daily') freq = 'once_daily';
+    if (freq === 'alternate') freq = 'alternate_days';
+    updateData.frequency = freq as any;
+  }
   if (data.route) updateData.route = data.route as any;
 
   return prisma.medication.update({
     where: { id },
-    data: updateData,
+    data: updateData as any,
   });
 };
 

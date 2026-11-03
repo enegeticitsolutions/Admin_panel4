@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
 import GlobalDrawer from './components/shared/GlobalDrawer';
 import { Animated, Dimensions } from 'react-native';
-import { AddMedicineModal, MedicationFormData } from '@/components/ui/AddMedicineModal';
+import { AddMedicationModal, MedicationFormPayload } from '@/components/medications/AddMedicationModal';
 import { AddressInputField } from '../../components/ui/AddressInputField';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -54,7 +54,7 @@ export default function EditBeneficiaryScreen() {
     const [latitude, setLatitude] = useState(0);
     const [longitude, setLongitude] = useState(0);
     const [conditions, setConditions] = useState<string[]>([]);
-    const [medications, setMedications] = useState<MedicationFormData[]>([]);
+    const [medications, setMedications] = useState<MedicationFormPayload[]>([]);
     const [physicianName, setPhysicianName] = useState('');
     const [physicianPhone, setPhysicianPhone] = useState('');
     const [physicianSpec, setPhysicianSpec] = useState('');
@@ -119,13 +119,16 @@ export default function EditBeneficiaryScreen() {
                     setAddress(beneficiary.address || '');
                     setConditions(beneficiary.conditions?.map((c: any) => c.condition?.name) || []);
                     setMedications(beneficiary.medicationList?.map((m: any) => ({
+                        id: m.id,
                         name: m.name,
                         dosage: m.dosage,
-                        frequency: m.frequency,
+                        route: m.route || 'oral',
+                        cadence: m.cadence || 'daily',
+                        frequency: m.frequency || 'once_daily',
+                        timeSlots: m.timeSlots || [],
                         instructions: m.instructions || '',
                         startDate: m.startDate || '',
                         endDate: m.endDate || '',
-                        timesPerDay: m.timeSlots || [],
                         setReminders: !!m.setReminders
                     })) || []);
                     setPhysicianName(beneficiary.primaryPhysicianName || '');
@@ -518,19 +521,12 @@ export default function EditBeneficiaryScreen() {
                 </View>
             </Modal>
 
-            <AddMedicineModal
+            <AddMedicationModal
                 visible={showMedicineModal}
                 onClose={() => setShowMedicineModal(false)}
                 onSave={async (med) => {
                     setMedications(prev => [...prev, {
-                        name: med.name,
-                        dosage: med.dosage,
-                        frequency: med.frequency,
-                        instructions: med.instructions || '',
-                        startDate: med.startDate || '',
-                        endDate: med.endDate || '',
-                        timesPerDay: med.timesPerDay || [],
-                        setReminders: !!med.setReminders
+                        ...med,
                     }]);
                     setShowMedicineModal(false);
                 }}

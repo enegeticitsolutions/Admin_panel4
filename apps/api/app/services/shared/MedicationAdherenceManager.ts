@@ -33,6 +33,51 @@ export class MedicationAdherenceManager {
     }
 
     /**
+     * Determines whether a medication is due on a given target calendar date
+     * based on its cadence (daily, alternate, weekly, monthly) or legacy frequency.
+     */
+    public static isMedicationDueOnDate(
+        med: { startDate: Date | string; frequency?: string; cadence?: string },
+        targetDate: Date
+    ): boolean {
+        // Resolve cadence (with backward compatibility for legacy frequency values)
+        let cadence = med.cadence || 'daily';
+        const freq = med.frequency;
+        if (freq === 'alternate' || freq === 'alternate_days') cadence = 'alternate';
+        else if (freq === 'weekly') cadence = 'weekly';
+        else if (freq === 'fortnightly') cadence = 'fortnightly';
+        else if (freq === 'monthly') cadence = 'monthly';
+
+        if (cadence === 'daily') {
+            return true;
+        }
+
+        const start = new Date(med.startDate);
+        start.setHours(0, 0, 0, 0);
+        const target = new Date(targetDate);
+        target.setHours(0, 0, 0, 0);
+
+        if (target < start) return false;
+
+        const diffTime = target.getTime() - start.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+        if (cadence === 'alternate' || cadence === 'alternate_days') {
+            return diffDays % 2 === 0;
+        }
+        if (cadence === 'weekly') {
+            return diffDays % 7 === 0;
+        }
+        if (cadence === 'fortnightly') {
+            return diffDays % 14 === 0;
+        }
+        if (cadence === 'monthly') {
+            return target.getDate() === start.getDate();
+        }
+        return true;
+    }
+
+    /**
      * Retrieves all active medications scheduled for today.
      * If no medications are active for today, scans forward to find the most upcoming
      * active medication start date and generates the schedule timeline for that day instead,
@@ -77,17 +122,23 @@ export class MedicationAdherenceManager {
             const currentTime = new Date();
 
             for (const med of medications) {
+                // If frequency is alternate, weekly, or monthly, verify if it is due on this day
+                if (!MedicationAdherenceManager.isMedicationDueOnDate(med, start)) {
+                    continue;
+                }
+
                 // Translate frequency & time slots
                 let slots: string[] = med.timeSlots || [];
                 if (slots.length === 0) {
-                    if (med.frequency === 'once_daily') {
-                        slots = ['08:00 AM'];
-                    } else if (med.frequency === 'twice_daily') {
+                    const freqStr = (med.frequency as string) || 'once_daily';
+                    if (freqStr === 'twice_daily') {
                         slots = ['08:00 AM', '08:00 PM'];
-                    } else if (med.frequency === 'thrice_daily') {
+                    } else if (freqStr === 'thrice_daily') {
                         slots = ['08:00 AM', '02:00 PM', '08:00 PM'];
+                    } else if (freqStr === 'four_times_daily') {
+                        slots = ['08:00 AM', '02:00 PM', '06:00 PM', '08:00 PM'];
                     } else {
-                        slots = ['08:00 AM']; // fallback
+                        slots = ['08:00 AM']; // once_daily or fallback
                     }
                 }
 
@@ -336,7 +387,16 @@ export class MedicationAdherenceManager {
             const diffTime = effectiveEnd.getTime() - effectiveStart.getTime();
             if (diffTime >= 0) {
                 const daysActive = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
-                totalExpectedDoses += daysActive * dailyDoses;
+                let multiplier = daysActive;
+                const cadence = (med as any).cadence || med.frequency;
+                if (cadence === 'alternate' || cadence === 'alternate_days') {
+                    multiplier = Math.ceil(daysActive / 2);
+                } else if (cadence === 'weekly') {
+                    multiplier = Math.max(1, Math.ceil(daysActive / 7));
+                } else if (cadence === 'monthly') {
+                    multiplier = Math.max(1, Math.ceil(daysActive / 30));
+                }
+                totalExpectedDoses += multiplier * dailyDoses;
             }
         }
 
@@ -405,8 +465,11 @@ export class MedicationAdherenceManager {
             hours = 18; // 6:00 PM
             minutes = 0;
         } else if (cleaned === 'NIGHT') {
-            hours = 21; // 9:00 PM
-            minutes = 30; // 9:30 PM
+            hours = 20; // 8:00 PM
+            minutes = 0;
+        } else if (cleaned === 'BEDTIME') {
+            hours = 21; // 9:30 PM
+            minutes = 30;
         } else {
             const timeParts = cleaned.split(':');
             if (timeParts.length >= 2) {

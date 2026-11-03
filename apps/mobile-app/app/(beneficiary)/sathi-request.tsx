@@ -5,19 +5,30 @@ import { useLocalSearchParams } from 'expo-router';
 import { SaathiView } from '@/components/shared/SaathiView';
 
 export default function SathiRequestScreen() {
-  const { sathiId } = useLocalSearchParams();
-  const [beneficiaryId, setBeneficiaryId] = useState<string | null>(null);
+  const { sathiId, beneficiaryId: paramBeneficiaryId, beneficiaryName: paramBeneficiaryName } = useLocalSearchParams();
+  const [beneficiaryId, setBeneficiaryId] = useState<string | null>((paramBeneficiaryId as string) || null);
+  const [beneficiaryName, setBeneficiaryName] = useState<string | null>((paramBeneficiaryName as string) || null);
 
   useEffect(() => {
+    if (paramBeneficiaryId) {
+      setBeneficiaryId(paramBeneficiaryId as string);
+      if (paramBeneficiaryName) {
+        setBeneficiaryName(paramBeneficiaryName as string);
+      }
+      return;
+    }
     const loadUser = async () => {
       const userStr = await AsyncStorage.getItem('userData');
       if (userStr) {
         const user = JSON.parse(userStr);
         setBeneficiaryId(user.id);
+        if (!paramBeneficiaryName) {
+          setBeneficiaryName(user.name || null);
+        }
       }
     };
     loadUser();
-  }, []);
+  }, [paramBeneficiaryId, paramBeneficiaryName]);
 
   if (!beneficiaryId) {
     return (
@@ -27,5 +38,11 @@ export default function SathiRequestScreen() {
     );
   }
 
-  return <SaathiView beneficiaryId={beneficiaryId} initialVolunteerId={sathiId as string} />;
+  return (
+    <SaathiView
+      beneficiaryId={beneficiaryId}
+      beneficiaryName={beneficiaryName || undefined}
+      initialVolunteerId={sathiId as string}
+    />
+  );
 }

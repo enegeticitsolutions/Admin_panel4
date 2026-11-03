@@ -503,7 +503,9 @@ export function SaathiView({
             <TouchableOpacity onPress={() => onBackPress ? onBackPress() : safeBack()} style={styles.backBtn}>
               <Feather name="arrow-left" size={24} color="#000" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Saathi Network</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {beneficiaryName ? `Saathi • ${beneficiaryName}` : 'Saathi Network'}
+            </Text>
             <View style={{ width: 24 }} />
           </View>
         )}
@@ -515,19 +517,19 @@ export function SaathiView({
           }
         >
           <MaterialCommunityIcons name="account-group-outline" size={64} color={accentColor} style={{ marginBottom: 16 }} />
-          <Text style={styles.errorTitle}>Not Eligible</Text>
+          <Text style={styles.errorTitle}>No Active Saathi Hours</Text>
           <Text style={styles.errorDesc}>
-            Your active subscription package does not include Sathi Companion hours. Please contact your coordinator to upgrade your package benefits.
+            {beneficiaryName ? `${beneficiaryName}'s current care package` : 'Your current care package'} does not include active Saathi Companion hours. Explore our care packages or top up hours to request a verified companion.
           </Text>
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
             <TouchableOpacity
-              style={[styles.closeBtn, { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' }]}
-              onPress={() => onRefresh()}
+              style={[styles.closeBtn, { backgroundColor: '#FF6A00', paddingHorizontal: 16 }]}
+              onPress={() => router.push('/(setup)/subscription-packages')}
             >
-              <Text style={[styles.closeBtnText, { color: '#374151' }]}>Refresh</Text>
+              <Text style={[styles.closeBtnText, { color: '#FFFFFF' }]}>Browse Care Plans</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: accentColor }]} onPress={() => onBackPress ? onBackPress() : safeBack()}>
-              <Text style={styles.closeBtnText}>Go Back</Text>
+            <TouchableOpacity style={[styles.closeBtn, { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' }]} onPress={() => onBackPress ? onBackPress() : safeBack()}>
+              <Text style={[styles.closeBtnText, { color: '#374151' }]}>Go Back</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -706,7 +708,9 @@ export function SaathiView({
         <TouchableOpacity onPress={() => safeBack()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Saathi Network</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {beneficiaryName ? `Saathi • ${beneficiaryName}` : 'Saathi Network'}
+        </Text>
         <View style={{ width: 36 }} />
       </View>
 

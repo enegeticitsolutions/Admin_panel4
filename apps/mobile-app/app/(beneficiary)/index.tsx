@@ -35,6 +35,11 @@ import {
     JoinCareCircleModal,
     RenewOrLinkModal,
 } from '@/components/dashboard';
+import {
+    SaathiIntroModal,
+    SaathiBeneficiaryPickerModal,
+    SaathiEligibleMember,
+} from '@/components/saathi';
 
 
 const headerPattern = require('@/assets/images/header-pattern.png');
@@ -103,6 +108,9 @@ export default function BeneficiaryDashboard() {
     const [showJoinCircleModal, setShowJoinCircleModal] = useState<boolean>(false);
     const [showRenewalModal, setShowRenewalModal] = useState<boolean>(false);
     const [renewalTargetBen, setRenewalTargetBen] = useState<{ id: string; name: string; relationship?: string } | null>(null);
+    const [sathiEligibleBeneficiaries, setSathiEligibleBeneficiaries] = useState<any[]>([]);
+    const [showSaathiIntroModal, setShowSaathiIntroModal] = useState<boolean>(false);
+    const [showSaathiPickerModal, setShowSaathiPickerModal] = useState<boolean>(false);
 
     // Pulsing animation for the SOS button while triggering
     const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -145,6 +153,19 @@ export default function BeneficiaryDashboard() {
                 const sathiData = await sathiRes.json();
                 if (sathiRes.ok && sathiData?.data) {
                     setSathiEligible(sathiData.data.eligible);
+                }
+
+                // Check sathi eligible beneficiaries for subscriber
+                try {
+                    const sathiBenRes = await fetch(`${API_URL}/subscriber/beneficiaries/sathi-eligible`, {
+                        headers: { Authorization: `Bearer ${storedToken}` }
+                    });
+                    const sathiBenData = await sathiBenRes.json();
+                    if (sathiBenRes.ok && sathiBenData?.success && Array.isArray(sathiBenData?.data)) {
+                        setSathiEligibleBeneficiaries(sathiBenData.data);
+                    }
+                } catch (benErr) {
+                    console.warn('[SathiEligibleBeneficiaries] Error fetching:', benErr);
                 }
             } catch (err) {
                 console.error('[EligibilityCheck] Error checking on mount:', err);
@@ -305,6 +326,84 @@ export default function BeneficiaryDashboard() {
             } catch (_) { }
         }
         return b.age ? `${b.age} yrs` : '';
+    };
+
+    const getEligibleSaathiList = (): SaathiEligibleMember[] => {
+        const list: SaathiEligibleMember[] = [];
+
+        // 1. Personal user if eligible
+        if (sathiEligible && user?.id) {
+            list.push({
+                id: user.id,
+                name: user.name || 'Personal Account',
+                relationship: 'Self',
+                isPersonal: true,
+                photo: (user as any)?.profilePhoto || (user as any)?.photo || null,
+            });
+        }
+
+        // 2. Beneficiaries returned by /sathi-eligible
+        const seenIds = new Set(list.map((m) => m.id));
+        (sathiEligibleBeneficiaries || []).forEach((b: any) => {
+            if (!seenIds.has(b.id)) {
+                seenIds.add(b.id);
+                list.push({
+                    id: b.id,
+                    name: b.name || `${b.firstName || ''} ${b.lastName || ''}`.trim() || 'Family Member',
+                    relationship: b.relationship || 'Family',
+                    photo: b.photo || null,
+                    age: b.age || null,
+                    planName: b.activePackageName || b.packageName || undefined,
+                });
+            }
+        });
+
+        // 3. Fallback: check familyBeneficiaries if plan includes sathi
+        (familyBeneficiaries || []).forEach((b: any) => {
+            if (
+                !seenIds.has(b.id) &&
+                b.hasActivePlan &&
+                (b.sathiEligible || b.packageName?.toLowerCase?.().includes('sathi') || b.packageName?.toLowerCase?.().includes('premium'))
+            ) {
+                seenIds.add(b.id);
+                list.push({
+                    id: b.id,
+                    name: b.name || `${b.firstName || ''} ${b.lastName || ''}`.trim() || 'Family Member',
+                    relationship: b.relationship || 'Family',
+                    photo: b.photo || null,
+                    age: b.age || null,
+                    planName: b.packageName || undefined,
+                });
+            }
+        });
+
+        return list;
+    };
+
+    const handleSaathiPress = () => {
+        const eligibleList = getEligibleSaathiList();
+
+        if (eligibleList.length === 0) {
+            // No Saathi package active -> show educational overview modal
+            setShowSaathiIntroModal(true);
+            return;
+        }
+
+        if (eligibleList.length === 1) {
+            // Exactly 1 eligible profile -> directly open
+            const target = eligibleList[0];
+            router.push({
+                pathname: '/(beneficiary)/sathi-request',
+                params: {
+                    beneficiaryId: target.id,
+                    beneficiaryName: target.name,
+                },
+            });
+            return;
+        }
+
+        // Multiple eligible profiles -> open Beneficiary Selector Modal
+        setShowSaathiPickerModal(true);
     };
 
     return (
@@ -471,7 +570,7 @@ export default function BeneficiaryDashboard() {
                 {/* ── Quick Actions Grid ── */}
                 <QuickActionsSection
                     actionCardWidth={actionCardWidth}
-                    sathiEligible={sathiEligible}
+                    sathiEligible={sathiEligible || sathiEligibleBeneficiaries.length > 0}
                     hasFamilyOrPlans={hasFamilyOrPlans}
                     onFamilyConnectPress={() => {
                         if (!hasFamilyOrPlans) {
@@ -483,6 +582,7 @@ export default function BeneficiaryDashboard() {
                     onLogVitalsPress={() => {
                         router.push('/(beneficiary)/vitals');
                     }}
+                    onSaathiPress={handleSaathiPress}
                     onActionPress={(route) => router.push(route as any)}
                 />
 
@@ -590,6 +690,37 @@ export default function BeneficiaryDashboard() {
                 }}
                 onSuccess={() => {
                     refetchSubscriberData();
+                }}
+            />
+
+            {/* Saathi Educational & Discovery Modal */}
+            <SaathiIntroModal
+                visible={showSaathiIntroModal}
+                onClose={() => setShowSaathiIntroModal(false)}
+                onExplorePackages={() => router.push('/(setup)/subscription-packages')}
+                onRequestCallback={() => {
+                    Alert.alert(
+                        'Request Callback',
+                        'A dedicated MaiHoonNa Care Coordinator will call you shortly to assist with Saathi companion services.',
+                        [{ text: 'OK' }]
+                    );
+                }}
+            />
+
+            {/* Saathi Beneficiary Selector Modal */}
+            <SaathiBeneficiaryPickerModal
+                visible={showSaathiPickerModal}
+                onClose={() => setShowSaathiPickerModal(false)}
+                beneficiaries={getEligibleSaathiList()}
+                onSelectBeneficiary={(selected) => {
+                    setShowSaathiPickerModal(false);
+                    router.push({
+                        pathname: '/(beneficiary)/sathi-request',
+                        params: {
+                            beneficiaryId: selected.id,
+                            beneficiaryName: selected.name,
+                        },
+                    });
                 }}
             />
         </ScrollView>
