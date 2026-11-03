@@ -70,6 +70,8 @@ export class NotificationProducer {
           event: event.event,
           to: event.recipient.phone,
           variables: event.variables,
+          buttonPayload: event.buttonPayload,
+          components: event.components,
         });
         return { success: directResult.success, error: directResult.error };
       }

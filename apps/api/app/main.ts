@@ -77,6 +77,7 @@ import partnerRouter from './routes/website/partner.routes';
 
 // Payments & Webhook Router (Proxies to admin-backend payments service)
 import paymentsRouter from './api/payments/payment.routes';
+import whatsappWebhookRouter from './api/webhooks/whatsapp.routes';
 
 const app = express();
 
@@ -269,6 +270,12 @@ app.use(`${API}/partners`, partnerRouter);
 
 // Payments & Razorpay Webhook endpoints (app-level proxy to admin-backend)
 app.use(`${API}/payments`, paymentsRouter);
+
+// Inbound WhatsApp Webhook endpoints
+app.use(`${API}/webhooks`, whatsappWebhookRouter);
+app.use('/webhooks', whatsappWebhookRouter);
+app.use('/app-api/webhooks', whatsappWebhookRouter);
+app.use('/api/webhooks', whatsappWebhookRouter);
 
 // ─── 404 ──────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {

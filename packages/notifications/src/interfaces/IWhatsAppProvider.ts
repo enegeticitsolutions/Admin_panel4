@@ -5,6 +5,7 @@ export interface WhatsAppMessage {
   variables?: string[];  // Template body variable substitutions
   components?: Record<string, any>; // Direct custom components (e.g. body_1, button_1)
   mediaUrl?: string;     // Optional image/document URL
+  buttonPayload?: string; // Quick reply callback payload (e.g. ACTIVATE_SUB:123:subscriber)
 }
 
 export interface IWhatsAppProvider {

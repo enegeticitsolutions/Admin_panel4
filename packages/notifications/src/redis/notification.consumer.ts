@@ -175,6 +175,8 @@ export class NotificationConsumer {
           to: phone,
           templateName: templateConfig.template,
           variables: orderedVariables,
+          buttonPayload: eventData.buttonPayload,
+          components: eventData.components,
         });
       }
 
