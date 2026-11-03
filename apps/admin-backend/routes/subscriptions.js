@@ -1,12 +1,22 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { prisma } = require('../lib/prisma');
 const bcrypt = require('bcryptjs');
 const { calculateAge } = require('../utils/age');
 const { publishPackageVersion } = require('../utils/packageVersionHelper');
 const { invoiceService } = require('../modules/invoices/invoice.service');
 const { BillingCalculator } = require('@maihoonna/billing');
-const { notificationService } = require('@maihoonna/notifications');
+const { notificationService, notificationProducer } = require('@maihoonna/notifications');
+
+function generateConsentHmac(subscriptionId, role) {
+  const secret = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+  if (!secret) {
+    console.error('[SECURITY CONFIGURATION ERROR] WHATSAPP_WEBHOOK_VERIFY_TOKEN is missing in environment.');
+    throw new Error('WHATSAPP_WEBHOOK_VERIFY_TOKEN environment variable is required to generate secure consent signatures.');
+  }
+  return crypto.createHmac('sha256', secret).update(`${subscriptionId}:${role}`).digest('hex').slice(0, 16);
+}
 
 function normalizeUnit(unitLabel) {
   if (!unitLabel) return 'visits';
@@ -1374,26 +1384,86 @@ router.post('/admin-enroll', async (req, res) => {
       };
     });
 
-    // Auto-dispatch verification & activation email to subscriber
+    // Auto-dispatch verification & activation email to subscriber (Retained 100% via Notification Event Worker)
     const targetEmail = result?.subscriber?.email || (typeof subscriberEmail === 'string' && subscriberEmail.includes('@') ? subscriberEmail.trim().toLowerCase() : null);
     if (targetEmail) {
-      notificationService.send({
+      notificationProducer.publish({
         channel: 'email',
         event: 'VERIFY_BENEFICIARY_ACTIVATE_PACKAGE',
-        to: targetEmail,
+        recipient: { email: targetEmail },
         variables: {
           subscriber_name: result.subscriber?.name || subscriberName || 'Subscriber',
           subscriber_phone: result.subscriber?.phone || subscriberPhone || '',
           beneficiary_name: result.beneficiary?.name || beneficiaryName || 'Beneficiary',
           package_name: result.package?.name || 'Care Package',
-        }
+        },
+        idempotencyKey: `consent-email-${result.subscription.id}`,
       }).then((emailRes) => {
         if (emailRes?.success) {
-          console.log(`[admin-enroll] Automatic activation email dispatched to ${targetEmail} (MessageId: ${emailRes.messageId})`);
+          console.log(`[admin-enroll] Automatic activation email enqueued for worker delivery to ${targetEmail}`);
         } else {
-          console.warn(`[admin-enroll] Automatic activation email failed:`, emailRes?.error);
+          console.warn(`[admin-enroll] Automatic activation email enqueue failed:`, emailRes?.error);
         }
       }).catch(err => console.error('[admin-enroll] Auto-send activation email error:', err.message));
+    }
+
+    // Auto-dispatch WhatsApp Consent & Activation message (via Notification Event Worker)
+    const cleanPhoneDigits = (p) => String(p || '').replace(/\D/g, '').slice(-10);
+    const subPhone = cleanPhoneDigits(result?.subscriber?.phone || subscriberPhone);
+    const benPhone = cleanPhoneDigits(beneficiaryPhone || result?.beneficiary?.phone);
+    const rel = String(relationship || '').toLowerCase().trim();
+
+    // Check if beneficiary is the same person as the subscriber
+    const isSamePerson =
+      rel === 'self' ||
+      !benPhone ||
+      benPhone === subPhone ||
+      result?.subscriber?.id === result?.beneficiary?.id;
+
+    const whatsappTargets = [];
+    if (subPhone.length === 10) {
+      whatsappTargets.push({
+        role: 'subscriber',
+        phone: subPhone,
+        name: result?.subscriber?.name || subscriberName || 'Subscriber',
+      });
+    }
+
+    if (!isSamePerson && benPhone.length === 10) {
+      whatsappTargets.push({
+        role: 'beneficiary',
+        phone: benPhone,
+        name: result?.beneficiary?.name || beneficiaryName || 'Beneficiary',
+      });
+    }
+
+    const termsUrl = process.env.LEGAL_TERMS_URL || 'https://maihoonna.com/terms';
+
+    try {
+      for (const target of whatsappTargets) {
+        const signature = generateConsentHmac(result.subscription.id, target.role);
+        notificationProducer.publish({
+          channel: 'whatsapp',
+          event: 'PACKAGE_CONSENT_ACTIVATION',
+          recipient: { phone: target.phone },
+          variables: {
+            recipientName: target.name,
+            packageName: result.package?.name || 'Care Package',
+            beneficiaryName: result.beneficiary?.name || beneficiaryName || 'Beneficiary',
+            termsUrl,
+          },
+          buttonPayload: `ACTIVATE_SUB:${result.subscription.id}:${target.role}:${signature}`,
+          idempotencyKey: `consent-sub-${result.subscription.id}-${target.role}`,
+        }).then((waRes) => {
+          if (waRes?.success) {
+            console.log(`[admin-enroll] WhatsApp consent enqueued for worker delivery to ${target.role} (${target.phone})`);
+          } else {
+            console.warn(`[admin-enroll] WhatsApp consent enqueue failed for ${target.role}:`, waRes?.error);
+          }
+        }).catch(err => console.error(`[admin-enroll] Auto-send WhatsApp consent error for ${target.role}:`, err.message));
+      }
+    } catch (waErr) {
+      console.error('[admin-enroll] WhatsApp consent dispatch bypassed (check WHATSAPP_WEBHOOK_VERIFY_TOKEN):', waErr.message);
     }
 
     res.status(201).json({ success: true, data: result });
@@ -1433,6 +1503,85 @@ router.post('/send-activation-email', async (req, res) => {
     console.error('[send-activation-email] Error:', err);
     res.status(500).json({ success: false, message: err.message || 'Internal server error' });
   }
+});
+
+// ── POST /api/subscriptions/send-activation-consent ──────────────────────────
+// On-demand / Resend both Email & WhatsApp consent message
+router.post('/send-activation-consent', async (req, res) => {
+  const {
+    subscriptionId,
+    subscriberEmail,
+    subscriberName,
+    subscriberPhone,
+    beneficiaryName,
+    beneficiaryPhone,
+    packageName,
+    relationship
+  } = req.body;
+
+  const cleanPhoneDigits = (p) => String(p || '').replace(/\D/g, '').slice(-10);
+  const subPhone = cleanPhoneDigits(subscriberPhone);
+  const benPhone = cleanPhoneDigits(beneficiaryPhone);
+  const rel = String(relationship || '').toLowerCase().trim();
+  const isSamePerson = rel === 'self' || !benPhone || benPhone === subPhone;
+  const termsUrl = process.env.LEGAL_TERMS_URL || 'https://maihoonna.com/terms';
+
+  const dispatchResults = { email: null, whatsapp: [] };
+
+  // 1. Dispatch Email if provided
+  if (subscriberEmail && String(subscriberEmail).includes('@')) {
+    try {
+      const emailRes = await notificationService.send({
+        channel: 'email',
+        event: 'VERIFY_BENEFICIARY_ACTIVATE_PACKAGE',
+        to: String(subscriberEmail).trim().toLowerCase(),
+        variables: {
+          subscriber_name: subscriberName || 'Subscriber',
+          subscriber_phone: subscriberPhone || '',
+          beneficiary_name: beneficiaryName || 'Beneficiary',
+          package_name: packageName || 'Care Package',
+        }
+      });
+      dispatchResults.email = emailRes;
+    } catch (e) {
+      dispatchResults.email = { success: false, error: e.message };
+    }
+  }
+
+  // 2. Dispatch WhatsApp Targets
+  const targets = [];
+  if (subPhone.length === 10) {
+    targets.push({ role: 'subscriber', phone: subPhone, name: subscriberName || 'Subscriber' });
+  }
+  if (!isSamePerson && benPhone.length === 10) {
+    targets.push({ role: 'beneficiary', phone: benPhone, name: beneficiaryName || 'Beneficiary' });
+  }
+
+  for (const t of targets) {
+    try {
+      const waRes = await notificationService.send({
+        channel: 'whatsapp',
+        event: 'PACKAGE_CONSENT_ACTIVATION',
+        to: t.phone,
+        variables: {
+          recipientName: t.name,
+          packageName: packageName || 'Care Package',
+          beneficiaryName: beneficiaryName || 'Beneficiary',
+          termsUrl,
+        },
+        buttonPayload: subscriptionId ? `ACTIVATE_SUB:${subscriptionId}:${t.role}:${generateConsentHmac(subscriptionId, t.role)}` : undefined,
+      });
+      dispatchResults.whatsapp.push({ target: t.role, phone: t.phone, ...waRes });
+    } catch (e) {
+      dispatchResults.whatsapp.push({ target: t.role, phone: t.phone, success: false, error: e.message });
+    }
+  }
+
+  res.json({
+    success: true,
+    message: 'Consent notifications dispatched',
+    results: dispatchResults,
+  });
 });
 
 // ── GET /api/subscriptions/:id/balances ──────────────────────────────────────

@@ -50,6 +50,10 @@ export const WhatsAppRegistry: Record<string, WhatsAppTemplateConfig> = {
   PLAN_PURCHASED: { template: 'plan_purchased', body: ['amount', 'beneficiaryName', 'packageName'] },
   PACKAGE_PAYMENT: { template: 'package_payment', body: ['subscriberName', 'packageName', 'amount', 'paymentLink'] },
   ADDON_PAYMENT: { template: 'addon_payment', body: ['subscriberName', 'addonName', 'amount', 'paymentLink'] },
+  PACKAGE_CONSENT_ACTIVATION: {
+    template: process.env.MSG91_WHATSAPP_CONSENT_TEMPLATE || 'package_consent_activation',
+    body: ['recipientName', 'packageName', 'beneficiaryName', 'termsUrl'],
+  },
   PAYMENT_FAILED: { template: 'payment_failed', body: ['subscriberName', 'amount', 'beneficiaryName', 'paymentLink'] },
   SUBSCRIPTION_HOURS_LOW: { template: 'subscription_hours_running_down', body: ['beneficiaryName', 'percentConsumed'] },
   SUBSCRIPTION_HOURS_EXHAUSTED: { template: 'subscription_hours_exhaust', body: ['beneficiaryName'] },

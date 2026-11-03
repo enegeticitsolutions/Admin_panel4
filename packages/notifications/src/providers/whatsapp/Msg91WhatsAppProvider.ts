@@ -26,11 +26,20 @@ export class Msg91WhatsAppProvider implements IWhatsAppProvider {
 
       let componentsObj: Record<string, any> = {};
       if (message.components && Object.keys(message.components).length > 0) {
-        componentsObj = message.components;
+        componentsObj = { ...message.components };
       } else if (message.variables && message.variables.length > 0) {
         message.variables.forEach((val, idx) => {
           componentsObj[`body_${idx + 1}`] = { type: 'text', value: val };
         });
+      }
+
+      // Support interactive button / quick reply callback payload
+      if (message.buttonPayload && !componentsObj['button_1']) {
+        componentsObj['button_1'] = {
+          subtype: 'quick_reply',
+          type: 'payload',
+          value: message.buttonPayload,
+        };
       }
 
       const payload = {

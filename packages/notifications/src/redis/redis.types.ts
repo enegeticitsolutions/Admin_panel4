@@ -21,6 +21,8 @@ export interface NotificationStreamEvent {
   event: string; // E.g. 'VISIT_SCHEDULED', 'OTP_LOGIN', 'CC_PERFORMANCE_RATING'
   recipient: NotificationRecipient;
   variables: Record<string, any>;
+  buttonPayload?: string;
+  components?: Record<string, any>;
   metadata?: {
     screen?: string;
     priority?: 'high' | 'normal' | 'low';

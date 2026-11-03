@@ -12,11 +12,13 @@ export interface SendNotificationParams {
   to: string;
   variables?: Record<string, any>;
   from?: string;
+  components?: Record<string, any>;
+  buttonPayload?: string;
 }
 
 export const notificationService = {
   async send(params: SendNotificationParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    const { channel, event, to, variables = {}, from } = params;
+    const { channel, event, to, variables = {}, from, components, buttonPayload } = params;
 
     // ─── 1. WhatsApp Channel ──────────────────────────────────────────────────
     if (channel === 'whatsapp') {
@@ -42,6 +44,8 @@ export const notificationService = {
         to,
         templateName: templateConfig.template,
         variables: orderedVariables,
+        components,
+        buttonPayload,
       });
     }
 
