@@ -33,16 +33,16 @@ export const config = {
     returnURL: process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you',
     // 1. Partner Form
     partner: {
-      xnQsjsdp: process.env.ZOHO_CRM_PARTNER_XNQSJSDP || process.env.ZOHO_CRM_XNQSJSDP || '',
-      xmIwtLD: process.env.ZOHO_CRM_PARTNER_XMIWTLD || process.env.ZOHO_CRM_XMIWTLD || '',
+      xnQsjsdp: process.env.ZOHO_CRM_PARTNER_XNQSJSDP || '',
+      xmIwtLD: process.env.ZOHO_CRM_PARTNER_XMIWTLD || '',
       actionType: process.env.ZOHO_CRM_PARTNER_ACTION_TYPE || process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=',
       returnURL: process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you',
     },
     // 2. Contact Us / Custom Plan Modal Form
     contact: {
-      xnQsjsdp: process.env.ZOHO_CRM_CONTACT_XNQSJSDP || process.env.ZOHO_CONTACT_US_XNQSJSDP || '',
-      xmIwtLD: process.env.ZOHO_CRM_CONTACT_XMIWTLD || process.env.ZOHO_CONTACT_US_XMIWTLD || '',
-      actionType: process.env.ZOHO_CRM_CONTACT_ACTION_TYPE || process.env.ZOHO_CONTACT_US_ACTION_TYPE || 'TGVhZHM=',
+      xnQsjsdp: process.env.ZOHO_CRM_CONTACT_XNQSJSDP || '',
+      xmIwtLD: process.env.ZOHO_CRM_CONTACT_XMIWTLD || '',
+      actionType: process.env.ZOHO_CRM_CONTACT_ACTION_TYPE || process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=',
       returnURL: 'null',
     },
     // 3. Saathi Volunteer Enrollment Form

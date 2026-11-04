@@ -1829,8 +1829,27 @@ export default function EnrollmentWizardPage() {
           <div className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-primary font-bold"><CheckCircle2 className="w-5 h-5" /> Primary Emergency Contact</CardTitle>
-                <CardDescription>Highest priority contact for emergencies</CardDescription>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-primary font-bold"><CheckCircle2 className="w-5 h-5" /> Primary Emergency Contact</CardTitle>
+                    <CardDescription>Highest priority contact for emergencies</CardDescription>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer bg-blue-50 text-blue-900 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    <input
+                      type="checkbox"
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setEmergencyContactName(subscriberName || '');
+                          setEmergencyContactPhone(subscriberPhone ? subscriberPhone.replace(/\D/g, '').slice(-10) : '');
+                          setEmergencyContactEmail(subscriberEmail || '');
+                          if (relationship && relationship !== 'Self') setEmergencyContactRel(relationship);
+                        }
+                      }}
+                      className="w-4 h-4 accent-primary"
+                    />
+                    Same as Subscriber
+                  </label>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">

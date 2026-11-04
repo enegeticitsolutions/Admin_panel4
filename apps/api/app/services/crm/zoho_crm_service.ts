@@ -27,13 +27,13 @@ export class ZohoCrmService {
     try {
       const formType = leadData.formType || 'default';
 
-      // Resolve form-specific credentials with fallback to default
-      const credentials = (config.zohoCrm as any)[formType] || config.zohoCrm;
+      // Resolve form-specific credentials strictly without fallback
+      const credentials = (config.zohoCrm as any)[formType];
 
-      const xnQsjsdp = credentials?.xnQsjsdp || config.zohoCrm.xnQsjsdp;
-      const xmIwtLD = credentials?.xmIwtLD || config.zohoCrm.xmIwtLD;
-      const actionType = credentials?.actionType || config.zohoCrm.actionType || 'TGVhZHM=';
-      const returnURL = credentials?.returnURL || config.zohoCrm.returnURL || 'null';
+      const xnQsjsdp = credentials?.xnQsjsdp;
+      const xmIwtLD = credentials?.xmIwtLD;
+      const actionType = credentials?.actionType || 'TGVhZHM=';
+      const returnURL = credentials?.returnURL || 'null';
 
       if (!xnQsjsdp || !xmIwtLD) {
         console.warn(`⚠️ [Zoho CRM] Missing Zoho credentials for formType="${formType}". Lead sync skipped.`);
@@ -90,23 +90,38 @@ export class ZohoCrmService {
       // Honeypot field (should be empty)
       formData.append('aG9uZXlwb3Q', '');
 
-      const response = await fetch(ZohoCrmService.ZOHO_WEB_TO_LEAD_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-        body: formData.toString(),
-      });
+      // Retry up to 3 times on transient failure
+      let lastError: Error | null = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const response = await fetch(ZohoCrmService.ZOHO_WEB_TO_LEAD_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+            body: formData.toString(),
+          });
 
-      if (!response.ok) {
-        console.error(`❌ [Zoho CRM] Failed to submit lead for [${formType}]. Status: ${response.status}`);
-        return false;
+          if (response.ok) {
+            const responseText = await response.text();
+            console.log(`✅ [Zoho CRM] Successfully created lead for [${formType}] on attempt ${attempt} (${leadData.email || leadData.phone}). Snippet: ${responseText.slice(0, 100)}`);
+            return true;
+          }
+
+          lastError = new Error(`HTTP ${response.status}`);
+        } catch (fetchErr: any) {
+          lastError = fetchErr;
+        }
+
+        if (attempt < 3) {
+          console.warn(`⚠️ [Zoho CRM] Attempt ${attempt} failed for [${formType}] (${lastError?.message}), retrying in ${attempt}s...`);
+          await new Promise(res => setTimeout(res, 1000 * attempt));
+        }
       }
 
-      const responseText = await response.text();
-      console.log(`✅ [Zoho CRM] Successfully created lead for [${formType}] (${leadData.email || leadData.phone}). Snippet: ${responseText.slice(0, 100)}`);
-      return true;
+      console.error(`❌ [Zoho CRM] Failed to submit lead for [${formType}] after 3 attempts:`, lastError?.message);
+      return false;
 
     } catch (error: any) {
       console.error('❌ [Zoho CRM] Exception while submitting lead:', error.message);
