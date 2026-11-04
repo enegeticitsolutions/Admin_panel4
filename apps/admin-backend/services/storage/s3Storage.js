@@ -3,6 +3,7 @@ const {
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const StorageService = require('./storageInterface');
@@ -92,6 +93,18 @@ class S3Storage extends StorageService {
       Bucket: this.bucketName,
       Key: path,
     }));
+  }
+
+  async exists(path) {
+    try {
+      await this.s3Client.send(new HeadObjectCommand({
+        Bucket: this.bucketName,
+        Key: path,
+      }));
+      return true;
+    } catch (err) {
+      return false;
+    }
   }
 
   /**

@@ -119,8 +119,18 @@ class InvoicePdfService {
 
     let s3Key = invoice.pdfUrl;
 
-    if (!s3Key) {
-      console.log(`[InvoicePdfService] PDF not yet in S3 for ${invoice.invoiceNumber}. Generating and uploading...`);
+    // Verify S3 object actually exists; if missing, automatically generate and upload on the fly
+    let fileExists = false;
+    if (s3Key && typeof storage.exists === 'function') {
+      try {
+        fileExists = await storage.exists(s3Key);
+      } catch (_) {
+        fileExists = false;
+      }
+    }
+
+    if (!s3Key || !fileExists) {
+      console.log(`[InvoicePdfService] PDF not found in S3 for ${invoice.invoiceNumber}. Auto-generating and uploading on the fly...`);
       s3Key = await this.generateAndUploadInvoicePdf(invoice);
     }
 
