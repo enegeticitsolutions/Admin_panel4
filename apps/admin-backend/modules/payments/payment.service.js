@@ -135,9 +135,43 @@ async function processWebhook(signature, bodyBuffer, bodyPayload) {
 
   if (normalized.status === 'PAID') {
     let payment = await paymentRepository.findPaymentByOrderId(normalized.linkId);
+
+    // If not matched by linkId, try finding by gatewayPaymentId or transactionId
+    if (!payment && normalized.gatewayPaymentId) {
+      payment = await prisma.payment.findFirst({
+        where: {
+          OR: [
+            { gatewayPaymentId: normalized.gatewayPaymentId },
+            { transactionId: normalized.gatewayPaymentId },
+          ],
+        },
+      });
+    }
+
+    // Idempotency: If this payment was already recorded as success, skip duplicate webhook processing
+    if (payment && (payment.paymentStatus === 'success' || payment.paymentStatus === 'PAID')) {
+      console.log(`[Payment Service Webhook] Idempotent Guard: Payment ${payment.id} already marked as paid. Skipping duplicate webhook.`);
+      return { processed: true, message: 'Payment already marked as PAID' };
+    }
     
     // Auto-heal for mobile app webhooks: create dummy record if missing
     if (!payment && normalized.rawEntity?.notes?.subscriberId) {
+      // Prevent duplicate creation if gatewayPaymentId already exists anywhere in DB
+      if (normalized.gatewayPaymentId) {
+        const existingTxn = await prisma.payment.findFirst({
+          where: {
+            OR: [
+              { gatewayPaymentId: normalized.gatewayPaymentId },
+              { transactionId: normalized.gatewayPaymentId },
+            ],
+          },
+        });
+        if (existingTxn) {
+          console.log(`[Payment Service Webhook] Idempotent Guard: Transaction ${normalized.gatewayPaymentId} already exists in DB as payment ${existingTxn.id}. Skipping duplicate creation.`);
+          return { processed: true, message: 'Transaction already recorded' };
+        }
+      }
+
       const notes = normalized.rawEntity.notes;
       payment = await paymentRepository.createPendingPaymentRecord({
         subscriberId: notes.subscriberId,
