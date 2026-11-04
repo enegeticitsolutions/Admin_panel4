@@ -6,6 +6,7 @@ import {
   DiscountAllocator,
   TaxEngine,
   numberToWords,
+  renderInvoiceHtml,
 } from '../src';
 
 describe('Billing Engine - Core Invariants', () => {
@@ -127,5 +128,45 @@ describe('Billing Engine - Core Invariants', () => {
     // GST on 800 at 18% = 144
     assert.strictEqual(result.taxAmount, 144);
     assert.strictEqual(result.totalAmount, 944);
+  });
+
+  test('renderInvoiceHtml displays explicit 0.00 for non-applicable taxes in Intra-State and Inter-State', () => {
+    // 1. Intra-State (Haryana)
+    const intraSnapshot = BillingCalculator.calculate({
+      packageTotalBasePrice: 1000,
+      customerState: 'Haryana',
+      companyState: 'Haryana',
+      items: [{ name: 'Elder Care', quantity: 1, nominalCost: 1000, gstRate: 18 }],
+    });
+
+    const intraHtml = renderInvoiceHtml({
+      invoiceNumber: 'MHN/INV/2026-27/00001',
+      company: { name: 'MaiHoonNa', address: 'Gurugram', gstin: '06AAUCM9447N1ZE', pan: 'AAUCM9447N', cin: 'U86900HR', email: 'info@mhn.in', phone: '9999999999' },
+      recipient: { name: 'John Doe', address: 'DLF Phase 5, Gurgaon' },
+      snapshot: intraSnapshot,
+    });
+
+    assert.ok(intraHtml.includes('<td>CGST:</td>\n            <td class="text-right font-mono">₹90.00</td>'));
+    assert.ok(intraHtml.includes('<td>SGST:</td>\n            <td class="text-right font-mono">₹90.00</td>'));
+    assert.ok(intraHtml.includes('<td>IGST:</td>\n            <td class="text-right font-mono">₹0.00</td>'));
+
+    // 2. Inter-State (Karnataka / Delhi)
+    const interSnapshot = BillingCalculator.calculate({
+      packageTotalBasePrice: 1000,
+      customerState: 'Delhi',
+      companyState: 'Haryana',
+      items: [{ name: 'Elder Care', quantity: 1, nominalCost: 1000, gstRate: 18 }],
+    });
+
+    const interHtml = renderInvoiceHtml({
+      invoiceNumber: 'MHN/INV/2026-27/00002',
+      company: { name: 'MaiHoonNa', address: 'Gurugram', gstin: '06AAUCM9447N1ZE', pan: 'AAUCM9447N', cin: 'U86900HR', email: 'info@mhn.in', phone: '9999999999' },
+      recipient: { name: 'Jane Smith', address: 'Connaught Place, New Delhi' },
+      snapshot: interSnapshot,
+    });
+
+    assert.ok(interHtml.includes('<td>CGST:</td>\n            <td class="text-right font-mono">₹0.00</td>'));
+    assert.ok(interHtml.includes('<td>SGST:</td>\n            <td class="text-right font-mono">₹0.00</td>'));
+    assert.ok(interHtml.includes('<td>IGST:</td>\n            <td class="text-right font-mono">₹180.00</td>'));
   });
 });

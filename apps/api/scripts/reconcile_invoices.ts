@@ -141,7 +141,7 @@ export async function reconcileInvoices(dryRun = false) {
       const baseAmount = Math.round((totalAmount / 1.18) * 100) / 100;
       const taxAmount = Math.round((totalAmount - baseAmount) * 100) / 100;
       const customerState = p.subscription?.beneficiary?.state || p.subscriber?.state || 'Haryana';
-      const isHaryana = customerState.trim().toLowerCase() === 'haryana';
+      const isHaryana = customerState.trim().toLowerCase() === 'haryana' || ['gurgaon', 'gurugram', 'faridabad', 'panipat', 'ambala', 'karnal'].includes(customerState.trim().toLowerCase());
 
       const cgstAmount = isHaryana ? Math.round((taxAmount / 2) * 100) / 100 : 0;
       const sgstAmount = isHaryana ? Math.round((taxAmount - cgstAmount) * 100) / 100 : 0;

@@ -79,17 +79,27 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
   const INDIAN_STATE_CODES: Record<string, string> = {
     'jammu & kashmir': '01', 'jammu and kashmir': '01',
     'himachal pradesh': '02', 'punjab': '03', 'chandigarh': '04',
-    'uttarakhand': '05', 'uttaranchal': '05', 'haryana': '06', 'delhi': '07',
-    'rajasthan': '08', 'uttar pradesh': '09', 'bihar': '10', 'sikkim': '11',
-    'arunachal pradesh': '12', 'nagaland': '13', 'manipur': '14', 'mizoram': '15',
-    'tripura': '16', 'meghalaya': '17', 'assam': '18', 'west bengal': '19',
-    'jharkhand': '20', 'odisha': '21', 'orissa': '21', 'chhattisgarh': '22',
-    'madhya pradesh': '23', 'gujarat': '24',
+    'uttarakhand': '05', 'uttaranchal': '05',
+    'haryana': '06', 'gurgaon': '06', 'gurugram': '06', 'faridabad': '06',
+    'delhi': '07', 'new delhi': '07', 'delhi ncr': '07', 'ncr': '07',
+    'rajasthan': '08', 'jaipur': '08',
+    'uttar pradesh': '09', 'noida': '09', 'greater noida': '09', 'ghaziabad': '09',
+    'bihar': '10', 'patna': '10',
+    'sikkim': '11', 'arunachal pradesh': '12', 'nagaland': '13', 'manipur': '14', 'mizoram': '15',
+    'tripura': '16', 'meghalaya': '17', 'assam': '18',
+    'west bengal': '19', 'kolkata': '19', 'calcutta': '19',
+    'jharkhand': '20', 'ranchi': '20', 'odisha': '21', 'orissa': '21', 'chhattisgarh': '22',
+    'madhya pradesh': '23', 'bhopal': '23', 'indore': '23',
+    'gujarat': '24', 'ahmedabad': '24',
     'dadra and nagar haveli and daman and diu': '26',
-    'maharashtra': '27', 'andhra pradesh': '28', 'karnataka': '29', 'goa': '30',
-    'lakshadweep': '31', 'kerala': '32', 'tamil nadu': '33',
+    'maharashtra': '27', 'mumbai': '27', 'pune': '27',
+    'andhra pradesh': '28',
+    'karnataka': '29', 'bangalore': '29', 'bengaluru': '29',
+    'goa': '30', 'lakshadweep': '31', 'kerala': '32',
+    'tamil nadu': '33', 'chennai': '33',
     'puducherry': '34', 'pondicherry': '34',
-    'andaman and nicobar islands': '35', 'telangana': '36', 'ladakh': '38',
+    'andaman and nicobar islands': '35',
+    'telangana': '36', 'hyderabad': '36', 'ladakh': '38',
   };
   const getStateCode = (s: string) => INDIAN_STATE_CODES[s?.trim().toLowerCase()] || '';
 
@@ -114,7 +124,11 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
   const cgstAmount    = Number(data.cgstAmount || 0);
   const sgstAmount    = Number(data.sgstAmount || 0);
   const igstAmount    = Number(data.igstAmount || 0);
-  const isInterState  = igstAmount > 0;
+  const posRaw  = data.placeOfSupply || '';
+  const posCode = getStateCode(posRaw);
+  const posDisplay = posRaw ? `${posRaw}${posCode ? ` (${posCode})` : ''}` : '—';
+  const subStateCode = getStateCode(posRaw);
+  const isInterState = igstAmount > 0 || (posRaw && posRaw.trim().toLowerCase() !== 'haryana' && !['gurgaon', 'gurugram', 'faridabad'].includes(posRaw.trim().toLowerCase()));
 
   // Predefined tenure/duration discounts are already baked into the package price.
   // In the discount section, ONLY applied coupon and Saathi discounts are shown.
@@ -125,12 +139,6 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
   const payableAmount  = Number(data.totalAmount !== undefined && data.totalAmount !== null
     ? data.totalAmount
     : Math.max(0, baseAmount + cgstAmount + sgstAmount + igstAmount - totalDiscount));
-
-  // ── Place of supply ───────────────────────────────────────────────────────
-  const posRaw  = data.placeOfSupply || '';
-  const posCode = getStateCode(posRaw);
-  const posDisplay = posRaw ? `${posRaw}${posCode ? ` (${posCode})` : ''}` : '—';
-  const subStateCode = getStateCode(posRaw);
 
   // ── Items table ───────────────────────────────────────────────────────────
   let totalNetAmount  = 0;
@@ -207,10 +215,12 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
   }
 
   // ── GST summary ───────────────────────────────────────────────────────────
-  const gstRows = isInterState
-    ? `<tr><td>Total IGST:</td><td class="text-right">₹${igstAmount.toFixed(2)}</td></tr>`
-    : `<tr><td>Total CGST:</td><td class="text-right">₹${cgstAmount.toFixed(2)}</td></tr>
-       <tr><td>Total SGST:</td><td class="text-right">₹${sgstAmount.toFixed(2)}</td></tr>`;
+  // Statutory requirement: Explicitly display all GST components so 0 is shown when not applicable
+  const gstRows = `
+    <tr><td>Total CGST:</td><td class="text-right">₹${cgstAmount.toFixed(2)}</td></tr>
+    <tr><td>Total SGST:</td><td class="text-right">₹${sgstAmount.toFixed(2)}</td></tr>
+    <tr><td>Total IGST:</td><td class="text-right">₹${igstAmount.toFixed(2)}</td></tr>
+  `;
 
   const discountRows = totalDiscount > 0 ? `
     ${couponDiscount > 0 ? `<tr><td>Discount:</td><td class="text-right">-₹${couponDiscount.toFixed(2)}</td></tr>` : ''}
