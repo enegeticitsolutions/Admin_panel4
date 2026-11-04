@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -12,10 +12,11 @@ import {
     useWindowDimensions,
     Alert,
     Animated,
+    RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Feather, AntDesign, Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import { API_URL } from '@/constants/api';
@@ -80,13 +81,26 @@ interface DashboardData {
 export default function BeneficiaryDashboard() {
     const { width } = useWindowDimensions();
     const insets = useSafeAreaInsets();
-    const MAX_CONTENT_WIDTH = 800;
-    const BASE_HORIZONTAL_PADDING = 16;
-    const contentWidth = Math.min(Math.max(width - BASE_HORIZONTAL_PADDING * 2, 0), MAX_CONTENT_WIDTH);
-    const responsiveContentStyle = { width: contentWidth, alignSelf: 'center' as const };
-    const numColumns = contentWidth >= 600 ? 4 : 2;
-    const availableGridWidth = contentWidth - 32; // account for mainContent paddingHorizontal: 16 (16 * 2)
-    const actionCardWidth = Math.floor((availableGridWidth - ((numColumns - 1) * 16)) / numColumns);
+    
+    // Standardized containerisation across Android & iOS (compact phones, modern flagships, tablets)
+    const isTablet = width >= 768;
+    const MAX_CONTAINER_WIDTH = 640;
+    const horizontalGutter = width < 380 ? 12 : 16;
+    const containerWidth = Math.min(width, MAX_CONTAINER_WIDTH);
+    const innerContentWidth = containerWidth - (horizontalGutter * 2);
+
+    // Responsive grid for Quick Actions
+    const numColumns = isTablet ? 4 : 2;
+    const gridGap = 12;
+    const actionCardWidth = Math.floor((innerContentWidth - ((numColumns - 1) * gridGap)) / numColumns);
+
+    const responsiveContainerStyle = {
+        width: '100%' as const,
+        maxWidth: MAX_CONTAINER_WIDTH,
+        alignSelf: 'center' as const,
+        paddingHorizontal: horizontalGutter,
+    };
+
     useExitOnBack();
     const { showConfirm, showAlert } = useCustomAlert();
     const { user } = useAuth();
@@ -127,59 +141,62 @@ export default function BeneficiaryDashboard() {
         }
     }, [triggeringEmergency, pulseAnim]);
 
-    useEffect(() => {
-        async function fetchEligibility() {
-            try {
-                const [storedUser, storedToken] = await Promise.all([
-                    AsyncStorage.getItem('userData'),
-                    AsyncStorage.getItem('userToken'),
-                ]);
-                if (!storedUser || !storedToken) return;
-                const parsedUser = JSON.parse(storedUser);
+    const [refreshing, setRefreshing] = useState(false);
 
-                // Check emergency eligibility
-                const emergencyRes = await fetch(`${API_URL}/beneficiary/${parsedUser.id}/emergency/eligibility`, {
-                    headers: { Authorization: `Bearer ${storedToken}` }
-                });
-                const emergencyData = await emergencyRes.json();
-                if (emergencyRes.ok && emergencyData?.data) {
-                    setEmergencyEligible(emergencyData.data.eligible);
-                }
+    const fetchEligibility = useCallback(async () => {
+        try {
+            const [storedUser, storedToken] = await Promise.all([
+                AsyncStorage.getItem('userData'),
+                AsyncStorage.getItem('userToken'),
+            ]);
+            if (!storedUser || !storedToken) return;
+            const parsedUser = JSON.parse(storedUser);
 
-                // Check sathi eligibility
-                const sathiRes = await fetch(`${API_URL}/beneficiary/sathi-requests/${parsedUser.id}/sathi/eligibility`, {
-                    headers: { Authorization: `Bearer ${storedToken}` }
-                });
-                const sathiData = await sathiRes.json();
-                if (sathiRes.ok && sathiData?.data) {
-                    setSathiEligible(sathiData.data.eligible);
-                }
-
-                // Check sathi eligible beneficiaries for subscriber
-                try {
-                    const sathiBenRes = await fetch(`${API_URL}/subscriber/beneficiaries/sathi-eligible`, {
-                        headers: { Authorization: `Bearer ${storedToken}` }
-                    });
-                    const sathiBenData = await sathiBenRes.json();
-                    if (sathiBenRes.ok && sathiBenData?.success && Array.isArray(sathiBenData?.data)) {
-                        setSathiEligibleBeneficiaries(sathiBenData.data);
-                    }
-                } catch (benErr) {
-                    console.warn('[SathiEligibleBeneficiaries] Error fetching:', benErr);
-                }
-            } catch (err) {
-                console.error('[EligibilityCheck] Error checking on mount:', err);
-                setEmergencyEligible(false);
-                setSathiEligible(false);
+            // Check emergency eligibility
+            const emergencyRes = await fetch(`${API_URL}/beneficiary/${parsedUser.id}/emergency/eligibility`, {
+                headers: { Authorization: `Bearer ${storedToken}` }
+            });
+            const emergencyData = await emergencyRes.json();
+            if (emergencyRes.ok && emergencyData?.data) {
+                setEmergencyEligible(emergencyData.data.eligible);
             }
+
+            // Check sathi eligibility
+            const sathiRes = await fetch(`${API_URL}/beneficiary/sathi-requests/${parsedUser.id}/sathi/eligibility`, {
+                headers: { Authorization: `Bearer ${storedToken}` }
+            });
+            const sathiData = await sathiRes.json();
+            if (sathiRes.ok && sathiData?.data) {
+                setSathiEligible(sathiData.data.eligible);
+            }
+
+            // Check sathi eligible beneficiaries for subscriber
+            try {
+                const sathiBenRes = await fetch(`${API_URL}/subscriber/beneficiaries/sathi-eligible`, {
+                    headers: { Authorization: `Bearer ${storedToken}` }
+                });
+                const sathiBenData = await sathiBenRes.json();
+                if (sathiBenRes.ok && sathiBenData?.success && Array.isArray(sathiBenData?.data)) {
+                    setSathiEligibleBeneficiaries(sathiBenData.data);
+                }
+            } catch (benErr) {
+                console.warn('[SathiEligibleBeneficiaries] Error fetching:', benErr);
+            }
+        } catch (err) {
+            console.error('[EligibilityCheck] Error checking:', err);
+            setEmergencyEligible(false);
+            setSathiEligible(false);
         }
-        fetchEligibility();
     }, []);
 
+    useEffect(() => {
+        fetchEligibility();
+    }, [fetchEligibility]);
 
     const {
         data: personalData,
         isLoading: personalLoading,
+        refetch: refetchPersonalData,
     } = useQuery({
         queryKey: ['beneficiaryDashboardInfo', user?.id],
         queryFn: async () => {
@@ -224,6 +241,30 @@ export default function BeneficiaryDashboard() {
             return res.success ? (res.data || res) : null;
         },
     });
+
+    const refetchAllData = useCallback(async () => {
+        await Promise.allSettled([
+            refetchPersonalData(),
+            refetchSubscriberData(),
+            fetchEligibility(),
+        ]);
+    }, [refetchPersonalData, refetchSubscriberData, fetchEligibility]);
+
+    const handlePullToRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await refetchAllData();
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refetchAllData]);
+
+    // Auto-refresh when screen receives focus (e.g. after clicking any event, modal, or returning from actions)
+    useFocusEffect(
+        useCallback(() => {
+            refetchAllData();
+        }, [refetchAllData])
+    );
 
     const handleEmergencyPress = async () => {
         if (triggeringEmergency) return;
@@ -409,10 +450,19 @@ export default function BeneficiaryDashboard() {
     return (
         <ScrollView
             style={styles.container}
-            bounces={false}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}
+            bounces={true}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            stickyHeaderIndices={[0]}
+            refreshControl={
+                <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handlePullToRefresh}
+                    colors={['#FE6700']}
+                    tintColor="#FE6700"
+                    progressBackgroundColor="#FFFFFF"
+                />
+            }
         >
             <View style={styles.headerWrapper}>
                 <ImageBackground
@@ -420,69 +470,78 @@ export default function BeneficiaryDashboard() {
                     style={styles.headerBackground}
                     resizeMode="cover"
                 >
-                    <View style={{ paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 40 : 20), paddingBottom: 20 }}>
-                        <View style={[styles.headerContent, responsiveContentStyle]}>
-                            <View>
-                                <Text style={styles.greetingTitle}>{greeting}, {firstName}!</Text>
-                                <Text style={styles.greetingSubtitle}>
-                                    How are you feeling today?
-                                </Text>
-                            </View>
+                    <View
+                        style={{
+                            paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 24 : 16) + 10,
+                            paddingBottom: 22,
+                        }}
+                    >
+                        <View style={responsiveContainerStyle}>
+                            <View style={styles.headerContent}>
+                                <View style={{ flex: 1, marginRight: 10 }}>
+                                    <Text style={styles.greetingTitle} numberOfLines={1} adjustsFontSizeToFit>
+                                        {greeting}, {firstName}!
+                                    </Text>
+                                    <Text style={styles.greetingSubtitle} numberOfLines={1}>
+                                        How are you feeling today?
+                                    </Text>
+                                </View>
 
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <TouchableOpacity
-                                    style={styles.switchHeaderPill}
-                                    onPress={() => {
-                                        if (!hasFamilyOrPlans) {
-                                            setShowFamilyIntroModal(true);
-                                        } else {
-                                            router.push('/(subscriber)');
-                                        }
-                                    }}
-                                    activeOpacity={0.8}
-                                >
-                                    <Ionicons name="people-outline" size={14} color="#FF6A00" style={{ marginRight: 4 }} />
-                                    <Text style={styles.switchHeaderPillText}>Family</Text>
-                                </TouchableOpacity>
+                                <View style={styles.headerRightGroup}>
+                                    <TouchableOpacity
+                                        style={styles.switchHeaderPill}
+                                        onPress={() => {
+                                            if (!hasFamilyOrPlans) {
+                                                setShowFamilyIntroModal(true);
+                                            } else {
+                                                router.push('/(subscriber)');
+                                            }
+                                        }}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons name="people-outline" size={14} color="#FF6A00" style={{ marginRight: 4 }} />
+                                        <Text style={styles.switchHeaderPillText}>Family</Text>
+                                    </TouchableOpacity>
 
-                                <View style={styles.notificationWrapper}>
-                                    <NotificationBell />
+                                    <View style={styles.notificationWrapper}>
+                                        <NotificationBell />
+                                    </View>
                                 </View>
                             </View>
-                        </View>
 
-                        {emergencyEligible && (
-                            <Animated.View style={{ transform: [{ scale: pulseAnim }], ...responsiveContentStyle }}>
-                                <TouchableOpacity
-                                    style={[styles.emergencyBtn, triggeringEmergency && { opacity: 0.85 }]}
-                                    activeOpacity={0.85}
-                                    onPress={handleEmergencyPress}
-                                    disabled={triggeringEmergency}
-                                >
-                                    {triggeringEmergency ? (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                            <ActivityIndicator color="#FFFFFF" size="small" />
-                                            <Text style={styles.emergencyText}>
-                                                {locationStatus === 'locating' ? 'Locating & Calling...' : 'Dialing Helpline...'}
-                                            </Text>
-                                        </View>
-                                    ) : (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Feather name="phone-call" size={24} color="#FFFFFF" />
-                                            <View style={{ marginLeft: 10 }}>
-                                                <Text style={styles.emergencyText}>Emergency Support</Text>
-                                                <Text style={styles.emergencySubtext}>24/7 Helpline: 011-42258823</Text>
+                            {emergencyEligible && (
+                                <Animated.View style={{ transform: [{ scale: pulseAnim }], width: '100%', marginTop: 12 }}>
+                                    <TouchableOpacity
+                                        style={[styles.emergencyBtn, triggeringEmergency && { opacity: 0.85 }]}
+                                        activeOpacity={0.85}
+                                        onPress={handleEmergencyPress}
+                                        disabled={triggeringEmergency}
+                                    >
+                                        {triggeringEmergency ? (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                <ActivityIndicator color="#FFFFFF" size="small" />
+                                                <Text style={styles.emergencyText}>
+                                                    {locationStatus === 'locating' ? 'Locating & Calling...' : 'Dialing Helpline...'}
+                                                </Text>
                                             </View>
-                                        </View>
-                                    )}
-                                </TouchableOpacity>
-                            </Animated.View>
-                        )}
+                                        ) : (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                                                <Feather name="phone-call" size={22} color="#FFFFFF" />
+                                                <View style={{ marginLeft: 10 }}>
+                                                    <Text style={styles.emergencyText}>Emergency Support</Text>
+                                                    <Text style={styles.emergencySubtext}>24/7 Helpline: 011-42258823</Text>
+                                                </View>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                </Animated.View>
+                            )}
+                        </View>
                     </View>
                 </ImageBackground>
             </View>
 
-            <View style={[styles.mainContent, responsiveContentStyle]}>
+            <View style={[styles.mainContent, responsiveContainerStyle]}>
                 {/* ── Unlinked Care Plans Alert (High Priority Action) ── */}
                 <UnlinkedPlansBanner
                     unlinkedCount={unlinkedSubs.length}
@@ -657,8 +716,9 @@ export default function BeneficiaryDashboard() {
                     onClose={() => {
                         setShowCareCircleModal(false);
                         setSelectedCircleBen(null);
+                        refetchAllData();
                     }}
-                    onMembersChanged={() => refetchSubscriberData()}
+                    onMembersChanged={() => refetchAllData()}
                 />
             )}
 
@@ -666,7 +726,7 @@ export default function BeneficiaryDashboard() {
             <JoinCareCircleModal
                 visible={showJoinCircleModal}
                 onClose={() => setShowJoinCircleModal(false)}
-                onSuccess={() => refetchSubscriberData()}
+                onSuccess={() => refetchAllData()}
             />
 
             {/* Renew / Link Unassigned Care Plan Modal */}
@@ -677,6 +737,7 @@ export default function BeneficiaryDashboard() {
                 onClose={() => {
                     setShowRenewalModal(false);
                     setRenewalTargetBen(null);
+                    refetchAllData();
                 }}
                 onBrowseNew={() => {
                     const benId = renewalTargetBen?.id;
@@ -689,7 +750,7 @@ export default function BeneficiaryDashboard() {
                     });
                 }}
                 onSuccess={() => {
-                    refetchSubscriberData();
+                    refetchAllData();
                 }}
             />
 
@@ -738,13 +799,14 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#FFF0E6',
     },
+    scrollContent: {
+        flexGrow: 1,
+    },
     headerWrapper: {
         width: '100%',
-        borderBottomLeftRadius: 16,
-        borderBottomRightRadius: 16,
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
         overflow: 'hidden',
-        zIndex: 10,
-        elevation: 10,
     },
     headerBackground: {
         width: '100%',
@@ -753,26 +815,31 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingTop: 16,
-        paddingBottom: 16,
+        width: '100%',
     },
     greetingTitle: {
         fontFamily: 'Poppins-Bold',
-        fontSize: 24,
-        lineHeight: 32,
+        fontSize: 22,
+        lineHeight: 28,
         color: '#FFFFFF',
     },
     greetingSubtitle: {
         fontFamily: 'Poppins-Regular',
-        fontSize: 14,
-        lineHeight: 20,
+        fontSize: 13,
+        lineHeight: 18,
         color: 'rgba(255, 255, 255, 0.95)',
+        marginTop: 2,
+    },
+    headerRightGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flexShrink: 0,
     },
     notificationWrapper: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         backgroundColor: '#FFFFFF',
         justifyContent: 'center',
         alignItems: 'center',
@@ -790,9 +857,8 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         paddingVertical: 10,
         paddingHorizontal: 16,
-        minHeight: 58,
-        marginHorizontal: 16,
-        marginTop: 8,
+        minHeight: 52,
+        width: '100%',
         shadowColor: '#E7000B',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
@@ -801,19 +867,18 @@ const styles = StyleSheet.create({
     },
     emergencyText: {
         fontFamily: 'Poppins-SemiBold',
-        fontSize: 16,
-        lineHeight: 22,
+        fontSize: 15,
+        lineHeight: 20,
         color: '#FFFFFF',
     },
     emergencySubtext: {
         fontFamily: 'Poppins-Medium',
-        fontSize: 12,
-        lineHeight: 16,
+        fontSize: 11,
+        lineHeight: 15,
         color: 'rgba(255, 255, 255, 0.92)',
     },
     mainContent: {
-        paddingHorizontal: 16,
-        paddingTop: 20, // Reduced from hypothetical 40 back to 20 because we kept paddingBottom on headerCurve
+        paddingTop: 16,
     },
     switchHeaderPill: {
         flexDirection: 'row',

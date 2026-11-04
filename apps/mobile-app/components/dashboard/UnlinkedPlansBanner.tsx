@@ -55,10 +55,11 @@ export const UnlinkedPlansBanner: React.FC<UnlinkedPlansBannerProps> = ({
 
 const styles = StyleSheet.create({
     card: {
+        width: '100%',
         backgroundColor: '#FFF7ED',
         borderRadius: 18,
         padding: 16,
-        marginBottom: 20,
+        marginBottom: 16,
         borderWidth: 1.5,
         borderColor: '#FFEDD5',
         shadowColor: '#EA580C',

@@ -59,17 +59,9 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
         <View style={styles.container}>
             <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Family Care Activity</Text>
-                <View style={styles.headerRightActions}>
-                    {onOpenJoinCircle && (
-                        <TouchableOpacity onPress={onOpenJoinCircle} style={styles.joinCircleLink} activeOpacity={0.7}>
-                            <Ionicons name="key-outline" size={13} color="#2563EB" style={{ marginRight: 3 }} />
-                            <Text style={styles.joinCircleLinkText}>Join Circle</Text>
-                        </TouchableOpacity>
-                    )}
-                    <TouchableOpacity onPress={onOpenFamilyConnect} activeOpacity={0.7}>
-                        <Text style={styles.linkText}>Family Connect</Text>
-                    </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={onOpenFamilyConnect} activeOpacity={0.7}>
+                    <Text style={styles.linkText}>Family Connect</Text>
+                </TouchableOpacity>
             </View>
 
             {beneficiaries.length > 0 ? (
@@ -80,24 +72,24 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
                             <View style={[styles.snapshotIconBox, { backgroundColor: '#EFF6FF' }]}>
                                 <Ionicons name="people" size={18} color="#2563EB" />
                             </View>
-                            <Text style={styles.snapshotValue}>{beneficiaries.length}</Text>
-                            <Text style={styles.snapshotLabel}>Family Members</Text>
+                            <Text style={styles.snapshotValue} numberOfLines={1}>{beneficiaries.length}</Text>
+                            <Text style={styles.snapshotLabel} numberOfLines={1} adjustsFontSizeToFit>Family Members</Text>
                         </View>
 
                         <View style={styles.snapshotCard}>
                             <View style={[styles.snapshotIconBox, { backgroundColor: '#ECFDF5' }]}>
                                 <Ionicons name="time" size={18} color="#059669" />
                             </View>
-                            <Text style={styles.snapshotValue}>{remainingHours}h</Text>
-                            <Text style={styles.snapshotLabel}>Care Hours Left</Text>
+                            <Text style={styles.snapshotValue} numberOfLines={1}>{remainingHours}h</Text>
+                            <Text style={styles.snapshotLabel} numberOfLines={1} adjustsFontSizeToFit>Care Hours Left</Text>
                         </View>
 
                         <View style={styles.snapshotCard}>
                             <View style={[styles.snapshotIconBox, { backgroundColor: '#FFF7ED' }]}>
                                 <Feather name="calendar" size={18} color="#EA580C" />
                             </View>
-                            <Text style={styles.snapshotValue}>{visitsThisWeek}</Text>
-                            <Text style={styles.snapshotLabel}>Visits This Week</Text>
+                            <Text style={styles.snapshotValue} numberOfLines={1}>{visitsThisWeek}</Text>
+                            <Text style={styles.snapshotLabel} numberOfLines={1} adjustsFontSizeToFit>Visits This Week</Text>
                         </View>
                     </View>
 
@@ -184,14 +176,27 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
                         );
                     })}
 
-                    <TouchableOpacity
-                        style={styles.addMemberRow}
-                        onPress={onAddMember}
-                        activeOpacity={0.85}
-                    >
-                        <Ionicons name="person-add-outline" size={16} color="#FE6700" style={{ marginRight: 8 }} />
-                        <Text style={styles.addMemberRowText}>+ Add Another Family Member</Text>
-                    </TouchableOpacity>
+                    <View style={styles.actionsRow}>
+                        <TouchableOpacity
+                            style={styles.addMemberBtn}
+                            onPress={onAddMember}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="person-add-outline" size={15} color="#FE6700" style={{ marginRight: 6 }} />
+                            <Text style={styles.addMemberBtnText}>Add Member</Text>
+                        </TouchableOpacity>
+
+                        {onOpenJoinCircle && (
+                            <TouchableOpacity
+                                style={styles.joinCircleBtn}
+                                onPress={onOpenJoinCircle}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="key-outline" size={15} color="#2563EB" style={{ marginRight: 6 }} />
+                                <Text style={styles.joinCircleBtnText}>Join Circle</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </>
             ) : (
                 <View style={styles.emptyCard}>
@@ -203,14 +208,27 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
                         <Text style={styles.emptySub}>
                             Add your parents or family members to monitor their health visits and companion support.
                         </Text>
-                        <TouchableOpacity
-                            style={styles.addFamilyBtn}
-                            onPress={onAddMember}
-                            activeOpacity={0.85}
-                        >
-                            <Ionicons name="person-add-outline" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                            <Text style={styles.addFamilyBtnText}>Add Family Member</Text>
-                        </TouchableOpacity>
+                        <View style={styles.emptyActionsRow}>
+                            <TouchableOpacity
+                                style={styles.addFamilyBtn}
+                                onPress={onAddMember}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="person-add-outline" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.addFamilyBtnText}>Add Member</Text>
+                            </TouchableOpacity>
+
+                            {onOpenJoinCircle && (
+                                <TouchableOpacity
+                                    style={styles.emptyJoinBtn}
+                                    onPress={onOpenJoinCircle}
+                                    activeOpacity={0.85}
+                                >
+                                    <Ionicons name="key-outline" size={14} color="#2563EB" style={{ marginRight: 5 }} />
+                                    <Text style={styles.emptyJoinBtnText}>Join Circle</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
                     </View>
                 </View>
             )}
@@ -220,6 +238,7 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
 
 const styles = StyleSheet.create({
     container: {
+        width: '100%',
         marginBottom: 8,
     },
     sectionHeader: {
@@ -228,12 +247,16 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 12,
         marginTop: 8,
+        width: '100%',
+        flexWrap: 'wrap',
+        gap: 6,
     },
     sectionTitle: {
         fontFamily: 'Poppins-SemiBold',
         fontSize: 18,
         lineHeight: 24,
         color: '#0F172A',
+        flexShrink: 1,
     },
     linkText: {
         fontFamily: 'Poppins-Medium',
@@ -242,6 +265,7 @@ const styles = StyleSheet.create({
         color: '#FF6A00',
     },
     snapshotRow: {
+        width: '100%',
         flexDirection: 'row',
         gap: 10,
         marginBottom: 16,
@@ -250,9 +274,10 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
-        paddingVertical: 14,
-        paddingHorizontal: 8,
+        paddingVertical: 12,
+        paddingHorizontal: 6,
         alignItems: 'center',
+        justifyContent: 'center',
         borderWidth: 1,
         borderColor: '#F1F5F9',
         shadowColor: '#000',
@@ -283,6 +308,7 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     familyCard: {
+        width: '100%',
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#FFFFFF',
@@ -386,23 +412,46 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#059669',
     },
-    addMemberRow: {
+    actionsRow: {
+        width: '100%',
+        flexDirection: 'row',
+        gap: 10,
+        marginBottom: 18,
+    },
+    addMemberBtn: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#FFFFFF',
         borderRadius: 14,
         paddingVertical: 12,
-        paddingHorizontal: 16,
-        marginBottom: 18,
+        paddingHorizontal: 8,
         borderWidth: 1,
         borderColor: '#FED7AA',
         borderStyle: 'dashed',
     },
-    addMemberRowText: {
-        fontFamily: 'Poppins-Medium',
+    addMemberBtnText: {
+        fontFamily: 'Poppins-SemiBold',
         fontSize: 13,
         color: '#FE6700',
+    },
+    joinCircleBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#EFF6FF',
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 8,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+    },
+    joinCircleBtnText: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 13,
+        color: '#2563EB',
     },
     emptyCard: {
         flexDirection: 'row',
@@ -444,13 +493,18 @@ const styles = StyleSheet.create({
         lineHeight: 17,
         marginBottom: 10,
     },
+    emptyActionsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+    },
     addFamilyBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        alignSelf: 'flex-start',
         backgroundColor: '#FE6700',
         paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingVertical: 7,
         borderRadius: 8,
     },
     addFamilyBtnText: {
@@ -458,24 +512,19 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#FFFFFF',
     },
-    headerRightActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    joinCircleLink: {
+    emptyJoinBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: '#EFF6FF',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
         borderWidth: 1,
         borderColor: '#BFDBFE',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 8,
     },
-    joinCircleLinkText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 11,
+    emptyJoinBtnText: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 12,
         color: '#2563EB',
     },
     sharedBadge: {
