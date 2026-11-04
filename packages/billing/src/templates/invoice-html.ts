@@ -79,16 +79,9 @@ export function renderInvoiceHtml(opts: RenderInvoiceOptions): string {
       <tr>
         <td class="text-center">${ts.taxRate}%</td>
         <td class="text-right font-mono">₹${ts.taxableAmount.toFixed(2)}</td>
-        ${
-          !isInterState
-            ? `
-          <td class="text-right font-mono">₹${ts.cgstAmount.toFixed(2)}</td>
-          <td class="text-right font-mono">₹${ts.sgstAmount.toFixed(2)}</td>
-        `
-            : `
-          <td class="text-right font-mono" colspan="2">₹${ts.igstAmount.toFixed(2)}</td>
-        `
-        }
+        <td class="text-right font-mono">₹${ts.cgstAmount.toFixed(2)}</td>
+        <td class="text-right font-mono">₹${ts.sgstAmount.toFixed(2)}</td>
+        <td class="text-right font-mono">₹${ts.igstAmount.toFixed(2)}</td>
         <td class="text-right font-mono font-semibold">₹${ts.totalTax.toFixed(2)}</td>
       </tr>
     `
@@ -299,7 +292,9 @@ export function renderInvoiceHtml(opts: RenderInvoiceOptions): string {
             <tr>
               <th class="text-center">Rate</th>
               <th class="text-right">Taxable</th>
-              ${!isInterState ? '<th class="text-right">CGST</th><th class="text-right">SGST</th>' : '<th class="text-right" colspan="2">IGST</th>'}
+              <th class="text-right">CGST</th>
+              <th class="text-right">SGST</th>
+              <th class="text-right">IGST</th>
               <th class="text-right">Tax</th>
             </tr>
           </thead>
@@ -329,9 +324,6 @@ export function renderInvoiceHtml(opts: RenderInvoiceOptions): string {
             <td><strong>Net Taxable Value:</strong></td>
             <td class="text-right font-mono font-semibold">₹${snapshot.taxableAmount.toFixed(2)}</td>
           </tr>
-          ${
-            !isInterState
-              ? `
           <tr>
             <td>CGST:</td>
             <td class="text-right font-mono">₹${snapshot.cgstAmount.toFixed(2)}</td>
@@ -340,14 +332,10 @@ export function renderInvoiceHtml(opts: RenderInvoiceOptions): string {
             <td>SGST:</td>
             <td class="text-right font-mono">₹${snapshot.sgstAmount.toFixed(2)}</td>
           </tr>
-          `
-              : `
           <tr>
             <td>IGST:</td>
             <td class="text-right font-mono">₹${snapshot.igstAmount.toFixed(2)}</td>
           </tr>
-          `
-          }
           ${
             snapshot.miscellaneousCost > 0
               ? `
