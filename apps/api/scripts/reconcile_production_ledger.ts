@@ -442,7 +442,7 @@ async function main() {
         await tx.payment.update({
           where: { id: p.id },
           data: {
-            paymentStatus: 'duplicate_void' as any,
+            paymentStatus: 'failed',
             invoiceNumber: null,
             invoiceId: null,
             failureReason: 'System Audit: Duplicate webhook / payment link entry safely voided in reconciliation',
