@@ -43,7 +43,7 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
     onViewAllMeds,
     onOpenCareCircle,
 }) => {
-    const formatDate = (dateString: string | null) => {
+    const formatDate = (dateString?: string | null) => {
         if (!dateString) return 'Not Scheduled';
         const date = new Date(dateString);
         if (Number.isNaN(date.getTime())) return dateString;
@@ -80,30 +80,28 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
                 </View>
             )}
 
-            {/* ── Personal Stats Row ── */}
-            {(data.nextVisit || data.adherence) && (
-                <View style={styles.statsRow}>
-                    {data.nextVisit && (
-                        <View style={styles.statCard}>
-                            <View style={[styles.statIconBadge, { backgroundColor: '#DBEAFE' }]}>
-                                <Feather name="calendar" size={20} color="#155DFC" />
-                            </View>
-                            <Text style={styles.statLabel}>Next Visit</Text>
-                            <Text style={styles.statValue}>{formatDate(data.nextVisit)}</Text>
-                        </View>
-                    )}
-
-                    {data.adherence && (
-                        <View style={styles.statCard}>
-                            <View style={[styles.statIconBadge, { backgroundColor: '#DCFCE7' }]}>
-                                <Feather name="trending-up" size={20} color="#00A63E" />
-                            </View>
-                            <Text style={styles.statLabel}>Adherence</Text>
-                            <Text style={styles.statValue}>{data.adherence}</Text>
-                        </View>
-                    )}
+            {/* ── Personal Stats Row (Symmetrical 2-Card Layout) ── */}
+            <View style={styles.statsRow}>
+                <View style={styles.statCard}>
+                    <View style={[styles.statIconBadge, { backgroundColor: '#EFF6FF' }]}>
+                        <Feather name="calendar" size={18} color="#2563EB" />
+                    </View>
+                    <Text style={styles.statLabel}>Next Visit</Text>
+                    <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
+                        {formatDate(data.nextVisit)}
+                    </Text>
                 </View>
-            )}
+
+                <View style={styles.statCard}>
+                    <View style={[styles.statIconBadge, { backgroundColor: '#ECFDF5' }]}>
+                        <Feather name="trending-up" size={18} color="#059669" />
+                    </View>
+                    <Text style={styles.statLabel}>Adherence</Text>
+                    <Text style={styles.statValue} numberOfLines={1}>
+                        {data.adherence || '100%'}
+                    </Text>
+                </View>
+            </View>
 
             {/* ── Care Coordinator ── */}
             {data.careCoordinator && (
@@ -195,9 +193,11 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
 
 const styles = StyleSheet.create({
     container: {
+        width: '100%',
         marginBottom: 8,
     },
     careCircleBanner: {
+        width: '100%',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -240,6 +240,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 7,
         borderRadius: 8,
+        flexShrink: 0,
     },
     careCircleShareBtnText: {
         fontFamily: 'Poppins-SemiBold',
@@ -247,15 +248,16 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
     },
     statsRow: {
+        width: '100%',
         flexDirection: 'row',
         gap: 12,
-        marginBottom: 20,
+        marginBottom: 18,
     },
     statCard: {
         flex: 1,
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
-        padding: 16,
+        padding: 14,
         shadowColor: '#000000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
@@ -263,12 +265,12 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     statIconBadge: {
-        width: 36,
-        height: 36,
+        width: 34,
+        height: 34,
         borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 10,
     },
     statLabel: {
         fontFamily: 'Poppins-Regular',
@@ -278,8 +280,8 @@ const styles = StyleSheet.create({
     },
     statValue: {
         fontFamily: 'Poppins-Bold',
-        fontSize: 16,
-        lineHeight: 24,
+        fontSize: 15,
+        lineHeight: 22,
         color: '#0F172A',
         marginTop: 2,
     },

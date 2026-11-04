@@ -65,10 +65,11 @@ export const PersonalCarePromoCard: React.FC<PersonalCarePromoCardProps> = ({
 
 const styles = StyleSheet.create({
     compactCard: {
+        width: '100%',
         backgroundColor: '#FFFFFF',
         borderRadius: 18,
         padding: 16,
-        marginBottom: 20,
+        marginBottom: 16,
         borderWidth: 1,
         borderColor: '#FFE4D6',
         shadowColor: '#FE6700',
@@ -122,10 +123,11 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
     },
     fullCard: {
+        width: '100%',
         backgroundColor: '#FFFFFF',
         borderRadius: 20,
         padding: 18,
-        marginBottom: 20,
+        marginBottom: 16,
         borderWidth: 1,
         borderColor: '#FFE4D6',
         shadowColor: '#FE6700',

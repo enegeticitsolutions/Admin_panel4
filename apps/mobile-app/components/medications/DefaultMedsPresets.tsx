@@ -120,6 +120,7 @@ export const DefaultMedsPresets: React.FC<DefaultMedsPresetsProps> = ({
 const styles = StyleSheet.create({
   container: {
     marginVertical: 12,
+    width: '100%',
   },
   headerRow: {
     flexDirection: 'row',
@@ -129,11 +130,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   title: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 16,
     color: '#111827',
   },
   subtitle: {
+    fontFamily: 'Poppins-Regular',
     fontSize: 12,
     color: '#6B7280',
     marginTop: 1,
@@ -141,10 +143,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     gap: 12,
     paddingRight: 16,
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
   card: {
-    width: 220,
+    width: 224,
+    minHeight: 180,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 14,
@@ -155,6 +158,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
+    justifyContent: 'space-between',
   },
   cardTop: {
     flexDirection: 'row',
@@ -168,8 +172,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   categoryText: {
+    fontFamily: 'Poppins-Bold',
     fontSize: 10,
-    fontWeight: '700',
     textTransform: 'uppercase',
   },
   iconCircle: {
@@ -181,15 +185,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   medName: {
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 15,
-    fontWeight: '700',
     color: '#111827',
     marginBottom: 2,
   },
   dosageText: {
+    fontFamily: 'Poppins-Medium',
     fontSize: 12,
     color: '#4B5563',
-    fontWeight: '600',
     marginBottom: 6,
   },
   timingRow: {
@@ -199,21 +203,23 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   timingText: {
+    fontFamily: 'Poppins-Regular',
     fontSize: 11,
     color: '#6B7280',
     textTransform: 'capitalize',
     flex: 1,
   },
   instructionsText: {
+    fontFamily: 'Poppins-Regular',
     fontSize: 11,
     color: '#9CA3AF',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   cardActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 'auto',
+    marginTop: 8,
   },
   quickAddBtn: {
     flex: 1,
@@ -230,18 +236,18 @@ const styles = StyleSheet.create({
   },
   quickAddBtnText: {
     color: '#FFFFFF',
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 12,
-    fontWeight: '700',
   },
   customizeBtn: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
     backgroundColor: '#F3F4F6',
   },
   customizeBtnText: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontFamily: 'Poppins-Medium',
+    fontSize: 12,
     color: '#374151',
   },
 });

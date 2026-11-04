@@ -19,7 +19,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { API_URL } from '@/constants/api';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 import { DefaultMedsPresets } from '@/components/medications/DefaultMedsPresets';
@@ -139,9 +139,19 @@ type Props = {
 
 export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props) {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
-    const MAX_CONTENT_WIDTH = 440;
-    const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
+
+    // Standardized responsive containerisation across iOS & Android (compact to tablet)
+    const isTablet = width >= 768;
+    const MAX_CONTAINER_WIDTH = 640;
+    const horizontalGutter = width < 380 ? 12 : 16;
+    const containerStyle = {
+        width: '100%' as const,
+        maxWidth: MAX_CONTAINER_WIDTH,
+        alignSelf: 'center' as const,
+        paddingHorizontal: horizontalGutter,
+    };
 
     const [schedule, setSchedule] = useState<MedScheduleItem[]>([]);
     const [metrics, setMetrics] = useState<Metrics>({ average: 100, taken: 0, missed: 0 });
@@ -542,50 +552,54 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
 
     if (loading) {
         return (
-            <SafeAreaView style={styles.safeArea}>
-                <View style={[styles.center, responsiveStyle]}>
+            <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 24 : 16) + 12 }]}>
+                <View style={[styles.center, containerStyle]}>
                     <ActivityIndicator size="large" color="#FE6700" />
                     <Text style={styles.loadingText}>Loading Medications...</Text>
                 </View>
-            </SafeAreaView>
+            </View>
         );
     }
 
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-                <View style={styles.headerContent}>
-                    <Text style={styles.headerTitle}>Medications</Text>
-                    <Text style={styles.headerSub}>Today's medication schedule</Text>
+        <View style={styles.safeArea}>
+            <View style={[styles.headerWrapper, { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 24 : 16) + 8 }]}>
+                <View style={[styles.headerInner, containerStyle]}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+                        <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <View style={styles.headerContent}>
+                        <Text style={styles.headerTitle} numberOfLines={1}>Medications</Text>
+                        <Text style={styles.headerSub} numberOfLines={1}>Today's medication schedule</Text>
+                    </View>
+                    <TouchableOpacity
+                        onPress={() => {
+                            setSelectedPreset(null);
+                            setEditingMed(null);
+                            setShowAddModal(true);
+                        }}
+                        style={styles.addHeaderBtn}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="add" size={18} color="#FE6700" />
+                        <Text style={styles.addHeaderBtnText}>Add</Text>
+                    </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                    onPress={() => {
-                        setSelectedPreset(null);
-                        setEditingMed(null);
-                        setShowAddModal(true);
-                    }}
-                    style={styles.addHeaderBtn}
-                    activeOpacity={0.8}
-                >
-                    <Ionicons name="add" size={18} color="#FF6900" />
-                    <Text style={styles.addHeaderBtnText}>Add</Text>
-                </TouchableOpacity>
             </View>
 
             <ScrollView 
                 style={styles.container} 
-                contentContainerStyle={[styles.content, responsiveStyle]} 
+                contentContainerStyle={[styles.content, containerStyle, { paddingBottom: Math.max(insets.bottom, 16) + 80 }]} 
                 showsVerticalScrollIndicator={false}
+                bounces={true}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />
                 }
             >
                 <View style={styles.topRow}>
-                    <Text style={styles.topTitle}>Medications</Text>
+                    <Text style={styles.topTitle}>Daily Adherence</Text>
                     <View style={styles.toggleContainer}>
+                        <Ionicons name="notifications-outline" size={16} color="#6B7280" style={{ marginRight: 4 }} />
                         <Text style={styles.toggleLabel}>Reminders</Text>
                         <CustomSwitch value={remindersActive} onValueChange={handleToggleReminders} />
                     </View>
@@ -803,24 +817,30 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                 initialData={editingMed}
                 loading={modalLoading}
             />
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#FCFAF7',
     },
-    header: {
+    headerWrapper: {
+        width: '100%',
+        backgroundColor: '#FE6700',
+        borderBottomLeftRadius: 22,
+        borderBottomRightRadius: 22,
+        paddingBottom: 16,
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.18,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    headerInner: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        marginHorizontal: 16,
-        marginTop: 8,
-        backgroundColor: '#FF6900',
-        borderRadius: 20,
         gap: 12,
     },
     backBtn: {
@@ -835,15 +855,16 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     headerTitle: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 17,
-        fontWeight: '800',
+        fontFamily: 'Poppins-Bold',
+        fontSize: 18,
+        lineHeight: 24,
         color: '#FFFFFF',
     },
     headerSub: {
         fontFamily: 'Poppins-Regular',
         fontSize: 12,
-        color: 'rgba(255,255,255,0.9)',
+        lineHeight: 16,
+        color: 'rgba(255,255,255,0.92)',
         marginTop: 1,
     },
     addHeaderBtn: {
@@ -852,7 +873,7 @@ const styles = StyleSheet.create({
         gap: 4,
         backgroundColor: '#FFFFFF',
         paddingHorizontal: 12,
-        paddingVertical: 6,
+        paddingVertical: 7,
         borderRadius: 14,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
@@ -861,19 +882,16 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     addHeaderBtnText: {
-        fontFamily: 'Poppins-Medium',
+        fontFamily: 'Poppins-SemiBold',
         fontSize: 13,
-        fontWeight: '700',
-        color: '#FF6900',
+        color: '#FE6700',
     },
     container: {
         flex: 1,
         backgroundColor: '#FCFAF7',
     },
     content: {
-        paddingHorizontal: 16,
         paddingTop: 16,
-        paddingBottom: 96,
     },
     center: {
         flex: 1,

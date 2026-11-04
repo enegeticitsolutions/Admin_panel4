@@ -128,6 +128,7 @@ export const QuickActionsSection: React.FC<QuickActionsSectionProps> = ({
 
 const styles = StyleSheet.create({
     container: {
+        width: '100%',
         marginBottom: 20,
     },
     sectionHeader: {
@@ -136,6 +137,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         marginBottom: 12,
         marginTop: 8,
+        width: '100%',
     },
     sectionTitle: {
         fontFamily: 'Poppins-SemiBold',
@@ -147,22 +149,24 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
-        rowGap: 16,
+        rowGap: 12,
+        width: '100%',
     },
     card: {
-        height: 132,
+        minHeight: 124,
         borderRadius: 16,
         backgroundColor: '#FFFFFF',
-        padding: 16,
+        padding: 14,
         shadowColor: '#000000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.05,
         shadowRadius: 2,
         elevation: 2,
+        justifyContent: 'space-between',
     },
     iconBadge: {
-        width: 44,
-        height: 44,
+        width: 42,
+        height: 42,
         borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center',
@@ -171,11 +175,13 @@ const styles = StyleSheet.create({
         marginTop: 8,
         fontFamily: 'Poppins-Medium',
         fontSize: 13,
+        lineHeight: 18,
         color: '#000000',
     },
     cardSubtitle: {
         fontFamily: 'Poppins-Regular',
         fontSize: 11,
+        lineHeight: 15,
         color: '#4B5563',
         marginTop: 2,
     },
