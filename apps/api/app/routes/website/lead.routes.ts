@@ -4,14 +4,16 @@ import { createTransporter, isEmailConfigured, formatISTTimestamp } from './util
 import { ZohoCrmService } from '../../services/crm/zoho_crm_service';
 import { parsePhoneNumberWithError } from 'libphonenumber-js';
 import { config } from '../../core/config';
+import { websiteFormLimiter, honeypotCheck, isRecentDuplicateLead } from './utils/formAntiSpam';
 
 const router = Router();
 
 /**
  * POST /api/website/submit-form
  * Handles website lead signup, saves to DB, and dispatches Zoho notification emails.
+ * Protected with IP Rate Limiting, Honeypot bot trap, and 2-hour duplicate suppression.
  */
-router.post('/submit-form', async (req: Request, res: Response) => {
+router.post('/submit-form', websiteFormLimiter, honeypotCheck, async (req: Request, res: Response) => {
   console.log('📩 [Website Lead] Received payload:', req.body);
 
   try {
@@ -43,6 +45,16 @@ router.post('/submit-form', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: 'Invalid mobile number format for the selected country',
+      });
+    }
+
+    // Anti-Spam: Check if an inquiry with this phone or email was submitted in the last 2 hours
+    const isDuplicate = await isRecentDuplicateLead(normalizedPhone, email, 2);
+    if (isDuplicate) {
+      console.log(`ℹ️ [Website Lead] Duplicate suppressed for ${normalizedPhone} (already submitted in last 2h)`);
+      return res.status(200).json({
+        success: true,
+        message: 'Thank you! We already have your inquiry on file, and our team will get in touch shortly.',
       });
     }
 
@@ -152,9 +164,10 @@ router.post('/submit-form', async (req: Request, res: Response) => {
 
 /**
  * POST /api/website/custom-plan
- * Handles bespoke care plan inquiries from the Plans page modal and pushes to Zoho CRM Leads Module
+ * Handles bespoke care plan inquiries from the Plans page modal and pushes to Zoho CRM Leads Module.
+ * Protected with IP Rate Limiting, Honeypot bot trap, and 2-hour duplicate suppression.
  */
-router.post('/custom-plan', async (req: Request, res: Response) => {
+router.post('/custom-plan', websiteFormLimiter, honeypotCheck, async (req: Request, res: Response) => {
   console.log('📩 [Custom Plan Inquiry] Received payload:', req.body);
 
   try {
@@ -167,19 +180,17 @@ router.post('/custom-plan', async (req: Request, res: Response) => {
       });
     }
 
-    // 1. Forward directly to Zoho CRM Leads WebToLeadForm endpoint using dedicated 'contact' credentials
-    await ZohoCrmService.createLead({
-      formType: 'contact',
-      lastName: name,
-      phone,
-      pincode,
-      email,
-      description: services || '',
-      leadSource: 'Web Research',
-      company: 'Custom Care Plan Lead',
-    });
+    // Anti-Spam: Check if a custom plan request with this phone was submitted in the last 2 hours
+    const isDuplicate = await isRecentDuplicateLead(phone, email, 2);
+    if (isDuplicate) {
+      console.log(`ℹ️ [Custom Plan] Duplicate suppressed for ${phone} (already submitted in last 2h)`);
+      return res.status(200).json({
+        success: true,
+        message: 'Thank you! We already have your customized care plan request on file, and our care advisory team will reach out shortly.',
+      });
+    }
 
-    // 2. Also save to internal database for persistence & reporting
+    // 1. Database-First: Save to internal database for persistence & reporting
     try {
       await (prisma as any).marketingLead.create({
         data: {
@@ -192,9 +203,24 @@ router.post('/custom-plan', async (req: Request, res: Response) => {
           status: 'new',
         },
       });
+      console.log(`✅ [Custom Plan Inquiry] Saved to MarketingLead: ${name} (${phone})`);
     } catch (dbErr: any) {
       console.warn('⚠️ [Custom Plan DB insert note]:', dbErr.message);
     }
+
+    // 2. Forward to Zoho CRM Leads WebToLeadForm endpoint using dedicated 'contact' credentials
+    ZohoCrmService.createLead({
+      formType: 'contact',
+      lastName: name,
+      phone,
+      pincode,
+      email,
+      description: services || '',
+      leadSource: 'Web Research',
+      company: 'Custom Care Plan Lead',
+    }).catch((zohoErr: any) =>
+      console.error('⚠️ [Custom Plan Inquiry] Zoho CRM sync warning:', zohoErr.message)
+    );
 
     return res.status(200).json({
       success: true,
