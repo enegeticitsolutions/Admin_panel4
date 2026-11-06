@@ -262,8 +262,10 @@ async function createInvoice(req, res) {
       tax = +(tot - base).toFixed(2);
     }
 
-    const state = placeOfSupply || subscriber.state || 'Haryana';
-    const isInterState = state.trim().toLowerCase() !== 'haryana';
+    const rawState = (placeOfSupply || subscriber.state || 'Haryana').trim();
+    const isHaryana = rawState.toLowerCase() === 'haryana' || ['gurgaon', 'gurugram', 'faridabad', 'panipat', 'ambala', 'karnal'].includes(rawState.toLowerCase());
+    const state = isHaryana ? 'Haryana' : rawState;
+    const isInterState = !isHaryana;
     const cgst = isInterState ? 0 : +(tax / 2).toFixed(2);
     const sgst = isInterState ? 0 : +(tax / 2).toFixed(2);
     const igst = isInterState ? tax : 0;
