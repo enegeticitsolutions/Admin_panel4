@@ -75,7 +75,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             handleNavClick("legacy");
           }}
         >
-          Legacy Circle
+          Legacy Circles
         </a>
         <a
           href="/partners"
@@ -90,6 +90,19 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
       </nav>
 
       <div className="topbar__actions">
+        {/* Helpline Button */}
+        <a
+          href="tel:+917965560310"
+          className="topbar__helpline"
+          aria-label="Call Helpline: +917965560310"
+        >
+          <span className="topbar__helpline-dot" aria-hidden="true" />
+          <div className="topbar__helpline-content">
+            <span className="topbar__helpline-label">HELPLINE</span>
+            <span className="topbar__helpline-number">+917965560310</span>
+          </div>
+        </a>
+
         <a
           href="/plans"
           className={`view-plan-button ${activePage === "plans" ? "active" : ""}`}
@@ -98,7 +111,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             handleNavClick("plans");
           }}
         >
-          View Plans
+          View Plan
         </a>
 
 
@@ -208,6 +221,13 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             }}
           >
             📋 View Plans
+          </a>
+          <a
+            href="tel:+917965560310"
+            className="topbar__mobile-helpline"
+          >
+            <span className="topbar__helpline-dot" aria-hidden="true" />
+            <span>Helpline: <strong>+917965560310</strong></span>
           </a>
           {user ? (
             <a
