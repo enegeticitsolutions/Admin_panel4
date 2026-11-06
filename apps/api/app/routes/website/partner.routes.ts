@@ -3,14 +3,16 @@ import prisma from '../../core/database';
 import { createTransporter, isEmailConfigured, formatISTTimestamp } from './utils/mailer';
 import { ZohoCrmService } from '../../services/crm/zoho_crm_service';
 import { resolveFileUrl, resolveFileUrls } from '../../services/storage/urlResolver';
+import { websiteFormLimiter, honeypotCheck, isRecentDuplicateLead } from './utils/formAntiSpam';
 
 const router = Router();
 
 /**
  * POST /api/website/partner-application
  * Handles partner applications from the Partner with Us page.
+ * Protected with IP Rate Limiting, Honeypot bot trap, and 2-hour duplicate suppression.
  */
-router.post('/partner-application', async (req: Request, res: Response) => {
+router.post('/partner-application', websiteFormLimiter, honeypotCheck, async (req: Request, res: Response) => {
   console.log('🤝 [Partner Application] Received payload:', req.body);
 
   try {
@@ -26,6 +28,16 @@ router.post('/partner-application', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: 'Organization name, category, phone, and email are required.',
+      });
+    }
+
+    // Anti-Spam: Check if an application with this phone or email was received in the last 2 hours
+    const isDuplicate = await isRecentDuplicateLead(phone, email, 2);
+    if (isDuplicate) {
+      console.log(`ℹ️ [Partner Application] Duplicate suppressed for ${phone} / ${organizationName}`);
+      return res.status(200).json({
+        success: true,
+        message: 'Your partnership application is already on file and under review. Our team will contact you shortly.',
       });
     }
 
@@ -182,7 +194,7 @@ Service Details: ${serviceDetails ? serviceDetails.trim() : 'None provided'}`,
       }
     }
 
-    // 3. Forward to Zoho CRM Web-to-Lead
+    // 3. Forward to Zoho CRM Partner Registration (CustomModule3)
     const nameParts = (contactName || organizationName || 'Partner').trim().split(' ');
     const firstName = nameParts.length > 1 ? nameParts[0] : '';
     const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : nameParts[0];
@@ -194,7 +206,12 @@ Service Details: ${serviceDetails ? serviceDetails.trim() : 'None provided'}`,
       email,
       phone,
       company: organizationName,
-      description: `Partner Application [Category: ${category}] | City: ${operatingCity || 'Not specified'}\nDetails: ${serviceDetails || 'None provided'}`,
+      description: serviceDetails || `Partner Application [Category: ${category}] | City: ${operatingCity || 'Not specified'}`,
+      customFields: {
+        category,
+        city: operatingCity,
+        state: (req.body.state || '').trim(),
+      },
     }).catch((zohoErr: any) =>
       console.error('⚠️ [Partner Application] Zoho CRM sync error:', zohoErr.message)
     );

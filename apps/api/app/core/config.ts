@@ -33,10 +33,10 @@ export const config = {
     returnURL: process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you',
     // 1. Partner Form
     partner: {
-      xnQsjsdp: process.env.ZOHO_CRM_PARTNER_XNQSJSDP || '',
-      xmIwtLD: process.env.ZOHO_CRM_PARTNER_XMIWTLD || '',
-      actionType: process.env.ZOHO_CRM_PARTNER_ACTION_TYPE || process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=',
-      returnURL: process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you',
+      xnQsjsdp: process.env.ZOHO_CRM_PARTNER_XNQSJSDP || process.env.ZOHO_CRM_XNQSJSDP || '',
+      xmIwtLD: process.env.ZOHO_CRM_PARTNER_XMIWTLD || process.env.ZOHO_CRM_XMIWTLD || '',
+      actionType: process.env.ZOHO_CRM_PARTNER_ACTION_TYPE || 'Q3VzdG9tTW9kdWxlMw==',
+      returnURL: 'null',
     },
     // 2. Contact Us / Custom Plan Modal Form
     contact: {

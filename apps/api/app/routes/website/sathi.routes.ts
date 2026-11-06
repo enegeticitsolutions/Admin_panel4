@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../../core/database';
 import { createTransporter, isEmailConfigured, formatISTTimestamp } from './utils/mailer';
 import { ZohoCrmService } from '../../services/crm/zoho_crm_service';
+import { websiteFormLimiter, honeypotCheck, isRecentDuplicateLead } from './utils/formAntiSpam';
 
 const router = Router();
 
@@ -9,8 +10,9 @@ const router = Router();
  * POST /api/website/saathi-enrollment
  * Handles Saathi volunteer applications submitted via the website.
  * Saves to DB and sends an internal notification email to Saathi coordinators and team.
+ * Protected with IP Rate Limiting, Honeypot bot trap, and 2-hour duplicate suppression.
  */
-router.post('/saathi-enrollment', async (req: Request, res: Response) => {
+router.post('/saathi-enrollment', websiteFormLimiter, honeypotCheck, async (req: Request, res: Response) => {
   console.log('📩 [Saathi Enrollment] Received payload:', req.body);
 
   try {
@@ -20,6 +22,16 @@ router.post('/saathi-enrollment', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         message: 'First Name, phone, state, and city are required',
+      });
+    }
+
+    // Anti-Spam: Check if a volunteer application with this phone was received in the last 2 hours
+    const isDuplicate = await isRecentDuplicateLead(phone, email, 2);
+    if (isDuplicate) {
+      console.log(`ℹ️ [Saathi Enrollment] Duplicate suppressed for ${phone}`);
+      return res.status(200).json({
+        success: true,
+        message: 'Thank you! We already have your volunteer enrollment on file. A Saathi Coordinator will contact you shortly.',
       });
     }
 
