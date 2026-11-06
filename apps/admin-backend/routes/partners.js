@@ -140,7 +140,7 @@ async function syncPartnerToZohoCrm(data) {
   try {
     const xnQsjsdp = process.env.ZOHO_CRM_PARTNER_XNQSJSDP;
     const xmIwtLD = process.env.ZOHO_CRM_PARTNER_XMIWTLD;
-    const actionType = process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=';
+    const actionType = process.env.ZOHO_CRM_PARTNER_ACTION_TYPE || process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=';
     const returnURL = process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you';
 
     if (!xnQsjsdp || !xmIwtLD) {
