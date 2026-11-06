@@ -20,8 +20,8 @@ const defaultFaqs = [
   "Can I change or cancel my plan?",
 ];
 
-// Helper: Filter packages for Saathi vs Care Mitra categories while preserving trials and neutral packages
-export const matchesPackageCategory = (pkg, category = "saathi") => {
+// Helper: Filter packages for Care Mitra vs Saathi categories while preserving trials and neutral packages
+export const matchesPackageCategory = (pkg, category = "care_mitra") => {
   if (!pkg) return false;
   if (!category || category === "all") return true;
 
@@ -83,7 +83,7 @@ export default function PlansPage({
   const [modalPlan, setModalPlan] = useState(null);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("saathi");
+  const [selectedCategory, setSelectedCategory] = useState("care_mitra");
 
   // Regional & Location states
   const [packages, setPackages] = useState(livePackages);
@@ -814,24 +814,9 @@ export default function PlansPage({
           )}
         </div>
 
-        {/* ── Package Category Switcher (Saathi vs Care Mitra) ── */}
+        {/* ── Package Category Switcher (Care Mitra vs Saathi) ── */}
         <div className="plans-category-switch-wrap">
           <div className="plans-category-switch" role="tablist" aria-label="Select Package Type">
-            <button
-              type="button"
-              role="tab"
-              id="tab-saathi-packages"
-              aria-selected={selectedCategory === "saathi"}
-              className={`plans-category-switch__btn ${selectedCategory === "saathi" ? "plans-category-switch__btn--active" : ""}`}
-              onClick={() => handleCategoryChange("saathi")}
-            >
-              <span className="plans-category-switch__icon">🤝</span>
-              <span className="plans-category-switch__label">Saathi Packages</span>
-              {saathiCount > 0 && (
-                <span className="plans-category-switch__badge">{saathiCount}</span>
-              )}
-            </button>
-
             <button
               type="button"
               role="tab"
@@ -844,6 +829,21 @@ export default function PlansPage({
               <span className="plans-category-switch__label">Care Mitra Packages</span>
               {careMitraCount > 0 && (
                 <span className="plans-category-switch__badge">{careMitraCount}</span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              id="tab-saathi-packages"
+              aria-selected={selectedCategory === "saathi"}
+              className={`plans-category-switch__btn ${selectedCategory === "saathi" ? "plans-category-switch__btn--active" : ""}`}
+              onClick={() => handleCategoryChange("saathi")}
+            >
+              <span className="plans-category-switch__icon">🤝</span>
+              <span className="plans-category-switch__label">Saathi Packages</span>
+              {saathiCount > 0 && (
+                <span className="plans-category-switch__badge">{saathiCount}</span>
               )}
             </button>
 
