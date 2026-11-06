@@ -29,13 +29,13 @@ export class ZohoCrmService {
     try {
       const formType = leadData.formType || 'default';
 
-      // Resolve form-specific credentials with fallback to default
-      const credentials = (config.zohoCrm as any)[formType] || config.zohoCrm;
+      // Resolve form-specific credentials strictly without fallback
+      const credentials = (config.zohoCrm as any)[formType];
 
-      const xnQsjsdp = credentials?.xnQsjsdp || config.zohoCrm.xnQsjsdp;
-      const xmIwtLD = credentials?.xmIwtLD || config.zohoCrm.xmIwtLD;
-      const actionType = credentials?.actionType || config.zohoCrm.actionType || 'TGVhZHM=';
-      const returnURL = credentials?.returnURL || config.zohoCrm.returnURL || 'null';
+      const xnQsjsdp = credentials?.xnQsjsdp;
+      const xmIwtLD = credentials?.xmIwtLD;
+      const actionType = credentials?.actionType || 'TGVhZHM=';
+      const returnURL = credentials?.returnURL || 'null';
 
       if (!xnQsjsdp || !xmIwtLD) {
         console.warn(`⚠️ [Zoho CRM] Missing Zoho credentials for formType="${formType}". Lead sync skipped.`);

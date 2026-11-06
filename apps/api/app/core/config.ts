@@ -40,9 +40,9 @@ export const config = {
     },
     // 2. Contact Us / Custom Plan Modal Form
     contact: {
-      xnQsjsdp: process.env.ZOHO_CRM_CONTACT_XNQSJSDP || process.env.ZOHO_CONTACT_US_XNQSJSDP || '',
-      xmIwtLD: process.env.ZOHO_CRM_CONTACT_XMIWTLD || process.env.ZOHO_CONTACT_US_XMIWTLD || '',
-      actionType: process.env.ZOHO_CRM_CONTACT_ACTION_TYPE || process.env.ZOHO_CONTACT_US_ACTION_TYPE || 'TGVhZHM=',
+      xnQsjsdp: process.env.ZOHO_CRM_CONTACT_XNQSJSDP || '',
+      xmIwtLD: process.env.ZOHO_CRM_CONTACT_XMIWTLD || '',
+      actionType: process.env.ZOHO_CRM_CONTACT_ACTION_TYPE || process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=',
       returnURL: 'null',
     },
     // 3. Saathi Volunteer Enrollment Form

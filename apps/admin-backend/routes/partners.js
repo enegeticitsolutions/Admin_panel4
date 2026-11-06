@@ -134,17 +134,18 @@ async function resolvePartnerMedia(partner, ttlSeconds = 86400 * 7) {
 
 /**
  * Helper: Forward partner submission directly to Zoho CRM Web-to-Entity endpoint
+ * Uses dedicated ZOHO_CRM_PARTNER_XNQSJSDP credentials with automatic retries.
  */
 async function syncPartnerToZohoCrm(data) {
   try {
-    const xnQsjsdp = process.env.ZOHO_CRM_XNQSJSDP;
-    const xmIwtLD = process.env.ZOHO_CRM_XMIWTLD;
+    const xnQsjsdp = process.env.ZOHO_CRM_PARTNER_XNQSJSDP;
+    const xmIwtLD = process.env.ZOHO_CRM_PARTNER_XMIWTLD;
     const actionType = process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=';
     const returnURL = process.env.ZOHO_CRM_RETURN_URL || 'https://maihoonna.com/thank-you';
 
     if (!xnQsjsdp || !xmIwtLD) {
-      console.warn('[Zoho CRM Sync] Missing ZOHO_CRM_XNQSJSDP or ZOHO_CRM_XMIWTLD in environment variables. Skipping sync.');
-      return { success: false, error: 'Zoho CRM credentials not configured in environment' };
+      console.warn('[Zoho CRM Sync] Missing ZOHO_CRM_PARTNER_XNQSJSDP or ZOHO_CRM_PARTNER_XMIWTLD in environment variables. Skipping sync.');
+      return { success: false, error: 'Zoho CRM partner credentials not configured in environment' };
     }
 
     const zohoParams = new URLSearchParams({
@@ -170,18 +171,37 @@ async function syncPartnerToZohoCrm(data) {
       aG9uZXlwb3Q: '',
     });
 
-    const response = await fetch('https://crm.zoho.in/crm/WebForm', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      body: zohoParams.toString(),
-    });
+    // Retry up to 3 times on transient network / server failure
+    let lastError = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await fetch('https://crm.zoho.in/crm/WebForm', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          body: zohoParams.toString(),
+        });
 
-    const responseText = await response.text();
-    console.log('[Zoho CRM Sync] Status:', response.status, 'Response:', responseText.slice(0, 200));
-    return { success: response.ok, raw: responseText };
+        const responseText = await response.text();
+        if (response.ok) {
+          console.log(`[Zoho CRM Sync] Attempt ${attempt} succeeded. Status: ${response.status}`);
+          return { success: true, raw: responseText };
+        }
+        lastError = new Error(`HTTP ${response.status}: ${responseText.slice(0, 100)}`);
+      } catch (err) {
+        lastError = err;
+      }
+
+      if (attempt < 3) {
+        console.warn(`[Zoho CRM Sync] Attempt ${attempt} failed (${lastError.message}), retrying in ${attempt}s...`);
+        await new Promise(res => setTimeout(res, 1000 * attempt));
+      }
+    }
+
+    console.error('[Zoho CRM Sync Error after 3 attempts]:', lastError?.message);
+    return { success: false, error: lastError?.message || 'Sync failed after 3 attempts' };
   } catch (err) {
     console.error('[Zoho CRM Sync Error]:', err.message);
     return { success: false, error: err.message };
