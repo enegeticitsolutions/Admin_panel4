@@ -32,6 +32,10 @@ import {
   Clock,
   Crown,
   Navigation,
+  BookOpen,
+  Mic,
+  LayoutDashboard,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '../ui/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
@@ -237,6 +241,53 @@ const navigationSections: NavSection[] = [
         label: 'Capture log',
         icon: Activity,
         roles: ['master_admin', 'admin', 'operations_manager', 'field_manager'],
+      },
+    ]
+  },
+  {
+    title: 'COMMUNITY & CONTENT',
+    items: [
+      {
+        path: '/community/dashboard',
+        label: 'Community Dashboard',
+        icon: LayoutDashboard,
+        roles: ['master_admin', 'admin', 'operations_manager'],
+      },
+      {
+        path: '/community/events',
+        label: 'Events',
+        icon: Calendar,
+        roles: ['master_admin', 'admin', 'operations_manager'],
+      },
+      {
+        path: '/community/blogs',
+        label: 'Blogs',
+        icon: BookOpen,
+        roles: ['master_admin', 'admin'],
+      },
+      {
+        path: '/community/podcasts',
+        label: 'Podcasts',
+        icon: Mic,
+        roles: ['master_admin', 'admin'],
+      },
+      {
+        path: '/community/categories',
+        label: 'Categories',
+        icon: Tag,
+        roles: ['master_admin', 'admin'],
+      },
+      {
+        path: '/community/authors',
+        label: 'Authors / Speakers',
+        icon: UserCheck,
+        roles: ['master_admin', 'admin'],
+      },
+      {
+        path: '/community/analytics',
+        label: 'Analytics',
+        icon: BarChart3,
+        roles: ['master_admin', 'admin'],
       },
     ]
   },

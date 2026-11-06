@@ -9,6 +9,7 @@ interface QuickActionsSectionProps {
     onFamilyConnectPress?: () => void;
     onLogVitalsPress?: () => void;
     onSaathiPress?: () => void;
+    onCommunityPress?: () => void;
     onActionPress: (route: string) => void;
 }
 
@@ -19,6 +20,7 @@ export const QuickActionsSection: React.FC<QuickActionsSectionProps> = ({
     onFamilyConnectPress,
     onLogVitalsPress,
     onSaathiPress,
+    onCommunityPress,
     onActionPress,
 }) => {
     return (
@@ -120,6 +122,24 @@ export const QuickActionsSection: React.FC<QuickActionsSectionProps> = ({
                     </View>
                     <Text style={styles.cardTitle} numberOfLines={1} adjustsFontSizeToFit>Package Utilization</Text>
                     <Text style={styles.cardSubtitle} numberOfLines={2}>Track your benefits</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.card, { width: actionCardWidth }]}
+                    onPress={() => {
+                        if (onCommunityPress) {
+                            onCommunityPress();
+                        } else {
+                            onActionPress('/(community)');
+                        }
+                    }}
+                    activeOpacity={0.8}
+                >
+                    <View style={[styles.iconBadge, { backgroundColor: '#F0FDF4' }]}>
+                        <Ionicons name="chatbubbles-outline" size={24} color="#16A34A" />
+                    </View>
+                    <Text style={styles.cardTitle} numberOfLines={1} adjustsFontSizeToFit>Community</Text>
+                    <Text style={styles.cardSubtitle} numberOfLines={2}>Events, blogs & podcasts</Text>
                 </TouchableOpacity>
             </View>
         </View>

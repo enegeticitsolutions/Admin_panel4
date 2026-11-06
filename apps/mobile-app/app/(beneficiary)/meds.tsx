@@ -15,7 +15,7 @@ import {
     RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { API_URL } from '@/constants/api';
@@ -139,6 +139,8 @@ type Props = {
 
 export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props) {
     const router = useRouter();
+    const routeParams = useLocalSearchParams<{ beneficiaryId?: string; highlightMedId?: string }>();
+    const effectiveBeneficiaryId = propBeneficiaryId || routeParams.beneficiaryId;
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
 
@@ -167,27 +169,48 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
     const [modalLoading, setModalLoading] = useState(false);
     const [quickAddingId, setQuickAddingId] = useState<string | null>(null);
 
-    useFocusEffect(useCallback(() => { loadData(); }, [propBeneficiaryId]));
+    const resolveTargetBeneficiaryId = useCallback(async (): Promise<string | null> => {
+        if (effectiveBeneficiaryId) return effectiveBeneficiaryId;
+        const storedSelfBenId = await AsyncStorage.getItem('selfBeneficiaryId');
+        if (storedSelfBenId) return storedSelfBenId;
+
+        const storedToken = await AsyncStorage.getItem('userToken');
+        if (storedToken) {
+            try {
+                const res = await fetch(`${API_URL}/beneficiary/dashboard/dashboard/me`, {
+                    headers: { Authorization: `Bearer ${storedToken}` }
+                });
+                const json = await res.json();
+                if (json.success && json.data?.beneficiaryId) {
+                    await AsyncStorage.setItem('selfBeneficiaryId', json.data.beneficiaryId);
+                    return json.data.beneficiaryId;
+                }
+            } catch (e) {
+                console.warn('[MedsTracker] Failed to resolve beneficiaryId via dashboard/me:', e);
+            }
+        }
+
+        const userStr = await AsyncStorage.getItem('userData');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            return user.id;
+        }
+        return null;
+    }, [effectiveBeneficiaryId]);
+
+    useFocusEffect(useCallback(() => { loadData(); }, [effectiveBeneficiaryId]));
     useGlobalRefresh(() => { loadData(); });
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await loadData();
         setRefreshing(false);
-    }, [propBeneficiaryId]);
+    }, [effectiveBeneficiaryId]);
 
     const loadData = async () => {
         try {
             setLoading(true);
-            let targetBeneficiaryId = propBeneficiaryId;
-
-            if (!targetBeneficiaryId) {
-                const userStr = await AsyncStorage.getItem('userData');
-                if (userStr) {
-                    const user = JSON.parse(userStr);
-                    targetBeneficiaryId = user.id;
-                }
-            }
+            const targetBeneficiaryId = await resolveTargetBeneficiaryId();
 
             if (!targetBeneficiaryId) {
                 loadMocks();
@@ -293,11 +316,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
     const handleQuickAddPreset = async (preset: MedicationPresetItem) => {
         try {
             setQuickAddingId(preset.id);
-            let targetBeneficiaryId = propBeneficiaryId;
-            if (!targetBeneficiaryId) {
-                const userStr = await AsyncStorage.getItem('userData');
-                if (userStr) targetBeneficiaryId = JSON.parse(userStr).id;
-            }
+            const targetBeneficiaryId = await resolveTargetBeneficiaryId();
             const token = await AsyncStorage.getItem('userToken');
             if (!token || !targetBeneficiaryId) {
                 Alert.alert('Error', 'Please sign in to add medication.');
@@ -343,11 +362,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
     const handleSaveMedication = async (payload: MedicationFormPayload) => {
         try {
             setModalLoading(true);
-            let targetBeneficiaryId = propBeneficiaryId;
-            if (!targetBeneficiaryId) {
-                const userStr = await AsyncStorage.getItem('userData');
-                if (userStr) targetBeneficiaryId = JSON.parse(userStr).id;
-            }
+            const targetBeneficiaryId = await resolveTargetBeneficiaryId();
             const token = await AsyncStorage.getItem('userToken');
             if (!token || !targetBeneficiaryId) {
                 Alert.alert('Error', 'Please sign in to add medication.');
@@ -483,14 +498,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
 
         try {
             setSubmittingId(`${item.id}-${item.scheduleTimeText}`);
-            let targetBeneficiaryId = propBeneficiaryId;
-
-            if (!targetBeneficiaryId) {
-                const userStr = await AsyncStorage.getItem('userData');
-                if (userStr) {
-                    targetBeneficiaryId = JSON.parse(userStr).id;
-                }
-            }
+            const targetBeneficiaryId = await resolveTargetBeneficiaryId();
 
             if (!targetBeneficiaryId) {
                 updateLocalStatus(item, taken);
@@ -688,16 +696,28 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                         );
                         const canMarkItem = item.canMark ?? (isItemToday && !item.isFutureSchedule);
 
+                        const isHighlighted = routeParams.highlightMedId === item.id;
+
                         return (
-                            <View key={`${item.id}-${index}`} style={styles.medCard}>
+                            <View 
+                                key={`${item.id}-${index}`} 
+                                style={[styles.medCard, isHighlighted && styles.highlightedMedCard]}
+                            >
                                 <View style={styles.medMainRow}>
-                                    <View style={styles.iconCircle}>
+                                    <View style={[styles.iconCircle, isHighlighted && styles.highlightedIconCircle]}>
                                         <CustomPillIcon size={24} color="#FE6700" />
                                     </View>
 
                                     <View style={styles.medDetails}>
                                         <View style={styles.medNameRow}>
-                                            <Text style={styles.medName}>{item.name}</Text>
+                                            <View style={styles.medTitleWithBadge}>
+                                                <Text style={styles.medName}>{item.name}</Text>
+                                                {isHighlighted && (
+                                                    <View style={styles.selectedBadge}>
+                                                        <Text style={styles.selectedBadgeText}>Selected</Text>
+                                                    </View>
+                                                )}
+                                            </View>
                                             <TouchableOpacity
                                                 onPress={() => handleDeleteMedication(item.id, item.name)}
                                                 style={styles.trashBtn}
@@ -1044,6 +1064,40 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.04,
         shadowRadius: 4,
         elevation: 2,
+    },
+    highlightedMedCard: {
+        borderColor: '#FE6700',
+        borderWidth: 2,
+        backgroundColor: '#FFFBF7',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 6,
+        elevation: 4,
+    },
+    highlightedIconCircle: {
+        backgroundColor: '#FFEAD5',
+    },
+    medTitleWithBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        gap: 6,
+    },
+    selectedBadge: {
+        backgroundColor: '#FFF0E6',
+        borderRadius: 6,
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderWidth: 1,
+        borderColor: '#FFD8BF',
+    },
+    selectedBadgeText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#FE6700',
+        textTransform: 'uppercase',
     },
     medMainRow: {
         flexDirection: 'row',

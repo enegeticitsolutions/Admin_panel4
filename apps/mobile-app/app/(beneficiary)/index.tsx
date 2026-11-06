@@ -554,7 +554,14 @@ export default function BeneficiaryDashboard() {
                     <PersonalCareOverview
                         data={personalData}
                         onViewTeam={() => router.push('/(beneficiary)/team')}
-                        onViewAllMeds={() => router.push('/(beneficiary)/meds' as any)}
+                        onViewAllMeds={() => router.push({
+                            pathname: '/(beneficiary)/meds',
+                            params: { beneficiaryId: personalData.beneficiaryId }
+                        } as any)}
+                        onSelectMed={(medId) => router.push({
+                            pathname: '/(beneficiary)/meds',
+                            params: { beneficiaryId: personalData.beneficiaryId, highlightMedId: medId }
+                        } as any)}
                         onOpenCareCircle={() => {
                             if (personalData.beneficiaryId) {
                                 setSelectedCircleBen({

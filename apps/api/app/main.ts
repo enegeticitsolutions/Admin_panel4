@@ -71,6 +71,9 @@ import publicGuideRouter from './api/public/guide.routes';
 // Sathi Network Routes
 import sathiRouter from './api/sathi/sathi.routes';
 
+// Community & Content Routes
+import communityRouter from './api/community/community.routes';
+
 // Website-specific Internal Routes
 import websiteRouter from './routes/website/websiteRoutes';
 import partnerRouter from './routes/website/partner.routes';
@@ -264,6 +267,9 @@ app.use(`${API}/public`, publicEnrollmentRouter);
 // Sathi Network endpoints
 app.use(`${API}/sathi`, sathiRouter);
 
+// Community & Content endpoints
+app.use(`${API}/community`, communityRouter);
+
 // Website-specific Internal endpoints
 app.use(`${API}/website`, websiteRouter);
 app.use(`${API}/partners`, partnerRouter);
@@ -288,4 +294,4 @@ app.use((req, res, next) => {
 // See: app/middleware/errorHandler.ts for full classification logic.
 app.use(errorHandler);
 
-export default app;
+export default app;

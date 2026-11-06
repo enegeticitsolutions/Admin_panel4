@@ -217,6 +217,7 @@ function RootNavigator() {
         <Stack.Screen name="(care-companion)" />
       ) : null}
       <Stack.Screen name="(setup)" />
+      <Stack.Screen name="(community)" />
       {isLoggedIn ? (
         <Stack.Screen name="package-utilization" />
       ) : null}
