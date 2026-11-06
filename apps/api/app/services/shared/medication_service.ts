@@ -116,7 +116,8 @@ export const getBeneficiaryMedications = async (beneficiaryId: string) => {
     where: {
       OR: [
         { id: beneficiaryId },
-        { userId: beneficiaryId }
+        { userId: beneficiaryId },
+        { subscriberId: beneficiaryId }
       ]
     }
   });
@@ -152,7 +153,8 @@ export const createMedication = async (data: {
     where: {
       OR: [
         { id: data.beneficiaryId },
-        { userId: data.beneficiaryId }
+        { userId: data.beneficiaryId },
+        { subscriberId: data.beneficiaryId }
       ]
     }
   });

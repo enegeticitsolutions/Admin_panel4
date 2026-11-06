@@ -56,6 +56,13 @@ import RequestedVisitsPage from './pages/RequestedVisitsPage';
 import CheckoutPage from './pages/CheckoutPage';
 import RouteErrorBoundary from './components/common/RouteErrorBoundary';
 import LegacyCirclePage from './pages/LegacyCirclePage';
+import CommunityDashboardPage from './pages/community/CommunityDashboardPage';
+import CommunityEventsPage from './pages/community/CommunityEventsPage';
+import CommunityBlogsPage from './pages/community/CommunityBlogsPage';
+import CommunityPodcastsPage from './pages/community/CommunityPodcastsPage';
+import CommunityCategoriesPage from './pages/community/CommunityCategoriesPage';
+import CommunityAuthorsPage from './pages/community/CommunityAuthorsPage';
+import CommunityAnalyticsPage from './pages/community/CommunityAnalyticsPage';
 
 export const router = createBrowserRouter([
   {
@@ -267,6 +274,34 @@ export const router = createBrowserRouter([
       {
         path: 'legacy-circle',
         Component: LegacyCirclePage,
+      },
+      {
+        path: 'community/dashboard',
+        Component: CommunityDashboardPage,
+      },
+      {
+        path: 'community/events',
+        Component: CommunityEventsPage,
+      },
+      {
+        path: 'community/blogs',
+        Component: CommunityBlogsPage,
+      },
+      {
+        path: 'community/podcasts',
+        Component: CommunityPodcastsPage,
+      },
+      {
+        path: 'community/categories',
+        Component: CommunityCategoriesPage,
+      },
+      {
+        path: 'community/authors',
+        Component: CommunityAuthorsPage,
+      },
+      {
+        path: 'community/analytics',
+        Component: CommunityAnalyticsPage,
       },
     ],
   },

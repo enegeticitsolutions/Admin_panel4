@@ -89,6 +89,13 @@ model User {
   requestedServiceRequests       ServiceRequest[]         @relation("RequestedByServiceRequests")
   invoices                       Invoice[]                @relation("SubscriberInvoices")
   careCircleMemberships          CareCircleMember[]       @relation("CareCircleUser")
+  createdEvents                  CommunityEvent[]         @relation("EventCreatedBy")
+  createdBlogs                   Blog[]                   @relation("BlogCreatedBy")
+  createdPodcasts                Podcast[]                @relation("PodcastCreatedBy")
+  createdPodcastEpisodes         PodcastEpisode[]         @relation("PodcastEpisodeCreatedBy")
+  eventRegistrations             EventRegistration[]
+  contentBookmarks               ContentBookmark[]
+  contentLikes                   ContentLike[]
 
   @@index([name])
   @@index([role])
@@ -312,6 +319,7 @@ model Beneficiary {
   volunteerReviews     VolunteerReview[]
   legacyCircleProfile  LegacyCircleProfile?
   careCircleMembers    CareCircleMember[]
+  eventRegistrations   EventRegistration[]
 
   @@index([name])
   @@index([city])
@@ -1724,6 +1732,12 @@ enum NotificationType {
   appointment_cancelled
   care_report
   system
+  community_event_published
+  event_registration_confirmed
+  event_reminder
+  event_cancelled
+  community_blog_published
+  community_podcast_published
 }
 
 enum NotificationChannel {
@@ -2594,4 +2608,331 @@ model CareCircleMember {
   @@index([userId])
   @@index([inviteCode])
   @@map("care_circle_members")
+}
+
+// ─── COMMUNITY CONTENT DOMAIN ───────────────────────────────────────────────
+
+enum ContentStatus {
+  draft
+  scheduled
+  published
+  archived
+  cancelled
+}
+
+enum EventType {
+  online
+  offline
+  hybrid
+}
+
+enum ContentLanguage {
+  en
+  hi
+  mr
+  gu
+  bn
+  ta
+  te
+  kn
+}
+
+enum RegistrationStatus {
+  confirmed
+  waitlisted
+  cancelled
+  attended
+}
+
+enum BookmarkType {
+  event
+  blog
+  podcast_episode
+}
+
+enum LikeType {
+  blog
+  podcast_episode
+}
+
+model ContentCategory {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String?
+  icon        String?  // S3 storage key or Lucide icon name
+  color       String?  // Hex color code for badges
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events      CommunityEvent[]
+  blogs       Blog[]
+  podcasts    Podcast[]
+
+  @@map("content_categories")
+}
+
+model ContentAuthor {
+  id          String   @id @default(uuid())
+  name        String
+  designation String?  // e.g., "Senior Geriatrician, MBBS, MD"
+  bio         String?  @db.Text
+  avatarKey   String?  // S3 raw storage key
+  email       String?
+  phone       String?
+  website     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  eventsHosted   CommunityEvent[] @relation("EventHost")
+  blogsAuthored  Blog[]           @relation("BlogAuthor")
+  podcastsHosted Podcast[]       @relation("PodcastHost")
+
+  @@map("content_authors")
+}
+
+model CommunityEvent {
+  id                   String          @id @default(uuid())
+  title                String
+  slug                 String          @unique
+  shortDescription     String          @db.VarChar(500)
+  detailedDescription  String          @db.Text
+  categoryId           String
+  authorId             String?         // Primary Host / Speaker
+  eventType            EventType       @default(online)
+  language             ContentLanguage @default(en)
+  thumbnailKey         String?         // S3 raw storage key
+  recordingUrl         String?         // YouTube / CloudFront link
+  galleryKeys          String[]        @default([]) // S3 raw keys for photos
+
+  // Access Tier: "free" (All Users) | "subscribers_only" (Active Package Only)
+  accessTier           String          @default("free")
+
+  startDateTime        DateTime
+  endDateTime          DateTime
+  registrationRequired Boolean         @default(true)
+  registrationDeadline DateTime?
+  maxCapacity          Int             @default(100)
+  currentRegistrations Int             @default(0)
+
+  // Venue / Meeting Details
+  venueName            String?
+  venueAddress         String?
+  city                 String?
+  state                String?
+  pincode              String?
+  latitude             Float?
+  longitude            Float?
+  meetingUrl           String?
+  meetingPasscode      String?
+
+  status               ContentStatus   @default(draft)
+  scheduledPublishAt   DateTime?
+  publishedAt          DateTime?
+  cancelledAt          DateTime?
+  cancellationReason   String?
+
+  createdById          String
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  category             ContentCategory @relation(fields: [categoryId], references: [id])
+  host                 ContentAuthor?  @relation("EventHost", fields: [authorId], references: [id])
+  createdBy            User            @relation("EventCreatedBy", fields: [createdById], references: [id])
+  registrations        EventRegistration[]
+  bookmarks            ContentBookmark[]
+
+  @@index([status, startDateTime])
+  @@index([categoryId])
+  @@index([eventType])
+  @@index([language])
+  @@map("community_events")
+}
+
+model EventRegistration {
+  id               String             @id @default(uuid())
+  eventId          String
+  userId           String             // User who booked (Subscriber or Beneficiary)
+  beneficiaryId    String?            // If booked specifically on behalf of an elder
+  status           RegistrationStatus @default(confirmed)
+  waitlistNumber   Int?
+  notes            String?
+  attendedAt       DateTime?
+  checkInMethod    String?            // "qr", "manual", "admin"
+  cancelledAt      DateTime?
+  cancellationNote String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  event            CommunityEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  beneficiary      Beneficiary?       @relation(fields: [beneficiaryId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, userId, beneficiaryId])
+  @@index([eventId, status])
+  @@index([userId])
+  @@index([beneficiaryId])
+  @@map("event_registrations")
+}
+
+model Blog {
+  id                 String          @id @default(uuid())
+  title              String
+  slug               String          @unique
+  shortDescription   String          @db.VarChar(500)
+  richContent        String          @db.Text
+  categoryId         String
+  authorId           String?
+  language           ContentLanguage @default(en)
+  thumbnailKey       String?         // S3 raw storage key
+  readingTimeMinutes Int             @default(3)
+  tags               String[]        @default([])
+  isFeatured         Boolean         @default(false)
+
+  viewCount          Int             @default(0)
+  likeCount          Int             @default(0)
+  bookmarkCount      Int             @default(0)
+
+  status             ContentStatus   @default(draft)
+  scheduledPublishAt DateTime?
+  publishedAt        DateTime?
+
+  createdById        String
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  category           ContentCategory @relation(fields: [categoryId], references: [id])
+  author             ContentAuthor?  @relation("BlogAuthor", fields: [authorId], references: [id])
+  createdBy          User            @relation("BlogCreatedBy", fields: [createdById], references: [id])
+  bookmarks          ContentBookmark[]
+  likes              ContentLike[]
+  views              ContentView[]
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+  @@index([isFeatured])
+  @@index([language])
+  @@map("community_blogs")
+}
+
+model Podcast {
+  id                 String          @id @default(uuid())
+  title              String
+  slug               String          @unique
+  description        String          @db.Text
+  categoryId         String
+  authorId           String?         // Host
+  language           ContentLanguage @default(en)
+  coverImageKey      String?         // S3 raw storage key
+  totalEpisodes      Int             @default(0)
+  isFeatured         Boolean         @default(false)
+
+  status             ContentStatus   @default(draft)
+  createdById        String
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  category           ContentCategory @relation(fields: [categoryId], references: [id])
+  host               ContentAuthor?  @relation("PodcastHost", fields: [authorId], references: [id])
+  createdBy          User            @relation("PodcastCreatedBy", fields: [createdById], references: [id])
+  episodes           PodcastEpisode[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@map("community_podcasts")
+}
+
+model PodcastEpisode {
+  id                 String          @id @default(uuid())
+  podcastId          String
+  title              String
+  slug               String
+  description        String          @db.Text
+  episodeNumber      Int
+  seasonNumber       Int             @default(1)
+  audioStorageKey    String          // S3 raw storage key for audio
+  thumbnailKey       String?         // Episode specific art (optional fallback to series)
+  durationSeconds    Int             @default(0)
+  fileSizeBytes      BigInt          @default(0)
+  mimeType           String          @default("audio/mpeg")
+
+  playCount          Int             @default(0)
+  likeCount          Int             @default(0)
+  bookmarkCount      Int             @default(0)
+
+  status             ContentStatus   @default(draft)
+  scheduledPublishAt DateTime?
+  publishedAt        DateTime?
+
+  createdById        String
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  podcast            Podcast         @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  createdBy          User            @relation("PodcastEpisodeCreatedBy", fields: [createdById], references: [id])
+  bookmarks          ContentBookmark[]
+  likes              ContentLike[]
+  views              ContentView[]
+
+  @@unique([podcastId, episodeNumber])
+  @@index([podcastId, status, episodeNumber])
+  @@map("community_podcast_episodes")
+}
+
+model ContentBookmark {
+  id                 String          @id @default(uuid())
+  userId             String
+  itemType           BookmarkType
+  eventId            String?
+  blogId             String?
+  podcastEpisodeId   String?
+  createdAt          DateTime        @default(now())
+
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event              CommunityEvent? @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  blog               Blog?           @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  podcastEpisode     PodcastEpisode? @relation(fields: [podcastEpisodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemType, eventId, blogId, podcastEpisodeId])
+  @@index([userId, itemType])
+  @@map("content_bookmarks")
+}
+
+model ContentLike {
+  id                 String          @id @default(uuid())
+  userId             String
+  itemType           LikeType
+  blogId             String?
+  podcastEpisodeId   String?
+  createdAt          DateTime        @default(now())
+
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  blog               Blog?           @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  podcastEpisode     PodcastEpisode? @relation(fields: [podcastEpisodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemType, blogId, podcastEpisodeId])
+  @@index([userId, itemType])
+  @@map("content_likes")
+}
+
+model ContentView {
+  id                 String          @id @default(uuid())
+  userId             String?         // Nullable for guest or anonymous view
+  itemType           LikeType
+  blogId             String?
+  podcastEpisodeId   String?
+  listenDurationSec  Int?            // For podcasts
+  ipAddress          String?
+  userAgent          String?
+  createdAt          DateTime        @default(now())
+
+  blog               Blog?           @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  podcastEpisode     PodcastEpisode? @relation(fields: [podcastEpisodeId], references: [id], onDelete: Cascade)
+
+  @@index([itemType, blogId, createdAt])
+  @@index([itemType, podcastEpisodeId, createdAt])
+  @@map("content_views")
 }

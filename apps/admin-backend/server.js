@@ -187,6 +187,8 @@ app.use('/api/config', mastersOnly, require('./routes/config'));
 app.use('/api/saathi-guide', staffOnly, require('./routes/saathi-guide'));
 // Website CMS — public read (/home), admins only for mutations
 app.use('/api/website-content', require('./routes/website-content'));
+// Community & Content Module — Events, Blogs, Podcasts
+app.use('/api/community', require('./routes/community'));
 // Legacy circle — saathi + admins
 app.use('/api/legacy-circle', staffOnly, require('./routes/legacy-circle'));
 app.use('/api/payments', require('./routes/payments'));

@@ -34,6 +34,7 @@ interface PersonalCareOverviewProps {
     data: PersonalCareData;
     onViewTeam: () => void;
     onViewAllMeds: () => void;
+    onSelectMed?: (medId: string) => void;
     onOpenCareCircle?: () => void;
 }
 
@@ -41,6 +42,7 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
     data,
     onViewTeam,
     onViewAllMeds,
+    onSelectMed,
     onOpenCareCircle,
 }) => {
     const formatDate = (dateString?: string | null) => {
@@ -162,7 +164,12 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
                     </View>
 
                     {data.todaysMedications.map((med) => (
-                        <View key={med.id} style={styles.medCard}>
+                        <TouchableOpacity
+                            key={med.id}
+                            style={styles.medCard}
+                            activeOpacity={0.7}
+                            onPress={() => onSelectMed ? onSelectMed(med.id) : onViewAllMeds()}
+                        >
                             <View style={styles.medHeader}>
                                 <View style={styles.medIconBadge}>
                                     <MaterialCommunityIcons name="pill" size={20} color="#FE6700" />
@@ -183,7 +190,7 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
                                     </Text>
                                 </View>
                             </View>
-                        </View>
+                        </TouchableOpacity>
                     ))}
                 </>
             )}

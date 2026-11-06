@@ -21,7 +21,8 @@ export class MedicationAdherenceManager {
             where: {
                 OR: [
                     { id: this.beneficiaryId },
-                    { userId: this.beneficiaryId }
+                    { userId: this.beneficiaryId },
+                    { subscriberId: this.beneficiaryId }
                 ]
             }
         });
@@ -231,6 +232,88 @@ export class MedicationAdherenceManager {
 
                 const futureText = nextDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
                 slots = await generateSlotsForDay(nextStart, nextEnd, true, futureText);
+            }
+        }
+
+        // Final fallback: If slots is still empty, but there are active medications configured for this beneficiary,
+        // generate today's schedule slots for them so active medications are always visible and actionable.
+        if (slots.length === 0) {
+            const fallbackMeds = await prisma.medication.findMany({
+                where: {
+                    beneficiaryId: this.beneficiaryId,
+                    isActive: true,
+                }
+            });
+
+            if (fallbackMeds.length > 0) {
+                // Fetch existing today's logs
+                const todayLogs = await prisma.medicationAdherence.findMany({
+                    where: {
+                        beneficiaryId: this.beneficiaryId,
+                        scheduledTime: {
+                            gte: todayStart,
+                            lte: todayEnd,
+                        }
+                    }
+                });
+
+                const currentTime = new Date();
+
+                for (const med of fallbackMeds) {
+                    let slotsList: string[] = med.timeSlots || [];
+                    if (slotsList.length === 0) {
+                        const freqStr = (med.frequency as string) || 'once_daily';
+                        if (freqStr === 'twice_daily') slotsList = ['08:00 AM', '08:00 PM'];
+                        else if (freqStr === 'thrice_daily') slotsList = ['08:00 AM', '02:00 PM', '08:00 PM'];
+                        else if (freqStr === 'four_times_daily') slotsList = ['08:00 AM', '02:00 PM', '06:00 PM', '08:00 PM'];
+                        else slotsList = ['08:00 AM'];
+                    }
+
+                    // Calculate medication adherence rate
+                    const medLogs = await prisma.medicationAdherence.findMany({
+                        where: { medicationId: med.id }
+                    });
+                    const medTakenCount = medLogs.filter(l => l.taken).length;
+                    const medAdherence = medLogs.length > 0 ? Math.round((medTakenCount / medLogs.length) * 100) : 100;
+
+                    for (const slot of slotsList) {
+                        const scheduledTime = this.parseTimeSlotToDate(slot);
+                        scheduledTime.setFullYear(todayStart.getFullYear());
+                        scheduledTime.setMonth(todayStart.getMonth());
+                        scheduledTime.setDate(todayStart.getDate());
+
+                        const matchedLog = todayLogs.find(log =>
+                            log.medicationId === med.id &&
+                            Math.abs(new Date(log.scheduledTime).getTime() - scheduledTime.getTime()) < 60000
+                        );
+
+                        let status = 'pending';
+                        let logId = null;
+                        if (matchedLog) {
+                            status = matchedLog.taken ? 'taken' : 'missed';
+                            logId = matchedLog.id;
+                        } else if (scheduledTime < currentTime) {
+                            status = 'missed';
+                        }
+
+                        slots.push({
+                            id: med.id,
+                            logId,
+                            name: med.name,
+                            dosage: med.dosage,
+                            frequency: (med.frequency || 'once_daily').replace(/_/g, ' '),
+                            instructions: med.instructions || 'Take as directed',
+                            scheduleTimeText: slot,
+                            scheduledTimeIso: scheduledTime.toISOString(),
+                            status,
+                            adherencePercentage: medAdherence,
+                            isFutureSchedule: false,
+                            futureDateText: '',
+                            isToday: true,
+                            canMark: true
+                        });
+                    }
+                }
             }
         }
 

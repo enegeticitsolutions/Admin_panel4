@@ -2393,3 +2393,74 @@ export const legacyCircleApi = {
     });
   },
 };
+
+export const communityApi = {
+  getDashboard: () => apiJson<any>('/community/dashboard'),
+  getCategories: () => apiJson<any>('/community/categories'),
+  createCategory: (data: any) =>
+    apiJson<any>('/community/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateCategory: (id: string, data: any) =>
+    apiJson<any>(`/community/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  getAuthors: () => apiJson<any>('/community/authors'),
+  createAuthor: (data: any) =>
+    apiJson<any>('/community/authors', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateAuthor: (id: string, data: any) =>
+    apiJson<any>(`/community/authors/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  getEvents: (params?: any) => {
+    const qs = new URLSearchParams(params || {}).toString();
+    return apiJson<any>(`/community/events${qs ? '?' + qs : ''}`);
+  },
+  createEvent: (data: any) =>
+    apiJson<any>('/community/events', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateEvent: (id: string, data: any) =>
+    apiJson<any>(`/community/events/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  updateEventStatus: (id: string, status: string, cancellationReason?: string) =>
+    apiJson<any>(`/community/events/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, cancellationReason }),
+    }),
+  getEventAttendees: (id: string) => apiJson<any>(`/community/events/${id}/attendees`),
+  getBlogs: (params?: any) => {
+    const qs = new URLSearchParams(params || {}).toString();
+    return apiJson<any>(`/community/blogs${qs ? '?' + qs : ''}`);
+  },
+  createBlog: (data: any) =>
+    apiJson<any>('/community/blogs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateBlog: (id: string, data: any) =>
+    apiJson<any>(`/community/blogs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  getPodcasts: () => apiJson<any>('/community/podcasts'),
+  createPodcast: (data: any) =>
+    apiJson<any>('/community/podcasts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  createEpisode: (podcastId: string, data: any) =>
+    apiJson<any>(`/community/podcasts/${podcastId}/episodes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};

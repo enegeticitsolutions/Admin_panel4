@@ -24,7 +24,11 @@ async function handleBeneficiaryDashboard(req: AuthRequest, res: Response) {
 
         const beneficiary = await prisma.beneficiary.findFirst({
             where: {
-                OR: [{ userId: userId }, { id: userId }]
+                OR: [
+                    { userId: userId },
+                    { id: userId },
+                    { subscriberId: userId }
+                ]
             },
             include: {
                 primaryCC: {
