@@ -38,7 +38,7 @@ const HeroSection = ({ openForm }) => {
         <div className="hero__copy">
           <div className="eyebrow">
             <img src={healthcareIcon} alt="MaiHoonNa - Connected Senior Care Ecosystem" loading="eager" fetchpriority="high" width="20" height="20" />
-            India's Connected Senior Care Ecosystem
+            India's First Connected Senior Care Ecosystem
           </div>
           <h1>
             <span>Growing older, without giving up on living.</span>

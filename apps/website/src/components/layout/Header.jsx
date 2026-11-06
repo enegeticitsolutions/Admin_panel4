@@ -75,7 +75,7 @@ const Header = ({ activePage, setActivePage, user, openForm }) => {
             handleNavClick("legacy");
           }}
         >
-          Legacy Circles
+          Legacy Circle
         </a>
         <a
           href="/partners"
