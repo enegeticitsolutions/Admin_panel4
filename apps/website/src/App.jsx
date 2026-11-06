@@ -252,7 +252,10 @@ const App = () => {
     setInitialEmail(typeof email === "string" ? email : "");
     setIsModalOpen(true);
   };
-  const closeForm = () => setIsModalOpen(false);
+  const closeForm = () => {
+    setIsModalOpen(false);
+    setInitialEmail("");
+  };
 
   const renderAppContent = () => {
     if (activePage === "checkout") {
@@ -323,7 +326,23 @@ const App = () => {
 
         <Footer setActivePage={setActivePage} />
 
-        <CustomizePlanModal isOpen={isModalOpen} onClose={closeForm} initialEmail={initialEmail} title="Join the Waitlist" badge="Early Access" subtitle="Tell us about your eldercare needs and we'll reach out within 24 hours to get you started." successMsg="You're on the list! Our care advisory team will call you shortly to understand your requirements." />
+        <CustomizePlanModal
+          isOpen={isModalOpen}
+          onClose={closeForm}
+          initialEmail={initialEmail}
+          title={initialEmail ? "Join the Waitlist" : "Customize Your Eldercare Plan"}
+          badge={initialEmail ? "Early Access" : "Bespoke Care Plan"}
+          subtitle={
+            initialEmail
+              ? "Tell us about your eldercare needs and we'll reach out within 24 hours to get you started."
+              : "Tell us about your family’s unique requirements. Our care advisory team will design a customized care plan and reach out to you within 24 hours."
+          }
+          successMsg={
+            initialEmail
+              ? "You're on the list! Our care advisory team will call you shortly to understand your requirements."
+              : "Your custom care request has been submitted directly to our Care Advisory Team. We will review your requirements and call you shortly to formulate the perfect care plan."
+          }
+        />
       </div>
     );
   };

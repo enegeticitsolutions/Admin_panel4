@@ -7,12 +7,20 @@ import { API_BASE } from "../../services/api";
  * Opens when the user clicks 'Contact Us' on the 'Customize Your Own' card on /plans.
  * Maps and submits data directly to Zoho CRM Leads Module WebToLeadForm.
  */
-export default function CustomizePlanModal({ isOpen, onClose }) {
+export default function CustomizePlanModal({
+  isOpen,
+  onClose,
+  initialEmail = "",
+  title = "Customize Your Eldercare Plan",
+  badge = "Bespoke Care Plan",
+  subtitle = "Tell us about your family’s unique requirements. Our care advisory team will design a customized care plan and reach out to you within 24 hours.",
+  successMsg = "Your custom care request has been submitted directly to our Care Advisory Team. We will review your requirements and call you shortly to formulate the perfect care plan.",
+}) {
   const [formData, setFormData] = useState({
     "Last Name": "",
     "Phone": "",
     "Address - Zip / Postal Code": "",
-    "Email": "",
+    "Email": initialEmail || "",
     "Description": "",
   });
 
@@ -37,6 +45,10 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
     if (isOpen) {
       setIsSubmitted(false);
       setErrorMessage("");
+      setFormData((prev) => ({
+        ...prev,
+        Email: initialEmail || prev.Email || "",
+      }));
       setTimeout(() => {
         initialInputRef.current?.focus();
       }, 100);
@@ -50,7 +62,7 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
         document.body.appendChild(script);
       }
     }
-  }, [isOpen]);
+  }, [isOpen, initialEmail]);
 
   if (!isOpen) return null;
 
@@ -79,7 +91,7 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
       "Last Name": "",
       "Phone": "",
       "Address - Zip / Postal Code": "",
-      "Email": "",
+      "Email": initialEmail || "",
       "Description": "",
     });
     setErrorMessage("");
@@ -216,15 +228,15 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
           <div className="flex items-center gap-2 mb-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#FE6700]/10 text-[#FE6700]">
               <Sparkles className="w-3.5 h-3.5" />
-              Bespoke Care Plan
+              {badge}
             </span>
           </div>
 
           <h2 id="customize-modal-title" className="text-2xl font-bold text-slate-900 tracking-tight">
-            Customize Your Eldercare Plan
+            {title}
           </h2>
           <p className="mt-1 text-sm text-slate-600 leading-relaxed">
-            Tell us about your family’s unique requirements. Our care advisory team will design a customized care plan and reach out to you within 24 hours.
+            {subtitle}
           </p>
 
           {/* Close Button (✕) */}
@@ -249,7 +261,7 @@ export default function CustomizePlanModal({ isOpen, onClose }) {
                 Thank You for Contacting Us!
               </h3>
               <p className="text-sm text-slate-600 max-w-md mx-auto mb-6 leading-relaxed">
-                Your custom care request has been submitted directly to our Care Advisory Team. We will review your requirements and call you shortly to formulate the perfect care plan.
+                {successMsg}
               </p>
               <button
                 type="button"
