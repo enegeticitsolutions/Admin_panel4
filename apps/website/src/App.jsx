@@ -259,7 +259,10 @@ const App = () => {
     setModalSource(source);
     setIsModalOpen(true);
   };
-  const closeForm = () => setIsModalOpen(false);
+  const closeForm = () => {
+    setIsModalOpen(false);
+    setInitialEmail("");
+  };
 
   const renderAppContent = () => {
     if (activePage === "checkout") {
@@ -335,14 +338,32 @@ const App = () => {
           onClose={closeForm}
           initialEmail={initialEmail}
           source={modalSource}
-          title={modalSource.includes("NRI") ? "Join as NRI Family" : "Join the Waitlist"}
-          badge={modalSource.includes("NRI") ? "NRI Eldercare" : "Early Access"}
+          title={
+            modalSource.includes("NRI")
+              ? "Join as NRI Family"
+              : initialEmail || modalSource.includes("Waitlist")
+              ? "Join the Waitlist"
+              : "Customize Your Eldercare Plan"
+          }
+          badge={
+            modalSource.includes("NRI")
+              ? "NRI Eldercare"
+              : initialEmail || modalSource.includes("Waitlist")
+              ? "Early Access"
+              : "Bespoke Care Plan"
+          }
           subtitle={
             modalSource.includes("NRI")
               ? "Stay actively involved in your parents' daily care from anywhere in the world. Our team will reach out within 24 hours."
-              : "Tell us about your eldercare needs and we'll reach out within 24 hours to get you started."
+              : initialEmail || modalSource.includes("Waitlist")
+              ? "Tell us about your eldercare needs and we'll reach out within 24 hours to get you started."
+              : "Tell us about your family’s unique requirements. Our care advisory team will design a customized care plan and reach out to you within 24 hours."
           }
-          successMsg="You're on the list! Our care advisory team will call you shortly to understand your requirements."
+          successMsg={
+            modalSource.includes("NRI") || initialEmail || modalSource.includes("Waitlist")
+              ? "You're on the list! Our care advisory team will call you shortly to understand your requirements."
+              : "Your custom care request has been submitted directly to our Care Advisory Team. We will review your requirements and call you shortly to formulate the perfect care plan."
+          }
         />
       </div>
     );

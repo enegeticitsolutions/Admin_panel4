@@ -33,7 +33,7 @@ export default function CustomizePlanModal({
     "Last Name": "",
     "Phone": "",
     "Address - Zip / Postal Code": "",
-    "Email": "",
+    "Email": initialEmail || "",
     "Description": "",
   });
 
@@ -67,6 +67,7 @@ export default function CustomizePlanModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
+
   if (!isOpen) return null;
 
   const handleChange = (e) => {
@@ -94,7 +95,7 @@ export default function CustomizePlanModal({
       "Last Name": "",
       "Phone": "",
       "Address - Zip / Postal Code": "",
-      "Email": "",
+      "Email": initialEmail || "",
       "Description": "",
     });
     setErrorMessage("");

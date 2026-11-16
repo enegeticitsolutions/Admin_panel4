@@ -1,6 +1,7 @@
 import { useEffect } from "react";
+import { initGoogleAnalytics, trackPageView } from "../../services/analytics";
 
-const BASE_URL = "https://maihoonna.com";
+const BASE_URL = "https://www.maihoonna.com";
 
 /**
  * Resolves the full absolute canonical URL strictly pointing to https://maihoonna.com
@@ -636,6 +637,10 @@ const SeoHead = ({ activePage = "home" }) => {
       });
       document.head.appendChild(script);
     }
+
+    // 8. Track SPA Page Navigation in Google Analytics (GA4) via Environment Variable
+    initGoogleAnalytics();
+    trackPageView(config.title, window.location.pathname);
   }, [activePage]);
 
   return null;

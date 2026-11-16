@@ -38,7 +38,7 @@ const HeroSection = ({ openForm }) => {
         <div className="hero__copy">
           <div className="eyebrow">
             <img src={healthcareIcon} alt="MaiHoonNa - Connected Senior Care Ecosystem" loading="eager" fetchpriority="high" width="20" height="20" />
-            India's first connected senior care ecosystem
+            India's First Connected Senior Care Ecosystem
           </div>
           <h1>
             <span>Growing older, without giving up on living.</span>
@@ -66,8 +66,8 @@ const HeroSection = ({ openForm }) => {
             {error && <div style={{ position: 'absolute', bottom: '-24px', left: '10px', color: '#ff4444', fontSize: '13px', fontWeight: '500' }}>{error}</div>}
           </div>
 
-          <p className="hero-location" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: '10px' }}>
-            <span style={{ display: 'inline-block', width: '10px', height: '10px', backgroundColor: '#10B981', borderRadius: '50%', marginRight: '8px' }}></span>
+          <p className="hero-location">
+            <span className="hero-location__dot"></span>
             <strong>Live in Gurugram Sectors 53 to 57</strong>
           </p>
 
@@ -79,8 +79,8 @@ const HeroSection = ({ openForm }) => {
           src={homePageCutOut}
           alt="MaiHoonNa Care Mitras assisting elder seniors in Gurugram with home companionship and healthcare"
           className="hero-cutout"
-          width="540"
-          height="480"
+          width="705"
+          height="576"
           loading="eager"
           fetchpriority="high"
           decoding="async"
