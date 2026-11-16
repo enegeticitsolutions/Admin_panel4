@@ -42,11 +42,11 @@ export default function MoreOptionsScreen() {
     const safeBack = useSafeBack();
     const logoutWithConfirm = useLogoutWithConfirm();
     const deleteAccountWithConfirm = useDeleteAccountWithConfirm();
-    const { user } = useAuth();
+    const { user, isGuest, requireAuth } = useAuth();
     const [supportModalVisible, setSupportModalVisible] = useState(false);
 
-    const profileName = user?.name || 'Care Member';
-    const profilePhoto = user?.photo || user?.profilePhoto || null;
+    const profileName = isGuest ? 'Guest User' : (user?.name || 'Care Member');
+    const profilePhoto = isGuest ? null : (user?.photo || user?.profilePhoto || null);
 
     const menuItems: MenuItemProps[] = [
         {
@@ -59,31 +59,46 @@ export default function MoreOptionsScreen() {
             icon: <FontAwesome5 name="user-friends" size={16} color="#3B82F6" />,
             label: 'Care Team',
             iconBg: '#EFF6FF',
-            onPress: () => router.push('/(beneficiary)/team'),
+            onPress: () => {
+                if (requireAuth('View and message your dedicated care team.')) return;
+                router.push('/(beneficiary)/team');
+            },
         },
         {
             icon: <MaterialCommunityIcons name="history" size={20} color="#8B5CF6" />,
             label: 'Interactions',
             iconBg: '#F5F3FF',
-            onPress: () => router.push('/(beneficiary)/interactions'),
+            onPress: () => {
+                if (requireAuth('View past care interaction history and notes.')) return;
+                router.push('/(beneficiary)/interactions');
+            },
         },
         {
             icon: <MaterialCommunityIcons name="file-document-outline" size={20} color="#10B981" />,
             label: 'Medical Records',
             iconBg: '#ECFDF5',
-            onPress: () => router.push('/(beneficiary)/medical-records'),
+            onPress: () => {
+                if (requireAuth('Access confidential medical records and reports.')) return;
+                router.push('/(beneficiary)/medical-records');
+            },
         },
         {
             icon: <Feather name="package" size={18} color="#F97316" />,
             label: 'Package Utilization',
             iconBg: '#FFF3EB',
-            onPress: () => router.push('/package-utilization'),
+            onPress: () => {
+                if (requireAuth('Track care hours and package utilization.')) return;
+                router.push('/package-utilization');
+            },
         },
         {
             icon: <AntDesign name="heart" size={16} color="#EC4899" />,
             label: 'Saathi Network',
             iconBg: '#FDF2F8',
-            onPress: () => router.push('/(beneficiary)/sathi-request'),
+            onPress: () => {
+                if (requireAuth('Request a verified Saathi companion.')) return;
+                router.push('/(beneficiary)/sathi-request');
+            },
         },
         {
             icon: <MaterialCommunityIcons name="star-circle-outline" size={20} color="#F59E0B" />,
@@ -115,7 +130,13 @@ export default function MoreOptionsScreen() {
             >
                 <TouchableOpacity
                     style={styles.profileCard}
-                    onPress={() => router.push('/(beneficiary)/profile')}
+                    onPress={() => {
+                        if (isGuest) {
+                            requireAuth('Sign in or create a free account to manage your profile.');
+                        } else {
+                            router.push('/(beneficiary)/profile');
+                        }
+                    }}
                     activeOpacity={0.9}
                 >
                     {profilePhoto ? (
@@ -132,7 +153,9 @@ export default function MoreOptionsScreen() {
                     )}
                     <View style={styles.profileTextWrap}>
                         <Text style={styles.profileName}>{profileName}</Text>
-                        <Text style={styles.profileSubtitle}>View & edit profile</Text>
+                        <Text style={styles.profileSubtitle}>
+                            {isGuest ? 'Tap to sign in or create account' : 'View & edit profile'}
+                        </Text>
                     </View>
                     <Feather name="chevron-right" size={20} color="#FFFFFF" />
                 </TouchableOpacity>
@@ -140,7 +163,10 @@ export default function MoreOptionsScreen() {
                 {/* ── Family Connect Hub (Always accessible) ── */}
                 <TouchableOpacity
                     style={styles.familyConnectCard}
-                    onPress={() => router.push('/(subscriber)')}
+                    onPress={() => {
+                        if (requireAuth('Monitor family reports, care hours & beneficiaries.')) return;
+                        router.push('/(subscriber)');
+                    }}
                     activeOpacity={0.88}
                 >
                     <View style={styles.familyConnectLeft}>
@@ -169,27 +195,42 @@ export default function MoreOptionsScreen() {
                     ))}
                 </View>
 
-                <TouchableOpacity
-                    style={styles.logoutBtn}
-                    onPress={logoutWithConfirm}
-                    activeOpacity={0.75}
-                >
-                    <View style={styles.logoutIconWrap}>
-                        <Feather name="log-out" size={18} color="#EF4444" />
-                    </View>
-                    <Text style={styles.logoutText}>Log Out</Text>
-                </TouchableOpacity>
+                {isGuest ? (
+                    <TouchableOpacity
+                        style={styles.signInBtn}
+                        onPress={() => requireAuth('Sign in or create a free account to unlock all features.')}
+                        activeOpacity={0.8}
+                    >
+                        <View style={styles.signInIconWrap}>
+                            <Feather name="log-in" size={18} color="#FE6700" />
+                        </View>
+                        <Text style={styles.signInText}>Sign In / Create Account</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <>
+                        <TouchableOpacity
+                            style={styles.logoutBtn}
+                            onPress={logoutWithConfirm}
+                            activeOpacity={0.75}
+                        >
+                            <View style={styles.logoutIconWrap}>
+                                <Feather name="log-out" size={18} color="#EF4444" />
+                            </View>
+                            <Text style={styles.logoutText}>Log Out</Text>
+                        </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={styles.deleteAccountBtn}
-                    onPress={deleteAccountWithConfirm}
-                    activeOpacity={0.75}
-                >
-                    <View style={styles.deleteAccountIconWrap}>
-                        <Feather name="trash-2" size={18} color="#DC2626" />
-                    </View>
-                    <Text style={styles.deleteAccountText}>Delete Account</Text>
-                </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.deleteAccountBtn}
+                            onPress={deleteAccountWithConfirm}
+                            activeOpacity={0.75}
+                        >
+                            <View style={styles.deleteAccountIconWrap}>
+                                <Feather name="trash-2" size={18} color="#DC2626" />
+                            </View>
+                            <Text style={styles.deleteAccountText}>Delete Account</Text>
+                        </TouchableOpacity>
+                    </>
+                )}
 
                 <View style={{ height: Platform.OS === 'ios' ? 120 : 100 }} />
             </ScrollView>
@@ -228,6 +269,9 @@ const styles = StyleSheet.create({
     iconWrap: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
     menuLabel: { flex: 1, fontSize: 15, color: '#374151', fontFamily: 'Poppins-Medium' },
     divider: { height: 1, backgroundColor: '#F3F4F6', marginHorizontal: 16 },
+    signInBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7ED', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, shadowColor: '#FF6A00', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 2, borderWidth: 1.5, borderColor: '#FFEDD5', marginBottom: 12 },
+    signInIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginRight: 16, borderWidth: 1, borderColor: '#FFEDD5' },
+    signInText: { flex: 1, fontSize: 15, color: '#EA580C', fontFamily: 'Poppins-SemiBold' },
     logoutBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#000000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#FEE2E2', marginBottom: 12 },
     logoutIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF2F2', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
     logoutText: { flex: 1, fontSize: 15, color: '#EF4444', fontFamily: 'Poppins-Medium' },

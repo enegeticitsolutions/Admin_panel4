@@ -22,6 +22,7 @@ import { API_URL } from '@/constants/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
+import { useAuth } from '@/contexts/AuthContext';
 import { DefaultMedsPresets } from '@/components/medications/DefaultMedsPresets';
 import { AddMedicationModal, MedicationFormPayload } from '@/components/medications/AddMedicationModal';
 import { MedicationPresetItem } from '@/constants/medicationPresets';
@@ -143,6 +144,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
     const effectiveBeneficiaryId = propBeneficiaryId || routeParams.beneficiaryId;
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
+    const { isGuest, requireAuth } = useAuth();
 
     // Standardized responsive containerisation across iOS & Android (compact to tablet)
     const isTablet = width >= 768;
@@ -307,13 +309,22 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
         }
     };
 
+    const handleOpenAddCustom = () => {
+        if (requireAuth('Create a free account to add and manage your medications.')) return;
+        setSelectedPreset(null);
+        setEditingMed(null);
+        setShowAddModal(true);
+    };
+
     const handleSelectPreset = (preset: MedicationPresetItem) => {
+        if (requireAuth('Create a free account to track your medications.')) return;
         setSelectedPreset(preset);
         setEditingMed(null);
         setShowAddModal(true);
     };
 
     const handleQuickAddPreset = async (preset: MedicationPresetItem) => {
+        if (requireAuth('Create a free account to add medications.')) return;
         try {
             setQuickAddingId(preset.id);
             const targetBeneficiaryId = await resolveTargetBeneficiaryId();
@@ -479,6 +490,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
     };
 
     const handleLogAdherence = async (item: MedScheduleItem, taken: boolean) => {
+        if (requireAuth('Create a free account to record your medication adherence.')) return;
         // Enforce strict Today-Only marking rule
         const schedTime = new Date(item.scheduledTimeIso);
         const now = new Date();
@@ -581,11 +593,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                         <Text style={styles.headerSub} numberOfLines={1}>Today's medication schedule</Text>
                     </View>
                     <TouchableOpacity
-                        onPress={() => {
-                            setSelectedPreset(null);
-                            setEditingMed(null);
-                            setShowAddModal(true);
-                        }}
+                        onPress={handleOpenAddCustom}
                         style={styles.addHeaderBtn}
                         activeOpacity={0.8}
                     >
@@ -650,11 +658,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                 <View style={styles.sectionHeaderRow}>
                     <Text style={styles.sectionTitle}>Your Medications</Text>
                     <TouchableOpacity
-                        onPress={() => {
-                            setSelectedPreset(null);
-                            setEditingMed(null);
-                            setShowAddModal(true);
-                        }}
+                        onPress={handleOpenAddCustom}
                         style={styles.addCustomLink}
                         activeOpacity={0.7}
                     >
@@ -672,11 +676,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                         </Text>
                         <TouchableOpacity
                             style={styles.emptyAddBtn}
-                            onPress={() => {
-                                setSelectedPreset(null);
-                                setEditingMed(null);
-                                setShowAddModal(true);
-                            }}
+                            onPress={handleOpenAddCustom}
                             activeOpacity={0.85}
                         >
                             <Ionicons name="add" size={18} color="#FFFFFF" />

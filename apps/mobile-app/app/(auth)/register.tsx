@@ -20,7 +20,17 @@ export default function RegisterScreen() {
     const { push, replace, resetStack } = useNavigationStack();
     useAndroidBackHandler();
     const safeBack = useSafeBack();
-    const { login } = useAuth();
+    const { login, continueAsGuest } = useAuth();
+
+    const handleSkip = async () => {
+        try {
+            await continueAsGuest();
+            replace("/(beneficiary)");
+        } catch (e) {
+            console.warn('[Register:handleSkip] Error:', e);
+            replace("/(beneficiary)");
+        }
+    };
 
     const [step, setStep] = useState<'form' | 'otp'>('form');
     const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -405,7 +415,19 @@ export default function RegisterScreen() {
                     <Text style={styles.navTitle}>
                         {step === 'otp' ? 'Verify Mobile Number' : 'Create Account'}
                     </Text>
-                    <View style={styles.backBtn} />
+                    {step === 'form' ? (
+                        <TouchableOpacity
+                            onPress={handleSkip}
+                            style={styles.headerSkipBtn}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        >
+                            <Text style={styles.headerSkipBtnText}>Skip</Text>
+                            <Ionicons name="arrow-forward" size={14} color="#FF6A00" />
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={styles.backBtn} />
+                    )}
                 </View>
 
                 <ScrollView
@@ -901,6 +923,22 @@ const styles = StyleSheet.create({
         height: 40,
         justifyContent: "center",
         alignItems: "flex-start",
+    },
+    headerSkipBtn: {
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "#FFF7ED",
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: "#FFEDD5",
+        gap: 4,
+    },
+    headerSkipBtnText: {
+        fontSize: 12,
+        fontFamily: "Poppins-SemiBold",
+        color: "#FF6A00",
     },
     navTitle: {
         fontSize: 16,

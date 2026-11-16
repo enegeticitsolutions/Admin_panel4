@@ -103,7 +103,7 @@ export default function BeneficiaryDashboard() {
 
     useExitOnBack();
     const { showConfirm, showAlert } = useCustomAlert();
-    const { user } = useAuth();
+    const { user, isGuest, requireAuth } = useAuth();
 
     const [triggeringEmergency, setTriggeringEmergency] = useState(false);
     const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'done'>('idle');
@@ -267,6 +267,7 @@ export default function BeneficiaryDashboard() {
     );
 
     const handleEmergencyPress = async () => {
+        if (requireAuth('Trigger emergency SOS and broadcast your live location to care responders.')) return;
         if (triggeringEmergency) return;
 
         // Optimistic confirmation dialog first — then locate & dial 01142258823
@@ -334,7 +335,7 @@ export default function BeneficiaryDashboard() {
     else if (currentHour < 17) defaultGreeting = 'Good Afternoon';
 
     const greeting = personalData?.greeting || defaultGreeting;
-    const firstName = user?.name ? user.name.split(' ')[0] : (personalData?.firstName || 'there');
+    const firstName = isGuest ? 'Guest' : (user?.name ? user.name.split(' ')[0] : (personalData?.firstName || 'there'));
     const familyBeneficiaries: any[] = subscriberData?.beneficiaries || subscriberData?.data?.beneficiaries || [];
     const activeSubscriptions: any[] = subscriberData?.activeSubscriptions || subscriberData?.data?.activeSubscriptions || [];
     const unlinkedSubs: any[] = activeSubscriptions.filter((sub: any) => !sub.beneficiaryId);
@@ -422,6 +423,7 @@ export default function BeneficiaryDashboard() {
     };
 
     const handleSaathiPress = () => {
+        if (requireAuth('Request a verified Saathi companion or book your free care assessment.')) return;
         const eligibleList = getEligibleSaathiList();
 
         if (eligibleList.length === 0) {
@@ -480,33 +482,44 @@ export default function BeneficiaryDashboard() {
                             <View style={styles.headerContent}>
                                 <View style={{ flex: 1, marginRight: 10 }}>
                                     <Text style={styles.greetingTitle} numberOfLines={1} adjustsFontSizeToFit>
-                                        {greeting}, {firstName}!
+                                        {isGuest ? 'Welcome to MaiHoonNa!' : `${greeting}, ${firstName}!`}
                                     </Text>
                                     <Text style={styles.greetingSubtitle} numberOfLines={1}>
-                                        How are you feeling today?
+                                        {isGuest ? 'Explore our trusted senior care services' : 'How are you feeling today?'}
                                     </Text>
                                 </View>
 
-                                <View style={styles.headerRightGroup}>
+                                {isGuest ? (
                                     <TouchableOpacity
-                                        style={styles.switchHeaderPill}
-                                        onPress={() => {
-                                            if (!hasFamilyOrPlans) {
-                                                setShowFamilyIntroModal(true);
-                                            } else {
-                                                router.push('/(subscriber)');
-                                            }
-                                        }}
+                                        style={styles.guestHeaderSignInBtn}
+                                        onPress={() => requireAuth('Sign in or create a free account to unlock all features.')}
                                         activeOpacity={0.8}
                                     >
-                                        <Ionicons name="people-outline" size={14} color="#FF6A00" style={{ marginRight: 4 }} />
-                                        <Text style={styles.switchHeaderPillText}>Family</Text>
+                                        <Feather name="log-in" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                                        <Text style={styles.guestHeaderSignInText}>Sign In</Text>
                                     </TouchableOpacity>
+                                ) : (
+                                    <View style={styles.headerRightGroup}>
+                                        <TouchableOpacity
+                                            style={styles.switchHeaderPill}
+                                            onPress={() => {
+                                                if (!hasFamilyOrPlans) {
+                                                    setShowFamilyIntroModal(true);
+                                                } else {
+                                                    router.push('/(subscriber)');
+                                                }
+                                            }}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons name="people-outline" size={14} color="#FF6A00" style={{ marginRight: 4 }} />
+                                            <Text style={styles.switchHeaderPillText}>Family</Text>
+                                        </TouchableOpacity>
 
-                                    <View style={styles.notificationWrapper}>
-                                        <NotificationBell />
+                                        <View style={styles.notificationWrapper}>
+                                            <NotificationBell />
+                                        </View>
                                     </View>
-                                </View>
+                                )}
                             </View>
 
                             {emergencyEligible && (
@@ -542,6 +555,34 @@ export default function BeneficiaryDashboard() {
             </View>
 
             <View style={[styles.mainContent, responsiveContainerStyle]}>
+                {/* ── Guest Exploration Banner ── */}
+                {isGuest && (
+                    <TouchableOpacity
+                        style={styles.guestBannerCard}
+                        onPress={() => requireAuth('Create a free account to track your daily vitals and request care.')}
+                        activeOpacity={0.88}
+                    >
+                        <View style={styles.guestBannerIconWrap}>
+                            <MaterialCommunityIcons name="shield-star" size={24} color="#FF6A00" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                <Text style={styles.guestBannerTitle}>Guest Exploration Mode</Text>
+                                <View style={styles.guestPill}>
+                                    <Text style={styles.guestPillText}>PREVIEW</Text>
+                                </View>
+                            </View>
+                            <Text style={styles.guestBannerDesc}>
+                                Create a free account to track vitals, book companions, and get 24/7 care support.
+                            </Text>
+                        </View>
+                        <View style={styles.guestBannerCta}>
+                            <Text style={styles.guestBannerCtaText}>Sign In</Text>
+                            <Feather name="arrow-right" size={12} color="#FFFFFF" />
+                        </View>
+                    </TouchableOpacity>
+                )}
+
                 {/* ── Unlinked Care Plans Alert (High Priority Action) ── */}
                 <UnlinkedPlansBanner
                     unlinkedCount={unlinkedSubs.length}
@@ -639,6 +680,7 @@ export default function BeneficiaryDashboard() {
                     sathiEligible={sathiEligible || sathiEligibleBeneficiaries.length > 0}
                     hasFamilyOrPlans={hasFamilyOrPlans}
                     onFamilyConnectPress={() => {
+                        if (requireAuth('Monitor family reports, care hours, and care circles.')) return;
                         if (!hasFamilyOrPlans) {
                             setShowFamilyIntroModal(true);
                         } else {
@@ -646,10 +688,14 @@ export default function BeneficiaryDashboard() {
                         }
                     }}
                     onLogVitalsPress={() => {
+                        if (requireAuth('Track and monitor your daily health vitals.')) return;
                         router.push('/(beneficiary)/vitals');
                     }}
                     onSaathiPress={handleSaathiPress}
-                    onActionPress={(route) => router.push(route as any)}
+                    onActionPress={(route) => {
+                        if (route === '/(beneficiary)/request-service' && requireAuth('Request home care, nursing, or attendant services.')) return;
+                        router.push(route as any);
+                    }}
                 />
 
                 <View style={{ height: 40 }} />
@@ -842,6 +888,86 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 8,
         flexShrink: 0,
+    },
+    guestHeaderSignInBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.25)',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.6)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+    },
+    guestHeaderSignInText: {
+        fontSize: 12,
+        fontFamily: 'Poppins-SemiBold',
+        color: '#FFFFFF',
+    },
+    guestBannerCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        marginBottom: 16,
+        borderWidth: 1.5,
+        borderColor: '#FFEDD5',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    guestBannerIconWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#FFF7ED',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#FFEDD5',
+    },
+    guestBannerTitle: {
+        fontSize: 14,
+        fontFamily: 'Poppins-SemiBold',
+        color: '#111827',
+    },
+    guestPill: {
+        backgroundColor: '#FFF7ED',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: '#FFEDD5',
+    },
+    guestPillText: {
+        fontSize: 9,
+        fontFamily: 'Poppins-Bold',
+        color: '#EA580C',
+        letterSpacing: 0.5,
+    },
+    guestBannerDesc: {
+        fontSize: 11,
+        fontFamily: 'Poppins-Regular',
+        color: '#6B7280',
+        lineHeight: 16,
+    },
+    guestBannerCta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FF6A00',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 10,
+        gap: 4,
+    },
+    guestBannerCtaText: {
+        fontSize: 12,
+        fontFamily: 'Poppins-SemiBold',
+        color: '#FFFFFF',
     },
     notificationWrapper: {
         width: 38,
