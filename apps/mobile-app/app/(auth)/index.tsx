@@ -32,8 +32,19 @@ export default function AuthScreen() {
 
   const { push } = useNavigationStack();
   useAndroidBackHandler();
-  const { login } = useAuth();
+  const { login, continueAsGuest } = useAuth();
+  const router = useRouter();
   const { message } = useLocalSearchParams();
+
+  const handleSkip = async () => {
+    try {
+      await continueAsGuest();
+      router.replace('/(beneficiary)');
+    } catch (e) {
+      console.warn('[handleSkip] Error:', e);
+      router.replace('/(beneficiary)');
+    }
+  };
 
   useEffect(() => {
     if (message) {
@@ -236,6 +247,20 @@ export default function AuthScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Top Bar with Skip Option */}
+            <View style={styles.topBar}>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity
+                style={styles.skipButton}
+                onPress={handleSkip}
+                activeOpacity={0.7}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.skipButtonText}>Skip</Text>
+                <Ionicons name="arrow-forward" size={scale(14)} color="#FF6A00" />
+              </TouchableOpacity>
+            </View>
+
             {/* Logo */}
             <View style={styles.logoContainer}>
               <Image
@@ -357,9 +382,34 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: scale(24),
-    paddingTop: vscale(40),
+    paddingTop: vscale(20),
     paddingBottom: scale(32),
     alignItems: "center",
+  },
+
+  /* Top Bar */
+  topBar: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    marginBottom: vscale(12),
+  },
+  skipButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFF7ED",
+    paddingHorizontal: scale(14),
+    paddingVertical: vscale(6),
+    borderRadius: scale(20),
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+    gap: scale(4),
+  },
+  skipButtonText: {
+    fontFamily: "Poppins-SemiBold",
+    fontSize: scale(13),
+    color: "#FF6A00",
   },
 
   /* Logo */

@@ -18,6 +18,7 @@ import * as SecureStore from 'expo-secure-store';
 import { API_URL } from '@/constants/api';
 import { registerForPushNotifications, unregisterPushToken } from '@/services/notifications';
 import { queryClient } from '@/services/queryClient';
+import { GuestAuthModal } from '@/components/shared/GuestAuthModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ export interface UserData {
 interface AuthState {
   isLoading: boolean;
   isLoggedIn: boolean;
+  isGuest: boolean;
   token: string | null;
   user: UserData | null;
   role: string | null;
@@ -43,6 +45,9 @@ interface AuthState {
   isSwitchingRole: boolean;
   /** Whether a logout operation is actively in progress */
   isLoggingOut: boolean;
+  /** Guest prompt modal state */
+  isGuestAuthModalVisible: boolean;
+  guestPromptReason: string | null;
 }
 
 interface AuthContextValue extends AuthState {
@@ -52,6 +57,14 @@ interface AuthContextValue extends AuthState {
   updateUser: (token: string, userData: UserData) => Promise<void>;
   /** Switch between subscriber ↔ beneficiary (self) roles — dual-role users only */
   switchRole: (targetRole: 'subscriber' | 'beneficiary') => Promise<void>;
+  /** Enter guest mode to explore the app without logging in */
+  continueAsGuest: () => Promise<void>;
+  /** Exit guest mode and return to auth screen */
+  exitGuestMode: () => Promise<void>;
+  /** Gatekeeper helper: returns true (and prompts modal) if user is guest, returns false if logged in */
+  requireAuth: (reason?: string) => boolean;
+  /** Dismiss the guest auth modal */
+  closeGuestAuthModal: () => void;
 }
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -67,6 +80,7 @@ const SESSION_STORAGE_KEYS = [
   'selfBeneficiaryId',
   'selectedBeneficiaryId',
   'activeSubscription',
+  'isGuestSession',
 ];
 
 // ─── Provider ────────────────────────────────────────────────────────────────
@@ -75,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     isLoading: true,
     isLoggedIn: false,
+    isGuest: false,
     token: null,
     user: null,
     role: null,
@@ -82,6 +97,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     selfBeneficiaryId: null,
     isSwitchingRole: false,
     isLoggingOut: false,
+    isGuestAuthModalVisible: false,
+    guestPromptReason: null,
   });
 
   const isLoggingOutRef = useRef(false);
@@ -114,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setState({
             isLoading: false,
             isLoggedIn: true,
+            isGuest: false,
             token: storedToken,
             user: parsedUser,
             role: parsedUser.role,
@@ -121,6 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             selfBeneficiaryId: storedSelfBenId || null,
             isSwitchingRole: false,
             isLoggingOut: false,
+            isGuestAuthModalVisible: false,
+            guestPromptReason: null,
           });
 
           // Background refresh of the profile photo URL since presigned URLs expire
@@ -145,7 +165,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .catch(e => console.warn('[AuthContext] Failed to refresh profile photo on startup:', e));
 
         } else {
-          setState(prev => ({ ...prev, isLoading: false }));
+          // Check if user previously chose to explore as guest
+          const isGuestStored = await AsyncStorage.getItem('isGuestSession');
+          if (isGuestStored === 'true') {
+            setState(prev => ({
+              ...prev,
+              isLoading: false,
+              isLoggedIn: false,
+              isGuest: true,
+              isGuestAuthModalVisible: false,
+              guestPromptReason: null,
+            }));
+          } else {
+            setState(prev => ({ ...prev, isLoading: false, isGuest: false }));
+          }
         }
       } catch (err) {
         console.error('[AuthContext] Failed to load session:', err);
@@ -154,6 +187,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     loadSession();
+  }, []);
+
+  // Enter guest mode to explore the app without creating an account
+  const continueAsGuest = useCallback(async () => {
+    await AsyncStorage.setItem('isGuestSession', 'true');
+    setState(prev => ({
+      ...prev,
+      isLoading: false,
+      isLoggedIn: false,
+      isGuest: true,
+      token: null,
+      user: null,
+      role: null,
+      isGuestAuthModalVisible: false,
+      guestPromptReason: null,
+    }));
+  }, []);
+
+  // Exit guest mode and return to authentication screen
+  const exitGuestMode = useCallback(async () => {
+    await AsyncStorage.removeItem('isGuestSession');
+    setState(prev => ({
+      ...prev,
+      isGuest: false,
+      isGuestAuthModalVisible: false,
+      guestPromptReason: null,
+    }));
+  }, []);
+
+  // Gatekeeper: returns true (and prompts modal) if user is a guest, returns false if logged in
+  const requireAuth = useCallback((reason?: string): boolean => {
+    if (state.isLoggedIn) {
+      return false; // Authorized, allow action
+    }
+    // Block action and show auth prompt modal
+    setState(prev => ({
+      ...prev,
+      isGuestAuthModalVisible: true,
+      guestPromptReason: reason || null,
+    }));
+    return true; // Action blocked
+  }, [state.isLoggedIn]);
+
+  // Close the guest auth prompt modal
+  const closeGuestAuthModal = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      isGuestAuthModalVisible: false,
+      guestPromptReason: null,
+    }));
   }, []);
 
   // Called after successful OTP verify, password login, or biometric login
@@ -165,6 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     const roles = availableRoles.length > 0 ? availableRoles : [userData.role];
     const promises: Promise<any>[] = [
+      AsyncStorage.removeItem('isGuestSession'),
       AsyncStorage.setItem('userToken', token),
       AsyncStorage.setItem('userData', JSON.stringify(userData)),
       AsyncStorage.setItem('availableRoles', JSON.stringify(roles)),
@@ -183,6 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({
       isLoading: false,
       isLoggedIn: true,
+      isGuest: false,
       token,
       user: userData,
       role: userData.role,
@@ -190,6 +275,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       selfBeneficiaryId,
       isSwitchingRole: false,
       isLoggingOut: false,
+      isGuestAuthModalVisible: false,
+      guestPromptReason: null,
     });
 
     // Synchronize push notification token for this device with backend in background
@@ -301,6 +388,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({
       isLoading: false,
       isLoggedIn: false,
+      isGuest: false,
       token: null,
       user: null,
       role: null,
@@ -308,6 +396,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       selfBeneficiaryId: null,
       isSwitchingRole: false,
       isLoggingOut: true,
+      isGuestAuthModalVisible: false,
+      guestPromptReason: null,
     });
 
     // 2. Clear query cache
@@ -357,9 +447,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     disableBiometrics,
     updateUser,
     switchRole,
+    continueAsGuest,
+    exitGuestMode,
+    requireAuth,
+    closeGuestAuthModal,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <GuestAuthModal
+        visible={state.isGuestAuthModalVisible}
+        reason={state.guestPromptReason}
+        onClose={closeGuestAuthModal}
+      />
+    </AuthContext.Provider>
+  );
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────

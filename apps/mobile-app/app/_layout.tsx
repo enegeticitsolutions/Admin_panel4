@@ -48,7 +48,7 @@ function onAppStateChange(status: AppStateStatus) {
  * cannot reach the login screen. This is exactly how Swiggy/Zomato/Uber work.
  */
 function RootNavigator() {
-  const { isLoading, isLoggedIn, role } = useAuth();
+  const { isLoading, isLoggedIn, isGuest, role } = useAuth();
   const { resetStack } = useNavigationStack();
   const router = useRouter();
 
@@ -72,11 +72,11 @@ function RootNavigator() {
     resetStack();
     // Only force navigation back to the auth stack if the user actually logged out,
     // otherwise this redirects on app launch and skips the custom animated splash screen!
-    if (wasLoggedIn.current && !isLoggedIn && !isLoading) {
+    if (wasLoggedIn.current && !isLoggedIn && !isGuest && !isLoading) {
       router.replace('/(auth)');
     }
     wasLoggedIn.current = isLoggedIn;
-  }, [isLoggedIn, isLoading, resetStack]);
+  }, [isLoggedIn, isGuest, isLoading, resetStack]);
 
   // Register for push notifications and listen for incoming messages when logged in
   useEffect(() => {
@@ -205,12 +205,11 @@ function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
-      {!isLoggedIn ? (
-        <Stack.Screen name="(auth)" />
-      ) : (
-        <Stack.Screen name="(subscriber)" />
-      )}
+      <Stack.Screen name="(auth)" />
       {isLoggedIn ? (
+        <Stack.Screen name="(subscriber)" />
+      ) : null}
+      {(isLoggedIn || isGuest) ? (
         <Stack.Screen name="(beneficiary)" />
       ) : null}
       {isLoggedIn ? (

@@ -12,6 +12,7 @@ import { useSafeBack } from '@/hooks/useSafeBack';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { API_URL } from '@/constants/api';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ export default function VitalsScreen() {
     const router = useRouter();
     useAndroidBackHandler();
     const safeBack = useSafeBack();
+    const { isGuest, requireAuth } = useAuth();
 
     const [authToken, setAuthToken] = useState('');
     const [history, setHistory] = useState<SelfReportedHistoryEntry[]>([]);
@@ -92,6 +94,57 @@ export default function VitalsScreen() {
     };
 
     // ── Render ───────────────────────────────────────────────────────────────
+
+    if (isGuest) {
+        return (
+            <SafeAreaView style={styles.safeArea} edges={['top']}>
+                <View style={styles.topBar}>
+                    <TouchableOpacity onPress={() => safeBack()} style={styles.backBtn}>
+                        <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
+                    </TouchableOpacity>
+                    <View style={styles.topBarContent}>
+                        <Text style={styles.topBarTitle}>My Vitals</Text>
+                        <Text style={styles.topBarSub}>Self-reported health readings</Text>
+                    </View>
+                </View>
+
+                <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+                    <View style={styles.guestCard}>
+                        <View style={styles.guestIconWrap}>
+                            <Ionicons name="pulse" size={32} color="#FE6700" />
+                        </View>
+                        <Text style={styles.guestTitle}>Free Daily Vitals Tracking</Text>
+                        <Text style={styles.guestDesc}>
+                            Track blood pressure, blood sugar, oxygen levels, and temperature daily with safety alerts.
+                        </Text>
+
+                        <View style={styles.guestFeatureList}>
+                            <View style={styles.guestFeatureRow}>
+                                <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Standard default vitals monitored for all users</Text>
+                            </View>
+                            <View style={styles.guestFeatureRow}>
+                                <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Persistent history & health trends</Text>
+                            </View>
+                            <View style={styles.guestFeatureRow}>
+                                <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Share reports with doctors & family</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.guestCtaBtn}
+                            onPress={() => requireAuth('Create a free account to track your daily vitals.')}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={styles.guestCtaBtnText}>Create Free Account to Log Vitals</Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -275,4 +328,81 @@ const styles = StyleSheet.create({
         backgroundColor: '#FF6900', borderRadius: 12,
     },
     recordNowText: { color: '#FFF', fontWeight: '800', fontSize: 14 },
+    guestCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 24,
+        alignItems: 'center',
+        marginVertical: 12,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        ...Platform.select({
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12 },
+            android: { elevation: 3 },
+        }),
+    },
+    guestIconWrap: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#FFF7ED',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#FFEDD5',
+    },
+    guestTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#111827',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    guestDesc: {
+        fontSize: 13,
+        color: '#6B7280',
+        textAlign: 'center',
+        lineHeight: 19,
+        marginBottom: 20,
+    },
+    guestFeatureList: {
+        width: '100%',
+        backgroundColor: '#F9FAFB',
+        borderRadius: 14,
+        padding: 16,
+        gap: 12,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+    },
+    guestFeatureRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    guestFeatureText: {
+        fontSize: 13,
+        color: '#374151',
+        fontWeight: '500',
+        flex: 1,
+    },
+    guestCtaBtn: {
+        width: '100%',
+        backgroundColor: '#FE6700',
+        borderRadius: 14,
+        height: 52,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    guestCtaBtnText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#FFFFFF',
+    },
 });

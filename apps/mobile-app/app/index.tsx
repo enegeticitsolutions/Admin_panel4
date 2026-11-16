@@ -57,7 +57,7 @@ function Dot({ index, activeIndex }: { index: number; activeIndex: number }) {
 // ── Main Entry / Splash Screen ──────────────────────────────────────────────────
 export default function Index() {
   const router = useRouter();
-  const { isLoading, isLoggedIn, role } = useAuth();
+  const { isLoading, isLoggedIn, isGuest, role } = useAuth();
   const flatListRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [splashDone, setSplashDone] = useState(false);
@@ -149,6 +149,10 @@ export default function Index() {
   }
 
   // ── Route based on auth state ─────────────────────────────────────────────────
+  if (isGuest) {
+    return <Redirect href="/(beneficiary)" />;
+  }
+
   if (!isLoggedIn) {
     return <Redirect href="/(auth)" />;
   }

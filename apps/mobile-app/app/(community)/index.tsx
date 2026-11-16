@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
 
@@ -38,14 +38,23 @@ export default function CommunityHomeScreen() {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${API_URL}/community/home`, { headers });
+      const [res, eventsRes] = await Promise.all([
+        fetch(`${API_URL}/community/home`, { headers }),
+        fetch(`${API_URL}/community/events`, { headers }).catch(() => null),
+      ]);
       const json = await res.json();
+      const eventsJson = eventsRes ? await eventsRes.json().catch(() => null) : null;
 
       if (json.success && json.data) {
-        setEvents(json.data.events || []);
         setBlogs(json.data.blogs || []);
         setPodcasts(json.data.podcasts || []);
         setCategories(json.data.categories || []);
+      }
+
+      if (eventsJson && eventsJson.success && Array.isArray(eventsJson.data) && eventsJson.data.length > 0) {
+        setEvents(eventsJson.data);
+      } else if (json.success && json.data?.events) {
+        setEvents(json.data.events || []);
       }
     } catch (err) {
       console.warn('[Community] Failed to fetch community data:', err);
@@ -54,6 +63,12 @@ export default function CommunityHomeScreen() {
       setRefreshing(false);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchCommunityData();
+    }, [])
+  );
 
   useEffect(() => {
     fetchCommunityData();

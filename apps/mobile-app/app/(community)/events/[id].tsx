@@ -15,10 +15,12 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { requireAuth } = useAuth();
 
   const [event, setEvent] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -50,6 +52,9 @@ export default function EventDetailScreen() {
   }, [id]);
 
   const handleRsvp = async () => {
+    if (requireAuth('Create a free account to register for community health events and interactive webinars.')) {
+      return;
+    }
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {

@@ -18,15 +18,21 @@ async function resolveUrl(key?: string | null): Promise<string | null> {
 // ─── GET /api/community/home ──────────────────────────────────────────────────
 router.get('/home', optionalAuthenticate, async (_req: Request, res: Response) => {
   try {
-    const [events, blogs, podcasts, categories] = await Promise.all([
-      // Top 5 upcoming published events
+    const now = new Date();
+    const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const [eventsResult, blogs, podcasts, categories] = await Promise.all([
+      // Upcoming, ongoing, or recent published events
       (prisma as any).communityEvent.findMany({
         where: {
           status: 'published',
-          startDateTime: { gte: new Date() },
+          OR: [
+            { endDateTime: { gte: now } },
+            { startDateTime: { gte: past24h } },
+          ],
         },
         orderBy: { startDateTime: 'asc' },
-        take: 5,
+        take: 20,
         include: {
           category: { select: { id: true, name: true, slug: true, color: true } },
           host: { select: { id: true, name: true, designation: true, avatarKey: true } },
@@ -60,6 +66,20 @@ router.get('/home', optionalAuthenticate, async (_req: Request, res: Response) =
         orderBy: { sortOrder: 'asc' },
       }),
     ]);
+
+    let events = eventsResult;
+    // Fallback: If no upcoming or today's events, show latest published events
+    if (!events || events.length === 0) {
+      events = await (prisma as any).communityEvent.findMany({
+        where: { status: 'published' },
+        orderBy: { startDateTime: 'desc' },
+        take: 20,
+        include: {
+          category: { select: { id: true, name: true, slug: true, color: true } },
+          host: { select: { id: true, name: true, designation: true, avatarKey: true } },
+        },
+      });
+    }
 
     // Resolve media URLs
     const resolvedEvents = await Promise.all(
