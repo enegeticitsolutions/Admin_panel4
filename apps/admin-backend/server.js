@@ -193,6 +193,7 @@ app.use('/api/community', require('./routes/community'));
 app.use('/api/legacy-circle', staffOnly, require('./routes/legacy-circle'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/invoices', staffOnly, require('./modules/invoices/invoice.routes'));
+app.use('/api/credit-notes', staffOnly, require('./modules/credit-notes/credit-note.routes'));
 app.use('/api/partners', require('./routes/partners'));
 
 // ─── Secure File Access — Presigned URL (all authenticated staff) ─────────────────

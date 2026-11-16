@@ -2254,6 +2254,73 @@ export const invoicesApi = {
   },
 };
 
+export const creditNotesApi = {
+  getRefundDetails: async (invoiceId: string): Promise<any> => {
+    const res = await apiFetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}/refund-details`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to fetch invoice refund details');
+    }
+    return data.data;
+  },
+
+  issueCreditNote: async (invoiceId: string, payload: {
+    amount: number;
+    refundMode: 'GATEWAY_ONLINE' | 'MANUAL_BANK';
+    manualReference?: string;
+    reason?: string;
+    notes?: string;
+    cancelSubscription?: boolean;
+  }): Promise<any> => {
+    const res = await apiFetch(`${API_BASE}/invoices/${encodeURIComponent(invoiceId)}/credit-notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to issue Credit Note');
+    }
+    return data.data;
+  },
+
+  getCreditNotes: async (params?: { page?: number; limit?: number; search?: string; invoiceId?: string; subscriberId?: string }): Promise<{
+    data: any[];
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  }> => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.invoiceId) query.append('invoiceId', params.invoiceId);
+    if (params?.subscriberId) query.append('subscriberId', params.subscriberId);
+    const qStr = query.toString();
+    const res = await apiFetch(`${API_BASE}/credit-notes${qStr ? `?${qStr}` : ''}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to fetch credit notes');
+    }
+    return data;
+  },
+
+  fetchCreditNotePdfUrl: async (id: string): Promise<{ downloadUrl: string; fileName: string }> => {
+    const res = await apiFetch(`${API_BASE}/credit-notes/${encodeURIComponent(id)}/pdf-url`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to load Credit Note PDF');
+    }
+    return data.data;
+  },
+
+  fetchCreditNoteHtml: async (id: string): Promise<string> => {
+    const res = await apiFetch(`${API_BASE}/credit-notes/${encodeURIComponent(id)}/html`);
+    if (!res.ok) {
+      throw new Error('Failed to load Credit Note HTML preview');
+    }
+    return await res.text();
+  },
+};
+
 // ============================================================================
 // VITALS API
 // ============================================================================

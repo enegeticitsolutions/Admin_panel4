@@ -104,8 +104,42 @@ async function fetchPaymentLink(linkId) {
   }
 }
 
+/**
+ * Issues a refund against an authorized/captured Razorpay payment.
+ * Amount is in Rupees and is converted to paise for Razorpay.
+ */
+async function issueRefund({ paymentId, amount, notes = {}, receipt = null }) {
+  const rzp = getRazorpayInstance();
+  if (!rzp) {
+    throw new Error('Razorpay is not configured or credentials missing');
+  }
+  if (!paymentId) {
+    throw new Error('paymentId is required for issuing gateway refund');
+  }
+
+  const payload = {
+    amount: Math.round(Number(amount) * 100), // convert to paise
+    speed: 'optimum',
+    notes: {
+      ...notes,
+      source: 'MaiHoonNa Admin Credit Note',
+    },
+  };
+  if (receipt) payload.receipt = receipt;
+
+  try {
+    const refundRes = await rzp.payments.refund(paymentId, payload);
+    console.log(`[Razorpay Service] Refund issued successfully: ${refundRes.id} for payment ${paymentId}`);
+    return refundRes;
+  } catch (err) {
+    console.error(`[Razorpay Service] Refund failed for payment ${paymentId}:`, err.message || err);
+    throw new Error(`Razorpay refund failed: ${err.message || 'Gateway rejected refund'}`);
+  }
+}
+
 module.exports = {
   createPaymentLink,
   fetchPaymentLink,
+  issueRefund,
   isConfigured: () => !!getRazorpayInstance(),
 };

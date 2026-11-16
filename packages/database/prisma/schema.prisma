@@ -88,6 +88,7 @@ model User {
   serviceRequests                ServiceRequest[]         @relation("SubscriberServiceRequests")
   requestedServiceRequests       ServiceRequest[]         @relation("RequestedByServiceRequests")
   invoices                       Invoice[]                @relation("SubscriberInvoices")
+  creditNotes                    CreditNote[]             @relation("SubscriberCreditNotes")
   careCircleMemberships          CareCircleMember[]       @relation("CareCircleUser")
   createdEvents                  CommunityEvent[]         @relation("EventCreatedBy")
   createdBlogs                   Blog[]                   @relation("BlogCreatedBy")
@@ -316,6 +317,7 @@ model Beneficiary {
   volunteerVisitLogs   VolunteerVisitLog[]
   sathiVisitRequests   SathiVisitRequest[]
   invoices             Invoice[]                @relation("BeneficiaryInvoices")
+  creditNotes          CreditNote[]             @relation("BeneficiaryCreditNotes")
   volunteerReviews     VolunteerReview[]
   legacyCircleProfile  LegacyCircleProfile?
   careCircleMembers    CareCircleMember[]
@@ -818,6 +820,7 @@ model Subscription {
   packageVersion   PackageVersion?              @relation(fields: [packageVersionId], references: [id])
   subscriber       User                         @relation("SubscriberSubscriptions", fields: [subscriberId], references: [id])
   invoices         Invoice[]                    @relation("SubscriptionInvoices")
+  creditNotes      CreditNote[]                 @relation("SubscriptionCreditNotes")
 
   @@index([subscriberId])
   @@index([beneficiaryId])
@@ -889,6 +892,7 @@ model Payment {
   subscription         Subscription?   @relation(fields: [subscriptionId], references: [id])
   packageVersion       PackageVersion? @relation(fields: [packageVersionId], references: [id])
   invoice              Invoice?        @relation(fields: [invoiceId], references: [id])
+  creditNotes          CreditNote[]    @relation("PaymentCreditNotes")
 
   @@index([subscriberId])
   @@index([beneficiaryId])
@@ -2438,8 +2442,9 @@ model Invoice {
   subscription Subscription? @relation("SubscriptionInvoices", fields: [subscriptionId], references: [id])
   appointment  Appointment?  @relation("AppointmentInvoice", fields: [appointmentId], references: [id])
 
-  items    InvoiceItem[]
-  payments Payment[]
+  items       InvoiceItem[]
+  payments    Payment[]
+  creditNotes CreditNote[]
 
   @@index([subscriberId])
   @@index([subscriptionId])
@@ -2480,6 +2485,76 @@ model InvoiceCounter {
   updatedAt     DateTime @updatedAt
 
   @@map("invoice_counters")
+}
+
+enum CreditNoteStatus {
+  ISSUED
+  VOID
+}
+
+enum RefundMode {
+  GATEWAY_ONLINE
+  MANUAL_BANK
+}
+
+model CreditNote {
+  id                    String           @id @default(uuid())
+  creditNoteNumber      String           @unique // e.g. MHN/CN/2026-27/00001
+  status                CreditNoteStatus @default(ISSUED)
+
+  // Original Invoice Link
+  invoiceId             String
+  originalInvoiceNumber String
+
+  // Subscriber & Beneficiary Info
+  subscriberId          String
+  beneficiaryId         String?
+  subscriptionId        String?
+  paymentId             String?
+
+  // Financial & Tax Reversal Amounts
+  baseAmount            Float            // Base taxable amount reversed
+  taxAmount             Float            // Total GST reversed
+  cgstAmount            Float            @default(0.0)
+  sgstAmount            Float            @default(0.0)
+  igstAmount            Float            @default(0.0)
+  totalAmount           Float            // Total Credit Note amount (base + tax = refundAmount)
+
+  // Refund Details
+  refundMode            RefundMode       @default(GATEWAY_ONLINE)
+  gatewayRefundId       String?          // e.g. "rfnd_xxxx" from Razorpay
+  manualReference       String?          // Bank UTR or transaction reference number
+  reason                String           // e.g. "Customer cancellation"
+  notes                 String?
+
+  // Statutory PDF
+  pdfUrl                String?
+  pdfGeneratedAt        DateTime?
+
+  issuedAt              DateTime         @default(now())
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  invoice               Invoice          @relation(fields: [invoiceId], references: [id])
+  subscriber            User             @relation("SubscriberCreditNotes", fields: [subscriberId], references: [id])
+  beneficiary           Beneficiary?     @relation("BeneficiaryCreditNotes", fields: [beneficiaryId], references: [id])
+  subscription          Subscription?    @relation("SubscriptionCreditNotes", fields: [subscriptionId], references: [id])
+  payment               Payment?         @relation("PaymentCreditNotes", fields: [paymentId], references: [id])
+
+  @@index([invoiceId])
+  @@index([subscriberId])
+  @@index([creditNoteNumber])
+  @@map("credit_notes")
+}
+
+model CreditNoteCounter {
+  id            String   @id @default(uuid())
+  financialYear String   @unique // e.g. "2026-27"
+  lastCount     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("credit_note_counters")
 }
 
 model TaxCategory {

@@ -82,3 +82,66 @@ export async function generateInvoiceNumber(
   return candidate;
 }
 
+export async function generateCreditNoteNumber(
+  prismaClient: any,
+  forDate: Date = new Date(),
+  prefix: string = 'MHN/CN'
+): Promise<string> {
+  const financialYear = currentIndianFinancialYear(forDate);
+
+  const counter = await prismaClient.creditNoteCounter.upsert({
+    where: { financialYear },
+    update: { lastCount: { increment: 1 } },
+    create: { financialYear, lastCount: 1 },
+  });
+
+  let nextCount = counter.lastCount;
+  let candidate = `${prefix}/${financialYear}/${nextCount.toString().padStart(5, '0')}`;
+
+  if (prismaClient.creditNote && typeof prismaClient.creditNote.findUnique === 'function') {
+    const exists = await prismaClient.creditNote.findUnique({
+      where: { creditNoteNumber: candidate },
+      select: { id: true },
+    });
+
+    if (exists) {
+      const latestCreditNote = await prismaClient.creditNote.findFirst({
+        where: { creditNoteNumber: { startsWith: `${prefix}/${financialYear}/` } },
+        orderBy: { creditNoteNumber: 'desc' },
+        select: { creditNoteNumber: true },
+      });
+
+      if (latestCreditNote?.creditNoteNumber) {
+        const match = latestCreditNote.creditNoteNumber.match(/\/(\d+)$/);
+        const maxSeq = match ? parseInt(match[1], 10) : NaN;
+        if (!isNaN(maxSeq) && maxSeq >= nextCount) {
+          nextCount = maxSeq + 1;
+        } else {
+          nextCount++;
+        }
+      } else {
+        nextCount++;
+      }
+
+      while (true) {
+        candidate = `${prefix}/${financialYear}/${nextCount.toString().padStart(5, '0')}`;
+        const collision = await prismaClient.creditNote.findUnique({
+          where: { creditNoteNumber: candidate },
+          select: { id: true },
+        });
+        if (!collision) {
+          break;
+        }
+        nextCount++;
+      }
+
+      await prismaClient.creditNoteCounter.update({
+        where: { financialYear },
+        data: { lastCount: nextCount },
+      });
+    }
+  }
+
+  return candidate;
+}
+
