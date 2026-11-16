@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const invoiceController = require('./invoice.controller');
+const creditNoteController = require('../credit-notes/credit-note.controller');
 const upload = require('../../middleware/upload');
+
+// Refund & Credit Note routes for specific invoice (must precede /:id actions)
+router.get('/:id/refund-details', creditNoteController.getRefundDetails);
+router.post('/:id/credit-notes', creditNoteController.issueCreditNote);
 
 // Counter routes (must precede /:id)
 router.get('/counter', invoiceController.getInvoiceCounter);

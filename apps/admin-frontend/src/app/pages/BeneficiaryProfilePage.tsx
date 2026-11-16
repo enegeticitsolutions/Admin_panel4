@@ -22,6 +22,7 @@ import { AddConditionDialog } from '../components/forms/AddConditionDialog';
 import { PackageUtilizationPanel } from '../components/PackageUtilizationPanel';
 import VisitDetailsModal from '../components/field-management/VisitDetailsModal';
 import { VitalsTrendsCard } from '../components/beneficiary/VitalsTrendsCard';
+import { InvoiceRefundBadge, InvoiceRefundButton, InvoiceCreditNoteList } from '../components/invoices/InvoiceCreditNoteSection';
 import { format } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 
@@ -1256,50 +1257,61 @@ export default function BeneficiaryProfilePage() {
                         return (
                           <div
                             key={inv.id}
-                            className="flex items-center justify-between p-5 rounded-2xl border border-gray-100 bg-[#FDFBF9] hover:border-emerald-200 hover:bg-emerald-50/20 transition-all group"
+                            className="flex flex-col p-5 rounded-2xl border border-gray-100 bg-[#FDFBF9] hover:border-emerald-200 hover:bg-emerald-50/20 transition-all group gap-2"
                           >
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
-                                <Receipt size={16} />
-                              </div>
-                              <div>
-                                <p className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors">
-                                  {inv.invoiceNumber}
-                                </p>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${statusClass}`}>
-                                    {inv.status}
-                                  </span>
-                                  <span className="text-[9px] font-bold text-gray-400 uppercase">
-                                    {typeLabels[inv.invoiceType] || inv.invoiceType}
-                                  </span>
-                                  <span className="text-[9px] text-gray-300">·</span>
-                                  <span className="text-[9px] font-bold text-gray-400">{issuedDate}</span>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
+                                  <Receipt size={16} />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors">
+                                    {inv.invoiceNumber}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${statusClass}`}>
+                                      {inv.status}
+                                    </span>
+                                    <InvoiceRefundBadge creditNotes={inv.creditNotes} />
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase">
+                                      {typeLabels[inv.invoiceType] || inv.invoiceType}
+                                    </span>
+                                    <span className="text-[9px] text-gray-300">·</span>
+                                    <span className="text-[9px] font-bold text-gray-400">{issuedDate}</span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
-                                <p className="text-base font-black text-gray-800">₹{Number(inv.totalAmount).toFixed(2)}</p>
-                                {Number(inv.taxAmount) > 0 && (
-                                  <p className="text-[9px] font-bold text-gray-400">incl. ₹{Number(inv.taxAmount).toFixed(2)} GST</p>
-                                )}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="text-right mr-2">
+                                  <p className="text-base font-black text-gray-800">₹{Number(inv.totalAmount).toFixed(2)}</p>
+                                  {Number(inv.taxAmount) > 0 && (
+                                    <p className="text-[9px] font-bold text-gray-400">incl. ₹{Number(inv.taxAmount).toFixed(2)} GST</p>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewInvoice(inv.id)}
+                                  disabled={openingInvoiceId === inv.id}
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E7DED6] text-gray-600 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
+                                  title="View / Print Invoice"
+                                >
+                                  {openingInvoiceId === inv.id ? (
+                                    <Loader2 size={13} className="animate-spin text-emerald-600" />
+                                  ) : (
+                                    <ExternalLink size={13} />
+                                  )}
+                                  <span>View</span>
+                                </button>
+                                <InvoiceRefundButton invoice={inv} onSuccess={fetchInvoices} />
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleViewInvoice(inv.id)}
-                                disabled={openingInvoiceId === inv.id}
-                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-[#E7DED6] text-gray-600 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
-                                title="View / Print Invoice"
-                              >
-                                {openingInvoiceId === inv.id ? (
-                                  <Loader2 size={13} className="animate-spin text-emerald-600" />
-                                ) : (
-                                  <ExternalLink size={13} />
-                                )}
-                                <span>View</span>
-                              </button>
                             </div>
+
+                            {/* Credit Notes issued against this invoice */}
+                            {inv.creditNotes && inv.creditNotes.length > 0 && (
+                              <div className="border-t border-gray-100 pt-2 mt-1">
+                                <InvoiceCreditNoteList invoice={inv} />
+                              </div>
+                            )}
                           </div>
                         );
                       })}

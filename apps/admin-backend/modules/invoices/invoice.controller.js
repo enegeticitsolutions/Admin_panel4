@@ -49,6 +49,9 @@ async function listInvoices(req, res) {
           payments: {
             select: { id: true, paymentMethod: true, paymentStatus: true, transactionId: true, paidAt: true },
           },
+          creditNotes: {
+            select: { id: true, creditNoteNumber: true, totalAmount: true, status: true, refundMode: true, issuedAt: true, pdfUrl: true },
+          },
         },
         orderBy: { issuedAt: 'desc' },
         skip,
@@ -99,6 +102,9 @@ async function getInvoiceById(req, res) {
         },
         items: true,
         payments: true,
+        creditNotes: {
+          orderBy: { issuedAt: 'desc' },
+        },
       },
     });
 
@@ -139,6 +145,9 @@ async function getInvoiceHtml(req, res) {
         },
         items: true,
         payments: true,
+        creditNotes: {
+          orderBy: { issuedAt: 'desc' },
+        },
       },
     });
 

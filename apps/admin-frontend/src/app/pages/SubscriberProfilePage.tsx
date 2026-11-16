@@ -11,6 +11,7 @@ import { Button } from '../components/ui/button';
 import { EditSubscriberDialog } from '../components/forms/EditSubscriberDialog';
 import { AddInvoiceDialog } from '../components/forms/AddInvoiceDialog';
 import { InvoiceCounterDialog } from '../components/forms/InvoiceCounterDialog';
+import { InvoiceRefundBadge, InvoiceRefundButton, InvoiceCreditNoteList } from '../components/invoices/InvoiceCreditNoteSection';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
@@ -40,6 +41,7 @@ export default function SubscriberProfilePage() {
   const [isDirectUploading, setIsDirectUploading] = useState(false);
   const hiddenFileInputRef = useRef<HTMLInputElement | null>(null);
   const directFileInputRef = useRef<HTMLInputElement | null>(null);
+
 
   const fetchDetails = async () => {
     if (!id) return;
@@ -836,103 +838,119 @@ export default function SubscriberProfilePage() {
                         return (
                           <div
                             key={inv.id}
-                            className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl border border-gray-100 bg-[#FDFBF9] hover:border-emerald-200 hover:bg-emerald-50/20 transition-all group gap-4"
+                            className="flex flex-col p-4 rounded-2xl border border-gray-100 bg-[#FDFBF9] hover:border-emerald-200 hover:bg-emerald-50/20 transition-all group gap-2"
                           >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
-                                <Receipt size={14} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors truncate">
-                                  {inv.invoiceNumber}
-                                </p>
-                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${statusClass}`}>
-                                    {inv.status}
-                                  </span>
-                                  <span className="text-[9px] font-bold text-gray-400 uppercase">
-                                    {typeLabels[inv.invoiceType] || inv.invoiceType}
-                                  </span>
-                                  {benName && (
-                                    <>
-                                      <span className="text-[9px] text-gray-300">·</span>
-                                      <span className="text-[9px] font-bold text-gray-500">👤 {benName}</span>
-                                    </>
-                                  )}
-                                  <span className="text-[9px] text-gray-300">·</span>
-                                  <span className="text-[9px] font-bold text-gray-400">{issuedDate}</span>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 flex-shrink-0">
+                                  <Receipt size={14} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-black text-gray-800 group-hover:text-emerald-700 transition-colors truncate">
+                                    {inv.invoiceNumber}
+                                  </p>
+                                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${statusClass}`}>
+                                      {inv.status}
+                                    </span>
+                                    <InvoiceRefundBadge creditNotes={inv.creditNotes} />
+                                    <span className="text-[9px] font-bold text-gray-400 uppercase">
+                                      {typeLabels[inv.invoiceType] || inv.invoiceType}
+                                    </span>
+                                    {benName && (
+                                      <>
+                                        <span className="text-[9px] text-gray-300">·</span>
+                                        <span className="text-[9px] font-bold text-gray-500">👤 {benName}</span>
+                                      </>
+                                    )}
+                                    <span className="text-[9px] text-gray-300">·</span>
+                                    <span className="text-[9px] font-bold text-gray-400">{issuedDate}</span>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
 
-                            <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
-                              <div className="text-right mr-2">
-                                <p className="text-sm font-black text-gray-800">₹{Number(inv.totalAmount).toFixed(2)}</p>
-                                {Number(inv.taxAmount) > 0 && (
-                                  <p className="text-[9px] font-bold text-gray-400">incl. ₹{Number(inv.taxAmount).toFixed(2)} GST</p>
-                                )}
-                              </div>
+                              <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
+                                <div className="text-right mr-2">
+                                  <p className="text-sm font-black text-gray-800">₹{Number(inv.totalAmount).toFixed(2)}</p>
+                                  {Number(inv.taxAmount) > 0 && (
+                                    <p className="text-[9px] font-bold text-gray-400">incl. ₹{Number(inv.taxAmount).toFixed(2)} GST</p>
+                                  )}
+                                </div>
 
-                              {/* View / Download PDF */}
-                              <button
-                                type="button"
-                                onClick={() => handleViewInvoice(inv.id)}
-                                disabled={openingInvoiceId === inv.id}
-                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E7DED6] text-gray-700 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
-                                title="View / Print Invoice PDF"
-                              >
-                                {openingInvoiceId === inv.id ? (
-                                  <Loader2 size={12} className="animate-spin text-emerald-600" />
-                                ) : (
-                                  <ExternalLink size={12} />
-                                )}
-                                <span>View</span>
-                              </button>
-
-                              {/* Attach or Replace PDF */}
-                              <button
-                                type="button"
-                                onClick={() => triggerUploadPdf(inv.id)}
-                                disabled={uploadingInvoiceId === inv.id}
-                                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E7DED6] text-gray-700 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
-                                title={inv.pdfUrl ? 'Replace attached PDF' : 'Attach PDF to this invoice'}
-                              >
-                                {uploadingInvoiceId === inv.id ? (
-                                  <Loader2 size={12} className="animate-spin text-emerald-600" />
-                                ) : (
-                                  <Upload size={12} />
-                                )}
-                                <span>{inv.pdfUrl ? 'Replace' : '+ PDF'}</span>
-                              </button>
-
-                              {/* Delete PDF from S3 (if present) */}
-                              {inv.pdfUrl && (
+                                {/* View / Download PDF */}
                                 <button
                                   type="button"
-                                  onClick={() => handleDeletePdf(inv.id, inv.invoiceNumber)}
-                                  disabled={deletingInvoiceId === inv.id}
-                                  className="p-2 rounded-xl bg-white border border-[#E7DED6] text-gray-400 hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50/50 transition-colors disabled:opacity-50"
-                                  title="Delete attached PDF file"
+                                  onClick={() => handleViewInvoice(inv.id)}
+                                  disabled={openingInvoiceId === inv.id}
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E7DED6] text-gray-700 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
+                                  title="View / Print Invoice PDF"
                                 >
-                                  <FileMinus size={13} />
+                                  {openingInvoiceId === inv.id ? (
+                                    <Loader2 size={12} className="animate-spin text-emerald-600" />
+                                  ) : (
+                                    <ExternalLink size={12} />
+                                  )}
+                                  <span>View</span>
                                 </button>
-                              )}
 
-                              {/* Delete Invoice Record Permanently */}
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteInvoice(inv.id, inv.invoiceNumber)}
-                                disabled={deletingInvoiceId === inv.id}
-                                className="p-2 rounded-xl bg-white border border-[#E7DED6] text-gray-400 hover:border-red-400 hover:text-red-600 hover:bg-red-50/50 transition-colors disabled:opacity-50"
-                                title="Delete invoice record permanently"
-                              >
-                                {deletingInvoiceId === inv.id ? (
-                                  <Loader2 size={13} className="animate-spin text-red-500" />
-                                ) : (
-                                  <Trash2 size={13} />
+                                {/* Issue Credit Note / Refund Button */}
+                                <InvoiceRefundButton
+                                  invoice={inv}
+                                  onSuccess={() => { if (id) loadInvoices(id); }}
+                                />
+
+                                {/* Attach or Replace PDF */}
+                                <button
+                                  type="button"
+                                  onClick={() => triggerUploadPdf(inv.id)}
+                                  disabled={uploadingInvoiceId === inv.id}
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white border border-[#E7DED6] text-gray-700 text-xs font-bold hover:border-emerald-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
+                                  title={inv.pdfUrl ? 'Replace attached PDF' : 'Attach PDF to this invoice'}
+                                >
+                                  {uploadingInvoiceId === inv.id ? (
+                                    <Loader2 size={12} className="animate-spin text-emerald-600" />
+                                  ) : (
+                                    <Upload size={12} />
+                                  )}
+                                  <span>{inv.pdfUrl ? 'Replace' : '+ PDF'}</span>
+                                </button>
+
+                                {/* Delete PDF from S3 (if present) */}
+                                {inv.pdfUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeletePdf(inv.id, inv.invoiceNumber)}
+                                    disabled={deletingInvoiceId === inv.id}
+                                    className="p-2 rounded-xl bg-white border border-[#E7DED6] text-gray-400 hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50/50 transition-colors disabled:opacity-50"
+                                    title="Delete attached PDF file"
+                                  >
+                                    <FileMinus size={13} />
+                                  </button>
                                 )}
-                              </button>
+
+                                {/* Delete Invoice Record Permanently */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteInvoice(inv.id, inv.invoiceNumber)}
+                                  disabled={deletingInvoiceId === inv.id}
+                                  className="p-2 rounded-xl bg-white border border-[#E7DED6] text-gray-400 hover:border-red-400 hover:text-red-600 hover:bg-red-50/50 transition-colors disabled:opacity-50"
+                                  title="Delete invoice record permanently"
+                                >
+                                  {deletingInvoiceId === inv.id ? (
+                                    <Loader2 size={13} className="animate-spin text-red-500" />
+                                  ) : (
+                                    <Trash2 size={13} />
+                                  )}
+                                </button>
+                              </div>
                             </div>
+
+                            {/* Credit Notes issued against this invoice */}
+                            {inv.creditNotes && inv.creditNotes.length > 0 && (
+                              <div className="border-t border-gray-100 pt-2 mt-1">
+                                <InvoiceCreditNoteList invoice={inv} />
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -993,6 +1011,7 @@ export default function SubscriberProfilePage() {
           fetchDetails();
         }}
       />
+
     </div>
   );
 }
