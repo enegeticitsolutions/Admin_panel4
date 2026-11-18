@@ -1779,6 +1779,23 @@ export const enrollmentApi = {
     });
   },
 
+  /** Send or resend activation & consent via WhatsApp (`package_consent_activation`) + optional email */
+  async sendActivationConsent(payload: {
+    subscriptionId?: string;
+    subscriberEmail?: string;
+    subscriberName?: string;
+    subscriberPhone?: string;
+    beneficiaryName?: string;
+    beneficiaryPhone?: string;
+    relationship?: string;
+    packageName?: string;
+  }): Promise<{ success: boolean; message: string; results?: any }> {
+    return apiJson('/subscriptions/send-activation-consent', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   /** Check if a pincode is serviceable by any active zone */
   async checkPincode(pincode: string): Promise<{
     success: boolean;

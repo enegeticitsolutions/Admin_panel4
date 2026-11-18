@@ -11,6 +11,7 @@ import { generateUUID } from '../../utils/helpers';
 import { generateInvoiceNumber, calculateItemizedInvoice, BenefitTaxItem } from '../../utils/invoice_utils';
 import { notificationProducer } from '@maihoonna/notifications';
 import { benefitPeriodManager } from '../../services/benefit/BenefitPeriodManager';
+import { dispatchPackageConsentForSubscription } from '../../services/subscriber/package_consent_whatsapp';
 
 const router = Router();
 
@@ -660,6 +661,9 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
       }
     });
 
+    // Dispatch package_consent_activation WhatsApp template asynchronously
+    void dispatchPackageConsentForSubscription(subscriptionId);
+
     res.json({
       success: true,
       isQueued,
@@ -974,6 +978,12 @@ router.post('/purchase', paymentLimiter as unknown as RequestHandler, authentica
                 startDate: new Date().toLocaleDateString('en-IN'),
               },
             });
+
+            // Package Consent & Activation WhatsApp (`package_consent_activation`)
+            const createdSubId = responseData.subscriptionId || responseData.subscription?.id;
+            if (createdSubId) {
+              await dispatchPackageConsentForSubscription(createdSubId);
+            }
           }
         } catch (notifErr: any) {
           console.error('[Purchase Notification Error]:', notifErr.message);

@@ -2,35 +2,19 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import prisma from '../../core/database';
 import { generateUUID } from '../../utils/helpers';
-import { notificationService, notificationProducer } from '@maihoonna/notifications';
+import {
+  notificationService,
+  notificationProducer,
+  verifySubscriptionConsentHmac,
+  verifyAccessConsentHmac,
+  AccessConsentAction,
+} from '@maihoonna/notifications';
 import { benefitPeriodManager } from '../../services/benefit/BenefitPeriodManager';
-import { verifyAccessConsentHmac, ConsentAction } from '../../services/access/whatsapp_access_consent';
 import { respondToAccessRequest } from '../../services/access/profile_access_service';
 
 const router = Router();
 
-/**
- * Validates HMAC-SHA256 signature attached to the WhatsApp button callback payload.
- * Prevents attackers from guessing/forging subscription IDs to trigger unauthorized activations.
- */
-function verifyConsentHmac(subscriptionId: string, role: string, sig?: string): boolean {
-  if (!sig || typeof sig !== 'string') return false;
-  const secret = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
-  if (!secret) {
-    console.error('[WhatsApp Webhook Security Alert] Cannot verify signature: WHATSAPP_WEBHOOK_VERIFY_TOKEN is missing in environment.');
-    return false;
-  }
-  const expectedSig = crypto.createHmac('sha256', secret).update(`${subscriptionId}:${role}`).digest('hex').slice(0, 16);
-
-  try {
-    const a = Buffer.from(sig);
-    const b = Buffer.from(expectedSig);
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-  } catch {
-    return false;
-  }
-}
+const verifyConsentHmac = verifySubscriptionConsentHmac;
 
 /**
  * Handles inbound WhatsApp Quick Reply button clicks for Profile Access Requests:
@@ -42,7 +26,7 @@ function verifyConsentHmac(subscriptionId: string, role: string, sig?: string): 
  */
 async function handleProfileAccessConsentWebhook(buttonPayload: string, senderPhone: string): Promise<void> {
   const isApprove = buttonPayload.startsWith('ACCESS_APPROVE:');
-  const action: ConsentAction = isApprove ? 'APPROVE' : 'REJECT';
+  const action: AccessConsentAction = isApprove ? 'APPROVE' : 'REJECT';
   const parts = buttonPayload.split(':');
   const requestId = parts[1]?.trim();
   const signature = parts[2]?.trim();
