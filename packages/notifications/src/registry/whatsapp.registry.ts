@@ -54,6 +54,14 @@ export const WhatsAppRegistry: Record<string, WhatsAppTemplateConfig> = {
     template: process.env.MSG91_WHATSAPP_CONSENT_TEMPLATE || 'package_consent_activation',
     body: ['recipientName', 'packageName', 'beneficiaryName', 'termsUrl'],
   },
+  PROFILE_ACCESS_REQUEST: {
+    template: process.env.MSG91_WHATSAPP_ACCESS_REQUEST_TEMPLATE || 'profile_access_request',
+    body: ['recipientName', 'requesterName', 'relationship', 'accessLevel'],
+  },
+  PROFILE_ACCESS_DECISION: {
+    template: process.env.MSG91_WHATSAPP_ACCESS_DECISION_TEMPLATE || 'profile_access_decision',
+    body: ['requesterName', 'beneficiaryName', 'decision'],
+  },
   PAYMENT_FAILED: { template: 'payment_failed', body: ['subscriberName', 'amount', 'beneficiaryName', 'paymentLink'] },
   SUBSCRIPTION_HOURS_LOW: { template: 'subscription_hours_running_down', body: ['beneficiaryName', 'percentConsumed'] },
   SUBSCRIPTION_HOURS_EXHAUSTED: { template: 'subscription_hours_exhaust', body: ['beneficiaryName'] },

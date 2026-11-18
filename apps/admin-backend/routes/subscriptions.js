@@ -8,6 +8,7 @@ const { publishPackageVersion } = require('../utils/packageVersionHelper');
 const { invoiceService } = require('../modules/invoices/invoice.service');
 const { BillingCalculator } = require('@maihoonna/billing');
 const { notificationService, notificationProducer } = require('@maihoonna/notifications');
+const { ensureProfileAccessOnCreate } = require('../services/profile-access.helper');
 
 function generateConsentHmac(subscriptionId, role) {
   const secret = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
@@ -948,6 +949,14 @@ router.post('/admin-enroll', async (req, res) => {
                   }
                 : undefined,
           },
+        });
+
+        // Dual-write SELF + MANAGER rows into unified care_circle_members table
+        await ensureProfileAccessOnCreate(tx, {
+          beneficiaryId: beneficiary.id,
+          beneficiaryUserId: beneficiaryUser.id,
+          sponsorUserId: subscriberUser.id,
+          relationship: sameAsSubscriber ? 'Self' : (relationship || 'Family'),
         });
 
         // ──────────────────────────────────────────────────────────────

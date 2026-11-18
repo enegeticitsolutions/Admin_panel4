@@ -10,6 +10,7 @@
 const { prisma } = require('../../lib/prisma');
 const { notifyUser } = require('../notifications');
 const { notificationService } = require('@maihoonna/notifications');
+const { getCareCircleAlertRecipients } = require('../profile-access.helper');
 
 function getValidPhone(phone) {
   if (!phone) return null;
@@ -37,15 +38,16 @@ async function dispatchEmergencyTriggered({ requestId, beneficiaryId, locationAd
     const timestampStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     const location = locationAddress || 'GPS Location Tagged';
 
-    // A. Notify Subscriber (High-Priority FCM Push + In-App Bell)
-    if (beneficiary.subscriber?.id) {
+    // A. Notify Subscriber & all active Care Circle family members (High-Priority FCM Push + In-App Bell)
+    const familyRecipientIds = await getCareCircleAlertRecipients(prisma, beneficiaryId, beneficiary.subscriber?.id);
+    for (const familyUserId of familyRecipientIds) {
       notifyUser(prisma, {
-        userId: beneficiary.subscriber.id,
+        userId: familyUserId,
         type: 'alert',
         title: '🚨 EMERGENCY SOS TRIGGERED!',
         body: `Emergency support triggered for ${beneficiaryName} at ${timestampStr}. Location: ${location}`,
         data: { requestId, beneficiaryId, screen: 'emergency', event: 'EMERGENCY_TRIGGERED' },
-      }).catch(err => console.error('[EmergencyDispatcher] Subscriber Push Error:', err.message));
+      }).catch(err => console.error('[EmergencyDispatcher] Family Push Error:', err.message));
     }
 
     // B. Notify Primary & Secondary Care Companions

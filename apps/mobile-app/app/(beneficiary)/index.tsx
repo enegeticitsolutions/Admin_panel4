@@ -41,6 +41,7 @@ import {
     SaathiBeneficiaryPickerModal,
     SaathiEligibleMember,
 } from '@/components/saathi';
+import { AccessRequestsBanner } from '@/components/access';
 
 
 const headerPattern = require('@/assets/images/header-pattern.png');
@@ -590,6 +591,12 @@ export default function BeneficiaryDashboard() {
                     onAssignPress={() => router.push('/(subscriber)')}
                 />
 
+                {/* ── Pending Profile Access Requests & Invitations Banner ── */}
+                <AccessRequestsBanner
+                    pendingCount={subscriberData?.pendingIncomingRequestsCount || 0}
+                    onChanged={refetchAllData}
+                />
+
                 {/* ── Personal Care Plan (If Active) ── */}
                 {hasPersonalCarePlan && personalData && (
                     <PersonalCareOverview
@@ -664,6 +671,8 @@ export default function BeneficiaryDashboard() {
                         setShowCareCircleModal(true);
                     }}
                     onOpenJoinCircle={() => setShowJoinCircleModal(true)}
+                    pendingAccessRequestsCount={subscriberData?.pendingIncomingRequestsCount || 0}
+                    onAccessChanged={refetchAllData}
                 />
 
                 {/* ── Personal Wellness Card (when user manages family but has no personal plan yet) ── */}

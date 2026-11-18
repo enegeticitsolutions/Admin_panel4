@@ -10,6 +10,7 @@
 const { prisma } = require('../../lib/prisma');
 const { notifyUser } = require('../notifications');
 const { notificationService } = require('@maihoonna/notifications');
+const { getCareCircleAlertRecipients } = require('../profile-access.helper');
 
 function getValidPhone(phone) {
   if (!phone) return null;
@@ -35,15 +36,16 @@ async function dispatchVitalsAlert({ readingId, beneficiaryId, vitalName, readin
     const beneficiaryName = beneficiary.name || 'Beneficiary';
     const ccName = capturedByName || 'Care Companion';
 
-    // A. Notify Subscriber (FCM Push + Bell)
-    if (beneficiary.subscriber?.id) {
+    // A. Notify Subscriber & all active Care Circle family members (FCM Push + Bell)
+    const familyRecipientIds = await getCareCircleAlertRecipients(prisma, beneficiaryId, beneficiary.subscriber?.id);
+    for (const familyUserId of familyRecipientIds) {
       notifyUser(prisma, {
-        userId: beneficiary.subscriber.id,
+        userId: familyUserId,
         type: 'alert',
         title: '⚠️ Abnormal Vitals Alert',
         body: `${vitalName} reading for ${beneficiaryName} was flagged as abnormal (${readingValue}). Logged by ${ccName}.`,
         data: { readingId, beneficiaryId, screen: 'vitals', event: 'VITALS_ALERT' },
-      }).catch(err => console.error('[VitalsDispatcher] Subscriber Push Error:', err.message));
+      }).catch(err => console.error('[VitalsDispatcher] Family Push Error:', err.message));
     }
 
     // B. Notify Care Companion

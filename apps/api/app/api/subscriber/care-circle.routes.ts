@@ -1,111 +1,125 @@
 import { Router, Response } from 'express';
 import { authenticate, AuthRequest } from '../shared/deps';
 import prisma from '../../core/database';
-import { v4 as uuidv4 } from 'uuid';
+import * as accessService from '../../services/access/profile_access_service';
+import { ApiError } from '../../utils/ApiError';
 
 const router = Router();
 
-// Generate a friendly 8-character invite code (e.g., CC-482910)
-function generateInviteCode(): string {
-  const digits = Math.floor(100000 + Math.random() * 900000);
-  return `CC-${digits}`;
+function sendError(res: Response, err: unknown, fallback: string) {
+  if (err instanceof ApiError) {
+    return res.status(err.statusCode).json({ success: false, message: err.message });
+  }
+  const message = err instanceof Error ? err.message : fallback;
+  console.error(`[CareCircle] ${fallback}:`, err);
+  return res.status(500).json({ success: false, message });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/subscriber/care-circle/:beneficiaryId
-// Fetch all members of a Care Circle for a beneficiary
+// Backward-compatible endpoint returning Care Circle members for a Care Profile
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/:beneficiaryId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const beneficiaryId = req.params.beneficiaryId as string;
 
-    const beneficiary = await prisma.beneficiary.findUnique({
-      where: { id: beneficiaryId },
-      include: {
-        subscriber: {
-          select: { id: true, name: true, phone: true, email: true, profilePhoto: true }
-        },
-        careCircleMembers: {
-          where: { status: { in: ['active', 'invited'] } },
-          include: {
-            user: {
-              select: { id: true, name: true, phone: true, email: true, profilePhoto: true }
-            }
+    const access = await accessService.getProfileAccess(userId, beneficiaryId, req.userRole);
+    if (!access.canView) {
+      return res.status(403).json({ success: false, message: 'Access denied: You are not part of this Care Circle' });
+    }
+
+    const [beneficiary, pendingInvites] = await Promise.all([
+      prisma.beneficiary.findUnique({
+        where: { id: beneficiaryId },
+        include: {
+          user: { select: { id: true, name: true, phone: true, email: true, profilePhoto: true } },
+          subscriber: { select: { id: true, name: true, phone: true, email: true, profilePhoto: true } },
+          careCircleMembers: {
+            where: { status: { in: ['active', 'invited'] } },
+            include: {
+              user: { select: { id: true, name: true, phone: true, email: true, profilePhoto: true } },
+            },
+            orderBy: { createdAt: 'asc' },
           },
-          orderBy: { createdAt: 'asc' }
-        }
-      }
-    });
+        },
+      }),
+      prisma.careAccessRequest.findMany({
+        where: { beneficiaryId, status: 'PENDING', expiresAt: { gt: new Date() } },
+        include: { requester: { select: { id: true, name: true, phone: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
 
     if (!beneficiary) {
       return res.status(404).json({ success: false, message: 'Beneficiary not found' });
     }
 
-    // Access check: User must be primary sponsor OR the beneficiary themselves (self-profile) OR an active care circle member
-    const isPrimarySponsor = beneficiary.subscriberId === userId || beneficiary.userId === userId;
-    const isMember = beneficiary.careCircleMembers.some((m) => m.userId === userId && m.status === 'active');
-
-    if (!isPrimarySponsor && !isMember && req.userRole !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Access denied: You are not part of this Care Circle' });
-    }
-
-    // Format response
+    // Null-safe resolution of primary sponsor (handles subscriberId = null self-managed profiles cleanly)
+    const primaryUser = beneficiary.subscriber || beneficiary.user;
     const primarySponsor = {
-      userId: beneficiary.subscriber.id,
-      name: beneficiary.subscriber.name || 'Primary Sponsor',
-      phone: beneficiary.subscriber.phone,
-      email: beneficiary.subscriber.email,
-      profilePhoto: beneficiary.subscriber.profilePhoto,
-      role: 'primary_sponsor',
-      relationship: beneficiary.relationship || 'Sponsor',
+      userId: primaryUser.id,
+      name: primaryUser.name || 'Primary Caregiver',
+      phone: primaryUser.phone,
+      email: primaryUser.email,
+      profilePhoto: primaryUser.profilePhoto,
+      role: beneficiary.subscriber ? 'primary_sponsor' : 'self',
+      accessRole: beneficiary.subscriber && beneficiary.subscriber.id !== beneficiary.userId ? 'MANAGER' : 'SELF',
+      relationship: beneficiary.subscriber ? beneficiary.relationship || 'Sponsor' : 'Self',
       isPrimary: true,
       canRenew: true,
       canViewVitals: true,
       canBookVisits: true,
       canEditDetails: true,
-      status: 'active'
+      canManageAccess: true,
+      status: 'active',
     };
 
-    const members = beneficiary.careCircleMembers.map((m) => ({
-      id: m.id,
-      userId: m.user.id,
-      name: m.user.name || 'Co-Caregiver',
-      phone: m.user.phone,
-      email: m.user.email,
-      profilePhoto: m.user.profilePhoto,
-      role: m.role,
-      relationship: m.relationship || 'Family Member',
-      isPrimary: false,
-      canRenew: m.canRenew,
-      canViewVitals: m.canViewVitals,
-      canBookVisits: m.canBookVisits,
-      canEditDetails: m.canEditDetails,
-      status: m.status,
-      inviteCode: m.inviteCode,
-      createdAt: m.createdAt
-    }));
+    // Exclude the primaryUser from secondary `members` list to prevent duplicate cards & off-by-one counts
+    const members = beneficiary.careCircleMembers
+      .filter((m) => m.user.id !== primaryUser.id)
+      .map((m) => ({
+        id: m.id,
+        userId: m.user.id,
+        name: m.user.name || 'Co-Caregiver',
+        phone: m.user.phone,
+        email: m.user.email,
+        profilePhoto: m.user.profilePhoto,
+        role: m.role,
+        accessRole: m.accessRole,
+        relationship: m.relationship || 'Family Member',
+        isPrimary: m.accessRole === 'SELF' || m.accessRole === 'MANAGER',
+        canRenew: m.canRenew,
+        canViewVitals: m.canViewVitals,
+        canBookVisits: m.canBookVisits,
+        canEditDetails: m.canEditDetails,
+        canManageAccess: m.canManageAccess,
+        status: m.status,
+        inviteCode: m.inviteCode,
+        createdAt: m.createdAt,
+      }));
 
     res.json({
       success: true,
       data: {
         beneficiaryId: beneficiary.id,
         beneficiaryName: beneficiary.name,
-        isCurrentUserPrimarySponsor: isPrimarySponsor,
+        isCurrentUserPrimarySponsor: access.canManageAccess,
+        currentUserAccessRole: access.accessRole,
         totalMembers: members.length + 1,
         primarySponsor,
-        members
-      }
+        members,
+        pendingRequests: pendingInvites,
+      },
     });
-  } catch (error: any) {
-    console.error('[CareCircle GET error]:', error);
-    res.status(500).json({ success: false, message: 'Failed to load Care Circle members', error: error.message });
+  } catch (error) {
+    return sendError(res, error, 'Failed to load Care Circle members');
   }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/subscriber/care-circle/invite
-// Invite a family member to the Care Circle
+// Invite a family member (creates a CareAccessRequest invite + shareable code)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/invite', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -115,294 +129,182 @@ router.post('/invite', authenticate, async (req: AuthRequest, res: Response) => 
       phone,
       name,
       relationship = 'Family Member',
-      role = 'viewer',
+      role,
       canEditDetails = false,
       canRenew = true,
       canViewVitals = true,
-      canBookVisits = true
+      canBookVisits = true,
     } = req.body;
 
     if (!beneficiaryId || !phone) {
       return res.status(400).json({ success: false, message: 'beneficiaryId and phone are required' });
     }
 
-    // Clean phone number (strip whitespace and common prefixes)
-    let cleanPhone = String(phone).replace(/\s+/g, '').replace(/^(\+91)/, '');
+    const cleanPhone = accessService.normalizeIndianPhone(phone);
     if (cleanPhone.length !== 10) {
       return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit mobile number' });
     }
 
-    // Verify requesting user is the primary sponsor OR profile owner of this beneficiary
-    const beneficiary = await prisma.beneficiary.findUnique({
-      where: { id: beneficiaryId },
-      select: { id: true, name: true, subscriberId: true, userId: true }
-    });
-
-    if (!beneficiary) {
-      return res.status(404).json({ success: false, message: 'Beneficiary not found' });
-    }
-
-    const isOwnerOrSelf = beneficiary.subscriberId === userId || beneficiary.userId === userId;
-    if (!isOwnerOrSelf && req.userRole !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Only the primary sponsor or profile owner can invite members to this Care Circle' });
-    }
-
-    // Check if target user exists or create a placeholder user
-    let targetUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { phone: cleanPhone },
-          { phone: `+91${cleanPhone}` }
-        ]
-      }
-    });
-
-    if (!targetUser) {
-      // Create user record for seamless future login
-      targetUser = await prisma.user.create({
-        data: {
-          phone: cleanPhone,
-          name: name || undefined,
-          role: 'subscriber',
-          isVerified: false,
-          status: 'active'
-        }
+    const access = await accessService.getProfileAccess(userId, beneficiaryId, req.userRole);
+    if (!access.canManageAccess) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the profile owner or Care Manager can invite members to this Care Circle',
       });
     }
 
-    if (targetUser.id === userId) {
-      return res.status(400).json({ success: false, message: 'You cannot invite yourself to your own Care Circle' });
-    }
+    const targetRole =
+      role === 'manager' || role === 'primary_sponsor'
+        ? 'MANAGER'
+        : role === 'editor' || Boolean(canEditDetails)
+        ? 'EDITOR'
+        : 'VIEWER';
 
-    const effectiveRole = role || (canEditDetails ? 'editor' : 'viewer');
-
-    // Check if already in Care Circle
-    const existingMembership = await prisma.careCircleMember.findUnique({
-      where: {
-        beneficiaryId_userId: {
-          beneficiaryId,
-          userId: targetUser.id
-        }
-      }
+    // Create standardized CareAccessRequest invite (for auto-matching + share code)
+    const inviteResult = await accessService.createAccessInvite({
+      actorUserId: userId,
+      actorRole: req.userRole,
+      beneficiaryId,
+      targetPhone: cleanPhone,
+      requestedRole: targetRole,
+      relationship,
     });
 
-    if (existingMembership) {
-      if (existingMembership.status === 'active') {
-        return res.status(409).json({ success: false, message: 'This user is already an active member of this Care Circle' });
-      }
-      // Re-activate if was removed or pending
-      const reactivated = await prisma.careCircleMember.update({
-        where: { id: existingMembership.id },
-        data: {
-          status: 'active',
-          role: effectiveRole,
+    // If the invited user already exists in the system, keep instant-add backward compatibility
+    const existingTargetUser = await prisma.user.findFirst({
+      where: { OR: [{ phone: cleanPhone }, { phone: `+91${cleanPhone}` }] },
+      select: { id: true, name: true, phone: true },
+    });
+
+    let membership: any = null;
+    if (existingTargetUser && existingTargetUser.id !== userId) {
+      const perms = accessService.derivePermissionsFromRole(targetRole);
+      membership = await prisma.careCircleMember.upsert({
+        where: { beneficiaryId_userId: { beneficiaryId, userId: existingTargetUser.id } },
+        create: {
+          beneficiaryId,
+          userId: existingTargetUser.id,
+          accessRole: targetRole,
+          role: perms.legacyRole,
           relationship,
           canRenew: Boolean(canRenew),
           canViewVitals: Boolean(canViewVitals),
           canBookVisits: Boolean(canBookVisits),
-          canEditDetails: Boolean(canEditDetails),
-          invitedBy: userId
-        }
-      });
-      return res.json({
-        success: true,
-        message: `${name || 'Family member'} has been re-added to ${beneficiary.name}'s Care Circle`,
-        data: reactivated
+          canEditDetails: perms.canEditDetails,
+          canManageAccess: perms.canManageAccess,
+          status: 'active',
+          invitedBy: userId,
+          grantedByUserId: userId,
+        },
+        update: {
+          accessRole: targetRole,
+          role: perms.legacyRole,
+          relationship,
+          canRenew: Boolean(canRenew),
+          canViewVitals: Boolean(canViewVitals),
+          canBookVisits: Boolean(canBookVisits),
+          canEditDetails: perms.canEditDetails,
+          canManageAccess: perms.canManageAccess,
+          status: 'active',
+          revokedAt: null,
+          revokedByUserId: null,
+          grantedByUserId: userId,
+        },
+        include: { user: { select: { id: true, name: true, phone: true } } },
       });
     }
-
-    // Generate unique invite code
-    let inviteCode = generateInviteCode();
-    // Ensure uniqueness
-    const codeConflict = await prisma.careCircleMember.findUnique({ where: { inviteCode } });
-    if (codeConflict) {
-      inviteCode = `CC-${Math.floor(100000 + Math.random() * 900000)}`;
-    }
-
-    const newMember = await prisma.careCircleMember.create({
-      data: {
-        beneficiaryId,
-        userId: targetUser.id,
-        role: effectiveRole,
-        relationship,
-        canRenew: Boolean(canRenew),
-        canViewVitals: Boolean(canViewVitals),
-        canBookVisits: Boolean(canBookVisits),
-        canEditDetails: Boolean(canEditDetails),
-        status: 'active', // Instantly active so co-caregiver sees it immediately when logged in
-        inviteCode,
-        invitedBy: userId
-      },
-      include: {
-        user: {
-          select: { id: true, name: true, phone: true }
-        }
-      }
-    });
 
     res.status(201).json({
       success: true,
-      message: `${name || 'Family member'} added to ${beneficiary.name}'s Care Circle`,
+      message: `${name || 'Family member'} invited to Care Circle`,
       data: {
-        ...newMember,
-        inviteCode,
-        shareText: `Join ${beneficiary.name}'s Care Circle on MaiHoonNa to monitor visits, vitals, and coordinate care. Download the app or enter code ${inviteCode}.`
-      }
+        ...(membership || {}),
+        inviteId: inviteResult.invite.id,
+        inviteCode: inviteResult.inviteCode,
+        shareText: inviteResult.shareText,
+      },
     });
-  } catch (error: any) {
-    console.error('[CareCircle invite error]:', error);
-    res.status(500).json({ success: false, message: 'Failed to invite Care Circle member', error: error.message });
+  } catch (error) {
+    return sendError(res, error, 'Failed to invite Care Circle member');
   }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/subscriber/care-circle/join
-// Join a Care Circle via an invite code
+// Join a Care Circle via invite code (delegates to ProfileAccessService)
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/join', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId!;
-    const { inviteCode } = req.body;
-
-    if (!inviteCode || typeof inviteCode !== 'string') {
-      return res.status(400).json({ success: false, message: 'Invite code is required' });
-    }
-
-    const cleanCode = inviteCode.trim().toUpperCase();
-
-    const memberEntry = await prisma.careCircleMember.findUnique({
-      where: { inviteCode: cleanCode },
-      include: {
-        beneficiary: {
-          select: { id: true, name: true, subscriber: { select: { name: true } } }
-        }
-      }
-    });
-
-    if (!memberEntry) {
-      return res.status(404).json({ success: false, message: 'Invalid or expired invite code' });
-    }
-
-    // Update the membership with the actual user ID and activate
-    const updated = await prisma.careCircleMember.update({
-      where: { id: memberEntry.id },
-      data: {
-        userId,
-        status: 'active'
-      }
-    });
-
+    const result = await accessService.claimInviteCode(req.userId!, req.body.inviteCode);
     res.json({
       success: true,
-      message: `You are now connected to ${memberEntry.beneficiary.name}'s Care Circle!`,
-      data: {
-        beneficiaryId: memberEntry.beneficiary.id,
-        beneficiaryName: memberEntry.beneficiary.name,
-        relationship: memberEntry.relationship,
-        membership: updated
-      }
+      message: `You are now connected to ${result.beneficiaryName}'s Care Circle!`,
+      data: result,
     });
-  } catch (error: any) {
-    console.error('[CareCircle join error]:', error);
-    res.status(500).json({ success: false, message: 'Failed to join Care Circle', error: error.message });
+  } catch (error) {
+    return sendError(res, error, 'Failed to join Care Circle');
   }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DELETE /api/subscriber/care-circle/:beneficiaryId/members/:memberId
-// Remove a member from the Care Circle
+// Soft-revokes membership (blocks revoking SELF)
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete('/:beneficiaryId/members/:memberId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId!;
-    const { beneficiaryId, memberId } = req.params;
-
-    const beneficiary = await prisma.beneficiary.findUnique({
-      where: { id: beneficiaryId },
-      select: { subscriberId: true, userId: true }
-    });
-
-    if (!beneficiary) {
-      return res.status(404).json({ success: false, message: 'Beneficiary not found' });
-    }
-
-    const member = await prisma.careCircleMember.findUnique({
-      where: { id: memberId }
-    });
-
-    if (!member || member.beneficiaryId !== beneficiaryId) {
-      return res.status(404).json({ success: false, message: 'Care Circle member not found' });
-    }
-
-    // Permission: Primary sponsor or profile owner can remove anyone; members can remove themselves (leave)
-    const isPrimarySponsor = beneficiary.subscriberId === userId || beneficiary.userId === userId;
-    const isSelf = member.userId === userId;
-
-    if (!isPrimarySponsor && !isSelf && req.userRole !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Unauthorized to remove this member' });
-    }
-
-    await prisma.careCircleMember.delete({
-      where: { id: memberId }
+    const result = await accessService.revokeMemberAccess({
+      actorUserId: req.userId!,
+      actorRole: req.userRole,
+      beneficiaryId: req.params.beneficiaryId as string,
+      memberId: req.params.memberId as string,
     });
 
     res.json({
       success: true,
-      message: isSelf ? 'You have left this Care Circle' : 'Member removed from Care Circle'
+      message: result.isLeavingSelf ? 'You have left this Care Circle' : 'Member removed from Care Circle',
     });
-  } catch (error: any) {
-    console.error('[CareCircle remove error]:', error);
-    res.status(500).json({ success: false, message: 'Failed to remove member', error: error.message });
+  } catch (error) {
+    return sendError(res, error, 'Failed to remove member');
   }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PATCH /api/subscriber/care-circle/:beneficiaryId/members/:memberId/permissions
-// Update a member's permissions
+// Updates member permissions (blocks restricting SELF)
 // ─────────────────────────────────────────────────────────────────────────────
 router.patch('/:beneficiaryId/members/:memberId/permissions', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.userId!;
-    const { beneficiaryId, memberId } = req.params;
-    const { canRenew, canViewVitals, canBookVisits, canEditDetails, role, relationship } = req.body;
+    const { canRenew, canViewVitals, canBookVisits, canEditDetails, role, accessRole, relationship } = req.body;
+    const mappedRole =
+      accessRole ||
+      (role === 'manager' || role === 'primary_sponsor'
+        ? 'MANAGER'
+        : role === 'editor'
+        ? 'EDITOR'
+        : role === 'viewer'
+        ? 'VIEWER'
+        : undefined);
 
-    const beneficiary = await prisma.beneficiary.findUnique({
-      where: { id: beneficiaryId },
-      select: { subscriberId: true, userId: true }
-    });
-
-    if (!beneficiary) {
-      return res.status(404).json({ success: false, message: 'Beneficiary not found' });
-    }
-
-    const isPrimarySponsor = beneficiary.subscriberId === userId || beneficiary.userId === userId;
-    if (!isPrimarySponsor && req.userRole !== 'admin') {
-      return res.status(403).json({ success: false, message: 'Only the primary sponsor or profile owner can update member permissions' });
-    }
-
-    const updated = await prisma.careCircleMember.update({
-      where: { id: memberId },
-      data: {
-        ...(canRenew !== undefined && { canRenew: Boolean(canRenew) }),
-        ...(canViewVitals !== undefined && { canViewVitals: Boolean(canViewVitals) }),
-        ...(canBookVisits !== undefined && { canBookVisits: Boolean(canBookVisits) }),
-        ...(canEditDetails !== undefined && {
-          canEditDetails: Boolean(canEditDetails),
-          role: Boolean(canEditDetails) ? 'editor' : 'viewer'
-        }),
-        ...(role !== undefined && { role }),
-        ...(relationship !== undefined && { relationship })
-      }
+    const updated = await accessService.updateMemberRole({
+      actorUserId: req.userId!,
+      actorRole: req.userRole,
+      beneficiaryId: req.params.beneficiaryId as string,
+      memberId: req.params.memberId as string,
+      accessRole: mappedRole,
+      canRenew,
+      canViewVitals,
+      canBookVisits,
+      canEditDetails,
+      relationship,
     });
 
     res.json({
       success: true,
       message: 'Permissions updated successfully',
-      data: updated
+      data: updated,
     });
-  } catch (error: any) {
-    console.error('[CareCircle permissions error]:', error);
-    res.status(500).json({ success: false, message: 'Failed to update permissions', error: error.message });
+  } catch (error) {
+    return sendError(res, error, 'Failed to update permissions');
   }
 });
 

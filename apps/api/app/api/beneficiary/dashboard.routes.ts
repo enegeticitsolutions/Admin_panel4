@@ -3,33 +3,32 @@ import prisma from '../../core/database';
 import { authenticate, AuthRequest } from '../shared/deps';
 import { notificationProducer } from '@maihoonna/notifications';
 import { resolveFileUrl } from '../../services/storage';
+import { getProfileAccess } from '../../services/access/profile_access_service';
 
 const router = Router();
 
-// Dashboard for Beneficiary (Secure me route)
+// Dashboard for Beneficiary (Secure me route — strictly resolves caller's own SELF profile)
 router.get('/dashboard/me', authenticate, async (req: AuthRequest, res: Response) => {
-    // We reuse the logic by passing req.userId
-    req.params.beneficiaryId = req.userId!;
-    return handleBeneficiaryDashboard(req, res);
+    return handleBeneficiaryDashboard(req, res, true);
 });
 
-// Dashboard for Beneficiary (Legacy route)
+// Dashboard for Beneficiary (Explicit beneficiaryId or userId)
 router.get('/dashboard/:beneficiaryId', authenticate, async (req: AuthRequest, res: Response) => {
-    return handleBeneficiaryDashboard(req, res);
+    return handleBeneficiaryDashboard(req, res, false);
 });
 
-async function handleBeneficiaryDashboard(req: AuthRequest, res: Response) {
+async function handleBeneficiaryDashboard(req: AuthRequest, res: Response, isSelfRoute: boolean) {
     try {
-        const userId = req.params.beneficiaryId as string;
+        const targetId = isSelfRoute ? req.userId! : (req.params.beneficiaryId as string);
 
+        // On /dashboard/me, strictly match caller's OWN Care Profile (prevents dual-role users loading a parent's profile)
         const beneficiary = await prisma.beneficiary.findFirst({
-            where: {
-                OR: [
-                    { userId: userId },
-                    { id: userId },
-                    { subscriberId: userId }
-                ]
-            },
+            where: isSelfRoute
+                ? { userId: targetId, status: { not: 'deleted' } }
+                : {
+                    OR: [{ id: targetId }, { userId: targetId }],
+                    status: { not: 'deleted' },
+                },
             include: {
                 primaryCC: {
                     include: { user: true }
@@ -41,15 +40,9 @@ async function handleBeneficiaryDashboard(req: AuthRequest, res: Response) {
             return res.status(404).json({ success: false, message: 'Beneficiary profile not found for this user' });
         }
 
-        // Security authorization check
-        const isSelf = req.userId === beneficiary.userId || req.userId === beneficiary.id;
-        const isOwnerSubscriber = req.userId === beneficiary.subscriberId;
-        const isStaff = ['admin', 'super_admin', 'field_manager', 'care_companion'].includes(req.userRole || '');
-        const isCareCircle = await prisma.careCircleMember.findFirst({
-            where: { beneficiaryId: beneficiary.id, userId: req.userId, status: 'active' }
-        });
-
-        if (!isSelf && !isOwnerSubscriber && !isStaff && !isCareCircle) {
+        // Single-query unified authorization check
+        const access = await getProfileAccess(req.userId, beneficiary.id, req.userRole);
+        if (!access.canView) {
             return res.status(403).json({ success: false, message: 'Unauthorized access to beneficiary dashboard' });
         }
 

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticate, AuthRequest } from '../shared/deps';
 import prisma from '../../core/database';
 import { resolveFileUrl } from '../../services/storage/urlResolver';
+import { listIncomingRequests } from '../../services/access/profile_access_service';
 
 const router = Router();
 
@@ -124,22 +125,41 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
 
     const now = new Date();
 
-    // ── Accessible beneficiaries: Direct subscriber OR active Care Circle member ──
-    const beneficiaries = await prisma.beneficiary.findMany({
-      where: {
-        OR: [
-          { subscriberId: userId },
-          { careCircleMembers: { some: { userId: userId, status: 'active' } } }
-        ],
-        status: { not: 'deleted' }
-      },
-      include: {
-        careCircleMembers: {
-          where: { status: 'active' },
-          select: { id: true, userId: true, role: true, relationship: true, canRenew: true, canViewVitals: true }
-        }
-      }
-    });
+    // ── Unified single-index lookup via care_circle_members (covers SELF, MANAGER, EDITOR, VIEWER) ──
+    const [memberships, incomingRequests] = await Promise.all([
+      prisma.careCircleMember.findMany({
+        where: {
+          userId,
+          status: 'active',
+          beneficiary: { status: { not: 'deleted' } },
+        },
+        include: {
+          beneficiary: {
+            include: {
+              careCircleMembers: {
+                where: { status: 'active' },
+                select: {
+                  id: true,
+                  userId: true,
+                  accessRole: true,
+                  role: true,
+                  relationship: true,
+                  canRenew: true,
+                  canViewVitals: true,
+                  canEditDetails: true,
+                  canManageAccess: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      listIncomingRequests(userId),
+    ]);
+
+    const membershipByBenId = new Map(memberships.map((m) => [m.beneficiaryId, m]));
+    const beneficiaries = memberships.map((m) => m.beneficiary);
 
     const accessibleBenIds = beneficiaries.map((b: any) => b.id);
 
@@ -248,20 +268,26 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
       }
 
       const resolvedPhoto = b.photo ? await resolveFileUrl(b.photo, 1800) : null;
-      const isCareCircle = b.subscriberId !== userId;
-      const membership = isCareCircle ? (b.careCircleMembers || []).find((m: any) => m.userId === userId) : null;
-      const careCircleRole = isCareCircle ? (membership?.role || 'caregiver') : 'primary_sponsor';
-      const canRenew = isCareCircle ? (membership?.canRenew ?? true) : true;
-      const canViewVitals = isCareCircle ? (membership?.canViewVitals ?? true) : true;
+      const membership = membershipByBenId.get(b.id);
+      const accessRole = membership?.accessRole || (b.userId === userId ? 'SELF' : b.subscriberId === userId ? 'MANAGER' : 'VIEWER');
+      const isCareCircle = accessRole === 'EDITOR' || accessRole === 'VIEWER';
+      const careCircleRole = membership?.role || (accessRole === 'SELF' ? 'self' : accessRole === 'MANAGER' ? 'primary_sponsor' : 'viewer');
+      const canRenew = true; // Recharge is decoupled from care permissions
+      const canViewVitals = membership?.canViewVitals ?? true;
+      const canEditDetails = accessRole === 'SELF' || accessRole === 'MANAGER' || accessRole === 'EDITOR' || Boolean(membership?.canEditDetails);
+      const canManageAccess = accessRole === 'SELF' || accessRole === 'MANAGER' || Boolean(membership?.canManageAccess);
 
       return {
         ...b,
         photo: resolvedPhoto,
+        accessRole,
         isCareCircleMember: isCareCircle,
         careCircleRole,
         canRenew,
         canViewVitals,
-        careCircleMembersCount: (b.careCircleMembers?.length || 0) + 1,
+        canEditDetails,
+        canManageAccess,
+        careCircleMembersCount: b.careCircleMembers?.length || 1,
         packageStatus,
         isExpired: packageStatus === 'expired',
         subscriptionEndDate: activeSub?.endDate || expiredSub?.endDate || null,
@@ -336,11 +362,19 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
         }));
     }
 
+    const selfProfile = mappedBeneficiaries.find((b: any) => b.accessRole === 'SELF') || null;
+    const managedProfiles = mappedBeneficiaries.filter((b: any) => b.accessRole === 'MANAGER');
+    const sharedProfiles = mappedBeneficiaries.filter((b: any) => b.accessRole === 'EDITOR' || b.accessRole === 'VIEWER');
+
     res.json({
       success: true,
       activeSubscriptions: allActiveSubscriptions,
       queuedSubscriptions,
       beneficiaries: mappedBeneficiaries,
+      selfProfile,
+      managedProfiles,
+      sharedProfiles,
+      pendingIncomingRequestsCount: incomingRequests.totalPending,
       topStats: {
         happinessScore: avgHappiness,
         visitsThisWeek: { total: visitsThisWeek, completed: completedVisitsThisWeek },

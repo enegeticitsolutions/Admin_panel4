@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import { ProfileAccessActionButtons } from '@/components/access';
 
 export interface BeneficiaryItem {
     id: string;
@@ -13,8 +14,10 @@ export interface BeneficiaryItem {
     packageStatus?: 'active' | 'expired' | 'pending' | 'none';
     verificationStatus?: string;
     isSelf?: boolean;
+    accessRole?: 'SELF' | 'MANAGER' | 'EDITOR' | 'VIEWER';
     isCareCircleMember?: boolean;
     careCircleRole?: string;
+    canEditDetails?: boolean;
     careCircleMembersCount?: number;
 }
 
@@ -27,6 +30,8 @@ interface FamilyCareSectionProps {
     onOpenFamilyConnect: () => void;
     onOpenCareCircle?: (beneficiary: BeneficiaryItem) => void;
     onOpenJoinCircle?: () => void;
+    pendingAccessRequestsCount?: number;
+    onAccessChanged?: () => void;
 }
 
 export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
@@ -38,6 +43,8 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
     onOpenFamilyConnect,
     onOpenCareCircle,
     onOpenJoinCircle,
+    pendingAccessRequestsCount = 0,
+    onAccessChanged,
 }) => {
     const getDisplayAge = (b: BeneficiaryItem): string => {
         if (b.dateOfBirth) {
@@ -127,8 +134,15 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
                                         )}
                                         {b.isCareCircleMember && (
                                             <View style={styles.sharedBadge}>
-                                                <Ionicons name="people" size={10} color="#2563EB" style={{ marginRight: 2 }} />
-                                                <Text style={styles.sharedBadgeText}>Shared Care</Text>
+                                                <Ionicons
+                                                    name={b.accessRole === 'EDITOR' || b.canEditDetails ? 'create-outline' : 'eye-outline'}
+                                                    size={10}
+                                                    color="#2563EB"
+                                                    style={{ marginRight: 2 }}
+                                                />
+                                                <Text style={styles.sharedBadgeText}>
+                                                    {b.accessRole === 'EDITOR' || b.canEditDetails ? 'Shared • Edit' : 'Shared • View'}
+                                                </Text>
                                             </View>
                                         )}
                                     </View>
@@ -197,6 +211,11 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
                             </TouchableOpacity>
                         )}
                     </View>
+
+                    <ProfileAccessActionButtons
+                        pendingCount={pendingAccessRequestsCount}
+                        onChanged={onAccessChanged}
+                    />
                 </>
             ) : (
                 <View style={styles.emptyCard}>
@@ -206,7 +225,7 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
                     <View style={styles.emptyTextWrap}>
                         <Text style={styles.emptyTitle}>No Family Members Added</Text>
                         <Text style={styles.emptySub}>
-                            Add your parents or family members to monitor their health visits and companion support.
+                            Add your parents or family members, or ask for access to monitor an existing care profile.
                         </Text>
                         <View style={styles.emptyActionsRow}>
                             <TouchableOpacity
@@ -229,6 +248,11 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
                                 </TouchableOpacity>
                             )}
                         </View>
+
+                        <ProfileAccessActionButtons
+                            pendingCount={pendingAccessRequestsCount}
+                            onChanged={onAccessChanged}
+                        />
                     </View>
                 </View>
             )}

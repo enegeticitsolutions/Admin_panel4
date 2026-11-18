@@ -3,54 +3,27 @@ import * as beneficiaryService from '../../services/subscriber/beneficiary_servi
 import { getStorageService } from '../../services/storage';
 import prisma from '../../core/database';
 import { v4 as uuidv4 } from 'uuid';
+import { getProfileAccess } from '../../services/access/profile_access_service';
 
 async function verifyBeneficiaryAccess(userId?: string, userRole?: string, beneficiaryId?: string): Promise<boolean> {
-  if (!userId || !beneficiaryId) return false;
-  if (['admin', 'master_admin', 'super_admin', 'field_manager', 'operations_manager', 'customer_service'].includes(userRole || '')) {
-    return true;
-  }
-  const ben = await prisma.beneficiary.findUnique({
-    where: { id: beneficiaryId },
-    select: {
-      subscriberId: true,
-      userId: true,
-      careCircleMembers: {
-        where: { userId: userId, status: 'active' },
-        select: { id: true, canViewVitals: true, canRenew: true, canEditDetails: true }
-      }
-    }
-  });
-  if (!ben) return false;
-  return ben.subscriberId === userId || ben.userId === userId || ben.careCircleMembers.length > 0;
+  const access = await getProfileAccess(userId, beneficiaryId, userRole);
+  return access.canView;
 }
 
-async function verifyBeneficiaryWriteAccess(userId?: string, userRole?: string, beneficiaryId?: string): Promise<{ allowed: boolean; reason?: string }> {
-  if (!userId || !beneficiaryId) return { allowed: false, reason: 'Unauthorized' };
-  if (['admin', 'master_admin', 'super_admin', 'field_manager', 'operations_manager', 'customer_service'].includes(userRole || '')) {
-    return { allowed: true };
+async function verifyBeneficiaryWriteAccess(
+  userId?: string,
+  userRole?: string,
+  beneficiaryId?: string
+): Promise<{ allowed: boolean; reason?: string }> {
+  const access = await getProfileAccess(userId, beneficiaryId, userRole);
+  if (!access.hasAccess) {
+    return { allowed: false, reason: 'Access denied: You do not have permission to access this Care Profile.' };
   }
-  const ben = await prisma.beneficiary.findUnique({
-    where: { id: beneficiaryId },
-    select: {
-      subscriberId: true,
-      userId: true,
-      careCircleMembers: {
-        where: { userId: userId, status: 'active' },
-        select: { id: true, canEditDetails: true }
-      }
-    }
-  });
-  if (!ben) return { allowed: false, reason: 'Beneficiary not found' };
-  // Primary sponsor or profile owner has full write permissions
-  if (ben.subscriberId === userId || ben.userId === userId) {
-    return { allowed: true };
-  }
-  const membership = ben.careCircleMembers[0];
-  if (!membership) {
-    return { allowed: false, reason: 'Access denied: You are not part of this Care Circle.' };
-  }
-  if (!membership.canEditDetails) {
-    return { allowed: false, reason: 'Access denied: You have View-Only access to this profile. Contact the primary caregiver for edit permissions.' };
+  if (!access.canEdit) {
+    return {
+      allowed: false,
+      reason: 'Access denied: You have View-Only access to this profile. Contact the profile owner or Care Manager for edit permissions.',
+    };
   }
   return { allowed: true };
 }
@@ -59,17 +32,19 @@ export const getBeneficiaryProfile = async (req: Request, res: Response) => {
   try {
     const beneficiaryId = req.params.beneficiaryId as string;
     const authReq = req as any;
-    const hasAccess = await verifyBeneficiaryAccess(authReq.userId, authReq.userRole, beneficiaryId);
-    if (!hasAccess) {
+    // Single indexed lookup resolves BOTH view & edit permissions (replaces 2 separate auth queries)
+    const access = await getProfileAccess(authReq.userId, beneficiaryId, authReq.userRole);
+    if (!access.canView) {
       return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to view this beneficiary.' });
     }
     const profile = await beneficiaryService.getBeneficiaryProfile(beneficiaryId);
-    const writeCheck = await verifyBeneficiaryWriteAccess(authReq.userId, authReq.userRole, beneficiaryId);
     res.json({
       success: true,
       data: {
         ...profile,
-        canEditDetails: writeCheck.allowed,
+        accessRole: access.accessRole,
+        canEditDetails: access.canEdit,
+        canManageAccess: access.canManageAccess,
       }
     });
   } catch (error: any) {
