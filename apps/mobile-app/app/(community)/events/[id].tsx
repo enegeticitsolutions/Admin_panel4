@@ -52,7 +52,7 @@ export default function EventDetailScreen() {
   }, [id]);
 
   const handleRsvp = async () => {
-    if (requireAuth('Create a free account to register for community health events and interactive webinars.')) {
+    if (requireAuth('Create an account to register for community health events and interactive webinars.')) {
       return;
     }
     try {

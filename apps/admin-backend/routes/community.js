@@ -245,11 +245,23 @@ router.put('/authors/:id', adminsOnly, async (req, res) => {
 // ─── 4. Events Management (with accessTier, city, state, thumbnail) ──────────
 router.get('/events', staffOnly, async (req, res) => {
   try {
-    const { status, eventType, categoryId } = req.query;
+    const { status, eventType, categoryId, timeFilter } = req.query;
     const where = {};
     if (status) where.status = status;
     if (eventType) where.eventType = eventType;
     if (categoryId) where.categoryId = categoryId;
+
+    if (timeFilter) {
+      const now = new Date();
+      if (timeFilter === 'upcoming') {
+        where.startDateTime = { gt: now };
+      } else if (timeFilter === 'ongoing') {
+        where.startDateTime = { lte: now };
+        where.endDateTime = { gte: now };
+      } else if (timeFilter === 'past') {
+        where.endDateTime = { lt: now };
+      }
+    }
 
     const events = await prisma.communityEvent.findMany({
       where,
@@ -300,7 +312,20 @@ router.post('/events', adminsOnly, async (req, res) => {
       meetingUrl,
       meetingPasscode,
       status,
+      ranking,
     } = req.body;
+
+    const parsedRanking = ranking !== undefined && ranking !== '' && ranking !== null && !isNaN(parseInt(ranking, 10))
+      ? Math.min(5, Math.max(1, parseInt(ranking, 10)))
+      : null;
+
+    if (parsedRanking !== null) {
+      // Enforce unique ranking: clear this rank from any other event
+      await prisma.communityEvent.updateMany({
+        where: { ranking: parsedRanking },
+        data: { ranking: null },
+      });
+    }
 
     const event = await prisma.communityEvent.create({
       data: {
@@ -316,6 +341,7 @@ router.post('/events', adminsOnly, async (req, res) => {
         accessTier: accessTier === 'subscribers_only' ? 'subscribers_only' : 'free',
         city: city || null,
         state: state || null,
+        ranking: parsedRanking,
         startDateTime: new Date(startDateTime),
         endDateTime: new Date(endDateTime),
         registrationRequired: registrationRequired !== false,
@@ -340,7 +366,24 @@ router.post('/events', adminsOnly, async (req, res) => {
 router.put('/events/:id', adminsOnly, async (req, res) => {
   try {
     const { id } = req.params;
-    const body = req.body;
+    const body = { ...req.body };
+
+    if ('ranking' in req.body) {
+      body.ranking = req.body.ranking !== '' && req.body.ranking !== null && !isNaN(parseInt(req.body.ranking, 10))
+        ? Math.min(5, Math.max(1, parseInt(req.body.ranking, 10)))
+        : null;
+
+      if (body.ranking !== null) {
+        // Enforce unique ranking: clear this rank from any other event
+        await prisma.communityEvent.updateMany({
+          where: {
+            ranking: body.ranking,
+            id: { not: id },
+          },
+          data: { ranking: null },
+        });
+      }
+    }
 
     const updated = await prisma.communityEvent.update({
       where: { id },
@@ -348,8 +391,9 @@ router.put('/events/:id', adminsOnly, async (req, res) => {
         ...body,
         thumbnailKey: sanitizeStorageKey(body.thumbnailKey),
         accessTier: body.accessTier === 'subscribers_only' ? 'subscribers_only' : 'free',
-        city: body.city || null,
-        state: body.state || null,
+        city: body.city !== undefined ? (body.city || null) : undefined,
+        state: body.state !== undefined ? (body.state || null) : undefined,
+        ranking: body.ranking !== undefined ? body.ranking : undefined,
         startDateTime: body.startDateTime ? new Date(body.startDateTime) : undefined,
         endDateTime: body.endDateTime ? new Date(body.endDateTime) : undefined,
         maxCapacity: body.maxCapacity ? parseInt(body.maxCapacity, 10) : undefined,
@@ -447,8 +491,21 @@ router.post('/blogs', adminsOnly, async (req, res) => {
       readingTimeMinutes,
       tags,
       isFeatured,
+      ranking,
       status,
     } = req.body;
+
+    const parsedRanking = ranking !== undefined && ranking !== '' && ranking !== null && !isNaN(parseInt(ranking, 10))
+      ? Math.min(5, Math.max(1, parseInt(ranking, 10)))
+      : null;
+
+    if (parsedRanking !== null) {
+      // Enforce unique ranking: clear this rank from any other blog
+      await prisma.blog.updateMany({
+        where: { ranking: parsedRanking },
+        data: { ranking: null },
+      });
+    }
 
     const blog = await prisma.blog.create({
       data: {
@@ -463,6 +520,7 @@ router.post('/blogs', adminsOnly, async (req, res) => {
         readingTimeMinutes: readingTimeMinutes || Math.max(1, Math.ceil((richContent || '').split(' ').length / 200)),
         tags: tags || [],
         isFeatured: !!isFeatured,
+        ranking: parsedRanking,
         status: status || 'published',
         publishedAt: status === 'published' ? new Date() : null,
         createdById: userId,
@@ -479,13 +537,31 @@ router.post('/blogs', adminsOnly, async (req, res) => {
 router.put('/blogs/:id', adminsOnly, async (req, res) => {
   try {
     const { id } = req.params;
-    const body = req.body;
+    const body = { ...req.body };
+
+    if ('ranking' in req.body) {
+      body.ranking = req.body.ranking !== '' && req.body.ranking !== null && !isNaN(parseInt(req.body.ranking, 10))
+        ? Math.min(5, Math.max(1, parseInt(req.body.ranking, 10)))
+        : null;
+
+      if (body.ranking !== null) {
+        // Enforce unique ranking: clear this rank from any other blog
+        await prisma.blog.updateMany({
+          where: {
+            ranking: body.ranking,
+            id: { not: id },
+          },
+          data: { ranking: null },
+        });
+      }
+    }
 
     const updated = await prisma.blog.update({
       where: { id },
       data: {
         ...body,
         thumbnailKey: sanitizeStorageKey(body.thumbnailKey),
+        ranking: body.ranking !== undefined ? body.ranking : undefined,
         publishedAt: body.status === 'published' ? new Date() : undefined,
       },
     });
@@ -532,7 +608,19 @@ router.get('/podcasts', staffOnly, async (req, res) => {
 router.post('/podcasts', adminsOnly, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { title, slug, description, categoryId, authorId, coverImageKey, language, isFeatured } = req.body;
+    const { title, slug, description, categoryId, authorId, coverImageKey, language, isFeatured, ranking } = req.body;
+
+    const parsedRanking = ranking !== undefined && ranking !== '' && ranking !== null && !isNaN(parseInt(ranking, 10))
+      ? Math.min(5, Math.max(1, parseInt(ranking, 10)))
+      : null;
+
+    if (parsedRanking !== null) {
+      // Enforce unique ranking: clear this rank from any other podcast
+      await prisma.podcast.updateMany({
+        where: { ranking: parsedRanking },
+        data: { ranking: null },
+      });
+    }
 
     const podcast = await prisma.podcast.create({
       data: {
@@ -544,12 +632,50 @@ router.post('/podcasts', adminsOnly, async (req, res) => {
         language: language || 'en',
         coverImageKey: sanitizeStorageKey(coverImageKey),
         isFeatured: !!isFeatured,
+        ranking: parsedRanking,
         status: 'published',
         createdById: userId,
       },
     });
 
     res.json({ success: true, data: podcast });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.put('/podcasts/:id', adminsOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = { ...req.body };
+
+    if ('ranking' in req.body) {
+      body.ranking = req.body.ranking !== '' && req.body.ranking !== null && !isNaN(parseInt(req.body.ranking, 10))
+        ? Math.min(5, Math.max(1, parseInt(req.body.ranking, 10)))
+        : null;
+
+      if (body.ranking !== null) {
+        // Enforce unique ranking: clear this rank from any other podcast
+        await prisma.podcast.updateMany({
+          where: {
+            ranking: body.ranking,
+            id: { not: id },
+          },
+          data: { ranking: null },
+        });
+      }
+    }
+
+    const updated = await prisma.podcast.update({
+      where: { id },
+      data: {
+        ...body,
+        coverImageKey: sanitizeStorageKey(body.coverImageKey),
+        ranking: body.ranking !== undefined ? body.ranking : undefined,
+      },
+    });
+
+    res.json({ success: true, data: updated });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

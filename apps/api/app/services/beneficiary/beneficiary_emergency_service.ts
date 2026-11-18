@@ -7,8 +7,13 @@ import { benefitLedgerService } from '../shared/benefit_ledger_service';
 export const getBeneficiaryEmergencyEligibility = async (beneficiaryId: string) => {
   const activeSubscriptions = await prisma.subscription.findMany({
     where: {
-      beneficiaryId,
-      isActive: true
+      isActive: true,
+      OR: [
+        { beneficiaryId: beneficiaryId },
+        { subscriberId: beneficiaryId },
+        { beneficiary: { userId: beneficiaryId } },
+        { beneficiary: { id: beneficiaryId } }
+      ]
     },
     include: {
       packageVersion: {

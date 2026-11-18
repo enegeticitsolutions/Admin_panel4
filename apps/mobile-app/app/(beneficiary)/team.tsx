@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform, ActivityIndicator, useWindowDimensions, RefreshControl } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
@@ -8,7 +8,8 @@ import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { useGlobalRefresh } from '@/utils/events';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
 
 type TeamMember = {
     id: string;
@@ -26,21 +27,46 @@ export default function CareTeamScreen() {
     const MAX_CONTENT_WIDTH = 440;
     const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
 
+    const router = useRouter();
+    const { isGuest, isLoggedIn, isLoading: authLoading } = useAuth();
+    const [isUnauthenticated, setIsUnauthenticated] = useState(false);
     const [team, setTeam] = useState<TeamMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useFocusEffect(useCallback(() => { fetchTeam(); }, []));
-    useGlobalRefresh(() => { fetchTeam(); });
+    useFocusEffect(
+        useCallback(() => {
+            if (authLoading) return;
+            if (isGuest || !isLoggedIn) {
+                setIsUnauthenticated(true);
+                setLoading(false);
+            } else {
+                fetchTeam();
+            }
+        }, [authLoading, isGuest, isLoggedIn])
+    );
+
+    useGlobalRefresh(() => {
+        if (!isGuest && isLoggedIn) {
+            fetchTeam();
+        }
+    });
 
     const onRefresh = useCallback(async () => {
+        if (isGuest || !isLoggedIn) return;
         setRefreshing(true);
         await fetchTeam();
         setRefreshing(false);
-    }, []);
+    }, [isGuest, isLoggedIn]);
 
     const fetchTeam = async () => {
+        if (isGuest || !isLoggedIn) {
+            setIsUnauthenticated(true);
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
             setError(null);
@@ -49,11 +75,12 @@ export default function CareTeamScreen() {
             const userStr = await AsyncStorage.getItem('userData');
 
             if (!token || !userStr) {
-                setError('User session not found. Please log in again.');
+                setIsUnauthenticated(true);
                 setLoading(false);
                 return;
             }
 
+            setIsUnauthenticated(false);
             const user = JSON.parse(userStr);
             const userId = user.id;
 
@@ -72,7 +99,7 @@ export default function CareTeamScreen() {
             }
         } catch (e: any) {
             console.error('Fetch Team Error:', e);
-            setError('An error occurred while loading your care team');
+            setError('An error occurred while loading your care team. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -99,17 +126,84 @@ export default function CareTeamScreen() {
                 <Text style={styles.headerTitle}>Your Care Team</Text>
             </View>
 
-            {loading ? (
+            {loading || authLoading ? (
                 <View style={[styles.centerContainer, responsiveStyle]}>
                     <ActivityIndicator size="large" color="#FE6700" />
                     <Text style={styles.loaderText}>Loading your care team...</Text>
                 </View>
+            ) : isUnauthenticated || isGuest || !isLoggedIn ? (
+                <ScrollView
+                    contentContainerStyle={[styles.guestContent, responsiveStyle]}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.guestCard}>
+                        {/* Care Team Badge */}
+                        <View style={styles.guestBadge}>
+                            <Feather name="users" size={13} color="#FE6700" />
+                            <Text style={styles.guestBadgeText}>Dedicated Care Team</Text>
+                        </View>
+
+                        {/* Icon Wrap */}
+                        <View style={styles.guestIconWrap}>
+                            <MaterialCommunityIcons name="account-group" size={42} color="#FE6700" />
+                        </View>
+
+                        <Text style={styles.guestTitle}>Meet Your Dedicated Care Team</Text>
+                        <Text style={styles.guestDesc}>
+                            Create an account or sign in to connect directly with your assigned Saathi care companions, nurses, and dedicated care managers.
+                        </Text>
+
+                        {/* Feature Highlights */}
+                        <View style={styles.guestFeatureList}>
+                            <View style={styles.guestFeatureRow}>
+                                <Feather name="check-circle" size={16} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Verified & background-checked Saathi companions</Text>
+                            </View>
+                            <View style={styles.guestFeatureRow}>
+                                <Feather name="check-circle" size={16} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Direct 1-tap phone calls & messaging with caregivers</Text>
+                            </View>
+                            <View style={styles.guestFeatureRow}>
+                                <Feather name="check-circle" size={16} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Field managers overseeing personalized care plans</Text>
+                            </View>
+                            <View style={styles.guestFeatureRow}>
+                                <Feather name="check-circle" size={16} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>24/7 care coordination & emergency assistance</Text>
+                            </View>
+                        </View>
+
+                        {/* CTA Buttons */}
+                        <TouchableOpacity
+                            style={styles.guestPrimaryBtn}
+                            onPress={() => router.push('/(auth)/register')}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={styles.guestPrimaryBtnText}>Create Account</Text>
+                            <Feather name="arrow-right" size={18} color="#FFFFFF" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.guestSecondaryBtn}
+                            onPress={() => router.push('/(auth)')}
+                            activeOpacity={0.75}
+                        >
+                            <Text style={styles.guestSecondaryBtnText}>
+                                Already have an account? <Text style={styles.guestSecondaryLink}>Sign In</Text>
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
             ) : error ? (
                 <View style={[styles.centerContainer, responsiveStyle]}>
-                    <Feather name="alert-triangle" size={48} color="#EF4444" />
+                    <View style={styles.errorIconWrap}>
+                        <Feather name="alert-circle" size={36} color="#D97706" />
+                    </View>
+                    <Text style={styles.errorTitle}>Unable to Load Care Team</Text>
                     <Text style={styles.errorText}>{error}</Text>
-                    <TouchableOpacity style={styles.retryButton} onPress={fetchTeam}>
-                        <Text style={styles.retryText}>Retry</Text>
+                    <TouchableOpacity style={styles.retryButton} onPress={fetchTeam} activeOpacity={0.85}>
+                        <Feather name="refresh-cw" size={15} color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.retryText}>Try Again</Text>
                     </TouchableOpacity>
                 </View>
             ) : team.length === 0 ? (
@@ -320,24 +414,176 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         marginTop: 12,
     },
-    errorText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 15,
-        color: '#EF4444',
+    errorIconWrap: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#FEF3C7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 14,
+    },
+    errorTitle: {
+        fontSize: 18,
+        color: '#111827',
+        fontFamily: 'Poppins-SemiBold',
+        marginBottom: 6,
         textAlign: 'center',
-        marginTop: 12,
+    },
+    errorText: {
+        fontSize: 14,
+        color: '#6B7280',
+        textAlign: 'center',
+        fontFamily: 'Poppins-Regular',
+        lineHeight: 20,
+        marginBottom: 20,
+        paddingHorizontal: 20,
     },
     retryButton: {
         backgroundColor: '#FE6700',
         paddingHorizontal: 24,
-        paddingVertical: 12,
+        height: 48,
         borderRadius: 12,
-        marginTop: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+        elevation: 2,
     },
     retryText: {
         fontFamily: 'Poppins-Medium',
         fontSize: 14,
         color: '#FFFFFF',
+    },
+    // Guest Encouragement Styles
+    guestContent: {
+        flexGrow: 1,
+        backgroundColor: '#FAF5ED',
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: Platform.OS === 'ios' ? 120 : 100,
+        justifyContent: 'center',
+    },
+    guestCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 24,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.06,
+                shadowRadius: 16,
+            },
+            android: {
+                elevation: 3,
+            },
+        }),
+    },
+    guestBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#FFF7ED',
+        borderWidth: 1,
+        borderColor: '#FFEDD5',
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        marginBottom: 16,
+    },
+    guestBadgeText: {
+        fontSize: 12,
+        fontFamily: 'Poppins-Medium',
+        color: '#FE6700',
+    },
+    guestIconWrap: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        backgroundColor: '#FFF7ED',
+        borderWidth: 1,
+        borderColor: '#FFEDD5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    guestTitle: {
+        fontSize: 20,
+        fontFamily: 'Poppins-SemiBold',
+        color: '#111827',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    guestDesc: {
+        fontSize: 13,
+        fontFamily: 'Poppins-Regular',
+        color: '#6B7280',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    guestFeatureList: {
+        width: '100%',
+        backgroundColor: '#F9FAFB',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        gap: 12,
+        marginBottom: 24,
+    },
+    guestFeatureRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    guestFeatureText: {
+        fontSize: 13,
+        fontFamily: 'Poppins-Regular',
+        color: '#374151',
+        flex: 1,
+        lineHeight: 18,
+    },
+    guestPrimaryBtn: {
+        width: '100%',
+        backgroundColor: '#FE6700',
+        borderRadius: 14,
+        height: 52,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    guestPrimaryBtnText: {
+        fontSize: 15,
+        fontFamily: 'Poppins-SemiBold',
+        color: '#FFFFFF',
+    },
+    guestSecondaryBtn: {
+        marginTop: 14,
+        paddingVertical: 8,
+        alignItems: 'center',
+    },
+    guestSecondaryBtnText: {
+        fontSize: 14,
+        fontFamily: 'Poppins-Regular',
+        color: '#6B7280',
+    },
+    guestSecondaryLink: {
+        fontFamily: 'Poppins-SemiBold',
+        color: '#FE6700',
     },
     emptyText: {
         fontFamily: 'Poppins-Regular',

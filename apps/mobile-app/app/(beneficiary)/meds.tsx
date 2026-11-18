@@ -310,21 +310,21 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
     };
 
     const handleOpenAddCustom = () => {
-        if (requireAuth('Create a free account to add and manage your medications.')) return;
+        if (requireAuth('Create an account to add and manage your medications.')) return;
         setSelectedPreset(null);
         setEditingMed(null);
         setShowAddModal(true);
     };
 
     const handleSelectPreset = (preset: MedicationPresetItem) => {
-        if (requireAuth('Create a free account to track your medications.')) return;
+        if (requireAuth('Create an account to track your medications.')) return;
         setSelectedPreset(preset);
         setEditingMed(null);
         setShowAddModal(true);
     };
 
     const handleQuickAddPreset = async (preset: MedicationPresetItem) => {
-        if (requireAuth('Create a free account to add medications.')) return;
+        if (requireAuth('Create an account to add medications.')) return;
         try {
             setQuickAddingId(preset.id);
             const targetBeneficiaryId = await resolveTargetBeneficiaryId();
@@ -490,7 +490,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
     };
 
     const handleLogAdherence = async (item: MedScheduleItem, taken: boolean) => {
-        if (requireAuth('Create a free account to record your medication adherence.')) return;
+        if (requireAuth('Create an account to record your medication adherence.')) return;
         // Enforce strict Today-Only marking rule
         const schedTime = new Date(item.scheduledTimeIso);
         const now = new Date();

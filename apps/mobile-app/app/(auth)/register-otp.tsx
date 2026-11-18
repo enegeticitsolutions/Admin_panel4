@@ -69,8 +69,6 @@ export default function RegisterOtpScreen() {
         const role = result.user.role;
         if (role === 'care_companion') {
           replace('/(care-companion)');
-        } else if (role === 'prospect') {
-          replace('/(setup)/subscription-packages');
         } else {
           replace('/(beneficiary)');
         }

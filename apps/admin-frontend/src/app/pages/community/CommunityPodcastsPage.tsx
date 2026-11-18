@@ -36,6 +36,7 @@ export default function CommunityPodcastsPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [ranking, setRanking] = useState('');
 
   // New Episode Form
   const [epTitle, setEpTitle] = useState('');
@@ -75,16 +76,55 @@ export default function CommunityPodcastsPage() {
         title,
         description,
         categoryId,
+        ranking: ranking ? parseInt(ranking, 10) : null,
       });
-      toast.success('Podcast series created!');
+      toast.success('Podcast show created!');
       setSeriesDialogOpen(false);
       setTitle('');
       setDescription('');
+      setRanking('');
       loadData();
     } catch (err: any) {
       toast.error(err.message || 'Failed to create series');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const rankMap = React.useMemo(() => {
+    const map = new Map<number, any>();
+    podcasts.forEach((p) => {
+      if (typeof p.ranking === 'number' && p.ranking >= 1 && p.ranking <= 5) {
+        map.set(p.ranking, p);
+      }
+    });
+    return map;
+  }, [podcasts]);
+
+  const handleUpdateRanking = async (podcastId: string, newRank: number | null) => {
+    const displaced = newRank ? podcasts.find((p) => p.id !== podcastId && p.ranking === newRank) : null;
+
+    setPodcasts((prev) =>
+      prev.map((p) => {
+        if (p.id === podcastId) return { ...p, ranking: newRank };
+        if (newRank !== null && p.ranking === newRank) return { ...p, ranking: null };
+        return p;
+      })
+    );
+
+    try {
+      await communityApi.updatePodcast(podcastId, { ranking: newRank });
+      if (displaced) {
+        toast.success(`Top ${newRank} assigned (reassigned from "${displaced.title.trim()}")`);
+      } else if (newRank) {
+        toast.success(`Rank updated to Top ${newRank}`);
+      } else {
+        toast.success('Ranking removed');
+      }
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update ranking');
+      loadData();
     }
   };
 
@@ -149,7 +189,31 @@ export default function CommunityPodcastsPage() {
             <Card key={p.id} className="border-slate-200">
               <CardHeader className="flex flex-row items-start justify-between pb-2">
                 <div>
-                  <Badge variant="outline" className="mb-1">{p.category?.name || 'General'}</Badge>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant="outline">{p.category?.name || 'General'}</Badge>
+                    <select
+                      value={p.ranking || ''}
+                      onChange={(e) => handleUpdateRanking(p.id, e.target.value ? parseInt(e.target.value, 10) : null)}
+                      className="text-xs border border-slate-200 rounded px-1.5 py-0.5 bg-white font-medium text-slate-700 hover:border-orange-400 cursor-pointer focus:outline-none"
+                    >
+                      <option value="">Rank: None</option>
+                      {[1, 2, 3, 4, 5].map((r) => {
+                        const occupant = rankMap.get(r);
+                        const isCurrent = p.ranking === r;
+                        const medal = r === 1 ? '🏆' : r === 2 ? '🥈' : r === 3 ? '🥉' : '';
+                        let label = `Top ${r} ${medal}`.trim();
+                        if (occupant && !isCurrent) {
+                          const occTitle = occupant.title.trim();
+                          label += ` (Takes from: ${occTitle.length > 14 ? occTitle.slice(0, 14) + '...' : occTitle})`;
+                        }
+                        return (
+                          <option key={r} value={r}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
                   <CardTitle className="text-lg font-bold text-slate-900">{p.title}</CardTitle>
                 </div>
                 <Button
@@ -217,17 +281,44 @@ export default function CommunityPodcastsPage() {
                 required
               />
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-700">Category</label>
-              <select
-                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-              >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Category</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Showcase Rank (Top 1–5)</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                  value={ranking}
+                  onChange={(e) => setRanking(e.target.value)}
+                >
+                  <option value="">None (Standard)</option>
+                  {[1, 2, 3, 4, 5].map((r) => {
+                    const occupant = rankMap.get(r);
+                    const medal = r === 1 ? '🏆' : r === 2 ? '🥈' : r === 3 ? '🥉' : '';
+                    let label = `Top ${r} ${medal}`.trim();
+                    if (occupant) {
+                      const occTitle = occupant.title.trim();
+                      label += ` (Takes from: ${occTitle.length > 18 ? occTitle.slice(0, 18) + '...' : occTitle})`;
+                    }
+                    return (
+                      <option key={r} value={r}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-700">Description</label>
