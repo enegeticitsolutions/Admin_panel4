@@ -244,7 +244,7 @@ export function renderCreditNoteHtml(opts: RenderCreditNoteOptions): string {
         </div>
       </div>
       <div class="doc-type">
-        <div class="doc-badge">Tax Credit Note</div>
+        <div class="doc-badge">Credit Note</div>
         <div class="doc-number">${esc(creditNoteNumber)}</div>
         <div class="doc-date">Date: <strong>${esc(formattedDate)}</strong></div>
       </div>
@@ -288,7 +288,7 @@ export function renderCreditNoteHtml(opts: RenderCreditNoteOptions): string {
         <tr>
           <th style="width: 40px;" class="text-center">#</th>
           <th>Description & Statutory Particulars</th>
-          <th style="width: 100px;" class="text-right">Reversible Base</th>
+          <th style="width: 110px;" class="text-right">Taxable Value</th>
           ${isInterState ? `<th style="width: 90px;" class="text-right">IGST</th>` : `<th style="width: 80px;" class="text-right">CGST</th><th style="width: 80px;" class="text-right">SGST</th>`}
           <th style="width: 100px;" class="text-right">Total Credit</th>
         </tr>
@@ -316,7 +316,7 @@ export function renderCreditNoteHtml(opts: RenderCreditNoteOptions): string {
     <div class="totals-area">
       <table class="totals-table">
         <tr>
-          <td>Reversed Taxable Value:</td>
+          <td>Taxable Value:</td>
           <td class="text-right font-mono">₹${breakdown.baseAmount.toFixed(2)}</td>
         </tr>
         ${
@@ -344,7 +344,7 @@ export function renderCreditNoteHtml(opts: RenderCreditNoteOptions): string {
 
     <!-- Footer -->
     <div class="footer">
-      This is a computer-generated statutory Tax Credit Note issued under Section 34 of the CGST Act, 2017.<br>
+      This is a computer-generated Credit Note issued under Section 34 of the CGST Act, 2017.<br>
       ${company.name ? esc(company.name) : ''}${company.cin ? ` | CIN: ${esc(company.cin)}` : ''}
     </div>
   </div>
