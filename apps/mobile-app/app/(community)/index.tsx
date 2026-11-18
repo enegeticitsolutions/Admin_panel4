@@ -31,6 +31,7 @@ export default function CommunityHomeScreen() {
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [eventTimelineFilter, setEventTimelineFilter] = useState<'upcoming' | 'ongoing' | 'past'>('upcoming');
 
   const fetchCommunityData = async () => {
     try {
@@ -40,7 +41,7 @@ export default function CommunityHomeScreen() {
 
       const [res, eventsRes] = await Promise.all([
         fetch(`${API_URL}/community/home`, { headers }),
-        fetch(`${API_URL}/community/events`, { headers }).catch(() => null),
+        fetch(`${API_URL}/community/events?timeline=all`, { headers }).catch(() => null),
       ]);
       const json = await res.json();
       const eventsJson = eventsRes ? await eventsRes.json().catch(() => null) : null;
@@ -79,17 +80,145 @@ export default function CommunityHomeScreen() {
     fetchCommunityData();
   };
 
-  const filteredEvents = selectedCategory === 'all'
-    ? events
-    : events.filter(e => e.categoryId === selectedCategory);
+  const nowTime = new Date().getTime();
 
-  const filteredBlogs = selectedCategory === 'all'
-    ? blogs
-    : blogs.filter(b => b.categoryId === selectedCategory);
+  const getEventTimeline = (e: any): 'ongoing' | 'upcoming' | 'past' => {
+    const start = new Date(e.startDateTime).getTime();
+    const end = e.endDateTime ? new Date(e.endDateTime).getTime() : start;
+    if (nowTime >= start && nowTime <= end) return 'ongoing';
+    if (nowTime < start) return 'upcoming';
+    return 'past';
+  };
 
-  const filteredPodcasts = selectedCategory === 'all'
-    ? podcasts
-    : podcasts.filter(p => p.categoryId === selectedCategory);
+  const matchesCategory = (item: any) => {
+    if (selectedCategory === 'all') return true;
+    return item.categoryId === selectedCategory || item.category?.id === selectedCategory;
+  };
+
+  const upcomingEvents = events.filter((e) => getEventTimeline(e) === 'upcoming' && matchesCategory(e));
+  const ongoingEvents = events.filter((e) => getEventTimeline(e) === 'ongoing' && matchesCategory(e));
+  const pastEvents = events.filter((e) => getEventTimeline(e) === 'past' && matchesCategory(e));
+
+  const filteredBlogs = blogs.filter(matchesCategory);
+  const filteredPodcasts = podcasts.filter(matchesCategory);
+
+  // Current events list based on timeline filter
+  const currentEventsList =
+    eventTimelineFilter === 'ongoing'
+      ? ongoingEvents
+      : eventTimelineFilter === 'past'
+      ? pastEvents
+      : upcomingEvents;
+
+  // Segment events into "Your Events" (RSVP'd) and "More Events"
+  const yourEvents = currentEventsList.filter((e) => Boolean(e.isRegistered));
+  const moreEvents = currentEventsList.filter((e) => !e.isRegistered);
+
+  const renderEventCard = (event: any, isYourEvent: boolean) => {
+    const timeline = getEventTimeline(event);
+    const isOngoing = timeline === 'ongoing';
+    const isPast = timeline === 'past';
+
+    return (
+      <TouchableOpacity
+        key={event.id}
+        style={[
+          styles.eventCard,
+          isYourEvent && styles.yourEventCard,
+          isOngoing && styles.ongoingEventCard,
+        ]}
+        activeOpacity={0.85}
+        onPress={() => router.push(`/(community)/events/${event.id}`)}
+      >
+        {event.resolvedThumbnailUrl && (
+          <Image
+            source={{ uri: event.resolvedThumbnailUrl }}
+            style={styles.eventImage}
+            resizeMode="cover"
+          />
+        )}
+        <View style={styles.eventBody}>
+          <View style={styles.eventBadgeRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {isOngoing ? (
+                <View style={styles.ongoingBadge}>
+                  <View style={styles.pulsingDot} />
+                  <Text style={styles.ongoingBadgeText}>LIVE NOW</Text>
+                </View>
+              ) : isPast ? (
+                <View style={styles.pastBadge}>
+                  <Text style={styles.pastBadgeText}>COMPLETED</Text>
+                </View>
+              ) : (
+                <View style={[styles.typeBadge, { backgroundColor: event.eventType === 'online' ? '#EFF6FF' : '#FEF3C7' }]}>
+                  <Text style={[styles.typeBadgeText, { color: event.eventType === 'online' ? '#1D4ED8' : '#B45309' }]}>
+                    {event.eventType.toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              {event.category && (
+                <Text style={styles.eventCategoryText}>{event.category.name}</Text>
+              )}
+              {typeof event.ranking === 'number' && event.ranking >= 1 && event.ranking <= 5 && (
+                <View style={styles.topRankBadge}>
+                  <Text style={styles.topRankText}>Top {event.ranking} 🏆</Text>
+                </View>
+              )}
+            </View>
+
+            {isYourEvent && (
+              <View style={styles.rsvpBadge}>
+                <Feather name="check-circle" size={12} color="#059669" />
+                <Text style={styles.rsvpBadgeText}>RSVP Confirmed</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.eventTitle}>{event.title}</Text>
+          <Text style={styles.eventDescription} numberOfLines={2}>
+            {event.shortDescription}
+          </Text>
+
+          <View style={styles.eventFooter}>
+            <View style={styles.eventDateGroup}>
+              <Feather name="clock" size={16} color={isOngoing ? '#E11D48' : '#64748B'} />
+              <Text style={[styles.eventDateText, isOngoing && { color: '#E11D48', fontFamily: 'Poppins-SemiBold' }]}>
+                {new Date(event.startDateTime).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+            </View>
+
+            <View style={styles.rsvpButtonSmall}>
+              <Text
+                style={[
+                  styles.rsvpButtonText,
+                  isYourEvent && { color: '#059669' },
+                  isOngoing && { color: '#E11D48', fontFamily: 'Poppins-Bold' },
+                ]}
+              >
+                {isOngoing
+                  ? 'Join Live Now'
+                  : isPast
+                  ? 'View Details'
+                  : isYourEvent
+                  ? 'View Details'
+                  : 'Details & RSVP'}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={isOngoing ? '#E11D48' : isYourEvent ? '#059669' : '#FE6700'}
+              />
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -216,65 +345,129 @@ export default function CommunityHomeScreen() {
           {/* ── TAB 1: EVENTS ── */}
           {activeTab === 'events' && (
             <View>
-              {filteredEvents.length === 0 ? (
+              {/* Event Timeline Selector */}
+              <View style={styles.timelineTabs}>
+                <TouchableOpacity
+                  style={[styles.timelineTab, eventTimelineFilter === 'upcoming' && styles.timelineTabActive]}
+                  onPress={() => setEventTimelineFilter('upcoming')}
+                >
+                  <Text style={[styles.timelineTabText, eventTimelineFilter === 'upcoming' && styles.timelineTabTextActive]}>
+                    Upcoming ({upcomingEvents.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.timelineTab,
+                    eventTimelineFilter === 'ongoing' && styles.timelineTabActiveOngoing,
+                  ]}
+                  onPress={() => setEventTimelineFilter('ongoing')}
+                >
+                  {ongoingEvents.length > 0 && <View style={styles.liveIndicatorDot} />}
+                  <Text
+                    style={[
+                      styles.timelineTabText,
+                      eventTimelineFilter === 'ongoing' && styles.timelineTabTextActiveOngoing,
+                    ]}
+                  >
+                    Ongoing ({ongoingEvents.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.timelineTab, eventTimelineFilter === 'past' && styles.timelineTabActive]}
+                  onPress={() => setEventTimelineFilter('past')}
+                >
+                  <Text style={[styles.timelineTabText, eventTimelineFilter === 'past' && styles.timelineTabTextActive]}>
+                    Past ({pastEvents.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {currentEventsList.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="calendar-outline" size={48} color="#94A3B8" />
-                  <Text style={styles.emptyTitle}>No Upcoming Events</Text>
-                  <Text style={styles.emptySubtitle}>Check back soon for interactive workshops and health sessions.</Text>
+                  <Text style={styles.emptyTitle}>
+                    {eventTimelineFilter === 'ongoing'
+                      ? 'No Live Sessions Right Now'
+                      : eventTimelineFilter === 'past'
+                      ? 'No Past Events'
+                      : 'No Upcoming Events'}
+                  </Text>
+                  <Text style={styles.emptySubtitle}>
+                    {eventTimelineFilter === 'ongoing'
+                      ? 'Check the Upcoming tab to discover and RSVP for scheduled webinars and sessions.'
+                      : eventTimelineFilter === 'past'
+                      ? 'Completed wellness sessions and webinar recordings will appear here.'
+                      : 'Check back soon for interactive workshops and health sessions.'}
+                  </Text>
                 </View>
               ) : (
-                filteredEvents.map((event) => (
-                  <TouchableOpacity
-                    key={event.id}
-                    style={styles.eventCard}
-                    activeOpacity={0.85}
-                    onPress={() => router.push(`/(community)/events/${event.id}`)}
-                  >
-                    {event.resolvedThumbnailUrl && (
-                      <Image
-                        source={{ uri: event.resolvedThumbnailUrl }}
-                        style={styles.eventImage}
-                        resizeMode="cover"
-                      />
-                    )}
-                    <View style={styles.eventBody}>
-                      <View style={styles.eventBadgeRow}>
-                        <View style={[styles.typeBadge, { backgroundColor: event.eventType === 'online' ? '#EFF6FF' : '#FEF3C7' }]}>
-                          <Text style={[styles.typeBadgeText, { color: event.eventType === 'online' ? '#1D4ED8' : '#B45309' }]}>
-                            {event.eventType.toUpperCase()}
+                <View>
+                  {/* Highlight ongoing sessions if browsing upcoming */}
+                  {eventTimelineFilter === 'upcoming' && ongoingEvents.length > 0 && (
+                    <View style={styles.eventSectionGroup}>
+                      <View style={styles.sectionHeader}>
+                        <View style={styles.sectionTitleRow}>
+                          <View style={styles.liveIndicatorDot} />
+                          <Text style={[styles.sectionTitle, { color: '#E11D48' }]}>Happening Right Now</Text>
+                        </View>
+                        <View style={[styles.registeredCountBadge, { backgroundColor: '#FFE4E6' }]}>
+                          <Text style={[styles.registeredCountText, { color: '#E11D48' }]}>
+                            {ongoingEvents.length} Live
                           </Text>
                         </View>
-                        {event.category && (
-                          <Text style={styles.eventCategoryText}>{event.category.name}</Text>
-                        )}
                       </View>
-
-                      <Text style={styles.eventTitle}>{event.title}</Text>
-                      <Text style={styles.eventDescription} numberOfLines={2}>
-                        {event.shortDescription}
-                      </Text>
-
-                      <View style={styles.eventFooter}>
-                        <View style={styles.eventDateGroup}>
-                          <Feather name="clock" size={16} color="#64748B" />
-                          <Text style={styles.eventDateText}>
-                            {new Date(event.startDateTime).toLocaleDateString('en-IN', {
-                              day: 'numeric',
-                              month: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </Text>
-                        </View>
-
-                        <View style={styles.rsvpButtonSmall}>
-                          <Text style={styles.rsvpButtonText}>Details & RSVP</Text>
-                          <Ionicons name="chevron-forward" size={16} color="#FE6700" />
-                        </View>
-                      </View>
+                      {ongoingEvents.map((event) => renderEventCard(event, Boolean(event.isRegistered)))}
                     </View>
-                  </TouchableOpacity>
-                ))
+                  )}
+
+                  {/* Section 1: Your Events (RSVP'd) */}
+                  {yourEvents.length > 0 && (
+                    <View style={styles.eventSectionGroup}>
+                      <View style={styles.sectionHeader}>
+                        <View style={styles.sectionTitleRow}>
+                          <MaterialCommunityIcons name="calendar-check" size={20} color="#059669" />
+                          <Text style={styles.sectionTitle}>
+                            {eventTimelineFilter === 'past' ? 'Attended Sessions' : 'Your Events'}
+                          </Text>
+                        </View>
+                        <View style={styles.registeredCountBadge}>
+                          <Text style={styles.registeredCountText}>
+                            {yourEvents.length} {eventTimelineFilter === 'past' ? 'Attended' : 'RSVP\'d'}
+                          </Text>
+                        </View>
+                      </View>
+                      {yourEvents.map((event) => renderEventCard(event, true))}
+                    </View>
+                  )}
+
+                  {/* Section 2: More Events */}
+                  {moreEvents.length > 0 && (
+                    <View style={styles.eventSectionGroup}>
+                      <View style={styles.sectionHeader}>
+                        <View style={styles.sectionTitleRow}>
+                          <Feather name="calendar" size={18} color="#FE6700" />
+                          <Text style={styles.sectionTitle}>
+                            {eventTimelineFilter === 'ongoing'
+                              ? 'Live Sessions'
+                              : eventTimelineFilter === 'past'
+                              ? 'Past Sessions Archive'
+                              : yourEvents.length > 0
+                              ? 'More Events'
+                              : 'Upcoming Events'}
+                          </Text>
+                        </View>
+                        <View style={styles.moreCountBadge}>
+                          <Text style={styles.moreCountText}>
+                            {moreEvents.length} {eventTimelineFilter === 'past' ? 'Archived' : 'Available'}
+                          </Text>
+                        </View>
+                      </View>
+                      {moreEvents.map((event) => renderEventCard(event, false))}
+                    </View>
+                  )}
+                </View>
               )}
             </View>
           )}
@@ -305,9 +498,16 @@ export default function CommunityHomeScreen() {
                     )}
                     <View style={styles.blogBody}>
                       <View style={styles.blogMetaRow}>
-                        {blog.category && (
-                          <Text style={styles.blogCategoryPill}>{blog.category.name}</Text>
-                        )}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {blog.category && (
+                            <Text style={styles.blogCategoryPill}>{blog.category.name}</Text>
+                          )}
+                          {typeof blog.ranking === 'number' && blog.ranking >= 1 && blog.ranking <= 5 && (
+                            <View style={styles.topRankBadge}>
+                              <Text style={styles.topRankText}>Top {blog.ranking} 🏆</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={styles.readingTimeText}>
                           {blog.readingTimeMinutes || 3} min read
                         </Text>
@@ -370,7 +570,14 @@ export default function CommunityHomeScreen() {
                       </View>
                     )}
                     <View style={styles.podcastDetails}>
-                      <Text style={styles.podcastTitle}>{podcast.title}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Text style={styles.podcastTitle} numberOfLines={1}>{podcast.title}</Text>
+                        {typeof podcast.ranking === 'number' && podcast.ranking >= 1 && podcast.ranking <= 5 && (
+                          <View style={styles.topRankBadge}>
+                            <Text style={styles.topRankText}>Top {podcast.ranking} 🏆</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.podcastDesc} numberOfLines={2}>
                         {podcast.description}
                       </Text>
@@ -715,6 +922,171 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Medium',
     fontSize: 12,
     color: '#64748B',
+  },
+  eventSectionGroup: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionTitle: {
+    fontFamily: 'Poppins-Bold',
+    fontSize: 16,
+    color: '#0F172A',
+  },
+  registeredCountBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  registeredCountText: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 11,
+    color: '#059669',
+  },
+  moreCountBadge: {
+    backgroundColor: '#FFF7ED',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  moreCountText: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 11,
+    color: '#EA580C',
+  },
+  yourEventCard: {
+    borderColor: '#A7F3D0',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+  },
+  rsvpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  rsvpBadgeText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 11,
+    color: '#059669',
+  },
+  topRankBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  topRankText: {
+    fontFamily: 'Poppins-Bold',
+    fontSize: 11,
+    color: '#B45309',
+  },
+  timelineTabs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  timelineTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  timelineTabActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  timelineTabActiveOngoing: {
+    backgroundColor: '#FFE4E6',
+    borderColor: '#F43F5E',
+  },
+  timelineTabText: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 12,
+    color: '#64748B',
+  },
+  timelineTabTextActive: {
+    color: '#FFFFFF',
+    fontFamily: 'Poppins-SemiBold',
+  },
+  timelineTabTextActiveOngoing: {
+    color: '#E11D48',
+    fontFamily: 'Poppins-Bold',
+  },
+  liveIndicatorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E11D48',
+    marginRight: 6,
+  },
+  ongoingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFE4E6',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  pulsingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E11D48',
+  },
+  ongoingBadgeText: {
+    fontFamily: 'Poppins-Bold',
+    fontSize: 10,
+    color: '#E11D48',
+    letterSpacing: 0.5,
+  },
+  pastBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  pastBadgeText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 10,
+    color: '#64748B',
+  },
+  ongoingEventCard: {
+    borderColor: '#FECDD3',
+    borderWidth: 1.5,
+    backgroundColor: '#FFFBFB',
   },
 });
 

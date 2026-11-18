@@ -27,7 +27,6 @@ export default function AuthScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [biometricType, setBiometricType] = useState<BiometricKind>('biometric');
   const [hasBiometricsSetup, setHasBiometricsSetup] = useState(false);
-  const [showLegalModal, setShowLegalModal] = useState(false);
 
 
   const { push } = useNavigationStack();

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform, useWindowDimensions, Modal, TextInput, Alert, KeyboardAvoidingView, RefreshControl } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
@@ -9,6 +9,7 @@ import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
+import { useAuth } from '@/contexts/AuthContext';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { format } from 'date-fns';
 
@@ -38,6 +39,8 @@ export default function ScheduleScreen() {
     const safeBack = useSafeBack();
     useAndroidBackHandler();
 
+    const { isGuest, isLoggedIn, isLoading: authLoading } = useAuth();
+    const [isUnauthenticated, setIsUnauthenticated] = useState(false);
     const [upcomingVisits, setUpcomingVisits] = useState<Visit[]>([]);
     const [pastVisits, setPastVisits] = useState<Visit[]>([]);
     const [loading, setLoading] = useState(true);
@@ -67,19 +70,36 @@ export default function ScheduleScreen() {
 
     useFocusEffect(
         useCallback(() => {
-            fetchVisits();
-        }, [])
+            if (authLoading) return;
+            if (isGuest || !isLoggedIn) {
+                setIsUnauthenticated(true);
+                setLoading(false);
+            } else {
+                fetchVisits();
+            }
+        }, [authLoading, isGuest, isLoggedIn])
     );
 
-    useGlobalRefresh(() => { fetchVisits(); });
+    useGlobalRefresh(() => {
+        if (!isGuest && isLoggedIn) {
+            fetchVisits();
+        }
+    });
 
     const onRefresh = useCallback(async () => {
+        if (isGuest || !isLoggedIn) return;
         setRefreshing(true);
         await fetchVisits();
         setRefreshing(false);
-    }, []);
+    }, [isGuest, isLoggedIn]);
 
     const fetchVisits = async () => {
+        if (isGuest || !isLoggedIn) {
+            setIsUnauthenticated(true);
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
             setError(null);
@@ -87,11 +107,12 @@ export default function ScheduleScreen() {
             const userStr = await AsyncStorage.getItem('userData');
 
             if (!token || !userStr) {
-                setError('User session not found. Please log in again.');
+                setIsUnauthenticated(true);
                 setLoading(false);
                 return;
             }
 
+            setIsUnauthenticated(false);
             const user = JSON.parse(userStr);
             const beneficiaryId = user.id;
 
@@ -110,7 +131,7 @@ export default function ScheduleScreen() {
             }
         } catch (e: any) {
             console.error('Fetch Visits Error:', e);
-            setError('An error occurred while loading your schedule');
+            setError('An error occurred while loading your schedule. Please check your connection and try again.');
         } finally {
             setLoading(false);
         }
@@ -194,17 +215,84 @@ export default function ScheduleScreen() {
                 <Text style={styles.navBarTitle}>Visit Schedule</Text>
             </View>
 
-            {loading ? (
+            {loading || authLoading ? (
                 <View style={[styles.centerContainer, responsiveStyle]}>
                     <ActivityIndicator size="large" color="#FE6700" />
                     <Text style={styles.loaderText}>Loading schedule...</Text>
                 </View>
+            ) : isUnauthenticated || isGuest || !isLoggedIn ? (
+                <ScrollView 
+                    contentContainerStyle={[styles.guestContent, responsiveStyle]} 
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.guestCard}>
+                        {/* Care Schedule Badge */}
+                        <View style={styles.guestBadge}>
+                            <Feather name="calendar" size={13} color="#FE6700" />
+                            <Text style={styles.guestBadgeText}>Saathi Care Visits</Text>
+                        </View>
+
+                        {/* Icon Wrap */}
+                        <View style={styles.guestIconWrap}>
+                            <MaterialCommunityIcons name="calendar-clock" size={42} color="#FE6700" />
+                        </View>
+
+                        <Text style={styles.guestTitle}>Track Every Care Visit</Text>
+                        <Text style={styles.guestDesc}>
+                            Create an account or sign in to view scheduled visits with your verified Saathi care companions, track live appointments, and reschedule anytime.
+                        </Text>
+
+                        {/* Feature Highlights */}
+                        <View style={styles.guestFeatureList}>
+                            <View style={styles.guestFeatureRow}>
+                                <Feather name="check-circle" size={16} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Scheduled Saathi companion visits & reminders</Text>
+                            </View>
+                            <View style={styles.guestFeatureRow}>
+                                <Feather name="check-circle" size={16} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Live visit status & companion arrival times</Text>
+                            </View>
+                            <View style={styles.guestFeatureRow}>
+                                <Feather name="check-circle" size={16} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Easy 1-tap visit rescheduling & special requests</Text>
+                            </View>
+                            <View style={styles.guestFeatureRow}>
+                                <Feather name="check-circle" size={16} color="#10B981" />
+                                <Text style={styles.guestFeatureText}>Complete history of past care notes & summaries</Text>
+                            </View>
+                        </View>
+
+                        {/* CTA Buttons */}
+                        <TouchableOpacity
+                            style={styles.guestPrimaryBtn}
+                            onPress={() => router.push('/(auth)/register')}
+                            activeOpacity={0.85}
+                        >
+                            <Text style={styles.guestPrimaryBtnText}>Create Account</Text>
+                            <Feather name="arrow-right" size={18} color="#FFFFFF" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={styles.guestSecondaryBtn}
+                            onPress={() => router.push('/(auth)')}
+                            activeOpacity={0.75}
+                        >
+                            <Text style={styles.guestSecondaryBtnText}>
+                                Already have an account? <Text style={styles.guestSecondaryLink}>Sign In</Text>
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
             ) : error ? (
                 <View style={[styles.centerContainer, responsiveStyle]}>
-                    <Feather name="alert-triangle" size={48} color="#EF4444" />
+                    <View style={styles.errorIconWrap}>
+                        <Feather name="alert-circle" size={36} color="#D97706" />
+                    </View>
+                    <Text style={styles.errorTitle}>Unable to Load Schedule</Text>
                     <Text style={styles.errorText}>{error}</Text>
-                    <TouchableOpacity style={styles.retryButton} onPress={fetchVisits}>
-                        <Text style={styles.retryText}>Retry</Text>
+                    <TouchableOpacity style={styles.retryButton} onPress={fetchVisits} activeOpacity={0.85}>
+                        <Feather name="refresh-cw" size={15} color="#FFFFFF" style={{ marginRight: 8 }} />
+                        <Text style={styles.retryText}>Try Again</Text>
                     </TouchableOpacity>
                 </View>
             ) : (
@@ -583,24 +671,176 @@ const styles = StyleSheet.create({
         fontFamily: 'Poppins-Medium',
         marginTop: 12,
     },
-    errorText: {
-        fontSize: 15,
-        color: '#EF4444',
+    errorIconWrap: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#FEF3C7',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 14,
+    },
+    errorTitle: {
+        fontSize: 18,
+        color: '#111827',
+        fontFamily: 'Poppins-SemiBold',
+        marginBottom: 6,
         textAlign: 'center',
-        fontFamily: 'Poppins-Medium',
-        marginTop: 12,
+    },
+    errorText: {
+        fontSize: 14,
+        color: '#6B7280',
+        textAlign: 'center',
+        fontFamily: 'Poppins-Regular',
+        lineHeight: 20,
+        marginBottom: 20,
+        paddingHorizontal: 20,
     },
     retryButton: {
         backgroundColor: '#FE6700',
         paddingHorizontal: 24,
-        paddingVertical: 12,
+        height: 48,
         borderRadius: 12,
-        marginTop: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+        elevation: 2,
     },
     retryText: {
         color: '#FFFFFF',
         fontSize: 14,
         fontFamily: 'Poppins-Medium',
+    },
+    // Guest Encouragement Styles
+    guestContent: {
+        flexGrow: 1,
+        backgroundColor: '#FFF0E6',
+        paddingHorizontal: 20,
+        paddingTop: 16,
+        paddingBottom: Platform.OS === 'ios' ? 120 : 100,
+        justifyContent: 'center',
+    },
+    guestCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 24,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        ...Platform.select({
+            ios: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.06,
+                shadowRadius: 16,
+            },
+            android: {
+                elevation: 3,
+            },
+        }),
+    },
+    guestBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: '#FFF7ED',
+        borderWidth: 1,
+        borderColor: '#FFEDD5',
+        borderRadius: 20,
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        marginBottom: 16,
+    },
+    guestBadgeText: {
+        fontSize: 12,
+        fontFamily: 'Poppins-Medium',
+        color: '#FE6700',
+    },
+    guestIconWrap: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        backgroundColor: '#FFF7ED',
+        borderWidth: 1,
+        borderColor: '#FFEDD5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    guestTitle: {
+        fontSize: 20,
+        fontFamily: 'Poppins-SemiBold',
+        color: '#111827',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    guestDesc: {
+        fontSize: 13,
+        fontFamily: 'Poppins-Regular',
+        color: '#6B7280',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    guestFeatureList: {
+        width: '100%',
+        backgroundColor: '#F9FAFB',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        gap: 12,
+        marginBottom: 24,
+    },
+    guestFeatureRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    guestFeatureText: {
+        fontSize: 13,
+        fontFamily: 'Poppins-Regular',
+        color: '#374151',
+        flex: 1,
+        lineHeight: 18,
+    },
+    guestPrimaryBtn: {
+        width: '100%',
+        backgroundColor: '#FE6700',
+        borderRadius: 14,
+        height: 52,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    guestPrimaryBtnText: {
+        fontSize: 15,
+        fontFamily: 'Poppins-SemiBold',
+        color: '#FFFFFF',
+    },
+    guestSecondaryBtn: {
+        marginTop: 14,
+        paddingVertical: 8,
+        alignItems: 'center',
+    },
+    guestSecondaryBtnText: {
+        fontSize: 14,
+        fontFamily: 'Poppins-Regular',
+        color: '#6B7280',
+    },
+    guestSecondaryLink: {
+        fontFamily: 'Poppins-SemiBold',
+        color: '#FE6700',
     },
     emptyState: {
         alignItems: 'center',

@@ -28,7 +28,6 @@ import { useNavigationStack } from '@/contexts/NavigationStackContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { AddressInputField } from '@/components/ui/AddressInputField';
 import { useAuth } from '@/contexts/AuthContext';
-import { LegalConsentModal } from '@/components/shared/LegalConsentModal';
 
 const { width } = Dimensions.get('window');
 const scale = (size: number) => Math.round((width / 390) * size);
@@ -71,7 +70,6 @@ export default function ApplyVolunteerScreen() {
   const [availableInterests, setAvailableInterests] = useState<string[]>([]);
   const [showAllInterests, setShowAllInterests] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
-  const [showLegalModal, setShowLegalModal] = useState(false);
   const [consentBackground, setConsentBackground] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -835,13 +833,7 @@ export default function ApplyVolunteerScreen() {
             {/* ── Data Consent Checkbox ── */}
             <TouchableOpacity
               style={styles.checkboxRow}
-              onPress={() => {
-                  if (!consentGiven) {
-                      setShowLegalModal(true);
-                  } else {
-                      setConsentGiven(false);
-                  }
-              }}
+              onPress={() => setConsentGiven(prev => !prev)}
               activeOpacity={0.8}
             >
               <View style={[styles.checkbox, consentGiven && styles.checkboxActive]}>
@@ -907,16 +899,6 @@ export default function ApplyVolunteerScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <LegalConsentModal
-        visible={showLegalModal}
-        onClose={() => setShowLegalModal(false)}
-        onAccept={() => {
-            setConsentGiven(true);
-            setShowLegalModal(false);
-        }}
-        requireConsent={!consentGiven}
-      />
     </SafeAreaView>
   );
 }

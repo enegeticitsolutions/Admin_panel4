@@ -597,7 +597,7 @@ export default function LegacyCircleScreen() {
                                         <TouchableOpacity
                                             style={styles.connectMemberBtn}
                                             onPress={() => {
-                                                if (requireAuth('Create a free account to connect with legacy circle members.')) return;
+                                                if (requireAuth('Create an account to connect with legacy circle members.')) return;
                                                 const subject = encodeURIComponent(`Connecting via MaiHoonNa Legacy Circle`);
                                                 const body = encodeURIComponent(`Dear ${member.name},\n\nI came across your inspiring profile in the MaiHoonNa Legacy Circle and would love to connect with you.\n\nWarm regards,\n${userData?.name || ''}`);
                                                 Linking.openURL(`mailto:${member.email}?subject=${subject}&body=${body}`);

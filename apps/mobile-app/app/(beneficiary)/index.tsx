@@ -31,6 +31,7 @@ import {
     PersonalCareOverview,
     PersonalCarePromoCard,
     QuickActionsSection,
+    CommunityShowcaseSection,
     FamilyConnectIntroModal,
     CareCircleModal,
     JoinCareCircleModal,
@@ -115,8 +116,8 @@ export default function BeneficiaryDashboard() {
         lat?: number;
         lng?: number;
     } | null>(null);
-    const [emergencyEligible, setEmergencyEligible] = useState<boolean>(true);
-    const [sathiEligible, setSathiEligible] = useState<boolean>(true);
+    const [emergencyEligible, setEmergencyEligible] = useState<boolean>(false);
+    const [sathiEligible, setSathiEligible] = useState<boolean>(false);
     const [showFamilyIntroModal, setShowFamilyIntroModal] = useState<boolean>(false);
     const [showCareCircleModal, setShowCareCircleModal] = useState<boolean>(false);
     const [selectedCircleBen, setSelectedCircleBen] = useState<{ id: string; name: string } | null>(null);
@@ -146,29 +147,43 @@ export default function BeneficiaryDashboard() {
 
     const fetchEligibility = useCallback(async () => {
         try {
+            if (isGuest) {
+                setEmergencyEligible(false);
+                setSathiEligible(false);
+                return;
+            }
+
             const [storedUser, storedToken] = await Promise.all([
                 AsyncStorage.getItem('userData'),
                 AsyncStorage.getItem('userToken'),
             ]);
-            if (!storedUser || !storedToken) return;
+            if (!storedUser || !storedToken) {
+                setEmergencyEligible(false);
+                setSathiEligible(false);
+                return;
+            }
             const parsedUser = JSON.parse(storedUser);
 
             // Check emergency eligibility
             const emergencyRes = await fetch(`${API_URL}/beneficiary/${parsedUser.id}/emergency/eligibility`, {
                 headers: { Authorization: `Bearer ${storedToken}` }
             });
-            const emergencyData = await emergencyRes.json();
-            if (emergencyRes.ok && emergencyData?.data) {
-                setEmergencyEligible(emergencyData.data.eligible);
+            if (emergencyRes.ok) {
+                const emergencyData = await emergencyRes.json();
+                setEmergencyEligible(Boolean(emergencyData?.data?.eligible));
+            } else {
+                setEmergencyEligible(false);
             }
 
             // Check sathi eligibility
             const sathiRes = await fetch(`${API_URL}/beneficiary/sathi-requests/${parsedUser.id}/sathi/eligibility`, {
                 headers: { Authorization: `Bearer ${storedToken}` }
             });
-            const sathiData = await sathiRes.json();
-            if (sathiRes.ok && sathiData?.data) {
-                setSathiEligible(sathiData.data.eligible);
+            if (sathiRes.ok) {
+                const sathiData = await sathiRes.json();
+                setSathiEligible(Boolean(sathiData?.data?.eligible));
+            } else {
+                setSathiEligible(false);
             }
 
             // Check sathi eligible beneficiaries for subscriber
@@ -179,16 +194,19 @@ export default function BeneficiaryDashboard() {
                 const sathiBenData = await sathiBenRes.json();
                 if (sathiBenRes.ok && sathiBenData?.success && Array.isArray(sathiBenData?.data)) {
                     setSathiEligibleBeneficiaries(sathiBenData.data);
+                } else {
+                    setSathiEligibleBeneficiaries([]);
                 }
             } catch (benErr) {
                 console.warn('[SathiEligibleBeneficiaries] Error fetching:', benErr);
+                setSathiEligibleBeneficiaries([]);
             }
         } catch (err) {
             console.error('[EligibilityCheck] Error checking:', err);
             setEmergencyEligible(false);
             setSathiEligible(false);
         }
-    }, []);
+    }, [isGuest]);
 
     useEffect(() => {
         fetchEligibility();
@@ -243,13 +261,32 @@ export default function BeneficiaryDashboard() {
         },
     });
 
+    const {
+        data: communityEvents = [],
+        isLoading: communityLoading,
+        refetch: refetchCommunityEvents,
+    } = useQuery({
+        queryKey: ['communityShowcaseEvents', user?.id],
+        queryFn: async () => {
+            const storedToken = await AsyncStorage.getItem('userToken');
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (storedToken) headers['Authorization'] = `Bearer ${storedToken}`;
+
+            const response = await fetch(`${API_URL}/community/events?timeline=upcoming`, { headers });
+            if (!response.ok) return [];
+            const res = await response.json();
+            return res.success && Array.isArray(res.data) ? res.data : [];
+        },
+    });
+
     const refetchAllData = useCallback(async () => {
         await Promise.allSettled([
             refetchPersonalData(),
             refetchSubscriberData(),
             fetchEligibility(),
+            refetchCommunityEvents(),
         ]);
-    }, [refetchPersonalData, refetchSubscriberData, fetchEligibility]);
+    }, [refetchPersonalData, refetchSubscriberData, fetchEligibility, refetchCommunityEvents]);
 
     const handlePullToRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -493,11 +530,11 @@ export default function BeneficiaryDashboard() {
                                 {isGuest ? (
                                     <TouchableOpacity
                                         style={styles.guestHeaderSignInBtn}
-                                        onPress={() => requireAuth('Sign in or create a free account to unlock all features.')}
+                                        onPress={() => requireAuth('Create an account or sign in to unlock all features.')}
                                         activeOpacity={0.8}
                                     >
-                                        <Feather name="log-in" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                                        <Text style={styles.guestHeaderSignInText}>Sign In</Text>
+                                        <Feather name="user-plus" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                                        <Text style={styles.guestHeaderSignInText}>Create Account</Text>
                                     </TouchableOpacity>
                                 ) : (
                                     <View style={styles.headerRightGroup}>
@@ -523,7 +560,7 @@ export default function BeneficiaryDashboard() {
                                 )}
                             </View>
 
-                            {emergencyEligible && (
+                            {!isGuest && emergencyEligible && (
                                 <Animated.View style={{ transform: [{ scale: pulseAnim }], width: '100%', marginTop: 12 }}>
                                     <TouchableOpacity
                                         style={[styles.emergencyBtn, triggeringEmergency && { opacity: 0.85 }]}
@@ -560,7 +597,7 @@ export default function BeneficiaryDashboard() {
                 {isGuest && (
                     <TouchableOpacity
                         style={styles.guestBannerCard}
-                        onPress={() => requireAuth('Create a free account to track your daily vitals and request care.')}
+                        onPress={() => requireAuth('Create an account to track your daily vitals and request care.')}
                         activeOpacity={0.88}
                     >
                         <View style={styles.guestBannerIconWrap}>
@@ -574,11 +611,11 @@ export default function BeneficiaryDashboard() {
                                 </View>
                             </View>
                             <Text style={styles.guestBannerDesc}>
-                                Create a free account to track vitals, book companions, and get 24/7 care support.
+                                Create an account to track vitals, book companions, and get 24/7 care support.
                             </Text>
                         </View>
                         <View style={styles.guestBannerCta}>
-                            <Text style={styles.guestBannerCtaText}>Sign In</Text>
+                            <Text style={styles.guestBannerCtaText}>Create Account</Text>
                             <Feather name="arrow-right" size={12} color="#FFFFFF" />
                         </View>
                     </TouchableOpacity>
@@ -626,7 +663,11 @@ export default function BeneficiaryDashboard() {
                 {!hasPersonalCarePlan && familyBeneficiaries.length === 0 && (
                     <PersonalCarePromoCard
                         isCompact={false}
-                        onExplorePress={() => router.push('/(setup)/subscription-packages')}
+                        isGuest={isGuest}
+                        onExplorePress={() => {
+                            if (isGuest && requireAuth('Create an account to explore and subscribe to care plans.')) return;
+                            router.push('/(setup)/subscription-packages');
+                        }}
                     />
                 )}
 
@@ -658,8 +699,12 @@ export default function BeneficiaryDashboard() {
                             router.push(`/(subscriber)/beneficiary-profile?id=${b.id}`);
                         }
                     }}
-                    onAddMember={() => router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } })}
+                    onAddMember={() => {
+                        if (isGuest && requireAuth('Create an account to add and manage family care members.')) return;
+                        router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } });
+                    }}
                     onOpenFamilyConnect={() => {
+                        if (isGuest && requireAuth('Create an account to access Family Connect.')) return;
                         if (!hasFamilyOrPlans) {
                             setShowFamilyIntroModal(true);
                         } else {
@@ -667,10 +712,14 @@ export default function BeneficiaryDashboard() {
                         }
                     }}
                     onOpenCareCircle={(b) => {
+                        if (isGuest && requireAuth('Create an account to view and manage care circles.')) return;
                         setSelectedCircleBen({ id: b.id, name: b.name });
                         setShowCareCircleModal(true);
                     }}
-                    onOpenJoinCircle={() => setShowJoinCircleModal(true)}
+                    onOpenJoinCircle={() => {
+                        if (isGuest && requireAuth('Create an account to join a family care circle.')) return;
+                        setShowJoinCircleModal(true);
+                    }}
                     pendingAccessRequestsCount={subscriberData?.pendingIncomingRequestsCount || 0}
                     onAccessChanged={refetchAllData}
                 />
@@ -679,7 +728,11 @@ export default function BeneficiaryDashboard() {
                 {!hasPersonalCarePlan && familyBeneficiaries.length > 0 && (
                     <PersonalCarePromoCard
                         isCompact={true}
-                        onExplorePress={() => router.push('/(setup)/subscription-packages')}
+                        isGuest={isGuest}
+                        onExplorePress={() => {
+                            if (isGuest && requireAuth('Create an account to explore and subscribe to care plans.')) return;
+                            router.push('/(setup)/subscription-packages');
+                        }}
                     />
                 )}
 
@@ -704,6 +757,19 @@ export default function BeneficiaryDashboard() {
                     onActionPress={(route) => {
                         if (route === '/(beneficiary)/request-service' && requireAuth('Request home care, nursing, or attendant services.')) return;
                         router.push(route as any);
+                    }}
+                />
+
+                {/* ── Community Showcase Section ── */}
+                <CommunityShowcaseSection
+                    events={communityEvents}
+                    loading={communityLoading}
+                    horizontalGutter={horizontalGutter}
+                    onEventPress={(eventId) => {
+                        router.push(`/(community)/events/${eventId}` as any);
+                    }}
+                    onExplorePress={() => {
+                        router.push('/(community)' as any);
                     }}
                 />
 

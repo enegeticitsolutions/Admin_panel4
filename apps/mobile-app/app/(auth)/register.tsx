@@ -13,7 +13,6 @@ import { IS_PASSWORD_LOGIN_ENABLED } from '@/constants/authMode';
 import { AddressPicker, SelectedAddress } from '@/components/ui/AddressPicker';
 import { getAccurateLocation, getCurrentLocation } from '@/services/location';
 import { serviceabilityService, ServiceabilityResult } from '@/services/serviceability.service';
-import { LegalConsentModal } from '@/components/shared/LegalConsentModal';
 import { CountryPickerModal } from '@/components/ui/CountryPickerModal';
 
 export default function RegisterScreen() {
@@ -35,7 +34,6 @@ export default function RegisterScreen() {
     const [step, setStep] = useState<'form' | 'otp'>('form');
     const [otp, setOtp] = useState(["", "", "", "", "", ""]);
     const [consentGiven, setConsentGiven] = useState(false);
-    const [showLegalModal, setShowLegalModal] = useState(false);
     const [resendTimer, setResendTimer] = useState(60);
     const inputRefs = useRef<Array<TextInput | null>>([]);
 
@@ -293,8 +291,6 @@ export default function RegisterScreen() {
                     resetStack();
                     if (result.user.role === 'care_companion') {
                         replace("/(care-companion)");
-                    } else if (result.user.role === 'prospect') {
-                        replace("/(setup)/subscription-packages");
                     } else {
                         replace("/(beneficiary)");
                     }
@@ -386,8 +382,6 @@ export default function RegisterScreen() {
                 resetStack();
                 if (result.user.role === 'care_companion') {
                     replace("/(care-companion)");
-                } else if (result.user.role === 'prospect') {
-                    replace("/(setup)/subscription-packages");
                 } else {
                     replace("/(beneficiary)");
                 }
@@ -733,13 +727,7 @@ export default function RegisterScreen() {
                                 {/* ── Data Consent Checkbox ── */}
                                 <TouchableOpacity
                                     style={styles.consentBox}
-                                    onPress={() => {
-                                        if (!consentGiven) {
-                                            setShowLegalModal(true);
-                                        } else {
-                                            setConsentGiven(false);
-                                        }
-                                    }}
+                                    onPress={() => setConsentGiven(prev => !prev)}
                                     activeOpacity={0.8}
                                     accessibilityRole="checkbox"
                                     accessibilityLabel="Accept Terms of Service and Privacy Policy"
@@ -888,16 +876,6 @@ export default function RegisterScreen() {
                     subtitle="Move the pin to your service address"
                 />
             </Modal>
-
-            <LegalConsentModal
-                visible={showLegalModal}
-                onClose={() => setShowLegalModal(false)}
-                onAccept={() => {
-                    setConsentGiven(true);
-                    setShowLegalModal(false);
-                }}
-                requireConsent={!consentGiven}
-            />
         </SafeAreaView>
     );
 }
