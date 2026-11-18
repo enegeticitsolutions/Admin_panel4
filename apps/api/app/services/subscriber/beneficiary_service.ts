@@ -6,6 +6,7 @@ import { getBeneficiarySathiEligibility } from '../beneficiary/beneficiary_sathi
 import { notificationProducer } from '@maihoonna/notifications';
 import { resolveFileUrl, resolveFileUrls } from '../storage';
 import { invalidateBeneficiarySoapContext } from '../ai/beneficiary_context_cache';
+import { ensureProfileAccessOnCreate, requestProfileAccess } from '../access/profile_access_service';
 
 // Map free-text frequencies from the mobile UI to valid DB enum values
 const frequencyMap: Record<string, string> = {
@@ -73,13 +74,14 @@ const parseDob = (dobStr: string | null | undefined): Date | null => {
 
 
 export const createBeneficiary = async (data: {
-  subscriberId: string;
-  phone: string; // Add real phone property
+  subscriberId?: string | null;
+  phone: string;
   name: string;
   photo?: string;
   age: number;
   gender: string;
   address: string;
+  relationship?: string;
   medicalConditions?: string[];
   medications?: string[];
   emergencyContacts?: any[];
@@ -87,92 +89,219 @@ export const createBeneficiary = async (data: {
 }) => {
   const phone = data.phone.replace(/\D/g, '').slice(-10);
   const dobDate = parseDob(data.dob);
+  const normalizedGender = (
+    data.gender?.toLowerCase() === 'male'
+      ? 'male'
+      : data.gender?.toLowerCase() === 'female'
+      ? 'female'
+      : 'prefer_not_to_say'
+  ) as any;
 
-  let user = await prisma.user.findUnique({ where: { phone } });
-  if (!user) {
-    user = await prisma.user.create({
+  const { beneficiary: savedBeneficiary, isNewlyCreated, requiresAccessConsent } = await prisma.$transaction(async (tx) => {
+    let user = await tx.user.findUnique({ where: { phone } });
+    const isExistingActiveUser = Boolean(user && user.lastLoginAt);
+
+    if (!user) {
+      user = await tx.user.create({
+        data: {
+          id: generateUUID(),
+          phone,
+          name: data.name,
+          role: 'beneficiary',
+          age: data.age,
+          dateOfBirth: dobDate,
+        },
+      });
+    }
+
+    const existingBeneficiary = await tx.beneficiary.findUnique({
+      where: { userId: user.id },
+    });
+
+    if (existingBeneficiary) {
+      const isSelf = data.subscriberId === user.id;
+      const isExistingSponsor = Boolean(data.subscriberId && existingBeneficiary.subscriberId === data.subscriberId);
+
+      // Protect existing active independent users from silent profile takeover (Scenario B)
+      if (!isSelf && !isExistingSponsor && isExistingActiveUser) {
+        await ensureProfileAccessOnCreate(tx, {
+          beneficiaryId: existingBeneficiary.id,
+          beneficiaryUserId: user.id,
+          sponsorUserId: null,
+          grantSponsorManager: false,
+        });
+        return { beneficiary: existingBeneficiary, isNewlyCreated: false, requiresAccessConsent: true };
+      }
+
+      const updated = await tx.beneficiary.update({
+        where: { id: existingBeneficiary.id },
+        data: {
+          ...(data.subscriberId && !existingBeneficiary.subscriberId ? { subscriberId: data.subscriberId } : {}),
+          name: data.name,
+          photo: data.photo || existingBeneficiary.photo,
+          age: data.age,
+          dateOfBirth: dobDate,
+          gender: normalizedGender,
+          address: data.address,
+          isActive: true,
+          status: 'active',
+        },
+      });
+
+      await ensureProfileAccessOnCreate(tx, {
+        beneficiaryId: updated.id,
+        beneficiaryUserId: user.id,
+        sponsorUserId: data.subscriberId || updated.subscriberId,
+        relationship: data.relationship,
+        grantSponsorManager: isSelf || isExistingSponsor || !isExistingActiveUser,
+      });
+
+      return { beneficiary: updated, isNewlyCreated: false, requiresAccessConsent: false };
+    }
+
+    const created = await tx.beneficiary.create({
       data: {
         id: generateUUID(),
-        phone,
+        userId: user.id,
+        subscriberId: data.subscriberId || null,
         name: data.name,
-        role: 'beneficiary',
-        age: data.age,
-        dateOfBirth: dobDate
-      },
-    });
-  }
-
-  const existingBeneficiary = await prisma.beneficiary.findUnique({
-    where: { userId: user.id }
-  });
-
-  if (existingBeneficiary) {
-    return prisma.beneficiary.update({
-      where: { id: existingBeneficiary.id },
-      data: {
-        subscriberId: data.subscriberId,
-        name: data.name,
-        photo: data.photo || existingBeneficiary.photo,
+        photo: data.photo,
         age: data.age,
         dateOfBirth: dobDate,
-        gender: (data.gender.toLowerCase() === 'male' ? 'male' : data.gender.toLowerCase() === 'female' ? 'female' : 'prefer_not_to_say') as any,
+        gender: normalizedGender,
         address: data.address,
-        isActive: true,
-        status: 'active',
-      }
+        relationship: data.relationship,
+        emergencyContacts: {
+          create: (data.emergencyContacts ?? []).map((c: any) => ({
+            id: generateUUID(),
+            name: c.name,
+            phone: c.phone,
+            relationship: c.relation || c.relationship || 'Emergency',
+          })),
+        },
+      },
+    });
+
+    const autoGrantManager = !isExistingActiveUser || data.subscriberId === user.id;
+    // Dual-write SELF + (unclaimed profile) MANAGER rows atomically
+    await ensureProfileAccessOnCreate(tx, {
+      beneficiaryId: created.id,
+      beneficiaryUserId: user.id,
+      sponsorUserId: data.subscriberId || null,
+      relationship: data.relationship,
+      grantSponsorManager: autoGrantManager,
+    });
+
+    return {
+      beneficiary: created,
+      isNewlyCreated: true,
+      requiresAccessConsent: Boolean(data.subscriberId && !autoGrantManager),
+    };
+  });
+
+  // Scenario B: Auto-send Access Request (In-App + WhatsApp Approve/Decline) for active independent user
+  if (requiresAccessConsent && data.subscriberId) {
+    requestProfileAccess({
+      requesterUserId: data.subscriberId,
+      targetPhone: phone,
+      requestedRole: 'EDITOR',
+      relationship: data.relationship || 'Family Member',
+      note: 'Care plan linked — requesting profile access to help coordinate care.',
+    }).catch((err: any) => {
+      console.warn('[BeneficiaryService:Create] Auto access request warning:', err.message);
     });
   }
 
-  const newBeneficiary = await prisma.beneficiary.create({
-    data: {
-      id: generateUUID(),
-      userId: user.id,
-      subscriberId: data.subscriberId,
-      name: data.name,
-      photo: data.photo,
-      age: data.age,
-      dateOfBirth: dobDate,
-      gender: (data.gender.toLowerCase() === 'male' ? 'male' : data.gender.toLowerCase() === 'female' ? 'female' : 'prefer_not_to_say') as any,
-      address: data.address,
-      emergencyContacts: {
-        create: (data.emergencyContacts ?? []).map((c: any) => ({
-          id: generateUUID(),
-          name: c.name,
-          phone: c.phone,
-          relationship: c.relation || c.relationship || 'Emergency',
-        })),
-      },
-    },
-  });
-
   // NT-005: Dispatch BENEF_PROFILE_CREATED (Decoupled Redis Streams)
-  (async () => {
-    try {
-      const subscriber = await prisma.user.findUnique({
-        where: { id: data.subscriberId },
-        select: { name: true },
-      });
-      const subscriberName = subscriber?.name || 'Subscriber';
-      const beneficiaryPhone = data.phone?.replace(/\D/g, '').slice(-10);
+  if (isNewlyCreated) {
+    (async () => {
+      try {
+        const subscriber = data.subscriberId
+          ? await prisma.user.findUnique({
+              where: { id: data.subscriberId },
+              select: { name: true },
+            })
+          : null;
+        const subscriberName = subscriber?.name || 'MaiHoonNa';
+        const beneficiaryPhone = data.phone?.replace(/\D/g, '').slice(-10);
 
-      if (beneficiaryPhone) {
-        await notificationProducer.publish({
-          idempotencyKey: `benef-${newBeneficiary.id}-created`,
-          channel: 'whatsapp',
-          event: 'BENEF_PROFILE_CREATED',
-          recipient: { phone: beneficiaryPhone },
-          variables: {
-            beneficiaryName: data.name,
-            subscriberName,
-          },
-        });
+        if (beneficiaryPhone) {
+          await notificationProducer.publish({
+            idempotencyKey: `benef-${savedBeneficiary.id}-created`,
+            channel: 'whatsapp',
+            event: 'BENEF_PROFILE_CREATED',
+            recipient: { phone: beneficiaryPhone },
+            variables: {
+              beneficiaryName: data.name,
+              subscriberName,
+            },
+          });
+        }
+      } catch (err: any) {
+        console.error('[BeneficiaryService:Create] Notification Error:', err.message);
       }
-    } catch (err: any) {
-      console.error('[BeneficiaryService:Create] Notification Error:', err.message);
-    }
-  })();
+    })();
+  }
 
-  return newBeneficiary;
+  return {
+    ...savedBeneficiary,
+    requiresAccessConsent,
+    ...(requiresAccessConsent
+      ? {
+          consentMessage:
+            'This user already has an active MaiHoonNa account. An approval request has been sent to them in-app and via WhatsApp.',
+        }
+      : {}),
+  };
+};
+
+/**
+ * Lazy Self-Profile Creation (Option A):
+ * Creates a personal Beneficiary Care Profile + SELF access row only when a Free User
+ * buys a plan for themselves or opts into personal care tracking.
+ */
+export const ensureSelfBeneficiaryProfile = async (userId: string) => {
+  const existing = await prisma.beneficiary.findUnique({ where: { userId } });
+  if (existing) {
+    await prisma.$transaction(async (tx) => {
+      await ensureProfileAccessOnCreate(tx, {
+        beneficiaryId: existing.id,
+        beneficiaryUserId: userId,
+        sponsorUserId: userId,
+      });
+    });
+    return existing;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new Error('User not found');
+
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.beneficiary.create({
+      data: {
+        id: generateUUID(),
+        userId: user.id,
+        subscriberId: user.id,
+        name: user.name || 'Self',
+        photo: user.profilePhoto || undefined,
+        age: user.age || 60,
+        dateOfBirth: user.dateOfBirth || null,
+        address: [user.flatPlot, user.streetArea, user.city, user.state].filter(Boolean).join(', ') || user.location || 'Pending Address',
+        city: user.city || undefined,
+        state: user.state || undefined,
+        pincode: user.pincode || undefined,
+        relationship: 'Self',
+      },
+    });
+
+    await ensureProfileAccessOnCreate(tx, {
+      beneficiaryId: created.id,
+      beneficiaryUserId: user.id,
+      sponsorUserId: user.id,
+    });
+
+    return created;
+  });
 };
 
 export const getBeneficiary = async (beneficiaryId: string) => {
@@ -182,27 +311,29 @@ export const getBeneficiary = async (beneficiaryId: string) => {
   return { ...b, photo: resolvedPhoto };
 };
 
-export const getSubscriberBeneficiaries = async (subscriberId: string) => {
-  const beneficiaries = await prisma.beneficiary.findMany({
+export const getSubscriberBeneficiaries = async (userId: string) => {
+  // Single composite-index query on care_circle_members (eliminates multi-table OR scan)
+  const memberships = await prisma.careCircleMember.findMany({
     where: {
-      OR: [
-        { subscriberId },
-        { careCircleMembers: { some: { userId: subscriberId, status: 'active' } } }
-      ],
-      status: { not: 'deleted' }
+      userId,
+      status: 'active',
+      beneficiary: { status: { not: 'deleted' } },
     },
     include: {
-      careCircleMembers: {
-        where: { userId: subscriberId, status: 'active' }
-      }
-    }
+      beneficiary: true,
+    },
+    orderBy: { createdAt: 'asc' },
   });
+
   return Promise.all(
-    beneficiaries.map(async (b: any) => ({
-      ...b,
-      isCareCircleMember: b.subscriberId !== subscriberId,
-      careCircleRole: b.subscriberId === subscriberId ? 'primary_sponsor' : (b.careCircleMembers?.[0]?.role || 'caregiver'),
-      photo: b.photo ? await resolveFileUrl(b.photo, 1800) : null,
+    memberships.map(async (m) => ({
+      ...m.beneficiary,
+      accessRole: m.accessRole,
+      isCareCircleMember: m.accessRole === 'EDITOR' || m.accessRole === 'VIEWER',
+      careCircleRole: m.role,
+      canEditDetails: m.accessRole === 'SELF' || m.accessRole === 'MANAGER' || m.accessRole === 'EDITOR' || m.canEditDetails,
+      canManageAccess: m.accessRole === 'SELF' || m.accessRole === 'MANAGER' || m.canManageAccess,
+      photo: m.beneficiary.photo ? await resolveFileUrl(m.beneficiary.photo, 1800) : null,
     }))
   );
 };

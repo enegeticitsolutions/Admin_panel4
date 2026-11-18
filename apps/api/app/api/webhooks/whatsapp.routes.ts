@@ -2,32 +2,96 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import prisma from '../../core/database';
 import { generateUUID } from '../../utils/helpers';
-import { notificationService, notificationProducer } from '@maihoonna/notifications';
+import {
+  notificationService,
+  notificationProducer,
+  verifySubscriptionConsentHmac,
+  verifyAccessConsentHmac,
+  AccessConsentAction,
+} from '@maihoonna/notifications';
 import { benefitPeriodManager } from '../../services/benefit/BenefitPeriodManager';
+import { respondToAccessRequest } from '../../services/access/profile_access_service';
 
 const router = Router();
 
-/**
- * Validates HMAC-SHA256 signature attached to the WhatsApp button callback payload.
- * Prevents attackers from guessing/forging subscription IDs to trigger unauthorized activations.
- */
-function verifyConsentHmac(subscriptionId: string, role: string, sig?: string): boolean {
-  if (!sig || typeof sig !== 'string') return false;
-  const secret = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
-  if (!secret) {
-    console.error('[WhatsApp Webhook Security Alert] Cannot verify signature: WHATSAPP_WEBHOOK_VERIFY_TOKEN is missing in environment.');
-    return false;
-  }
-  const expectedSig = crypto.createHmac('sha256', secret).update(`${subscriptionId}:${role}`).digest('hex').slice(0, 16);
+const verifyConsentHmac = verifySubscriptionConsentHmac;
 
-  try {
-    const a = Buffer.from(sig);
-    const b = Buffer.from(expectedSig);
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-  } catch {
-    return false;
+/**
+ * Handles inbound WhatsApp Quick Reply button clicks for Profile Access Requests:
+ *   - ACCESS_APPROVE:<requestId>:<hmac>
+ *   - ACCESS_REJECT:<requestId>:<hmac>
+ *
+ * Enforces HMAC signature verification, zero-trust sender phone binding (must be SELF or MANAGER),
+ * atomic/idempotent state transition via ProfileAccessService, and DPDP audit logging.
+ */
+async function handleProfileAccessConsentWebhook(buttonPayload: string, senderPhone: string): Promise<void> {
+  const isApprove = buttonPayload.startsWith('ACCESS_APPROVE:');
+  const action: AccessConsentAction = isApprove ? 'APPROVE' : 'REJECT';
+  const parts = buttonPayload.split(':');
+  const requestId = parts[1]?.trim();
+  const signature = parts[2]?.trim();
+
+  if (!requestId) {
+    console.warn('[WhatsApp Access Webhook] Missing requestId in payload:', buttonPayload);
+    return;
   }
+
+  // Layer 1: Cryptographic HMAC Verification
+  if (!verifyAccessConsentHmac(requestId, action, signature)) {
+    console.error(`[WhatsApp Access Webhook SECURITY ALERT] Invalid HMAC rejected! Request: ${requestId}, Action: ${action}, Sender: ${senderPhone}`);
+    return;
+  }
+
+  if (!senderPhone || senderPhone.length !== 10) {
+    console.error(`[WhatsApp Access Webhook SECURITY ALERT] Missing/invalid sender phone for request ${requestId}`);
+    return;
+  }
+
+  // Layer 2: Zero-Trust Sender Phone Lookup
+  const senderUser = await prisma.user.findFirst({
+    where: {
+      OR: [{ phone: senderPhone }, { phone: `+91${senderPhone}` }],
+    },
+    select: { id: true, role: true, phone: true },
+  });
+
+  if (!senderUser) {
+    console.error(`[WhatsApp Access Webhook SECURITY ALERT] Unrecognized sender phone ${senderPhone} for request ${requestId}`);
+    return;
+  }
+
+  // Layer 3: Atomic + Idempotent Authorization & Execution (verifies SELF or MANAGER internally)
+  const result = await respondToAccessRequest({
+    requestId,
+    actorUserId: senderUser.id,
+    actorRole: senderUser.role,
+    action,
+    rejectionReason: action === 'REJECT' ? 'Declined via WhatsApp quick reply' : undefined,
+  });
+
+  if (result.alreadyProcessed) {
+    console.log(`[WhatsApp Access Webhook] Request ${requestId} already processed. Idempotent check satisfied.`);
+    return;
+  }
+
+  // Layer 4: Legal Audit Trail (DPDP Act 2023)
+  await prisma.activityLog.create({
+    data: {
+      id: generateUUID(),
+      userId: senderUser.id,
+      type: 'PROFILE_ACCESS',
+      action: action === 'APPROVE' ? 'WHATSAPP_ACCESS_CONSENT_APPROVED' : 'WHATSAPP_ACCESS_CONSENT_REJECTED',
+      details: {
+        requestId,
+        channel: 'WHATSAPP_QUICK_REPLY',
+        senderPhone,
+        action,
+        timestamp: new Date().toISOString(),
+      },
+    },
+  });
+
+  console.log(`✅ [WhatsApp Access Webhook] Request ${requestId} ${action}D by user ${senderUser.id} (Phone: ${senderPhone})`);
 }
 
 /**
@@ -123,13 +187,29 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
 
     // Format B: MSG91 Inbound Webhook payload
     if (!buttonPayload) {
-      buttonPayload = body?.payload || body?.data?.payload || body?.message || body?.data?.message || '';
-      senderPhone = String(body?.sender || body?.mobile || body?.from || '').replace(/\D/g, '').slice(-10);
+      buttonPayload =
+        body?.buttonPayload ||
+        body?.button_payload ||
+        body?.payload ||
+        body?.data?.buttonPayload ||
+        body?.data?.payload ||
+        body?.message ||
+        body?.data?.message ||
+        '';
+      senderPhone = String(body?.sender || body?.mobile || body?.customerNumber || body?.from || '')
+        .replace(/\D/g, '')
+        .slice(-10);
     }
 
-    // Check if this is our package activation trigger
+    // Route 1: Profile Access Request Approve / Decline Quick-Reply Callbacks
+    if (buttonPayload && (buttonPayload.startsWith('ACCESS_APPROVE:') || buttonPayload.startsWith('ACCESS_REJECT:'))) {
+      await handleProfileAccessConsentWebhook(buttonPayload.trim(), senderPhone);
+      return;
+    }
+
+    // Route 2: Package Activation Consent Trigger
     if (!buttonPayload || !buttonPayload.includes('ACTIVATE_SUB:')) {
-      return; // Ignore other non-activation inbound messages/receipts
+      return; // Ignore other non-consent inbound messages/receipts
     }
 
     const parts = buttonPayload.split(':');

@@ -7,7 +7,8 @@ const { calculateAge } = require('../utils/age');
 const { publishPackageVersion } = require('../utils/packageVersionHelper');
 const { invoiceService } = require('../modules/invoices/invoice.service');
 const { BillingCalculator } = require('@maihoonna/billing');
-const { notificationService, notificationProducer } = require('@maihoonna/notifications');
+const { notificationService, notificationProducer, consentNotificationService } = require('@maihoonna/notifications');
+const { ensureProfileAccessOnCreate } = require('../services/profile-access.helper');
 
 function generateConsentHmac(subscriptionId, role) {
   const secret = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
@@ -950,6 +951,14 @@ router.post('/admin-enroll', async (req, res) => {
           },
         });
 
+        // Dual-write SELF + MANAGER rows into unified care_circle_members table
+        await ensureProfileAccessOnCreate(tx, {
+          beneficiaryId: beneficiary.id,
+          beneficiaryUserId: beneficiaryUser.id,
+          sponsorUserId: subscriberUser.id,
+          relationship: sameAsSubscriber ? 'Self' : (relationship || 'Family'),
+        });
+
         // ──────────────────────────────────────────────────────────────
         // 3b. Medical Conditions
         // ──────────────────────────────────────────────────────────────
@@ -1407,64 +1416,21 @@ router.post('/admin-enroll', async (req, res) => {
       }).catch(err => console.error('[admin-enroll] Auto-send activation email error:', err.message));
     }
 
-    // Auto-dispatch WhatsApp Consent & Activation message (via Notification Event Worker)
-    const cleanPhoneDigits = (p) => String(p || '').replace(/\D/g, '').slice(-10);
-    const subPhone = cleanPhoneDigits(result?.subscriber?.phone || subscriberPhone);
-    const benPhone = cleanPhoneDigits(beneficiaryPhone || result?.beneficiary?.phone);
-    const rel = String(relationship || '').toLowerCase().trim();
-
-    // Check if beneficiary is the same person as the subscriber
-    const isSamePerson =
-      rel === 'self' ||
-      !benPhone ||
-      benPhone === subPhone ||
-      result?.subscriber?.id === result?.beneficiary?.id;
-
-    const whatsappTargets = [];
-    if (subPhone.length === 10) {
-      whatsappTargets.push({
-        role: 'subscriber',
-        phone: subPhone,
+    // Auto-dispatch WhatsApp Consent & Activation message (`package_consent_activation` via Redis + direct fallback)
+    consentNotificationService.sendPackageConsentActivation({
+      subscriptionId: result.subscription?.id,
+      subscriber: {
+        id: result?.subscriber?.id,
         name: result?.subscriber?.name || subscriberName || 'Subscriber',
-      });
-    }
-
-    if (!isSamePerson && benPhone.length === 10) {
-      whatsappTargets.push({
-        role: 'beneficiary',
-        phone: benPhone,
+        phone: result?.subscriber?.phone || subscriberPhone,
+      },
+      beneficiary: {
+        userId: result?.beneficiary?.userId,
         name: result?.beneficiary?.name || beneficiaryName || 'Beneficiary',
-      });
-    }
-
-    const termsUrl = process.env.LEGAL_TERMS_URL || 'https://maihoonna.com/terms';
-
-    try {
-      for (const target of whatsappTargets) {
-        const signature = generateConsentHmac(result.subscription.id, target.role);
-        notificationProducer.publish({
-          channel: 'whatsapp',
-          event: 'PACKAGE_CONSENT_ACTIVATION',
-          recipient: { phone: target.phone },
-          variables: {
-            recipientName: target.name,
-            packageName: result.package?.name || 'Care Package',
-            beneficiaryName: result.beneficiary?.name || beneficiaryName || 'Beneficiary',
-            termsUrl,
-          },
-          buttonPayload: `ACTIVATE_SUB:${result.subscription.id}:${target.role}:${signature}`,
-          idempotencyKey: `consent-sub-${result.subscription.id}-${target.role}`,
-        }).then((waRes) => {
-          if (waRes?.success) {
-            console.log(`[admin-enroll] WhatsApp consent enqueued for worker delivery to ${target.role} (${target.phone})`);
-          } else {
-            console.warn(`[admin-enroll] WhatsApp consent enqueue failed for ${target.role}:`, waRes?.error);
-          }
-        }).catch(err => console.error(`[admin-enroll] Auto-send WhatsApp consent error for ${target.role}:`, err.message));
-      }
-    } catch (waErr) {
-      console.error('[admin-enroll] WhatsApp consent dispatch bypassed (check WHATSAPP_WEBHOOK_VERIFY_TOKEN):', waErr.message);
-    }
+        phone: beneficiaryPhone || result?.beneficiary?.phone,
+      },
+      packageName: result.package?.name || 'Care Package',
+    }).catch((err) => console.error('[admin-enroll] WhatsApp consent dispatch error:', err.message));
 
     res.status(201).json({ success: true, data: result });
   } catch (err) {
@@ -1548,34 +1514,16 @@ router.post('/send-activation-consent', async (req, res) => {
     }
   }
 
-  // 2. Dispatch WhatsApp Targets
-  const targets = [];
-  if (subPhone.length === 10) {
-    targets.push({ role: 'subscriber', phone: subPhone, name: subscriberName || 'Subscriber' });
-  }
-  if (!isSamePerson && benPhone.length === 10) {
-    targets.push({ role: 'beneficiary', phone: benPhone, name: beneficiaryName || 'Beneficiary' });
-  }
-
-  for (const t of targets) {
-    try {
-      const waRes = await notificationService.send({
-        channel: 'whatsapp',
-        event: 'PACKAGE_CONSENT_ACTIVATION',
-        to: t.phone,
-        variables: {
-          recipientName: t.name,
-          packageName: packageName || 'Care Package',
-          beneficiaryName: beneficiaryName || 'Beneficiary',
-          termsUrl,
-        },
-        buttonPayload: subscriptionId ? `ACTIVATE_SUB:${subscriptionId}:${t.role}:${generateConsentHmac(subscriptionId, t.role)}` : undefined,
-      });
-      dispatchResults.whatsapp.push({ target: t.role, phone: t.phone, ...waRes });
-    } catch (e) {
-      dispatchResults.whatsapp.push({ target: t.role, phone: t.phone, success: false, error: e.message });
-    }
-  }
+  // 2. Dispatch WhatsApp Targets via shared package-consent helper (safe if WHATSAPP_WEBHOOK_VERIFY_TOKEN is unset)
+  dispatchResults.whatsapp = await consentNotificationService.sendPackageConsentActivation({
+    subscriptionId,
+    subscriber: { name: subscriberName || 'Subscriber', phone: subPhone },
+    beneficiary: !isSamePerson
+      ? { name: beneficiaryName || 'Beneficiary', phone: benPhone }
+      : { name: beneficiaryName || subscriberName || 'Beneficiary', phone: subPhone },
+    packageName: packageName || 'Care Package',
+    forceDirect: true,
+  });
 
   res.json({
     success: true,
@@ -3694,6 +3642,14 @@ router.post('/:id/renew', async (req, res) => {
         endDate: newEndDate,
       };
     });
+
+    // Auto-dispatch WhatsApp Consent & Activation message on renewal
+    consentNotificationService.sendPackageConsentActivation({
+      subscriptionId: result.newSubscription?.id,
+      subscriber: result.subscriber,
+      beneficiary: result.beneficiary,
+      packageName: result.package?.name || 'Care Package',
+    }).catch((err) => console.error('[admin-renew] WhatsApp consent dispatch error:', err.message));
 
     res.status(201).json({ success: true, data: result });
   } catch (err) {

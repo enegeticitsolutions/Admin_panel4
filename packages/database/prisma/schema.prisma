@@ -90,6 +90,8 @@ model User {
   invoices                       Invoice[]                @relation("SubscriberInvoices")
   creditNotes                    CreditNote[]             @relation("SubscriberCreditNotes")
   careCircleMemberships          CareCircleMember[]       @relation("CareCircleUser")
+  accessRequestsMade             CareAccessRequest[]      @relation("AccessRequestsMade")
+  accessInvitesSent              CareAccessRequest[]      @relation("AccessInvitesSent")
   createdEvents                  CommunityEvent[]         @relation("EventCreatedBy")
   createdBlogs                   Blog[]                   @relation("BlogCreatedBy")
   createdPodcasts                Podcast[]                @relation("PodcastCreatedBy")
@@ -249,7 +251,7 @@ model SchedulePreference {
 model Beneficiary {
   id                    String     @id @default(uuid())
   userId                String     @unique
-  subscriberId          String
+  subscriberId          String?
   name                  String
   photo                 String?
   dateOfBirth           DateTime?
@@ -294,7 +296,7 @@ model Beneficiary {
   team                 Team?                    @relation(fields: [teamId], references: [id])
   primaryCC            CareCompanion?           @relation("PrimaryCC", fields: [primaryCcId], references: [id])
   secondaryCC          CareCompanion?           @relation("SecondaryCC", fields: [secondaryCcId], references: [id])
-  subscriber           User                     @relation("SubscriberBeneficiaries", fields: [subscriberId], references: [id])
+  subscriber           User?                    @relation("SubscriberBeneficiaries", fields: [subscriberId], references: [id])
   user                 User                     @relation("BeneficiaryUser", fields: [userId], references: [id])
   conditions           BeneficiaryCondition[]
   calls                CallLog[]                @relation("BeneficiaryCalls")
@@ -321,6 +323,7 @@ model Beneficiary {
   volunteerReviews     VolunteerReview[]
   legacyCircleProfile  LegacyCircleProfile?
   careCircleMembers    CareCircleMember[]
+  accessRequests       CareAccessRequest[]
   eventRegistrations   EventRegistration[]
 
   @@index([name])
@@ -2659,30 +2662,88 @@ model Partner {
   @@map("partners")
 }
 
-model CareCircleMember {
-  id             String    @id @default(uuid())
-  beneficiaryId  String
-  userId         String
-  role           String    @default("caregiver") // "primary_sponsor" | "caregiver" | "family_member" | "viewer"
-  relationship   String?   // "daughter", "son", "spouse", "sibling", etc.
-  canRenew       Boolean   @default(true)
-  canViewVitals  Boolean   @default(true)
-  canBookVisits  Boolean   @default(true)
-  canEditDetails Boolean   @default(false)
-  status         String    @default("active") // "active" | "invited" | "declined" | "removed"
-  inviteCode     String?   @unique
-  invitedBy      String?   // userId of primary sponsor who invited them
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+enum CareAccessRole {
+  SELF      // Care profile owner themselves (beneficiary.userId === userId)
+  MANAGER   // Primary caregiver/sponsor: full view, edit, book, and access management
+  EDITOR    // Trusted family member: view, edit, and book visits
+  VIEWER    // Family observer: read-only access
+}
 
-  beneficiary    Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
-  user           User        @relation("CareCircleUser", fields: [userId], references: [id], onDelete: Cascade)
+enum AccessRequestDirection {
+  REQUEST   // Pull: Requester asks for access to target Beneficiary's profile
+  INVITE    // Push: Owner/Manager invites target user via phone or shareable code
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+model CareCircleMember {
+  id              String         @id @default(uuid())
+  beneficiaryId   String
+  userId          String
+  accessRole      CareAccessRole @default(VIEWER) // Single source of truth for access tier
+  role            String         @default("caregiver") // Legacy string retained during zero-downtime transition
+  relationship    String?        // "daughter", "son", "spouse", "sibling", "self", etc.
+  canRenew        Boolean        @default(true)
+  canViewVitals   Boolean        @default(true)
+  canBookVisits   Boolean        @default(true)
+  canEditDetails  Boolean        @default(false)
+  canManageAccess Boolean        @default(false) // True for SELF and MANAGER
+  status          String         @default("active") // "active" | "invited" | "declined" | "removed" | "revoked"
+  inviteCode      String?        @unique // Legacy field retained for 30-day fallback on existing codes
+  invitedBy       String?        // userId of sponsor/manager who invited them
+  grantedByUserId String?
+  revokedByUserId String?
+  revokedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  beneficiary     Beneficiary    @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  user            User           @relation("CareCircleUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([beneficiaryId, userId])
   @@index([beneficiaryId])
   @@index([userId])
+  @@index([userId, status])
+  @@index([beneficiaryId, status])
   @@index([inviteCode])
   @@map("care_circle_members")
+}
+
+model CareAccessRequest {
+  id               String                 @id @default(uuid())
+  beneficiaryId    String
+  direction        AccessRequestDirection
+  requestedRole    CareAccessRole         @default(VIEWER)
+  relationship     String?
+  note             String?
+
+  requesterUserId  String?                // Set on REQUEST; populated on claim for INVITE
+  invitedByUserId  String?                // Set on INVITE
+  targetPhone      String?                // Normalized 10-digit phone for lookup / auto-matching
+  inviteCode       String?                @unique // Optional shareable CC-XXXXXX code for INVITE
+
+  status           AccessRequestStatus    @default(PENDING)
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  rejectionReason  String?
+  expiresAt        DateTime
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  beneficiary      Beneficiary            @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  requester        User?                  @relation("AccessRequestsMade", fields: [requesterUserId], references: [id], onDelete: SetNull)
+  invitedBy        User?                  @relation("AccessInvitesSent", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([beneficiaryId, status])
+  @@index([requesterUserId, status])
+  @@index([targetPhone, status])
+  @@map("care_access_requests")
 }
 
 // ─── COMMUNITY CONTENT DOMAIN ───────────────────────────────────────────────

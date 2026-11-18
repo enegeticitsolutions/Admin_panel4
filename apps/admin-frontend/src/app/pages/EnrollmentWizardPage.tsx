@@ -24,6 +24,7 @@ import {
   Printer, Tag, Percent, Sparkles, Gift,
 } from 'lucide-react';
 import { PincodeCheck } from '../components/enrollment/PincodeCheck';
+import { SendPackageConsentButton } from '../components/enrollment/SendPackageConsentButton';
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import {
@@ -831,26 +832,38 @@ export default function EnrollmentWizardPage() {
                 </p>
               </div>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={resendingEmail}
-              onClick={handleResendActivationEmail}
-              className="border-orange-300 text-[#FF7A00] hover:bg-[#FF7A00] hover:text-white font-bold text-xs gap-1.5 shadow-sm self-start sm:self-center shrink-0"
-            >
-              {resendingEmail ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Mail className="w-3.5 h-3.5" />
-                  Share / Resend Email
-                </>
-              )}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-center shrink-0">
+              <SendPackageConsentButton
+                subscriptionId={enrolledResult?.subscription?.id}
+                subscriberEmail={enrolledResult?.subscriber?.email || subscriberEmail}
+                subscriberName={enrolledResult?.subscriber?.name || subscriberName}
+                subscriberPhone={enrolledResult?.subscriber?.phone || subscriberPhone}
+                beneficiaryName={enrolledResult?.beneficiary?.name || beneficiaryName}
+                beneficiaryPhone={sameAsSubscriber ? (enrolledResult?.subscriber?.phone || subscriberPhone) : (beneficiaryPhone || enrolledResult?.beneficiary?.phone)}
+                relationship={sameAsSubscriber ? 'Self' : relationship}
+                packageName={enrolledResult?.package?.name || selectedPackage?.name || 'Care Package'}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={resendingEmail}
+                onClick={handleResendActivationEmail}
+                className="border-orange-300 text-[#FF7A00] hover:bg-[#FF7A00] hover:text-white font-bold text-xs gap-1.5 shadow-sm shrink-0"
+              >
+                {resendingEmail ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-3.5 h-3.5" />
+                    Share / Resend Email
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
 
