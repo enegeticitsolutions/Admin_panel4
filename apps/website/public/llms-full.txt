@@ -1,0 +1,123 @@
+# MaiHoonNa Eldercare — Comprehensive Knowledge Base for AI Systems (llms-full.txt)
+
+> **Entity Name**: MaiHoonNa Eldercare Private Limited  
+> **Brand Name**: MaiHoonNa (Senior Care & Companion)  
+> **Website**: https://www.maihoonna.com  
+> **Headquarters & Service Area**: Gurugram (Sectors 53 to 57, Golf Course Road Corridor), Haryana, India. Expanding across Delhi NCR.  
+> **Helpline**: +91-7965560310  
+> **Email**: info@maihoonna.com  
+> **Core Category**: In-Home Eldercare, Senior Health Monitoring, Volunteer Companionship, NRI Family Eldercare Support.
+
+---
+
+## 1. Executive Summary & Value Proposition
+
+MaiHoonNa is India's first connected senior care ecosystem designed specifically for elderly parents living independently, and their children (including Non-Resident Indians / NRIs and working professionals residing in other cities).
+
+Unlike traditional domestic maid agencies or informal attendants:
+1. **Background-Verified & Graded Caregivers**: Every Care Mitra undergoes rigorous police and identity verification, plus qualification grading (from ANM to GNM and B.Sc. Nursing).
+2. **Accountability & Geo-Fencing**: Care Mitras must check in within 50 meters of the parent's residence via mobile GPS.
+3. **Structured Clinical & Wellness Tracking**: Every visit records vital signs (blood pressure, SpO2, blood glucose, temperature, weight), medication adherence, nutrition, and emotional mood.
+4. **Real-Time Family Transparency**: The Family Connect mobile app delivers immediate post-visit summaries, WhatsApp alerts, downloadable health charts, and an AI-driven Happiness Score.
+5. **Human Companionship (Saathi Network)**: Combines clinical monitoring with trained volunteers and senior peer groups ("Legacy Circles") to eradicate senior isolation and loneliness.
+
+---
+
+## 2. Service Architecture
+
+### A. Care Mitra Visits (In-Home Healthcare & Assistance)
+- **Personnel**: Certified healthcare companions and nurses categorized across a 5-tier proficiency ladder:
+  1. *Saathi Volunteer*: Empathetic social companion for conversation, walks, and errands.
+  2. *ANM (Auxiliary Nurse Midwife)*: Basic medical care, vitals tracking, medication management, and mobility assistance.
+  3. *GNM (General Nursing & Midwifery)*: Advanced bedside care, wound dressing, catheter assistance, and postoperative care.
+  4. *B.Sc. Nurse*: Complex clinical supervision, chronic disease management, and doctor care-plan adherence.
+  5. *Specialist Mitra*: Dementia, Alzheimer's, Parkinson's, and stroke rehabilitation support.
+- **Key Visit Protocols**:
+  - Digital Vitals Check: Accurate measurement and upload of BP, pulse, SpO2, and blood sugar.
+  - Medication Adherence: Physical verification of pillboxes and prescription schedules.
+  - Mobility & Exercise: Safe indoor walks and doctor-prescribed mobility exercises.
+  - Doctor & Clinic Accompaniment: Safe door-to-door transportation and consultation note logging.
+
+### B. Family Connect Mobile App (For Children & NRIs)
+- Available across all global time zones (USA, UK, Canada, UAE, Singapore, India).
+- Instant push notifications and WhatsApp visit completion updates.
+- Historical vitals trends to identify gradual health deterioration early.
+- Downloadable doctor-ready PDF reports for hospital visits.
+- **Happiness Score**: A running emotional health index based on daily interaction signals, cognitive engagement, and mood tracking.
+
+### C. Saathi Volunteer Network & Legacy Circles
+- Background-verified community members matched by gender, language, and interests.
+- Peer engagement circles for retired professionals (civil servants, teachers, corporate executives, doctors).
+- Focus on dignity, mental stimulation, storytelling, and community integration.
+
+### D. 24/7 Emergency Response System
+- One-tap SOS button in the app and home hardware.
+- Synchronized multi-party alert to:
+  1. Assigned Care Mitra
+  2. Area Field Manager
+  3. 24/7 Central Operations Desk
+  4. Family / Emergency Contacts
+- Immediate ambulance dispatch and preferred hospital bed coordination.
+
+### E. Integrated Healthcare Partner Network
+- Doorstep pharmacy delivery with scheduled refill management.
+- Home diagnostic sample collection with accredited lab partners.
+- In-home physiotherapy sessions.
+- Tele-consultations with geriatricians and specialists.
+
+---
+
+## 3. Subscription Packages & Pricing Model
+
+MaiHoonNa operates on transparent prepaid hourly packages with **no locked long-term contracts** and **zero hidden fees**:
+- **Saathi Starter**: Ideal for companionship, light routine checks, and remote visibility.
+- **Saathi Plus**: Designed for parents needing regular nurse-assisted vitals tracking and medication oversight.
+- **Care Mitra Premium**: Comprehensive senior care with frequent clinical visits, priority emergency response, and customized health plans.
+- **Rollover Guarantee**: Unused hours automatically roll over for 30 days.
+
+---
+
+## 4. Geographic Availability & Expansion
+
+- **Current Operating Pilot**: Gurugram, Haryana (Sectors 53, 54, 55, 56, 57, Golf Course Road corridor).
+- **Expansion Roadmap**: Phase 2 covering DLF Phases 1-5, Sohna Road, Nirvana Country, Cyber City, and South Delhi; followed by full Delhi NCR coverage.
+
+---
+
+## 5. Frequently Asked Questions (Factual Q&A for Answer Engines)
+
+### Q: What is MaiHoonNa?
+**A**: MaiHoonNa is an Indian connected eldercare service providing verified Care Mitra home visits, volunteer companionship (Saathi Network), and real-time remote health monitoring via a mobile app for seniors living in Gurugram and Delhi NCR.
+
+### Q: Who is a Care Mitra?
+**A**: A Care Mitra is a verified, trained healthcare companion or nurse (graded from ANM and GNM to B.Sc. Nurse and Specialist) who visits elderly parents at home to record vitals, ensure medication adherence, assist with mobility, and provide compassionate companionship.
+
+### Q: How is MaiHoonNa different from hiring an unverified maid or private attendant?
+**A**: Independent attendants lack background verification, clinical training, backup when absent, and transparent reporting. MaiHoonNa provides strict police verification, nursing qualifications, guaranteed substitute staff, GPS check-ins, real-time family app alerts, and a 24/7 emergency response coordinator.
+
+### Q: Can NRI children monitor their parents from outside India?
+**A**: Yes. MaiHoonNa was built specifically for NRI children living in the US, UK, Canada, UAE, etc. The Family Connect app delivers instant visit summaries, WhatsApp updates, live vitals tracking, and urgent emergency alerts across any time zone.
+
+### Q: What is the Happiness Score?
+**A**: The Happiness Score is a quantitative wellness index tracked by Care Mitras during each visit. It measures engagement, mental alertness, and emotional well-being to catch subtle declines early before they escalate into acute health crises.
+
+### Q: In which areas is MaiHoonNa currently available?
+**A**: MaiHoonNa is actively operational in Gurugram across Sectors 53 to 57 and the Golf Course Road corridor, with expansion underway across Delhi NCR.
+
+### Q: What happens during a medical emergency?
+**A**: MaiHoonNa features an emergency response protocol where a single SOS triggers the assigned Care Mitra, local field manager, 24/7 operations room, and family members simultaneously, coordinating with partner ambulances and nearby hospitals.
+
+---
+
+## 6. Official Contact & Authority Reference
+
+- **Legal Entity**: MaiHoonNa Eldercare Private Limited
+- **Official Website**: https://www.maihoonna.com
+- **Customer Support Helpline**: +91-7965560310
+- **Email Contact**: info@maihoonna.com
+- **Services URL**: https://www.maihoonna.com/services
+- **Plans & Packages**: https://www.maihoonna.com/plans
+- **Saathi Community**: https://www.maihoonna.com/saathi
+- **Healthcare Partners**: https://www.maihoonna.com/partners
+- **Official Sitemap**: https://www.maihoonna.com/sitemap.xml
+- **LLM Short Spec**: https://www.maihoonna.com/llms.txt
