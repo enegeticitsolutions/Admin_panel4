@@ -4,6 +4,7 @@ import { validateCoupon, applyCoupon } from '../coupon_service';
 import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
 import bcrypt from 'bcryptjs';
 import { generateInvoiceNumber, calculateItemizedInvoice, BenefitTaxItem } from '../../utils/invoice_utils';
+import { notificationProducer } from '@maihoonna/notifications';
 
 function normalizeUnit(unitLabel: string | null | undefined): string {
   if (!unitLabel) return 'visits';
@@ -328,44 +329,44 @@ export const purchaseSubscription = async (
   // --- Start Medical Data Parsing ---
   const conditionIds: string[] = [];
   if (medicalData?.conditions && Array.isArray(medicalData.conditions)) {
-      for (const condName of medicalData.conditions) {
-          const slug = condName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          try {
-              const condition = await prisma.medicalCondition.upsert({
-                  where: { slug },
-                  update: {},
-                  create: {
-                      id: generateUUID(),
-                      name: condName,
-                      slug: slug,
-                      category: "General"
-                   }
-              });
-              conditionIds.push(condition.id);
-          } catch(e) { console.error("Condition Error", e); }
-      }
+    for (const condName of medicalData.conditions) {
+      const slug = condName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      try {
+        const condition = await prisma.medicalCondition.upsert({
+          where: { slug },
+          update: {},
+          create: {
+            id: generateUUID(),
+            name: condName,
+            slug: slug,
+            category: "General"
+          }
+        });
+        conditionIds.push(condition.id);
+      } catch (e) { console.error("Condition Error", e); }
+    }
   }
 
   const mappedMedications: any[] = [];
   if (medicalData?.medications && Array.isArray(medicalData.medications)) {
-      for (const med of medicalData.medications) {
-          // Map frequency string to enum (basic fallback)
-          let freqEnum = 'once_daily';
-          const lowerFreq = String(med.frequency || '').toLowerCase();
-          if (lowerFreq.includes('twice') || lowerFreq.includes('2')) freqEnum = 'twice_daily';
-          else if (lowerFreq.includes('thrice') || lowerFreq.includes('3')) freqEnum = 'thrice_daily';
-          else if (lowerFreq.includes('needed')) freqEnum = 'as_needed';
+    for (const med of medicalData.medications) {
+      // Map frequency string to enum (basic fallback)
+      let freqEnum = 'once_daily';
+      const lowerFreq = String(med.frequency || '').toLowerCase();
+      if (lowerFreq.includes('twice') || lowerFreq.includes('2')) freqEnum = 'twice_daily';
+      else if (lowerFreq.includes('thrice') || lowerFreq.includes('3')) freqEnum = 'thrice_daily';
+      else if (lowerFreq.includes('needed')) freqEnum = 'as_needed';
 
-          mappedMedications.push({
-              id: generateUUID(),
-              name: med.name || 'Unknown',
-              dosage: med.dosage || '',
-              frequency: freqEnum as any,
-              timeSlots: med.timesPerDay || [],
-              setReminders: !!med.setReminders,
-              startDate: new Date()
-          });
-      }
+      mappedMedications.push({
+        id: generateUUID(),
+        name: med.name || 'Unknown',
+        dosage: med.dosage || '',
+        frequency: freqEnum as any,
+        timeSlots: med.timesPerDay || [],
+        setReminders: !!med.setReminders,
+        startDate: new Date()
+      });
+    }
   }
   // --- End Medical Data Parsing ---
 
@@ -529,7 +530,7 @@ export const purchaseSubscription = async (
             latitude: beneficiaryData.latitude || null,
             longitude: beneficiaryData.longitude || null,
             relationship: beneficiaryData.relationship || null,
-            
+
             // Hook up parsed medical fields
             primaryPhysicianName: medicalData?.physicianName || null,
             primaryPhysicianPhone: medicalData?.physicianPhone || null,
@@ -545,14 +546,14 @@ export const purchaseSubscription = async (
               })),
             },
             conditions: conditionIds.length > 0 ? {
-                create: conditionIds.map(cid => ({
-                    id: generateUUID(),
-                    conditionId: cid,
-                    severity: 'moderate' as any
-                }))
+              create: conditionIds.map(cid => ({
+                id: generateUUID(),
+                conditionId: cid,
+                severity: 'moderate' as any
+              }))
             } : undefined,
             medicationList: mappedMedications.length > 0 ? {
-                create: mappedMedications
+              create: mappedMedications
             } : undefined
           }
         });
@@ -576,7 +577,7 @@ export const purchaseSubscription = async (
                 vitalDefinitionId: def.id,
               }
             },
-            update: { 
+            update: {
               isActive: true,
               selectedBySubscriberId: userId,
             },
@@ -773,13 +774,13 @@ export const purchaseSubscription = async (
 
     // 3. Generate Invoice for this purchase
     const invoiceNumber = await generateInvoiceNumber(tx);
-    
+
     const subscriber = await tx.user.findUnique({
       where: { id: userId },
       select: { state: true },
     });
     const customerState = beneficiaryData?.state || subscriber?.state || '';
-    
+
     // Prepare items for tax engine
     // Use the un-discounted total base price for the package so that the duration discount
     // (which is passed in discountAmount) correctly reduces the taxable value instead of double discounting.
@@ -1136,7 +1137,7 @@ export const linkBeneficiaryToSubscription = async (
     const subscriberUser = await prisma.user.findUnique({ where: { id: userId } });
     finalEmergencyContacts.push({
       name: subscriberUser?.name || 'Subscriber',
-      phone: subscriberUser?.phone ,
+      phone: subscriberUser?.phone,
       relation: beneficiaryData.relationship || 'Subscriber',
     });
   }
@@ -1218,8 +1219,8 @@ export const linkBeneficiaryToSubscription = async (
     if (subIdToLink) {
       const existingSub = await tx.subscription.findUnique({
         where: { id: subIdToLink },
-        include: { 
-          package: true, 
+        include: {
+          package: true,
           packageVersion: {
             include: {
               versionBenefits: true
@@ -1271,7 +1272,7 @@ export const linkBeneficiaryToSubscription = async (
 
       await tx.subscription.update({
         where: { id: subIdToLink },
-        data: { 
+        data: {
           beneficiaryId: beneficiary.id,
           packageVersionId: pVersion?.id || existingSub?.packageVersionId || null,
           startDate: startDate,
@@ -1284,7 +1285,7 @@ export const linkBeneficiaryToSubscription = async (
 
       await tx.payment.updateMany({
         where: { subscriptionId: subIdToLink },
-        data: { 
+        data: {
           beneficiaryId: beneficiary.id,
           planStartDate: startDate,
           planEndDate: endDate
@@ -1329,15 +1330,15 @@ export const linkBeneficiaryToSubscription = async (
       for (const def of vitalDefs) {
         await tx.beneficiaryVitalConfig.upsert({
           where: { beneficiaryId_vitalDefinitionId: { beneficiaryId: beneficiary.id, vitalDefinitionId: def.id } },
-          update: { 
-            isActive: true, 
+          update: {
+            isActive: true,
             selectedBySubscriberId: userId,
           },
-          create: { 
-            id: generateUUID(), 
-            beneficiaryId: beneficiary.id, 
-            vitalDefinitionId: def.id, 
-            isActive: true, 
+          create: {
+            id: generateUUID(),
+            beneficiaryId: beneficiary.id,
+            vitalDefinitionId: def.id,
+            isActive: true,
             frequency: 'every_visit',
             selectedBySubscriberId: userId,
           }
@@ -1377,8 +1378,8 @@ export const linkBeneficiaryToSubscription = async (
       });
     }
 
-    return { 
-      beneficiaryId: beneficiary.id, 
+    return {
+      beneficiaryId: beneficiary.id,
       beneficiaryName: beneficiary.name,
       isQueued
     };
@@ -1386,7 +1387,7 @@ export const linkBeneficiaryToSubscription = async (
 
   return {
     success: true,
-    message: result.isQueued 
+    message: result.isQueued
       ? 'Beneficiary linked successfully! This plan is in Queue behind their active plan.'
       : 'Beneficiary enrolled and linked to subscription successfully!',
     beneficiaryId: result.beneficiaryId,
@@ -1446,6 +1447,12 @@ export const activateSubscription = async (
   medicalData?: any,
   emergencyContactsRaw?: any
 ) => {
+  // Fetch beneficiary profile to determine ownership & current verification status
+  const existingBen = await prisma.beneficiary.findUnique({
+    where: { id: beneficiaryId },
+    select: { id: true, userId: true, subscriberId: true, verificationStatus: true, isActive: true, name: true, relationship: true }
+  });
+
   // 1. Find subscription for this beneficiary (or any subscription for this subscriber)
   let existingSub = await prisma.subscription.findFirst({
     where: { beneficiaryId, isActive: false },
@@ -1475,6 +1482,11 @@ export const activateSubscription = async (
     });
   }
 
+  // Idempotency: If already verified and subscription is already active, return cleanly
+  if (existingBen && existingBen.verificationStatus === 'verified' && existingSub?.isActive) {
+    return { subscription: existingSub, beneficiary: existingBen, alreadyActive: true };
+  }
+
   if (!existingSub) {
     existingSub = await prisma.subscription.findFirst({
       where: { subscriberId: userId },
@@ -1490,52 +1502,54 @@ export const activateSubscription = async (
     });
   }
 
+  const payingSubscriberId = existingBen?.subscriberId || existingSub?.subscriberId || userId;
+
   const dobDate = parseDob(beneficiaryData.dob);
 
   // 2. Medical Data Parsing
   const conditionIds: string[] = [];
   if (medicalData?.conditions && Array.isArray(medicalData.conditions)) {
-      for (const condName of medicalData.conditions) {
-          const slug = condName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-          try {
-              const condition = await prisma.medicalCondition.upsert({
-                  where: { slug },
-                  update: {},
-                  create: {
-                      id: generateUUID(),
-                      name: condName,
-                      slug: slug,
-                      category: "General"
-                   }
-              });
-              conditionIds.push(condition.id);
-          } catch(e) { console.error("Condition Error", e); }
-      }
+    for (const condName of medicalData.conditions) {
+      const slug = condName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      try {
+        const condition = await prisma.medicalCondition.upsert({
+          where: { slug },
+          update: {},
+          create: {
+            id: generateUUID(),
+            name: condName,
+            slug: slug,
+            category: "General"
+          }
+        });
+        conditionIds.push(condition.id);
+      } catch (e) { console.error("Condition Error", e); }
+    }
   }
 
   const mappedMedications: any[] = [];
   if (medicalData?.medications && Array.isArray(medicalData.medications)) {
-      for (const med of medicalData.medications) {
-          let freqEnum = 'once_daily';
-          const lowerFreq = String(med.frequency || '').toLowerCase();
-          if (lowerFreq.includes('twice') || lowerFreq.includes('2')) freqEnum = 'twice_daily';
-          else if (lowerFreq.includes('thrice') || lowerFreq.includes('3')) freqEnum = 'thrice_daily';
-          else if (lowerFreq.includes('needed')) freqEnum = 'as_needed';
+    for (const med of medicalData.medications) {
+      let freqEnum = 'once_daily';
+      const lowerFreq = String(med.frequency || '').toLowerCase();
+      if (lowerFreq.includes('twice') || lowerFreq.includes('2')) freqEnum = 'twice_daily';
+      else if (lowerFreq.includes('thrice') || lowerFreq.includes('3')) freqEnum = 'thrice_daily';
+      else if (lowerFreq.includes('needed')) freqEnum = 'as_needed';
 
-          mappedMedications.push({
-              id: generateUUID(),
-              beneficiaryId,
-              name: med.name || 'Unknown',
-              dosage: med.dosage || '',
-              frequency: freqEnum as any,
-              timeSlots: med.timesPerDay || [],
-              setReminders: !!med.setReminders,
-              instructions: med.instructions || null,
-              startDate: med.startDate ? (parseDob(med.startDate) || new Date()) : new Date(),
-              endDate: med.endDate ? parseDob(med.endDate) : null,
-              totalDays: med.totalDays ? parseInt(med.totalDays, 10) : null
-          });
-      }
+      mappedMedications.push({
+        id: generateUUID(),
+        beneficiaryId,
+        name: med.name || 'Unknown',
+        dosage: med.dosage || '',
+        frequency: freqEnum as any,
+        timeSlots: med.timesPerDay || [],
+        setReminders: !!med.setReminders,
+        instructions: med.instructions || null,
+        startDate: med.startDate ? (parseDob(med.startDate) || new Date()) : new Date(),
+        endDate: med.endDate ? parseDob(med.endDate) : null,
+        totalDays: med.totalDays ? parseInt(med.totalDays, 10) : null
+      });
+    }
   }
 
   // 3. Emergency Contacts Parsing
@@ -1598,7 +1612,7 @@ export const activateSubscription = async (
 
   const vitalsInput = medicalData?.vitals || {};
 
-  return prisma.$transaction(async (tx) => {
+  const activationResult = await prisma.$transaction(async (tx) => {
     // A. Update Beneficiary profile
     const beneficiary = await tx.beneficiary.update({
       where: { id: beneficiaryId },
@@ -1616,7 +1630,9 @@ export const activateSubscription = async (
         pincode: beneficiaryData.pincode || null,
         latitude: beneficiaryData.latitude || null,
         longitude: beneficiaryData.longitude || null,
-        relationship: beneficiaryData.relationship || null,
+        relationship: userId === payingSubscriberId
+          ? (beneficiaryData.relationship || null)
+          : (existingBen?.relationship || beneficiaryData.relationship || null),
         maritalStatus: beneficiaryData.maritalStatus || null,
         verificationStatus: "verified", // Mark as verified!
         isActive: true,
@@ -1679,7 +1695,7 @@ export const activateSubscription = async (
               vitalDefinitionId: def.id,
             }
           },
-          update: { 
+          update: {
             isActive: true,
             selectedBySubscriberId: userId,
           },
@@ -1814,10 +1830,11 @@ export const activateSubscription = async (
     // H. Create Invoice & Payment record
     let invoiceNumber: string | null = null;
     let invoiceId: string | null = null;
+
     if (subscription) {
       invoiceNumber = await generateInvoiceNumber(tx);
       const subscriber = await tx.user.findUnique({
-        where: { id: userId },
+        where: { id: payingSubscriberId },
         select: { state: true },
       });
       const customerState = beneficiary?.state || subscriber?.state || '';
@@ -1847,7 +1864,7 @@ export const activateSubscription = async (
           invoiceNumber,
           invoiceType: 'SUBSCRIPTION',
           status: 'PAID',
-          subscriberId: userId,
+          subscriberId: payingSubscriberId,
           beneficiaryId,
           subscriptionId: subscription.id,
           baseAmount: invoiceCalc.baseAmount,
@@ -1880,7 +1897,7 @@ export const activateSubscription = async (
         data: {
           invoiceNumber,
           invoiceId,
-          subscriberId: userId,
+          subscriberId: payingSubscriberId,
           beneficiaryId,
           subscriptionId: subscription.id,
           packageType: subscription.packageType || 'silver',
@@ -1918,19 +1935,49 @@ export const activateSubscription = async (
         details: {
           subscriptionId: subscription?.id || null,
           beneficiaryId,
-          invoiceNumber
+          invoiceNumber,
+          activatedBy: userId === payingSubscriberId ? 'subscriber' : 'beneficiary'
         } as any
       }
     });
 
-    // Promote user from prospect to subscriber if they are currently a prospect
-    await tx.user.updateMany({
-      where: { id: userId, role: 'prospect' },
-      data: { role: 'subscriber' },
-    });
+    // Promote user from prospect to subscriber only if activating as subscriber
+    if (userId === payingSubscriberId) {
+      await tx.user.updateMany({
+        where: { id: userId, role: 'prospect' },
+        data: { role: 'subscriber' },
+      });
+    }
 
     return { subscription, beneficiary };
   });
+
+  // J. Notify Subscriber if activated directly by Beneficiary
+  const payingSubId = existingBen?.subscriberId || existingSub?.subscriberId;
+  if (payingSubId && userId !== payingSubId) {
+    try {
+      const subUser = await prisma.user.findUnique({
+        where: { id: payingSubId },
+        select: { phone: true, name: true }
+      });
+      if (subUser?.phone) {
+        notificationProducer.publish({
+          idempotencyKey: `sub-${activationResult.subscription?.id}-ben-activated`,
+          channel: 'whatsapp',
+          event: 'BENEFICIARY_PROFILE_ACTIVATED',
+          recipient: { phone: subUser.phone },
+          variables: {
+            subscriberName: subUser.name || 'Subscriber',
+            beneficiaryName: activationResult.beneficiary?.name || 'Beneficiary'
+          }
+        }).catch((err: any) => console.warn('[SubscriptionService:Activate] Notification Error:', err?.message));
+      }
+    } catch (e: any) {
+      console.warn('[SubscriptionService:Activate] Could not notify subscriber:', e?.message);
+    }
+  }
+
+  return activationResult;
 };
 
 export const getSubscriptionPackages = async (regionId?: string) => {

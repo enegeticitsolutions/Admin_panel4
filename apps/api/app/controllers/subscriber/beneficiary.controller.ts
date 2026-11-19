@@ -38,10 +38,27 @@ export const getBeneficiaryProfile = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to view this beneficiary.' });
     }
     const profile = await beneficiaryService.getBeneficiaryProfile(beneficiaryId);
+    const isSelf = profile?.userId === authReq.userId || access.accessRole === 'SELF';
+    const isOwnerSubscriber = profile?.subscriberId === authReq.userId;
+    let resolvedRelationship: string | null = null;
+    if (isSelf) {
+      resolvedRelationship = 'Self';
+    } else if (isOwnerSubscriber) {
+      resolvedRelationship = profile?.relationship || null;
+    } else {
+      const memberRecord = await prisma.careCircleMember.findUnique({
+        where: { beneficiaryId_userId: { beneficiaryId, userId: authReq.userId } },
+        select: { relationship: true }
+      });
+      resolvedRelationship = memberRecord?.relationship || null;
+    }
+
     res.json({
       success: true,
       data: {
         ...profile,
+        relationship: resolvedRelationship,
+        subscriberRelationship: profile?.relationship,
         accessRole: access.accessRole,
         canEditDetails: access.canEdit,
         canManageAccess: access.canManageAccess,

@@ -185,7 +185,7 @@ export class AuthService {
     }
 
     let selfBeneficiaryId: string | null = null;
-    if (user.beneficiaryProfile && user.beneficiaryProfile.isActive !== false) {
+    if (user.beneficiaryProfile) {
       if (!availableRoles.includes('beneficiary')) availableRoles.push('beneficiary');
       selfBeneficiaryId = user.beneficiaryProfile.id;
     } else if (user.subscriberBeneficiaries && user.subscriberBeneficiaries.length > 0) {
@@ -282,12 +282,9 @@ export class AuthService {
       };
     }
 
-    // Block pending beneficiaries
-    if (user.role === 'beneficiary' && user.beneficiaryProfile?.verificationStatus === 'pending') {
-      throw new Error(
-        'Your beneficiary profile is pending verification. Please contact your subscriber to verify and activate your account.',
-      );
-    }
+    // Beneficiary profile pending status (decoupled: allow login so beneficiary can self-activate)
+    const isPendingVerification =
+      user.role === 'beneficiary' && user.beneficiaryProfile?.verificationStatus === 'pending';
 
     const token = createToken({ sub: user.id, role: user.role });
     await this.touchLastLogin(user.id);
@@ -316,6 +313,14 @@ export class AuthService {
       availableRoles,
       selfBeneficiaryId,
       activeRole: user.role,
+      isPendingVerification,
+      beneficiaryProfile: user.beneficiaryProfile
+        ? {
+            id: user.beneficiaryProfile.id,
+            verificationStatus: user.beneficiaryProfile.verificationStatus,
+            isActive: user.beneficiaryProfile.isActive,
+          }
+        : null,
       token,
     };
   }
@@ -551,11 +556,8 @@ export class AuthService {
     const isMatch = await bcrypt.compare(passwordRaw, user.password);
     if (!isMatch) throw new Error('Invalid phone number or password.');
 
-    if (user.role === 'beneficiary' && user.beneficiaryProfile?.verificationStatus === 'pending') {
-      throw new Error(
-        'Your beneficiary profile is pending verification. Please contact your subscriber to verify and activate your account.',
-      );
-    }
+    const isPendingVerification =
+      user.role === 'beneficiary' && user.beneficiaryProfile?.verificationStatus === 'pending';
 
     const token = createToken({ sub: user.id, role: user.role });
     await this.touchLastLogin(user.id);
@@ -570,6 +572,14 @@ export class AuthService {
       availableRoles,
       selfBeneficiaryId,
       activeRole: user.role,
+      isPendingVerification,
+      beneficiaryProfile: user.beneficiaryProfile
+        ? {
+            id: user.beneficiaryProfile.id,
+            verificationStatus: user.beneficiaryProfile.verificationStatus,
+            isActive: user.beneficiaryProfile.isActive,
+          }
+        : null,
       token,
     };
   }
