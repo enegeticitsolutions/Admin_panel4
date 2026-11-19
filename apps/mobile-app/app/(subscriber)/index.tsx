@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Image, Platform, Animated, Dimensions, Modal, ActivityIndicator, ImageBackground, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Image, Platform, Animated, Dimensions, Modal, ActivityIndicator, ImageBackground, Alert, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
@@ -45,7 +45,70 @@ export default function SubscriberDashboardScreen() {
     const [isActivating, setIsActivating] = useState(false);
     const [showRenewalModal, setShowRenewalModal] = useState<boolean>(false);
     const [renewalTargetBen, setRenewalTargetBen] = useState<any | null>(null);
+    const [searchPhone, setSearchPhone] = useState('');
+    const [isSearchingPhone, setIsSearchingPhone] = useState(false);
+    const [searchedBen, setSearchedBen] = useState<any | null>(null);
+    const [lookupError, setLookupError] = useState('');
     const pullAnim = useRef(new Animated.Value(0)).current;
+
+    const handleLookupPhone = async () => {
+        const clean = searchPhone.replace(/\D/g, '');
+        if (clean.length !== 10) {
+            setLookupError('Please enter a valid 10-digit mobile number');
+            return;
+        }
+        setIsSearchingPhone(true);
+        setLookupError('');
+        setSearchedBen(null);
+        try {
+            const storedToken = await AsyncStorage.getItem('userToken');
+            const res = await fetch(`${API_URL}/subscriber/subscriptions/lookup-beneficiary?phone=${clean}`, {
+                headers: { 'Authorization': `Bearer ${storedToken}` }
+            });
+            const data = await res.json();
+            if (data.success && data.found) {
+                setSearchedBen(data.beneficiary);
+            } else {
+                setLookupError(data.message || 'No registered elder found with this mobile number.');
+            }
+        } catch (err) {
+            setLookupError('Network error looking up beneficiary. Please try again.');
+        } finally {
+            setIsSearchingPhone(false);
+        }
+    };
+
+    const handleAssignToBeneficiary = async (benId?: string, phoneStr?: string) => {
+        if (!selectedUnlinkedSubId) return;
+        setIsLinking(true);
+        try {
+            const storedToken = await AsyncStorage.getItem('userToken');
+            const res = await fetch(`${API_URL}/subscriber/subscriptions/${selectedUnlinkedSubId}/link-beneficiary`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${storedToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(benId ? { beneficiaryId: benId } : { phone: phoneStr })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setLinkModalVisible(false);
+                setSearchPhone('');
+                setSearchedBen(null);
+                setLookupError('');
+                Alert.alert('Care Plan Assigned', data.message || 'Care plan successfully linked!');
+                refetch();
+            } else {
+                Alert.alert('Assignment Failed', data.message || 'Failed to link care plan');
+            }
+        } catch (error) {
+            console.error(error);
+            Alert.alert('Error', 'An error occurred while linking care plan');
+        } finally {
+            setIsLinking(false);
+        }
+    };
 
     useEffect(() => {
         if (highlightBen) {
@@ -491,16 +554,15 @@ export default function SubscriberDashboardScreen() {
                             <TouchableOpacity
                                 style={[styles.unlinkedBtn, { flexDirection: 'row', alignItems: 'center' }]}
                                 onPress={() => {
-                                    if (beneficiaries.length > 0) {
-                                        setSelectedUnlinkedSubId(sub.id);
-                                        setLinkModalVisible(true);
-                                    } else {
-                                        router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } });
-                                    }
+                                    setSelectedUnlinkedSubId(sub.id);
+                                    setSearchPhone('');
+                                    setSearchedBen(null);
+                                    setLookupError('');
+                                    setLinkModalVisible(true);
                                 }}
                             >
-                                <Feather name="user-plus" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                                <Text style={styles.unlinkedBtnText}>Add Beneficiary</Text>
+                                <Ionicons name="flash" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.unlinkedBtnText}>Assign / Recharge</Text>
                             </TouchableOpacity>
                         </View>
                     ))}
@@ -549,10 +611,21 @@ export default function SubscriberDashboardScreen() {
                                 <Text style={styles.emptySubtitle}>({dashboard.activeSubscriptions[0]?.package?.name || dashboard.activeSubscriptions[0]?.packageType || 'Care Plan'})</Text>
                                 <TouchableOpacity
                                     style={[styles.emptyBtn, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
-                                    onPress={() => router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } })}
+                                    onPress={() => {
+                                        const unlinked = unlinkedSubs[0] || (dashboard?.activeSubscriptions || []).find((s: any) => !s.beneficiaryId);
+                                        if (unlinked) {
+                                            setSelectedUnlinkedSubId(unlinked.id);
+                                            setSearchPhone('');
+                                            setSearchedBen(null);
+                                            setLookupError('');
+                                            setLinkModalVisible(true);
+                                        } else {
+                                            router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } });
+                                        }
+                                    }}
                                 >
                                     <Feather name="user-plus" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                                    <Text style={styles.emptyBtnText}>Add Beneficiary</Text>
+                                    <Text style={styles.emptyBtnText}>Assign / Recharge Plan</Text>
                                 </TouchableOpacity>
                             </View>
                         ) : (
@@ -726,62 +799,135 @@ export default function SubscriberDashboardScreen() {
                 userData={userData}
             />
 
-            {/* ── Modal for Linking Existing Beneficiary ── */}
+            {/* ── Modal for Linking Existing Beneficiary (Jio-Style Recharge & Number Lookup) ── */}
             <Modal visible={linkModalVisible} transparent animationType="slide" onRequestClose={() => setLinkModalVisible(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Who is this care plan for?</Text>
+                            <Text style={styles.modalTitle}>Assign / Recharge Care Plan</Text>
                             <TouchableOpacity onPress={() => setLinkModalVisible(false)}>
                                 <Ionicons name="close" size={24} color="#111827" />
                             </TouchableOpacity>
                         </View>
-                        <Text style={styles.modalSubtitle}>Select an existing beneficiary to link to this plan.</Text>
+                        <Text style={styles.modalSubtitle}>Search any elder by 10-digit mobile number to recharge their plan, or choose from your family.</Text>
 
-                        <ScrollView style={{ maxHeight: height * 0.4, width: '100%', marginBottom: scale(16) }} showsVerticalScrollIndicator={false}>
-                            {beneficiaries.map((b: any) => (
-                                <TouchableOpacity
-                                    key={b.id}
-                                    style={styles.modalBenCard}
-                                    disabled={isLinking}
-                                    onPress={async () => {
-                                        if (!selectedUnlinkedSubId) return;
-                                        setIsLinking(true);
-                                        try {
-                                            const storedToken = await AsyncStorage.getItem('userToken');
-                                            const res = await fetch(`${API_URL}/subscriber/subscriptions/${selectedUnlinkedSubId}/link-beneficiary`, {
-                                                method: 'POST',
-                                                headers: {
-                                                    'Authorization': `Bearer ${storedToken}`,
-                                                    'Content-Type': 'application/json'
-                                                },
-                                                body: JSON.stringify({ beneficiaryId: b.id })
-                                            });
-                                            const data = await res.json();
-                                            if (data.success) {
-                                                setLinkModalVisible(false);
-                                                refetch();
-                                            } else {
-                                                alert(data.message || 'Failed to link beneficiary');
-                                            }
-                                        } catch (error) {
-                                            console.error(error);
-                                            alert('An error occurred while linking');
-                                        } finally {
-                                            setIsLinking(false);
-                                        }
+                        {/* ── Search by Phone Number (Jio-Style Recharge) ── */}
+                        <View style={styles.searchPhoneContainer}>
+                            <Text style={styles.searchPhoneLabel}>Recharge / Assign by Mobile Number</Text>
+                            <View style={styles.searchPhoneInputRow}>
+                                <Text style={styles.countryCodeText}>+91</Text>
+                                <TextInput
+                                    style={styles.searchPhoneInput}
+                                    placeholder="Enter 10-digit mobile number"
+                                    placeholderTextColor="#9CA3AF"
+                                    keyboardType="phone-pad"
+                                    maxLength={10}
+                                    value={searchPhone}
+                                    onChangeText={(val) => {
+                                        setSearchPhone(val.replace(/\D/g, ''));
+                                        setSearchedBen(null);
+                                        setLookupError('');
                                     }}
+                                />
+                                <TouchableOpacity
+                                    style={[styles.searchPhoneBtn, (searchPhone.length !== 10 || isSearchingPhone) && styles.searchPhoneBtnDisabled]}
+                                    disabled={searchPhone.length !== 10 || isSearchingPhone}
+                                    onPress={handleLookupPhone}
                                 >
-                                    <View style={styles.modalBenIcon}>
-                                        <Ionicons name="person" size={20} color="#FE6700" />
-                                    </View>
-                                    <View>
-                                        <Text style={styles.modalBenName}>{b.name}</Text>
-                                        <Text style={styles.modalBenRel}>{b.relationship || 'Beneficiary'}</Text>
-                                    </View>
+                                    {isSearchingPhone ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <Ionicons name="search" size={18} color="#FFFFFF" />
+                                    )}
                                 </TouchableOpacity>
-                            ))}
-                        </ScrollView>
+                            </View>
+
+                            {/* Found Beneficiary Card */}
+                            {searchedBen && (
+                                <View style={styles.foundBenCard}>
+                                    <View style={styles.foundBenHeader}>
+                                        <View style={styles.foundBenAvatar}>
+                                            <Ionicons name="person" size={22} color="#FE6700" />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <Text style={styles.foundBenName}>{searchedBen.name}</Text>
+                                            <Text style={styles.foundBenMeta}>
+                                                {searchedBen.age} yrs • {searchedBen.gender}{searchedBen.city ? ` • ${searchedBen.city}` : ''}
+                                            </Text>
+                                            {searchedBen.hasActivePlan ? (
+                                                <View style={styles.foundPlanActiveBadge}>
+                                                    <Ionicons name="time-outline" size={12} color="#D97706" />
+                                                    <Text style={styles.foundPlanActiveText}>
+                                                        Has Active Plan ({searchedBen.activePackageName || 'Care Plan'}) — Will be Queued
+                                                    </Text>
+                                                </View>
+                                            ) : (
+                                                <View style={styles.foundPlanExpiredBadge}>
+                                                    <Ionicons name="flash" size={12} color="#16A34A" />
+                                                    <Text style={styles.foundPlanExpiredText}>No Active Plan — Activates Immediately</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.assignSearchedBtn}
+                                        disabled={isLinking}
+                                        onPress={() => handleAssignToBeneficiary(searchedBen.id)}
+                                    >
+                                        {isLinking ? (
+                                            <ActivityIndicator size="small" color="#FFFFFF" />
+                                        ) : (
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Ionicons name="flash" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                                <Text style={styles.assignSearchedBtnText}>
+                                                    {searchedBen.hasActivePlan ? `Queue Plan for ${searchedBen.name}` : `Recharge & Assign to ${searchedBen.name}`}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {/* Not Found Banner */}
+                            {lookupError ? (
+                                <View style={styles.lookupErrorBanner}>
+                                    <Ionicons name="information-circle-outline" size={16} color="#DC2626" />
+                                    <Text style={styles.lookupErrorText}>{lookupError}</Text>
+                                </View>
+                            ) : null}
+                        </View>
+
+                        {/* ── Divider ── */}
+                        {beneficiaries.length > 0 && (
+                            <>
+                                <View style={styles.dividerRow}>
+                                    <View style={styles.dividerLine} />
+                                    <Text style={styles.dividerText}>OR CHOOSE FROM YOUR FAMILY</Text>
+                                    <View style={styles.dividerLine} />
+                                </View>
+
+                                {/* Existing Beneficiaries */}
+                                <ScrollView style={{ maxHeight: height * 0.22, width: '100%', marginBottom: scale(14) }} showsVerticalScrollIndicator={false}>
+                                    {beneficiaries.map((b: any) => (
+                                        <TouchableOpacity
+                                            key={b.id}
+                                            style={styles.modalBenCard}
+                                            disabled={isLinking}
+                                            onPress={() => handleAssignToBeneficiary(b.id)}
+                                        >
+                                            <View style={styles.modalBenIcon}>
+                                                <Ionicons name="person" size={20} color="#FE6700" />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.modalBenName}>{b.name}</Text>
+                                                <Text style={styles.modalBenRel}>{b.relationship || 'Beneficiary'}</Text>
+                                            </View>
+                                            <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                            </>
+                        )}
 
                         <TouchableOpacity
                             style={styles.modalAddNewBtn}
@@ -792,7 +938,7 @@ export default function SubscriberDashboardScreen() {
                             }}
                         >
                             <Feather name="user-plus" size={18} color="#FE6700" style={{ marginRight: 8 }} />
-                            <Text style={styles.modalAddNewText}>Add New Beneficiary</Text>
+                            <Text style={styles.modalAddNewText}>Enroll New Beneficiary</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -1244,6 +1390,160 @@ const styles = StyleSheet.create({
         borderWidth: 1, borderColor: '#FE6700', backgroundColor: '#FFF5ED'
     },
     modalAddNewText: { fontSize: scale(15), fontWeight: '600', color: '#FE6700' },
+
+    // ── Search & Recharge Styles ──
+    searchPhoneContainer: {
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: scale(12),
+        padding: scale(12),
+        marginBottom: scale(8),
+    },
+    searchPhoneLabel: {
+        fontSize: scale(13),
+        fontWeight: '700',
+        color: '#374151',
+        marginBottom: scale(8),
+    },
+    searchPhoneInputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#D1D5DB',
+        borderRadius: scale(10),
+        paddingHorizontal: scale(10),
+    },
+    countryCodeText: {
+        fontSize: scale(14),
+        fontWeight: '700',
+        color: '#4B5563',
+        marginRight: scale(6),
+    },
+    searchPhoneInput: {
+        flex: 1,
+        height: scale(42),
+        fontSize: scale(15),
+        color: '#111827',
+    },
+    searchPhoneBtn: {
+        backgroundColor: '#FE6700',
+        width: scale(36),
+        height: scale(36),
+        borderRadius: scale(8),
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    searchPhoneBtnDisabled: {
+        backgroundColor: '#D1D5DB',
+    },
+    foundBenCard: {
+        backgroundColor: '#FFF7ED',
+        borderWidth: 1,
+        borderColor: '#FED7AA',
+        borderRadius: scale(10),
+        padding: scale(12),
+        marginTop: scale(10),
+    },
+    foundBenHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    foundBenAvatar: {
+        width: scale(38),
+        height: scale(38),
+        borderRadius: scale(19),
+        backgroundColor: '#FFEDD5',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    foundBenName: {
+        fontSize: scale(15),
+        fontWeight: '700',
+        color: '#9A3412',
+    },
+    foundBenMeta: {
+        fontSize: scale(12),
+        color: '#C2410C',
+        marginTop: scale(1),
+    },
+    foundPlanActiveBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FEF3C7',
+        paddingVertical: scale(2),
+        paddingHorizontal: scale(6),
+        borderRadius: scale(4),
+        marginTop: scale(4),
+        alignSelf: 'flex-start',
+    },
+    foundPlanActiveText: {
+        fontSize: scale(11),
+        fontWeight: '600',
+        color: '#B45309',
+        marginLeft: scale(4),
+    },
+    foundPlanExpiredBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#DCFCE7',
+        paddingVertical: scale(2),
+        paddingHorizontal: scale(6),
+        borderRadius: scale(4),
+        marginTop: scale(4),
+        alignSelf: 'flex-start',
+    },
+    foundPlanExpiredText: {
+        fontSize: scale(11),
+        fontWeight: '600',
+        color: '#15803D',
+        marginLeft: scale(4),
+    },
+    assignSearchedBtn: {
+        backgroundColor: '#FE6700',
+        borderRadius: scale(8),
+        paddingVertical: scale(10),
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: scale(10),
+    },
+    assignSearchedBtnText: {
+        color: '#FFFFFF',
+        fontSize: scale(13),
+        fontWeight: '700',
+    },
+    lookupErrorBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FEE2E2',
+        padding: scale(8),
+        borderRadius: scale(8),
+        marginTop: scale(8),
+    },
+    lookupErrorText: {
+        color: '#B91C1C',
+        fontSize: scale(12),
+        marginLeft: scale(6),
+        flex: 1,
+    },
+    dividerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: scale(12),
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: '#E5E7EB',
+    },
+    dividerText: {
+        fontSize: scale(10),
+        fontWeight: '700',
+        color: '#9CA3AF',
+        marginHorizontal: scale(8),
+        letterSpacing: 0.5,
+    },
 
     // ── Self Beneficiary Card Styles ──
     benCardSelf: {

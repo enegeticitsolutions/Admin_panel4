@@ -12,6 +12,8 @@ import { generateInvoiceNumber, calculateItemizedInvoice, BenefitTaxItem } from 
 import { notificationProducer } from '@maihoonna/notifications';
 import { benefitPeriodManager } from '../../services/benefit/BenefitPeriodManager';
 import { dispatchPackageConsentForSubscription } from '../../services/subscriber/package_consent_whatsapp';
+import { resolveFileUrl } from '../../services/storage/urlResolver';
+import { normalizeIndianPhone } from '../../services/access/profile_access_service';
 
 const router = Router();
 
@@ -528,17 +530,106 @@ router.post('/create-order', paymentLimiter as unknown as RequestHandler, authen
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /subscriber/subscriptions/lookup-beneficiary
+// Lookup an existing registered beneficiary by phone number for Jio-style recharge/linking.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/lookup-beneficiary', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const rawPhone = (req.query.phone as string) || '';
+    const cleanPhone = normalizeIndianPhone(rawPhone);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit mobile number' });
+    }
+
+    const targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ phone: cleanPhone }, { phone: `+91${cleanPhone}` }],
+      },
+      include: {
+        beneficiaryProfile: {
+          include: {
+            subscriptions: {
+              where: { isActive: true },
+              orderBy: { endDate: 'desc' },
+              take: 1,
+              include: { package: { select: { name: true } } }
+            }
+          }
+        }
+      }
+    });
+
+    if (!targetUser || !targetUser.beneficiaryProfile || targetUser.beneficiaryProfile.status === 'deleted') {
+      return res.json({
+        success: true,
+        found: false,
+        message: 'No registered elder found with this mobile number.'
+      });
+    }
+
+    const ben = targetUser.beneficiaryProfile;
+    const activeSub = ben.subscriptions?.[0] || null;
+    const now = new Date();
+    const isPlanActive = activeSub && new Date(activeSub.endDate) > now && !activeSub.isQueued;
+
+    const existingMembership = await prisma.careCircleMember.findFirst({
+      where: { beneficiaryId: ben.id, userId: req.userId!, status: 'active' }
+    });
+
+    const photoUrl = ben.photo ? await resolveFileUrl(ben.photo, 1800) : null;
+
+    return res.json({
+      success: true,
+      found: true,
+      beneficiary: {
+        id: ben.id,
+        name: ben.name,
+        age: ben.age,
+        gender: ben.gender,
+        phone: cleanPhone,
+        photo: photoUrl,
+        city: ben.city,
+        state: ben.state,
+        hasActivePlan: isPlanActive,
+        activePackageName: activeSub?.package?.name || activeSub?.packageType || null,
+        activePlanEndDate: activeSub?.endDate || null,
+        isQueued: activeSub?.isQueued || false,
+        isCareCircleMember: !!existingMembership,
+        accessRole: existingMembership?.accessRole || null,
+      }
+    });
+  } catch (error: any) {
+    console.error('[Lookup Beneficiary Error]:', error);
+    return res.status(500).json({ success: false, message: error.message || 'Lookup failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // POST /subscriber/subscriptions/:subscriptionId/link-beneficiary
-// Links an existing beneficiary to an unlinked care plan.
+// Links an existing beneficiary to an unlinked care plan (supports ID or 10-digit phone).
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
     const { subscriptionId } = req.params;
-    const { beneficiaryId } = req.body;
+    let targetBeneficiaryId = req.body.beneficiaryId as string | undefined;
+    const phone = req.body.phone as string | undefined;
 
-    if (!beneficiaryId) {
-      return res.status(400).json({ success: false, message: 'beneficiaryId is required' });
+    // Support Jio-style phone number linking
+    if (!targetBeneficiaryId && phone) {
+      const cleanPhone = normalizeIndianPhone(phone);
+      const targetUser = await prisma.user.findFirst({
+        where: { OR: [{ phone: cleanPhone }, { phone: `+91${cleanPhone}` }] },
+        include: { beneficiaryProfile: true }
+      });
+      if (!targetUser || !targetUser.beneficiaryProfile || targetUser.beneficiaryProfile.status === 'deleted') {
+        return res.status(404).json({ success: false, message: 'No registered elder found with this mobile number.' });
+      }
+      targetBeneficiaryId = targetUser.beneficiaryProfile.id;
+    }
+
+    if (!targetBeneficiaryId) {
+      return res.status(400).json({ success: false, message: 'beneficiaryId or phone is required' });
     }
 
     // 1. Verify subscription ownership and ensure it's unlinked
@@ -550,28 +641,23 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
       return res.status(404).json({ success: false, message: 'Subscription not found' });
     }
     if (subscription.subscriberId !== userId) {
-      return res.status(403).json({ success: false, message: 'Forbidden' });
+      return res.status(403).json({ success: false, message: 'Forbidden: You do not own this care plan' });
     }
     if (subscription.beneficiaryId) {
       return res.status(400).json({ success: false, message: 'Subscription is already linked to a beneficiary' });
     }
 
-    // 2. Verify beneficiary ownership
+    // 2. Verify beneficiary exists
     const beneficiary = await prisma.beneficiary.findUnique({
-      where: { id: beneficiaryId }
+      where: { id: targetBeneficiaryId },
+      include: { user: true }
     });
 
     if (!beneficiary) {
       return res.status(404).json({ success: false, message: 'Beneficiary not found' });
     }
-    const isCareCircle = await prisma.careCircleMember.findFirst({
-      where: { beneficiaryId, userId, status: 'active', canRenew: true }
-    });
-    if (beneficiary.subscriberId !== userId && !isCareCircle) {
-      return res.status(403).json({ success: false, message: 'Forbidden: You do not have permission to link plans to this beneficiary' });
-    }
 
-    // 3. Link them in a transaction
+    // 3. Link them in a transaction (atomic recharge + Care Circle grant)
     let isQueued = false;
     await prisma.$transaction(async (tx) => {
       const now = new Date();
@@ -591,7 +677,7 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
       // Check if beneficiary already has an active unexpired plan
       const currentActiveSub = await tx.subscription.findFirst({
         where: {
-          beneficiaryId: beneficiaryId,
+          beneficiaryId: targetBeneficiaryId,
           isActive: true,
           endDate: { gte: now },
           id: { not: subscriptionId }
@@ -608,7 +694,7 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
       await tx.subscription.update({
         where: { id: subscriptionId },
         data: { 
-          beneficiaryId: beneficiaryId,
+          beneficiaryId: targetBeneficiaryId,
           startDate: newStart,
           endDate: newEnd,
           isActive: isActive,
@@ -620,7 +706,7 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
       await tx.payment.updateMany({
         where: { subscriptionId: subscriptionId },
         data: { 
-          beneficiaryId: beneficiaryId,
+          beneficiaryId: targetBeneficiaryId,
           planStartDate: newStart,
           planEndDate: newEnd,
           isSubscriptionActive: isActive,
@@ -659,6 +745,34 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
           tx
         );
       }
+
+      // In the Jio recharge model:
+      // Ensure the paying subscriber is automatically added to the Care Circle as MANAGER
+      const existingMembership = await tx.careCircleMember.findFirst({
+        where: { beneficiaryId: targetBeneficiaryId, userId }
+      });
+      if (!existingMembership) {
+        await tx.careCircleMember.create({
+          data: {
+            id: generateUUID(),
+            beneficiaryId: targetBeneficiaryId,
+            userId,
+            accessRole: 'MANAGER',
+            relationship: 'Sponsor',
+            status: 'active',
+            canRenew: true,
+            canViewVitals: true,
+            canBookVisits: true,
+            canEditDetails: true,
+            canManageAccess: true,
+          }
+        });
+      } else if (existingMembership.status !== 'active') {
+        await tx.careCircleMember.update({
+          where: { id: existingMembership.id },
+          data: { status: 'active', canRenew: true }
+        });
+      }
     });
 
     // Dispatch package_consent_activation WhatsApp template asynchronously
@@ -667,9 +781,11 @@ router.post('/:subscriptionId/link-beneficiary', authenticate, async (req: AuthR
     res.json({
       success: true,
       isQueued,
+      beneficiaryId: targetBeneficiaryId,
+      beneficiaryName: beneficiary.name,
       message: isQueued
-        ? 'Beneficiary linked successfully! This care plan has been placed in Queue behind their active plan.'
-        : 'Successfully linked beneficiary to care plan',
+        ? `Care plan queued successfully for ${beneficiary.name}! It will activate automatically when their current plan ends.`
+        : `Successfully recharged and activated care plan for ${beneficiary.name}!`,
     });
 
   } catch (error: any) {
