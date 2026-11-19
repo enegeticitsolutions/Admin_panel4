@@ -3,6 +3,7 @@ import prisma from '../../core/database';
 import { authenticate, AuthRequest } from './deps';
 import { benefitPeriodManager } from '../../services/benefit/BenefitPeriodManager';
 import { benefitLedgerEngine } from '../../services/benefit/BenefitLedgerEngine';
+import { getProfileAccess } from '../../services/access/profile_access_service';
 
 const router = Router();
 
@@ -112,18 +113,20 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         });
       }
 
-      // Ensure the requested beneficiary belongs to this subscriber (or user is admin)
+      // Ensure the requested beneficiary belongs to this subscriber (or user is admin or has Care Circle access)
       const isAdmin = ['admin', 'master_admin', 'super_admin', 'field_manager'].includes(userRole);
-      const benWhere: any = {
-        id: String(beneficiaryId),
-        isActive: true
-      };
       if (!isAdmin) {
-        benWhere.subscriberId = userId;
+        const access = await getProfileAccess(userId, String(beneficiaryId), userRole);
+        if (!access.canView) {
+          return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to view this beneficiary utilization.' });
+        }
       }
 
       const beneficiary = await prisma.beneficiary.findFirst({
-        where: benWhere,
+        where: {
+          id: String(beneficiaryId),
+          isActive: true
+        },
         select: {
           id: true,
           name: true,
@@ -154,9 +157,27 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     // SCENARIO 3: Subscriber/Admin dashboard list (all beneficiaries & plans)
     // ─────────────────────────────────────────────────────────────────
     if (userRole !== 'beneficiary') {
-      // 1. Fetch normal linked beneficiaries
+      // 1. Fetch accessible beneficiaries (directly owned by subscriber, care circle shared with active status, or self)
+      const careCircleMemberships = await prisma.careCircleMember.findMany({
+        where: {
+          userId,
+          status: 'active',
+          beneficiary: { status: { not: 'deleted' }, isActive: true }
+        },
+        select: { beneficiaryId: true }
+      });
+      const accessibleBenIds = Array.from(new Set(careCircleMemberships.map(m => m.beneficiaryId)));
+
       const beneficiaries = await prisma.beneficiary.findMany({
-        where: { subscriberId: userId, isActive: true },
+        where: {
+          isActive: true,
+          status: { not: 'deleted' },
+          OR: [
+            { subscriberId: userId },
+            { id: { in: accessibleBenIds } },
+            { userId: userId }
+          ]
+        },
         select: {
           id: true,
           name: true,
@@ -292,12 +313,12 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         };
       });
 
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         data: [
-          ...normalSummaries.filter(s => s.activePackage !== null), 
+          ...normalSummaries.filter(s => s.activePackage !== null),
           ...unlinkedSummaries
-        ] 
+        ]
       });
     }
 
@@ -311,7 +332,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 // Helper function to build detailed utilization response for a single beneficiary
 export async function buildDetailedUtilization(beneficiary: any) {
   const activeSub = beneficiary.subscriptions?.[0] || null;
-  
+
   let formattedBenefits: any[] = [];
   let recentLogs: any[] = [];
   let periodInfo: any = null;
@@ -653,6 +674,19 @@ router.post('/request-service', authenticate, async (req: AuthRequest, res: Resp
     const targetBeneficiaryId = activeSub?.beneficiaryId || cleanBenId;
     const targetSubscriberId = activeSub?.subscriberId || (userRole !== 'beneficiary' ? userId : null);
 
+    if (targetBeneficiaryId && !targetBeneficiaryId.startsWith('unlinked-')) {
+      const isAdmin = ['admin', 'master_admin', 'super_admin', 'field_manager'].includes(userRole);
+      if (!isAdmin) {
+        const access = await getProfileAccess(userId, targetBeneficiaryId, userRole);
+        if (!access.canBookVisits && !access.canEdit) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied: You do not have permission to request services for this beneficiary.'
+          });
+        }
+      }
+    }
+
     const request = await prisma.serviceRequest.create({
       data: {
         beneficiaryId: targetBeneficiaryId,
@@ -686,7 +720,7 @@ router.get('/ledger/:beneficiaryId', authenticate, async (req: AuthRequest, res:
 
     const isAdminOrStaff = ['admin', 'master_admin', 'super_admin', 'field_manager', 'operations_manager'].includes(userRole || '');
 
-    // Check authorization: beneficiary viewing self OR subscriber/user viewing owned beneficiary OR staff
+    // Check authorization: beneficiary viewing self OR subscriber/user viewing accessible beneficiary OR staff
     if (userRole === 'beneficiary') {
       const ben = await prisma.beneficiary.findFirst({
         where: { OR: [{ id: userId }, { userId: userId }] }
@@ -695,11 +729,8 @@ router.get('/ledger/:beneficiaryId', authenticate, async (req: AuthRequest, res:
         return res.status(403).json({ success: false, message: 'Unauthorized' });
       }
     } else if (!isAdminOrStaff) {
-      // Must own this beneficiary as subscriber
-      const ben = await prisma.beneficiary.findFirst({
-        where: { id: beneficiaryId, subscriberId: userId }
-      });
-      if (!ben) {
+      const access = await getProfileAccess(userId, beneficiaryId, userRole);
+      if (!access.canView) {
         return res.status(403).json({ success: false, message: 'Unauthorized' });
       }
     }

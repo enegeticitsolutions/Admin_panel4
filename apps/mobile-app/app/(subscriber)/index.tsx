@@ -643,7 +643,13 @@ export default function SubscriberDashboardScreen() {
                             const isSelected = b.id === selectedBeneficiaryId;
                             const isExpired = b.packageStatus === 'expired' || b.isExpired;
                             const isPending = b.verificationStatus === 'pending' || b.packageStatus === 'pending' || b.packageStatus === 'none' || b.isActive === false;
-                            const isSelf = (b.relationship || '').toLowerCase() === 'self' || b.isSelf;
+                            const isSelf = (b.relationship || '').toLowerCase() === 'self' || b.isSelf || b.accessRole === 'SELF';
+                            const isCareCircle = b.isCareCircleMember || b.accessRole === 'EDITOR' || b.accessRole === 'VIEWER';
+                            const relText = isSelf
+                                ? 'Self'
+                                : (isCareCircle
+                                    ? (b.relationship && b.relationship !== b.subscriberRelationship ? b.relationship : '')
+                                    : (b.relationship || ''));
 
                             return (
                                 <TouchableOpacity
@@ -697,7 +703,7 @@ export default function SubscriberDashboardScreen() {
                                                 </View>
                                             )}
                                         </View>
-                                        <Text style={styles.benMeta}>{getDisplayAge(b)}{b.relationship ? ` • ${b.relationship}` : ''}</Text>
+                                        <Text style={styles.benMeta}>{getDisplayAge(b)}{relText ? ` • ${relText}` : ''}</Text>
 
                                         {/* ── Status Badges ── */}
                                         {isPending ? (

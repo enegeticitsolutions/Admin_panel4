@@ -34,10 +34,6 @@ export default function PaymentSuccessScreen() {
     const today = new Date();
     const purchaseDate = today.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const activationDate = tomorrow.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-
     // Parse real package benefits passed from checkout screen
     const packageIncludes: string[] = React.useMemo(() => {
         const benefitsParam = params.benefits as string;
@@ -160,16 +156,6 @@ export default function PaymentSuccessScreen() {
                         <View>
                             <Text style={styles.detailLabel}>Purchase Date</Text>
                             <Text style={styles.detailValue}>{purchaseDate}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.detailRow}>
-                        <View style={styles.iconBoxGreen}>
-                            <Ionicons name="calendar" size={21} color="#FE6700" />
-                        </View>
-                        <View>
-                            <Text style={styles.detailLabel}>Service Activation</Text>
-                            <Text style={styles.detailValue}>{activationDate}</Text>
                         </View>
                     </View>
 

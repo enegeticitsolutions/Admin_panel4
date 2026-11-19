@@ -15,35 +15,43 @@ async function resolveUrl(key?: string | null): Promise<string | null> {
   }
 }
 
+function sortWithRanking(items: any[], dateField = 'publishedAt', dateAsc = false) {
+  return [...items].sort((a, b) => {
+    const rA = typeof a.ranking === 'number' && a.ranking >= 1 && a.ranking <= 5 ? a.ranking : null;
+    const rB = typeof b.ranking === 'number' && b.ranking >= 1 && b.ranking <= 5 ? b.ranking : null;
+    if (rA !== null && rB !== null) return rA - rB;
+    if (rA !== null) return -1;
+    if (rB !== null) return 1;
+    const dA = new Date(a[dateField] || 0).getTime();
+    const dB = new Date(b[dateField] || 0).getTime();
+    return dateAsc ? dA - dB : dB - dA;
+  });
+}
+
 // ─── GET /api/community/home ──────────────────────────────────────────────────
-router.get('/home', optionalAuthenticate, async (_req: Request, res: Response) => {
+router.get('/home', optionalAuthenticate, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.userId;
+
   try {
     const now = new Date();
-    const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const [eventsResult, blogs, podcasts, categories] = await Promise.all([
-      // Upcoming, ongoing, or recent published events
+    const [eventsResult, blogs, podcasts, categories, userRegs] = await Promise.all([
+      // Only upcoming or ongoing published events (exclude completed)
       (prisma as any).communityEvent.findMany({
         where: {
           status: 'published',
-          OR: [
-            { endDateTime: { gte: now } },
-            { startDateTime: { gte: past24h } },
-          ],
+          endDateTime: { gte: now },
         },
-        orderBy: { startDateTime: 'asc' },
-        take: 20,
         include: {
           category: { select: { id: true, name: true, slug: true, color: true } },
           host: { select: { id: true, name: true, designation: true, avatarKey: true } },
         },
       }),
 
-      // Top 5 featured / recent blogs
+      // Active blogs
       (prisma as any).blog.findMany({
         where: { status: 'published' },
-        orderBy: [{ isFeatured: 'desc' }, { publishedAt: 'desc' }],
-        take: 5,
         include: {
           category: { select: { id: true, name: true, slug: true } },
           author: { select: { id: true, name: true, designation: true, avatarKey: true } },
@@ -53,8 +61,8 @@ router.get('/home', optionalAuthenticate, async (_req: Request, res: Response) =
       // Active podcasts
       (prisma as any).podcast.findMany({
         where: { status: 'published' },
-        take: 5,
         include: {
+          category: { select: { id: true, name: true, slug: true } },
           host: { select: { id: true, name: true } },
           _count: { select: { episodes: true } },
         },
@@ -65,32 +73,41 @@ router.get('/home', optionalAuthenticate, async (_req: Request, res: Response) =
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
       }),
+
+      // User registrations if authenticated
+      userId
+        ? (prisma as any).eventRegistration.findMany({
+            where: { userId, status: { not: 'cancelled' } },
+            select: { eventId: true, id: true, status: true },
+          })
+        : [],
     ]);
 
-    let events = eventsResult;
-    // Fallback: If no upcoming or today's events, show latest published events
-    if (!events || events.length === 0) {
-      events = await (prisma as any).communityEvent.findMany({
-        where: { status: 'published' },
-        orderBy: { startDateTime: 'desc' },
-        take: 20,
-        include: {
-          category: { select: { id: true, name: true, slug: true, color: true } },
-          host: { select: { id: true, name: true, designation: true, avatarKey: true } },
-        },
-      });
-    }
+    const regMap = new Map(userRegs.map((r: any) => [r.eventId, r]));
+    const sortedEvents = sortWithRanking(eventsResult, 'startDateTime', true);
+    const sortedBlogs = sortWithRanking(blogs, 'publishedAt', false).slice(0, 5);
+    const sortedPodcasts = sortWithRanking(podcasts, 'createdAt', false).slice(0, 5);
 
     // Resolve media URLs
+    const nowMs = now.getTime();
     const resolvedEvents = await Promise.all(
-      events.map(async (e: any) => ({
-        ...e,
-        resolvedThumbnailUrl: await resolveUrl(e.thumbnailKey),
-      }))
+      sortedEvents.map(async (e: any) => {
+        const eventStart = new Date(e.startDateTime).getTime();
+        const eventEnd = new Date(e.endDateTime).getTime();
+        const timelineStatus = nowMs >= eventStart && nowMs <= eventEnd ? 'ongoing' : nowMs < eventStart ? 'upcoming' : 'past';
+
+        return {
+          ...e,
+          timelineStatus,
+          isRegistered: regMap.has(e.id),
+          userRegistration: regMap.get(e.id) || null,
+          resolvedThumbnailUrl: await resolveUrl(e.thumbnailKey),
+        };
+      })
     );
 
     const resolvedBlogs = await Promise.all(
-      blogs.map(async (b: any) => ({
+      sortedBlogs.map(async (b: any) => ({
         ...b,
         resolvedThumbnailUrl: await resolveUrl(b.thumbnailKey),
         author: b.author
@@ -100,7 +117,7 @@ router.get('/home', optionalAuthenticate, async (_req: Request, res: Response) =
     );
 
     const resolvedPodcasts = await Promise.all(
-      podcasts.map(async (p: any) => ({
+      sortedPodcasts.map(async (p: any) => ({
         ...p,
         resolvedCoverUrl: await resolveUrl(p.coverImageKey),
       }))
@@ -123,27 +140,64 @@ router.get('/home', optionalAuthenticate, async (_req: Request, res: Response) =
 
 // ─── GET /api/community/events ────────────────────────────────────────────────
 router.get('/events', optionalAuthenticate, async (req: Request, res: Response) => {
+  const authReq = req as AuthRequest;
+  const userId = authReq.userId;
+
   try {
-    const { categoryId, type, language } = req.query;
-    const where: any = { status: 'published' };
-    if (categoryId) where.categoryId = categoryId;
+    const { categoryId, type, language, timeline } = req.query;
+    const now = new Date();
+    const where: any = {
+      status: 'published',
+    };
+    if (timeline === 'past') {
+      where.endDateTime = { lt: now };
+    } else if (timeline === 'ongoing') {
+      where.startDateTime = { lte: now };
+      where.endDateTime = { gte: now };
+    } else if (timeline === 'all') {
+      // return all events
+    } else {
+      // default: active (upcoming & ongoing)
+      where.endDateTime = { gte: now };
+    }
+    if (categoryId && categoryId !== 'all') where.categoryId = categoryId;
     if (type) where.eventType = type;
     if (language) where.language = language;
 
-    const events = await (prisma as any).communityEvent.findMany({
-      where,
-      orderBy: { startDateTime: 'asc' },
-      include: {
-        category: true,
-        host: true,
-      },
-    });
+    const [events, userRegs] = await Promise.all([
+      (prisma as any).communityEvent.findMany({
+        where,
+        include: {
+          category: true,
+          host: true,
+        },
+      }),
+      userId
+        ? (prisma as any).eventRegistration.findMany({
+            where: { userId, status: { not: 'cancelled' } },
+            select: { eventId: true, id: true, status: true },
+          })
+        : [],
+    ]);
+
+    const regMap = new Map(userRegs.map((r: any) => [r.eventId, r]));
+    const sortedEvents = sortWithRanking(events, 'startDateTime', true);
 
     const data = await Promise.all(
-      events.map(async (e: any) => ({
-        ...e,
-        resolvedThumbnailUrl: await resolveUrl(e.thumbnailKey),
-      }))
+      sortedEvents.map(async (e: any) => {
+        const eventStart = new Date(e.startDateTime).getTime();
+        const eventEnd = new Date(e.endDateTime).getTime();
+        const nowMs = now.getTime();
+        const timelineStatus = nowMs >= eventStart && nowMs <= eventEnd ? 'ongoing' : nowMs < eventStart ? 'upcoming' : 'past';
+
+        return {
+          ...e,
+          timelineStatus,
+          isRegistered: regMap.has(e.id),
+          userRegistration: regMap.get(e.id) || null,
+          resolvedThumbnailUrl: await resolveUrl(e.thumbnailKey),
+        };
+      })
     );
 
     res.json({ success: true, data });
@@ -346,20 +400,21 @@ router.get('/blogs', optionalAuthenticate, async (req: Request, res: Response) =
   try {
     const { categoryId, language } = req.query;
     const where: any = { status: 'published' };
-    if (categoryId) where.categoryId = categoryId;
+    if (categoryId && categoryId !== 'all') where.categoryId = categoryId;
     if (language) where.language = language;
 
     const blogs = await (prisma as any).blog.findMany({
       where,
-      orderBy: { publishedAt: 'desc' },
       include: {
         category: true,
         author: true,
       },
     });
 
+    const sortedBlogs = sortWithRanking(blogs, 'publishedAt', false);
+
     const data = await Promise.all(
-      blogs.map(async (b: any) => ({
+      sortedBlogs.map(async (b: any) => ({
         ...b,
         resolvedThumbnailUrl: await resolveUrl(b.thumbnailKey),
         author: b.author ? { ...b.author, avatarUrl: await resolveUrl(b.author.avatarKey) } : null,
@@ -434,16 +489,23 @@ router.get('/blogs/:id', optionalAuthenticate, async (req: Request, res: Respons
 // ─── GET /api/community/podcasts ──────────────────────────────────────────────
 router.get('/podcasts', optionalAuthenticate, async (req: Request, res: Response) => {
   try {
+    const { categoryId } = req.query;
+    const where: any = { status: 'published' };
+    if (categoryId && categoryId !== 'all') where.categoryId = categoryId;
+
     const podcasts = await (prisma as any).podcast.findMany({
-      where: { status: 'published' },
+      where,
       include: {
+        category: true,
         host: true,
         _count: { select: { episodes: true } },
       },
     });
 
+    const sortedPodcasts = sortWithRanking(podcasts, 'createdAt', false);
+
     const data = await Promise.all(
-      podcasts.map(async (p: any) => ({
+      sortedPodcasts.map(async (p: any) => ({
         ...p,
         resolvedCoverUrl: await resolveUrl(p.coverImageKey),
       }))

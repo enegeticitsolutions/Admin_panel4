@@ -132,7 +132,7 @@ export default function MoreOptionsScreen() {
                     style={styles.profileCard}
                     onPress={() => {
                         if (isGuest) {
-                            requireAuth('Sign in or create a free account to manage your profile.');
+                            requireAuth('Sign in or create an account to manage your profile.');
                         } else {
                             router.push('/(beneficiary)/profile');
                         }
@@ -198,7 +198,7 @@ export default function MoreOptionsScreen() {
                 {isGuest ? (
                     <TouchableOpacity
                         style={styles.signInBtn}
-                        onPress={() => requireAuth('Sign in or create a free account to unlock all features.')}
+                        onPress={() => requireAuth('Sign in or create an account to unlock all features.')}
                         activeOpacity={0.8}
                     >
                         <View style={styles.signInIconWrap}>

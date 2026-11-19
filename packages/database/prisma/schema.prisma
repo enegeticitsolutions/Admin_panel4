@@ -2847,6 +2847,7 @@ model CommunityEvent {
   // Access Tier: "free" (All Users) | "subscribers_only" (Active Package Only)
   accessTier           String          @default("free")
 
+  ranking              Int?            // 1 to 5 for top showcase; null for standard
   startDateTime        DateTime
   endDateTime          DateTime
   registrationRequired Boolean         @default(true)
@@ -2885,23 +2886,27 @@ model CommunityEvent {
   @@index([categoryId])
   @@index([eventType])
   @@index([language])
+  @@index([ranking])
   @@map("community_events")
 }
 
 model EventRegistration {
-  id               String             @id @default(uuid())
-  eventId          String
-  userId           String             // User who booked (Subscriber or Beneficiary)
-  beneficiaryId    String?            // If booked specifically on behalf of an elder
-  status           RegistrationStatus @default(confirmed)
-  waitlistNumber   Int?
-  notes            String?
-  attendedAt       DateTime?
-  checkInMethod    String?            // "qr", "manual", "admin"
-  cancelledAt      DateTime?
-  cancellationNote String?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                  String             @id @default(uuid())
+  eventId             String
+  userId              String             // User who booked (Subscriber or Beneficiary)
+  beneficiaryId       String?            // If booked specifically on behalf of an elder
+  status              RegistrationStatus @default(confirmed)
+  waitlistNumber      Int?
+  notes               String?
+  attendedAt          DateTime?
+  checkInMethod       String?            // "qr", "manual", "admin"
+  reminder24hSentAt   DateTime?          // Timestamp when 24h reminder was sent
+  reminder1hSentAt    DateTime?          // Timestamp when 1h reminder was sent
+  reminderStartSentAt DateTime?          // Timestamp when event start notification was sent
+  cancelledAt         DateTime?
+  cancellationNote    String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
   event            CommunityEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -2911,6 +2916,9 @@ model EventRegistration {
   @@index([eventId, status])
   @@index([userId])
   @@index([beneficiaryId])
+  @@index([status, reminder24hSentAt])
+  @@index([status, reminder1hSentAt])
+  @@index([status, reminderStartSentAt])
   @@map("event_registrations")
 }
 
@@ -2927,6 +2935,7 @@ model Blog {
   readingTimeMinutes Int             @default(3)
   tags               String[]        @default([])
   isFeatured         Boolean         @default(false)
+  ranking            Int?            // 1 to 5 for top showcase; null for standard
 
   viewCount          Int             @default(0)
   likeCount          Int             @default(0)
@@ -2950,6 +2959,7 @@ model Blog {
   @@index([status, publishedAt])
   @@index([categoryId])
   @@index([isFeatured])
+  @@index([ranking])
   @@index([language])
   @@map("community_blogs")
 }
@@ -2965,6 +2975,7 @@ model Podcast {
   coverImageKey      String?         // S3 raw storage key
   totalEpisodes      Int             @default(0)
   isFeatured         Boolean         @default(false)
+  ranking            Int?            // 1 to 5 for top showcase; null for standard
 
   status             ContentStatus   @default(draft)
   createdById        String
@@ -2978,6 +2989,7 @@ model Podcast {
 
   @@index([status])
   @@index([categoryId])
+  @@index([ranking])
   @@map("community_podcasts")
 }
 

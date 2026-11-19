@@ -114,11 +114,24 @@ async function handleBeneficiaryDashboard(req: AuthRequest, res: Response, isSel
             include: { package: true }
         });
 
+        // Get pending/prepaid subscription if no active subscription
+        let pendingSub: any = null;
+        if (!activeSub) {
+            pendingSub = await prisma.subscription.findFirst({
+                where: { beneficiaryId: beneficiary.id, isActive: false },
+                orderBy: { createdAt: 'desc' },
+                include: { package: true }
+            });
+        }
+
         res.json({
             success: true,
             data: {
                 beneficiaryId: beneficiary.id,
                 beneficiaryName: beneficiary.name,
+                verificationStatus: beneficiary.verificationStatus || 'verified',
+                isActive: beneficiary.isActive !== false,
+                isPendingVerification: beneficiary.verificationStatus === 'pending' || !beneficiary.isActive,
                 greeting,
                 firstName: beneficiary.name.split(' ')[0], // Assuming first part of name
                 emotionalScore: beneficiary.emotionalScore === 8.0 ? 85 : beneficiary.emotionalScore,
@@ -129,6 +142,12 @@ async function handleBeneficiaryDashboard(req: AuthRequest, res: Response, isSel
                     hoursTotal: activeSub.hoursTotal,
                     hoursUsed: activeSub.hoursUsed,
                     remainingHours: Math.max(0, activeSub.hoursTotal - activeSub.hoursUsed)
+                } : null,
+                pendingSubscription: pendingSub ? {
+                    id: pendingSub.id,
+                    packageName: pendingSub.package?.name || pendingSub.packageType,
+                    packageType: pendingSub.packageType,
+                    status: 'pending',
                 } : null,
                 careCoordinator: (beneficiary.primaryCC && (beneficiary.primaryCC as any).user?.isActive !== false) ? {
                     id: beneficiary.primaryCC.id,

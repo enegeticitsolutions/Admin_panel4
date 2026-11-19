@@ -160,8 +160,6 @@ export default function Index() {
   // Role-based redirection to the correct home dashboard
   if (role === 'care_companion') {
     return <Redirect href="/(care-companion)" />;
-  } else if (role === 'prospect') {
-    return <Redirect href="/(setup)/subscription-packages" />;
   } else {
     // Unified customer home dashboard (for both self-care and family care managers)
     return <Redirect href="/(beneficiary)" />;

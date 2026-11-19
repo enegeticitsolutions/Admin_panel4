@@ -135,10 +135,10 @@ export default function VitalsScreen() {
 
                         <TouchableOpacity
                             style={styles.guestCtaBtn}
-                            onPress={() => requireAuth('Create a free account to track your daily vitals.')}
+                            onPress={() => requireAuth('Create an account to track your daily vitals.')}
                             activeOpacity={0.85}
                         >
-                            <Text style={styles.guestCtaBtnText}>Create Free Account to Log Vitals</Text>
+                            <Text style={styles.guestCtaBtnText}>Create Account to Log Vitals</Text>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>

@@ -3,12 +3,17 @@ import { authenticate } from '../shared/deps';
 import { ApiResponse } from '../../utils/ApiResponse';
 import { asyncHandler } from '../../utils/asyncHandler';
 import * as beneficiarySathiService from '../../services/beneficiary/beneficiary_sathi_service';
+import { getProfileAccess } from '../../services/access/profile_access_service';
 
 import prisma from '../../core/database';
 
 const router = Router();
 
-async function resolveBeneficiaryId(idParam: string, authReq: any): Promise<string> {
+async function resolveBeneficiaryId(
+  idParam: string,
+  authReq: any,
+  requiredPermission: 'canView' | 'canBookVisits' | 'canEdit' = 'canView'
+): Promise<string> {
   const beneficiary = await prisma.beneficiary.findFirst({
     where: {
       OR: [
@@ -25,7 +30,10 @@ async function resolveBeneficiaryId(idParam: string, authReq: any): Promise<stri
   const isAdmin = ['admin', 'super_admin', 'field_manager'].includes(authReq.userRole);
   
   if (!isOwner && !isAdmin) {
-    throw new Error('Unauthorized to access this beneficiary\'s Saathi data');
+    const access = await getProfileAccess(authReq.userId, beneficiary.id, authReq.userRole);
+    if (!access[requiredPermission]) {
+      throw new Error(`Unauthorized: You do not have permission to access or perform actions on this beneficiary's Saathi service.`);
+    }
   }
 
   return beneficiary.id;
@@ -84,7 +92,7 @@ router.put(
     if (!['CONNECTED', 'REJECTED'].includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status. Must be CONNECTED or REJECTED.' });
     }
-    const resolvedId = await resolveBeneficiaryId(req.params.beneficiaryId, req);
+    const resolvedId = await resolveBeneficiaryId(req.params.beneficiaryId, req, 'canBookVisits');
     const result = await beneficiarySathiService.updateAssignmentStatus(resolvedId, req.params.volunteerId, status);
     res.json(new ApiResponse(200, result));
   })
@@ -96,7 +104,7 @@ router.post(
   authenticate,
   asyncHandler(async (req: any, res: Response) => {
     const { dateTime, reason, targetVolunteerId } = req.body;
-    const resolvedId = await resolveBeneficiaryId(req.params.beneficiaryId, req);
+    const resolvedId = await resolveBeneficiaryId(req.params.beneficiaryId, req, 'canBookVisits');
     const request = await beneficiarySathiService.createSathiVisitRequest(
       resolvedId,
       dateTime,
@@ -116,7 +124,7 @@ router.post(
     if (!action || !['ACCEPT', 'REJECT'].includes(action)) {
       return res.status(400).json({ success: false, message: 'Invalid action.' });
     }
-    const resolvedId = await resolveBeneficiaryId(req.params.beneficiaryId, req);
+    const resolvedId = await resolveBeneficiaryId(req.params.beneficiaryId, req, 'canBookVisits');
     const request = await beneficiarySathiService.respondToSathiReschedule(
       resolvedId,
       req.params.requestId,

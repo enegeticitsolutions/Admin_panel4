@@ -8,6 +8,7 @@ export interface BeneficiaryItem {
     id: string;
     name: string;
     relationship?: string;
+    subscriberRelationship?: string;
     photo?: string | null;
     dateOfBirth?: string | null;
     age?: number | null;
@@ -102,10 +103,16 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
 
                     {/* ── Beneficiary Cards ── */}
                     {beneficiaries.map((b) => {
-                        const isSelf = (b.relationship || '').toLowerCase() === 'self' || b.isSelf;
+                        const isSelf = (b.relationship || '').toLowerCase() === 'self' || b.isSelf || b.accessRole === 'SELF';
+                        const isCareCircle = b.isCareCircleMember || b.accessRole === 'EDITOR' || b.accessRole === 'VIEWER';
                         const isPending = b.packageStatus === 'pending' || b.verificationStatus === 'pending';
                         const isExpired = b.packageStatus === 'expired';
                         const isActive = b.packageStatus === 'active';
+                        const relText = isSelf
+                            ? 'Self'
+                            : (isCareCircle
+                                ? (b.relationship && b.relationship !== b.subscriberRelationship ? b.relationship : '')
+                                : (b.relationship || ''));
 
                         return (
                             <TouchableOpacity
@@ -147,7 +154,7 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
                                         )}
                                     </View>
                                     <Text style={styles.familyMeta}>
-                                        {getDisplayAge(b)}{b.relationship ? ` • ${b.relationship}` : ''}
+                                        {getDisplayAge(b)}{relText ? ` • ${relText}` : ''}
                                     </Text>
 
                                     {/* Status & Care Circle Badges */}

@@ -2542,6 +2542,11 @@ export const communityApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  updatePodcast: (id: string, data: any) =>
+    apiJson<any>(`/community/podcasts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
   createEpisode: (podcastId: string, data: any) =>
     apiJson<any>(`/community/podcasts/${podcastId}/episodes`, {
       method: 'POST',

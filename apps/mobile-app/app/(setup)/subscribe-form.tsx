@@ -104,7 +104,17 @@ export default function SubscribeFormScreen() {
                 }
 
                 // 1. Check for existing session
-                const stored = await AsyncStorage.getItem('userData');
+                const [stored, isGuestStored] = await Promise.all([
+                    AsyncStorage.getItem('userData'),
+                    AsyncStorage.getItem('isGuestSession')
+                ]);
+
+                if (!stored || isGuestStored === 'true') {
+                    // Not a logged-in user: redirect to Create Account
+                    router.replace('/(auth)/register');
+                    return;
+                }
+
                 if (stored) {
                     const user = JSON.parse(stored);
                     

@@ -3,6 +3,7 @@ import { config } from './core/config';
 import prisma from './core/database';
 import { startMedicationWorker } from './workers/medicationWorker';
 import { startCelebrationWorker } from './workers/celebrationWorker';
+import { startEventReminderWorker } from './workers/eventReminderWorker';
 
 const start = async () => {
   try {
@@ -18,6 +19,7 @@ const start = async () => {
     if (isPrimaryWorkerInstance) {
       startMedicationWorker();
       startCelebrationWorker();
+      startEventReminderWorker();
     } else {
       console.log(`ℹ️  [Workers] Background workers skipped on worker replica (instance ${process.env.NODE_APP_INSTANCE})`);
     }

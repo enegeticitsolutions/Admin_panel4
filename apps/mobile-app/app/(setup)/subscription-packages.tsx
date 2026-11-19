@@ -197,15 +197,22 @@ export default function SubscriptionPackagesScreen() {
 
     const handleSelectPackage = async (packageType: string) => {
         // Check if user is logged in
-        const token = await AsyncStorage.getItem('userToken');
-        if (!token) {
+        const [token, isGuestStored] = await Promise.all([
+            AsyncStorage.getItem('userToken'),
+            AsyncStorage.getItem('isGuestSession')
+        ]);
+        if (!token || isGuestStored === 'true') {
             Alert.alert(
-                "Login Required",
-                "Please login first to select a package.",
+                "Account Required",
+                "Please create an account or sign in to select a care package.",
                 [
                     {
-                        text: "Login",
-                        onPress: () => router.push({ pathname: '/(auth)', params: { message: 'Please login first to select a package.' } })
+                        text: "Create Account",
+                        onPress: () => router.push('/(auth)/register')
+                    },
+                    {
+                        text: "Sign In",
+                        onPress: () => router.push('/(auth)')
                     },
                     {
                         text: "Cancel",

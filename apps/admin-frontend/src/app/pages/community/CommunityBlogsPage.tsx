@@ -51,6 +51,7 @@ export default function CommunityBlogsPage() {
   const [readingTimeMinutes, setReadingTimeMinutes] = useState('3');
   const [thumbnailKey, setThumbnailKey] = useState('');
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState('');
+  const [ranking, setRanking] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -128,6 +129,7 @@ export default function CommunityBlogsPage() {
         authorId: authorId || null,
         readingTimeMinutes: parseInt(readingTimeMinutes || '3', 10),
         thumbnailKey: thumbnailKey || null,
+        ranking: ranking ? parseInt(ranking, 10) : null,
         status: 'published',
       });
       toast.success('Article published successfully!');
@@ -141,6 +143,43 @@ export default function CommunityBlogsPage() {
     }
   };
 
+  const rankMap = React.useMemo(() => {
+    const map = new Map<number, any>();
+    blogs.forEach((b) => {
+      if (typeof b.ranking === 'number' && b.ranking >= 1 && b.ranking <= 5) {
+        map.set(b.ranking, b);
+      }
+    });
+    return map;
+  }, [blogs]);
+
+  const handleUpdateRanking = async (blogId: string, newRank: number | null) => {
+    const displaced = newRank ? blogs.find((b) => b.id !== blogId && b.ranking === newRank) : null;
+
+    setBlogs((prev) =>
+      prev.map((b) => {
+        if (b.id === blogId) return { ...b, ranking: newRank };
+        if (newRank !== null && b.ranking === newRank) return { ...b, ranking: null };
+        return b;
+      })
+    );
+
+    try {
+      await communityApi.updateBlog(blogId, { ranking: newRank });
+      if (displaced) {
+        toast.success(`Top ${newRank} assigned (reassigned from "${displaced.title.trim()}")`);
+      } else if (newRank) {
+        toast.success(`Rank updated to Top ${newRank}`);
+      } else {
+        toast.success('Ranking removed');
+      }
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update ranking');
+      loadData();
+    }
+  };
+
   const resetForm = () => {
     setTitle('');
     setShortDescription('');
@@ -148,6 +187,7 @@ export default function CommunityBlogsPage() {
     setThumbnailKey('');
     setThumbnailPreviewUrl('');
     setReadingTimeMinutes('3');
+    setRanking('');
   };
 
   return (
@@ -175,6 +215,7 @@ export default function CommunityBlogsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Article</TableHead>
+                  <TableHead>Rank</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Author</TableHead>
                   <TableHead>Stats</TableHead>
@@ -185,7 +226,7 @@ export default function CommunityBlogsPage() {
               <TableBody>
                 {blogs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-32 text-center text-slate-500">
+                    <TableCell colSpan={7} className="h-32 text-center text-slate-500">
                       No articles published yet. Click "New Article" to create your first guide.
                     </TableCell>
                   </TableRow>
@@ -210,6 +251,30 @@ export default function CommunityBlogsPage() {
                             <div className="line-clamp-1 text-xs text-slate-500">{b.shortDescription}</div>
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <select
+                          value={b.ranking || ''}
+                          onChange={(e) => handleUpdateRanking(b.id, e.target.value ? parseInt(e.target.value, 10) : null)}
+                          className="text-xs border border-slate-200 rounded px-2 py-1 bg-white font-medium text-slate-700 hover:border-orange-400 cursor-pointer focus:outline-none"
+                        >
+                          <option value="">None</option>
+                          {[1, 2, 3, 4, 5].map((r) => {
+                            const occupant = rankMap.get(r);
+                            const isCurrent = b.ranking === r;
+                            const medal = r === 1 ? '🏆' : r === 2 ? '🥈' : r === 3 ? '🥉' : '';
+                            let label = `Top ${r} ${medal}`.trim();
+                            if (occupant && !isCurrent) {
+                              const occTitle = occupant.title.trim();
+                              label += ` (Takes from: ${occTitle.length > 14 ? occTitle.slice(0, 14) + '...' : occTitle})`;
+                            }
+                            return (
+                              <option key={r} value={r}>
+                                {label}
+                              </option>
+                            );
+                          })}
+                        </select>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">{b.category?.name || 'General'}</Badge>
@@ -306,7 +371,7 @@ export default function CommunityBlogsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-700">Category</label>
                 <select
@@ -335,7 +400,32 @@ export default function CommunityBlogsPage() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700">Reading Time (Mins)</label>
+                <label className="text-xs font-semibold text-slate-700">Showcase Rank</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                  value={ranking}
+                  onChange={(e) => setRanking(e.target.value)}
+                >
+                  <option value="">None (Standard)</option>
+                  {[1, 2, 3, 4, 5].map((r) => {
+                    const occupant = rankMap.get(r);
+                    const medal = r === 1 ? '🏆' : r === 2 ? '🥈' : r === 3 ? '🥉' : '';
+                    let label = `Top ${r} ${medal}`.trim();
+                    if (occupant) {
+                      const occTitle = occupant.title.trim();
+                      label += ` (Takes from: ${occTitle.length > 18 ? occTitle.slice(0, 18) + '...' : occTitle})`;
+                    }
+                    return (
+                      <option key={r} value={r}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700">Read Time (Mins)</label>
                 <Input
                   type="number"
                   value={readingTimeMinutes}

@@ -12,7 +12,8 @@ async function resolveBeneficiaryId(idParam: string): Promise<string> {
     where: {
       OR: [
         { id: idParam },
-        { userId: idParam }
+        { userId: idParam },
+        { subscriberId: idParam }
       ]
     }
   });
@@ -27,8 +28,13 @@ router.get(
   '/:beneficiaryId/emergency/eligibility',
   authenticate,
   asyncHandler(async (req: any, res: Response) => {
-    const resolvedId = await resolveBeneficiaryId(req.params.beneficiaryId);
-    const eligibility = await emergencyService.getBeneficiaryEmergencyEligibility(resolvedId);
+    let targetId = req.params.beneficiaryId;
+    try {
+      targetId = await resolveBeneficiaryId(req.params.beneficiaryId);
+    } catch {
+      // Beneficiary record might not exist yet (e.g. prospect or subscriber with no beneficiary record)
+    }
+    const eligibility = await emergencyService.getBeneficiaryEmergencyEligibility(targetId);
     res.json(new ApiResponse(200, eligibility));
   })
 );

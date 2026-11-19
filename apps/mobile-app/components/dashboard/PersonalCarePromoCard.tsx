@@ -4,11 +4,13 @@ import { Feather } from '@expo/vector-icons';
 
 interface PersonalCarePromoCardProps {
     isCompact?: boolean;
+    isGuest?: boolean;
     onExplorePress: () => void;
 }
 
 export const PersonalCarePromoCard: React.FC<PersonalCarePromoCardProps> = ({
     isCompact = false,
+    isGuest = false,
     onExplorePress,
 }) => {
     if (isCompact) {
@@ -19,9 +21,13 @@ export const PersonalCarePromoCard: React.FC<PersonalCarePromoCardProps> = ({
                         <Feather name="shield" size={20} color="#FE6700" />
                     </View>
                     <View style={styles.compactTextWrap}>
-                        <Text style={styles.compactTitle}>Care for yourself too</Text>
+                        <Text style={styles.compactTitle}>
+                            {isGuest ? 'Dedicated Elder Care Plans' : 'Care for yourself too'}
+                        </Text>
                         <Text style={styles.compactSub}>
-                            You manage care and payments for your family. Protect your own wellness with dedicated companion visits & health checks.
+                            {isGuest
+                                ? 'Protect health and wellness with dedicated Saathi companion visits, vitals checks, and 24/7 care support.'
+                                : 'You manage care and payments for your family. Protect your own wellness with dedicated companion visits & health checks.'}
                         </Text>
                     </View>
                 </View>
@@ -30,7 +36,9 @@ export const PersonalCarePromoCard: React.FC<PersonalCarePromoCardProps> = ({
                     onPress={onExplorePress}
                     activeOpacity={0.85}
                 >
-                    <Text style={styles.compactBtnText}>Explore Plans for Myself</Text>
+                    <Text style={styles.compactBtnText}>
+                        {isGuest ? 'Explore Care Plans' : 'Explore Plans for Myself'}
+                    </Text>
                     <Feather name="arrow-right" size={15} color="#FFFFFF" />
                 </TouchableOpacity>
             </View>
@@ -44,19 +52,27 @@ export const PersonalCarePromoCard: React.FC<PersonalCarePromoCardProps> = ({
                     <Feather name="shield" size={24} color="#FE6700" />
                 </View>
                 <View style={styles.fullHeaderTextWrap}>
-                    <Text style={styles.fullTitle}>Personal Care Plan</Text>
-                    <Text style={styles.fullSubtitle}>No active plan for yourself yet</Text>
+                    <Text style={styles.fullTitle}>
+                        {isGuest ? 'Dedicated Care Plans' : 'Personal Care Plan'}
+                    </Text>
+                    <Text style={styles.fullSubtitle}>
+                        {isGuest ? 'Verified companions & health monitoring' : 'No active plan for yourself yet'}
+                    </Text>
                 </View>
             </View>
             <Text style={styles.fullDesc}>
-                You are managing care and payments for your family. Protect your own wellness with dedicated companion visits, regular vitals checkups, and 24/7 care support.
+                {isGuest
+                    ? 'Protect your loved ones or your own wellness with dedicated Saathi companion visits, regular vitals checkups, and 24/7 emergency care support.'
+                    : 'You are managing care and payments for your family. Protect your own wellness with dedicated companion visits, regular vitals checkups, and 24/7 care support.'}
             </Text>
             <TouchableOpacity
                 style={styles.fullBtn}
                 onPress={onExplorePress}
                 activeOpacity={0.85}
             >
-                <Text style={styles.fullBtnText}>Explore Plans for Myself</Text>
+                <Text style={styles.fullBtnText}>
+                    {isGuest ? 'Explore Care Plans' : 'Explore Plans for Myself'}
+                </Text>
                 <Feather name="arrow-right" size={16} color="#FFFFFF" />
             </TouchableOpacity>
         </View>

@@ -59,9 +59,9 @@ export function GuestAuthModal({ visible, reason, onClose }: GuestAuthModalProps
                         </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.title}>Create Your Free Account</Text>
+                    <Text style={styles.title}>Create Your Account</Text>
                     <Text style={styles.subtitle}>
-                        {reason || 'Sign in or create a free account to access vital health tracking, book care services, and unlock personalized support.'}
+                        {reason || 'Sign in or create an account to access vital health tracking, book care services, and unlock personalized support.'}
                     </Text>
 
                     {/* Value Points */}
@@ -90,7 +90,7 @@ export function GuestAuthModal({ visible, reason, onClose }: GuestAuthModalProps
                         onPress={handleCreateAccount}
                         activeOpacity={0.85}
                     >
-                        <Text style={styles.primaryBtnText}>Create Free Account</Text>
+                        <Text style={styles.primaryBtnText}>Create Account</Text>
                         <Feather name="arrow-right" size={16} color="#FFFFFF" />
                     </TouchableOpacity>
 
