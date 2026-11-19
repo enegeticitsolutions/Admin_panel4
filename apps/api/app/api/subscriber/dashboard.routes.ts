@@ -277,8 +277,23 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
       const canEditDetails = accessRole === 'SELF' || accessRole === 'MANAGER' || accessRole === 'EDITOR' || Boolean(membership?.canEditDetails);
       const canManageAccess = accessRole === 'SELF' || accessRole === 'MANAGER' || Boolean(membership?.canManageAccess);
 
+      const isSelf = b.userId === userId || accessRole === 'SELF';
+      const isOwnerSubscriber = b.subscriberId === userId;
+      let displayRelationship: string | null = null;
+      if (isSelf) {
+        displayRelationship = 'Self';
+      } else if (isOwnerSubscriber) {
+        displayRelationship = b.relationship || null;
+      } else {
+        // For Care Circle members with shared access, use their own membership relationship, NOT the subscriber's
+        displayRelationship = membership?.relationship || null;
+      }
+
       return {
         ...b,
+        isSelf,
+        relationship: displayRelationship,
+        subscriberRelationship: b.relationship,
         photo: resolvedPhoto,
         accessRole,
         isCareCircleMember: isCareCircle,

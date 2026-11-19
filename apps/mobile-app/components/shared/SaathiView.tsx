@@ -44,6 +44,7 @@ interface SaathiViewProps {
   accentColor?: string;
   showBackButton?: boolean;
   onBackPress?: () => void;
+  onChangeBeneficiary?: () => void;
 }
 
 export function SaathiView({
@@ -53,6 +54,7 @@ export function SaathiView({
   accentColor = '#FF6A00',
   showBackButton = true,
   onBackPress,
+  onChangeBeneficiary,
 }: SaathiViewProps) {
   const router = useRouter();
   const MAX_CONTENT_WIDTH = 440;
@@ -501,12 +503,19 @@ export function SaathiView({
         {showBackButton && (
           <View style={[styles.header, responsiveStyle]}>
             <TouchableOpacity onPress={() => onBackPress ? onBackPress() : safeBack()} style={styles.backBtn}>
-              <Feather name="arrow-left" size={24} color="#000" />
+              <Feather name="arrow-left" size={22} color="#FFFFFF" />
             </TouchableOpacity>
             <Text style={styles.headerTitle} numberOfLines={1}>
               {beneficiaryName ? `Saathi • ${beneficiaryName}` : 'Saathi Network'}
             </Text>
-            <View style={{ width: 24 }} />
+            {onChangeBeneficiary ? (
+              <TouchableOpacity onPress={onChangeBeneficiary} style={styles.switchHeaderBtn}>
+                <Feather name="users" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.switchHeaderText}>Switch</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 36 }} />
+            )}
           </View>
         )}
 
@@ -522,12 +531,21 @@ export function SaathiView({
             {beneficiaryName ? `${beneficiaryName}'s current care package` : 'Your current care package'} does not include active Saathi Companion hours. Explore our care packages or top up hours to request a verified companion.
           </Text>
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
-            <TouchableOpacity
-              style={[styles.closeBtn, { backgroundColor: '#FF6A00', paddingHorizontal: 16 }]}
-              onPress={() => router.push('/(setup)/subscription-packages')}
-            >
-              <Text style={[styles.closeBtnText, { color: '#FFFFFF' }]}>Browse Care Plans</Text>
-            </TouchableOpacity>
+            {onChangeBeneficiary ? (
+              <TouchableOpacity
+                style={[styles.closeBtn, { backgroundColor: '#FF6A00', paddingHorizontal: 16 }]}
+                onPress={onChangeBeneficiary}
+              >
+                <Text style={[styles.closeBtnText, { color: '#FFFFFF' }]}>Select Family Member</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.closeBtn, { backgroundColor: '#FF6A00', paddingHorizontal: 16 }]}
+                onPress={() => router.push('/(setup)/subscription-packages')}
+              >
+                <Text style={[styles.closeBtnText, { color: '#FFFFFF' }]}>Browse Care Plans</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={[styles.closeBtn, { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' }]} onPress={() => onBackPress ? onBackPress() : safeBack()}>
               <Text style={[styles.closeBtnText, { color: '#374151' }]}>Go Back</Text>
             </TouchableOpacity>
@@ -711,7 +729,14 @@ export function SaathiView({
         <Text style={styles.headerTitle} numberOfLines={1}>
           {beneficiaryName ? `Saathi • ${beneficiaryName}` : 'Saathi Network'}
         </Text>
-        <View style={{ width: 36 }} />
+        {onChangeBeneficiary ? (
+          <TouchableOpacity onPress={onChangeBeneficiary} style={styles.switchHeaderBtn}>
+            <Feather name="users" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.switchHeaderText}>Switch</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
       </View>
 
       <ScrollView 
@@ -719,6 +744,25 @@ export function SaathiView({
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accentColor} />}
       >
+        {onChangeBeneficiary && beneficiaryName && (
+          <TouchableOpacity 
+            style={styles.activeBeneficiaryBanner}
+            onPress={onChangeBeneficiary}
+            activeOpacity={0.8}
+          >
+            <View style={styles.activeBeneficiaryLeft}>
+              <Feather name="user-check" size={16} color="#FF6A00" style={{ marginRight: 8 }} />
+              <Text style={styles.activeBeneficiaryLabel}>
+                Companion for: <Text style={styles.activeBeneficiaryName}>{beneficiaryName}</Text>
+              </Text>
+            </View>
+            <View style={styles.activeBeneficiaryRight}>
+              <Text style={styles.changeBeneficiaryLink}>Change</Text>
+              <Feather name="chevron-right" size={14} color="#FF6A00" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Network Banner */}
         <View style={styles.networkBanner}>
           <View style={styles.heartIconWrapper}>
@@ -1346,6 +1390,61 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  switchHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  switchHeaderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  activeBeneficiaryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  activeBeneficiaryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  activeBeneficiaryLabel: {
+    fontSize: 13,
+    color: '#4B5563',
+    fontWeight: '500',
+  },
+  activeBeneficiaryName: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '700',
+  },
+  activeBeneficiaryRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  changeBeneficiaryLink: {
+    fontSize: 13,
+    color: '#FF6A00',
+    fontWeight: '700',
   },
   content: {
     flex: 1,

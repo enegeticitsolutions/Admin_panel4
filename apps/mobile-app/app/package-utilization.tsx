@@ -650,6 +650,18 @@ export default function PackageUtilizationScreen() {
           <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Package Utilization</Text>
+        {detailData && userRole !== 'beneficiary' && (
+          <TouchableOpacity 
+            style={styles.switchHeaderBtn} 
+            onPress={() => {
+              setDetailData(null);
+              router.replace('/package-utilization');
+            }}
+          >
+            <Ionicons name="people-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.switchHeaderText}>All Plans</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -683,6 +695,28 @@ export default function PackageUtilizationScreen() {
             />
           }
         >
+          {detailData && userRole !== 'beneficiary' && (
+            <TouchableOpacity 
+              style={styles.activeMemberBanner}
+              onPress={() => {
+                setDetailData(null);
+                router.replace('/package-utilization');
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.activeMemberLeft}>
+                <Ionicons name="person-circle-outline" size={22} color="#FF5B0A" style={{ marginRight: 8 }} />
+                <Text style={styles.activeMemberLabel}>
+                  Viewing: <Text style={styles.activeMemberName}>{detailData.beneficiaryName || 'Unassigned Care Plan'}</Text>
+                </Text>
+              </View>
+              <View style={styles.activeMemberRight}>
+                <Text style={styles.switchMemberLink}>Change Member</Text>
+                <Ionicons name="chevron-forward" size={14} color="#FF5B0A" />
+              </View>
+            </TouchableOpacity>
+          )}
+
           {userRole !== 'beneficiary' && ((beneficiaryId && String(beneficiaryId).startsWith('unlinked-')) || (!beneficiaryId && detailData)) && (
             <TouchableOpacity 
               style={styles.addBeneficiaryCta}
@@ -1037,6 +1071,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
+  switchHeaderBtn: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  switchHeaderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  activeMemberBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  activeMemberLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  activeMemberLabel: {
+    fontSize: 13,
+    color: '#4B5563',
+    fontWeight: '500',
+  },
+  activeMemberName: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '700',
+  },
+  activeMemberRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  switchMemberLink: {
+    fontSize: 13,
+    color: '#FF5B0A',
+    fontWeight: '700',
+  },
   
   scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 140 },

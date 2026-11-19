@@ -1014,6 +1014,20 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
       });
     }
 
+    // Verify caller is either the subscriber who owns the beneficiary, or the beneficiary themselves
+    const targetBen = await prisma.beneficiary.findUnique({
+      where: { id: beneficiaryId },
+      select: { id: true, userId: true, subscriberId: true }
+    });
+    if (!targetBen) {
+      return res.status(404).json({ success: false, message: 'Beneficiary profile not found' });
+    }
+    const isOwnerSubscriber = targetBen.subscriberId === userId;
+    const isSelfBeneficiary = targetBen.userId === userId;
+    if (!isOwnerSubscriber && !isSelfBeneficiary && authReq.userRole !== 'admin' && authReq.userRole !== 'master_admin') {
+      return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to activate this beneficiary profile.' });
+    }
+
     const result = await subscriptionService.activateSubscription(
       userId as string,
       beneficiaryId,
@@ -1022,13 +1036,13 @@ router.post('/activate', authenticate, async (req: Request, res: Response) => {
       emergencyContacts
     );
 
-    // Generate new token containing the updated subscriber role
-    const { createToken } = require('../../core/security');
-    const newToken = createToken({ sub: userId as string, role: 'subscriber' });
     const updatedUser = await prisma.user.findUnique({
       where: { id: userId as string },
       select: { id: true, phone: true, name: true, age: true, role: true }
     });
+    const effectiveRole = updatedUser?.role || authReq.userRole || 'subscriber';
+    const { createToken } = require('../../core/security');
+    const newToken = createToken({ sub: userId as string, role: effectiveRole });
 
     res.json({
       success: true,

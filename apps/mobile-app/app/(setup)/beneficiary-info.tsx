@@ -57,6 +57,11 @@ export default function BeneficiaryInfoScreen() {
     const isVerificationFlow = params.isVerificationFlow === 'true';
     const beneficiaryId = params.beneficiaryId as string;
 
+    const isActivatingForSelf = isVerificationFlow && Boolean(
+        (userData?.id && pendingData?.userId === userData.id) ||
+        userData?.role === 'beneficiary'
+    );
+
     // Track original phone so we don't falsely block it during verification
     const [originalPhone, setOriginalPhone] = useState<string>('');
     const [isSameAsSubscriber, setIsSameAsSubscriber] = useState(false);
@@ -529,14 +534,19 @@ export default function BeneficiaryInfoScreen() {
         }
 
         const rel = (beneficiaryForm.relationship || '').trim();
-        if (!rel || rel.toLowerCase() === 'please select') {
-            setRelationshipError("Relationship to subscriber is required");
-            hasError = true;
-            if (!firstErrorField) firstErrorField = 'relationship';
-        } else if (rel.toLowerCase() === 'other') {
-            setCustomRelationshipError("Please specify relationship");
-            hasError = true;
-            if (!firstErrorField) firstErrorField = 'relationship';
+        if (!isActivatingForSelf) {
+            if (!rel || rel.toLowerCase() === 'please select') {
+                setRelationshipError("Relationship to subscriber is required");
+                hasError = true;
+                if (!firstErrorField) firstErrorField = 'relationship';
+            } else if (rel.toLowerCase() === 'other') {
+                setCustomRelationshipError("Please specify relationship");
+                hasError = true;
+                if (!firstErrorField) firstErrorField = 'relationship';
+            } else {
+                setRelationshipError(null);
+                setCustomRelationshipError(null);
+            }
         } else {
             setRelationshipError(null);
             setCustomRelationshipError(null);
@@ -627,6 +637,7 @@ export default function BeneficiaryInfoScreen() {
         const packageIdToPass = params.packageId || (pendingData?.subscriptions?.[0]?.packageType || '');
         const beneficiaryPayload = {
             ...beneficiaryForm,
+            relationship: isActivatingForSelf ? (pendingData?.relationship || 'Self') : (beneficiaryForm.relationship || 'Self'),
             address: finalAddress,
             photoUri: pickedPhotoUri
         };
@@ -866,15 +877,24 @@ export default function BeneficiaryInfoScreen() {
                         {/* Relationship Dropdown */}
                         <View style={styles.inputGroup} onLayout={(e) => { fieldPositions.current['relationship'] = e.nativeEvent.layout.y; }}>
                             <Text style={styles.label}>Relationship to Subscriber *</Text>
-                            <TouchableOpacity
-                                style={[styles.inputWithIcon, relationshipError ? { borderColor: '#EF4444' } : null]}
-                                onPress={() => setShowRelationshipModal(true)}
-                            >
-                                <Text style={[styles.flexInput, (!beneficiaryForm.relationship || beneficiaryForm.relationship === 'Please Select') && { color: '#9CA3AF' }]}>
-                                    {beneficiaryForm.relationship || 'Please Select'}
-                                </Text>
-                                <Ionicons name="chevron-down" size={20} color={relationshipError ? '#EF4444' : '#9CA3AF'} />
-                            </TouchableOpacity>
+                            {isActivatingForSelf ? (
+                                <View style={[styles.inputWithIcon, { backgroundColor: '#F9FAFB' }]}>
+                                    <Text style={[styles.flexInput, { color: '#374151', fontFamily: 'Poppins_500Medium' }]}>
+                                        Self {pendingData?.relationship ? `(Added by subscriber as: ${pendingData.relationship})` : ''}
+                                    </Text>
+                                    <Ionicons name="lock-closed-outline" size={16} color="#9CA3AF" />
+                                </View>
+                            ) : (
+                                <TouchableOpacity
+                                    style={[styles.inputWithIcon, relationshipError ? { borderColor: '#EF4444' } : null]}
+                                    onPress={() => setShowRelationshipModal(true)}
+                                >
+                                    <Text style={[styles.flexInput, (!beneficiaryForm.relationship || beneficiaryForm.relationship === 'Please Select') && { color: '#9CA3AF' }]}>
+                                        {beneficiaryForm.relationship || 'Please Select'}
+                                    </Text>
+                                    <Ionicons name="chevron-down" size={20} color={relationshipError ? '#EF4444' : '#9CA3AF'} />
+                                </TouchableOpacity>
+                            )}
                             {relationshipError && (
                                 <Text style={styles.errorText}>
                                     {relationshipError}

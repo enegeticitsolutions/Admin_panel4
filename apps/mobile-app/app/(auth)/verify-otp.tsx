@@ -127,7 +127,7 @@ export default function VerifyOtpScreen() {
                     }
                 } else if (result.user) {
                     // PERSIST SESSION via AuthContext
-                    await login(result.token, result.user);
+                    await login(result.token, result.user, result.availableRoles, result.selfBeneficiaryId);
                     resetStack();
 
                     const role = result.user.role;

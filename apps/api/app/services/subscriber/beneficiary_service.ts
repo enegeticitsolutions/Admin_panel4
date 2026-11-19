@@ -339,13 +339,57 @@ export const getSubscriberBeneficiaries = async (userId: string) => {
 };
 
 export const getSathiEligibleBeneficiaries = async (subscriberId: string) => {
-  const beneficiaries = await prisma.beneficiary.findMany({ where: { subscriberId } });
+  // Fetch beneficiaries directly sponsored by subscriber, shared via active Care Circle, or self
+  const careCircleMemberships = await prisma.careCircleMember.findMany({
+    where: {
+      userId: subscriberId,
+      status: 'active',
+      beneficiary: { status: { not: 'deleted' }, isActive: true }
+    },
+    select: { beneficiaryId: true, relationship: true }
+  });
+  const membershipMap = new Map(careCircleMemberships.map(m => [m.beneficiaryId, m.relationship]));
+  const accessibleBenIds = Array.from(new Set(careCircleMemberships.map(m => m.beneficiaryId)));
+
+  const beneficiaries = await prisma.beneficiary.findMany({
+    where: {
+      isActive: true,
+      status: { not: 'deleted' },
+      OR: [
+        { subscriberId },
+        { id: { in: accessibleBenIds } },
+        { userId: subscriberId }
+      ]
+    },
+    include: {
+      subscriptions: {
+        where: { isActive: true },
+        take: 1,
+        orderBy: { createdAt: 'desc' },
+        include: { package: true }
+      }
+    }
+  });
   
   const eligibleBeneficiaries = [];
   for (const b of beneficiaries) {
     const eligibility = await getBeneficiarySathiEligibility(b.id);
     if (eligibility.eligible) {
-      eligibleBeneficiaries.push(b);
+      const isSelf = b.userId === subscriberId;
+      const isSponsor = b.subscriberId === subscriberId;
+      const careCircleRel = membershipMap.get(b.id);
+      const contextualRelationship = isSelf
+        ? 'Self'
+        : isSponsor
+        ? b.relationship || 'Family'
+        : careCircleRel || 'Family';
+
+      eligibleBeneficiaries.push({
+        ...b,
+        relationship: contextualRelationship,
+        activePackageName: b.subscriptions?.[0]?.package?.name || undefined,
+        remainingUnits: eligibility.remainingUnits,
+      });
     }
   }
   

@@ -50,6 +50,15 @@ const headerPattern = require('@/assets/images/header-pattern.png');
 interface DashboardData {
     beneficiaryId?: string;
     beneficiaryName?: string;
+    verificationStatus?: string;
+    isActive?: boolean;
+    isPendingVerification?: boolean;
+    pendingSubscription?: {
+        id: string;
+        packageName?: string;
+        packageType?: string;
+        status?: string;
+    } | null;
     greeting: string;
     firstName: string;
     emotionalScore: number;
@@ -365,7 +374,12 @@ export default function BeneficiaryDashboard() {
         );
     }
 
-    const hasPersonalCarePlan = Boolean(personalData);
+    const isBeneficiaryPending = Boolean(
+        personalData?.isPendingVerification ||
+        personalData?.verificationStatus === 'pending' ||
+        (personalData && personalData.isActive === false)
+    );
+    const hasPersonalCarePlan = Boolean(personalData) && !isBeneficiaryPending;
 
     const currentHour = new Date().getHours();
     let defaultGreeting = 'Good Evening';
@@ -470,20 +484,7 @@ export default function BeneficiaryDashboard() {
             return;
         }
 
-        if (eligibleList.length === 1) {
-            // Exactly 1 eligible profile -> directly open
-            const target = eligibleList[0];
-            router.push({
-                pathname: '/(beneficiary)/sathi-request',
-                params: {
-                    beneficiaryId: target.id,
-                    beneficiaryName: target.name,
-                },
-            });
-            return;
-        }
-
-        // Multiple eligible profiles -> open Beneficiary Selector Modal
+        // Open Beneficiary Selector Modal so user can select whose Saathi service they want to access
         setShowSaathiPickerModal(true);
     };
 
@@ -634,6 +635,39 @@ export default function BeneficiaryDashboard() {
                     onChanged={refetchAllData}
                 />
 
+                {/* ── Pending Care Profile Verification Banner (Self-Activation) ── */}
+                {isBeneficiaryPending && (
+                    <View style={styles.pendingActivationCard}>
+                        <View style={styles.pendingActivationHeader}>
+                            <View style={styles.pendingBadge}>
+                                <Feather name="clock" size={13} color="#D97706" />
+                                <Text style={styles.pendingBadgeText}>PENDING ACTIVATION</Text>
+                            </View>
+                            <Text style={styles.pendingPackageName}>
+                                {personalData?.pendingSubscription?.packageName || personalData?.subscription?.packageName || 'Prepaid Care Plan'}
+                            </Text>
+                        </View>
+                        <Text style={styles.pendingActivationTitle}>Activate Your Care Plan</Text>
+                        <Text style={styles.pendingActivationDesc}>
+                            Your profile has been pre-enrolled for care support. Review and confirm your details, medical info, and emergency contacts to activate your plan.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.pendingActivateBtn}
+                            onPress={() => {
+                                const benId = personalData?.beneficiaryId || user?.id;
+                                router.push({
+                                    pathname: '/(setup)/beneficiary-info',
+                                    params: { isVerificationFlow: 'true', beneficiaryId: benId }
+                                });
+                            }}
+                            activeOpacity={0.85}
+                        >
+                            <Feather name="check-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                            <Text style={styles.pendingActivateBtnText}>Review & Activate Profile</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 {/* ── Personal Care Plan (If Active) ── */}
                 {hasPersonalCarePlan && personalData && (
                     <PersonalCareOverview
@@ -660,7 +694,7 @@ export default function BeneficiaryDashboard() {
                 )}
 
                 {/* ── Brand-New User with No Plan AND No Family Members Added ── */}
-                {!hasPersonalCarePlan && familyBeneficiaries.length === 0 && (
+                {!hasPersonalCarePlan && !isBeneficiaryPending && familyBeneficiaries.length === 0 && (
                     <PersonalCarePromoCard
                         isCompact={false}
                         isGuest={isGuest}
@@ -1218,5 +1252,70 @@ const styles = StyleSheet.create({
         color: '#B91C1C',
         flex: 1,
         lineHeight: 16,
+    },
+    pendingActivationCard: {
+        backgroundColor: '#FFFBEB',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        padding: 16,
+        marginBottom: 16,
+        shadowColor: '#D97706',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    pendingActivationHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+    },
+    pendingBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: '#FEF3C7',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+    },
+    pendingBadgeText: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 10,
+        color: '#D97706',
+        letterSpacing: 0.5,
+    },
+    pendingPackageName: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 12,
+        color: '#92400E',
+    },
+    pendingActivationTitle: {
+        fontFamily: 'Poppins-Bold',
+        fontSize: 16,
+        color: '#1F2937',
+        marginBottom: 4,
+    },
+    pendingActivationDesc: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 13,
+        color: '#4B5563',
+        lineHeight: 18,
+        marginBottom: 14,
+    },
+    pendingActivateBtn: {
+        backgroundColor: '#FE6700',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 12,
+        borderRadius: 10,
+    },
+    pendingActivateBtnText: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 14,
+        color: '#FFFFFF',
     },
 });
