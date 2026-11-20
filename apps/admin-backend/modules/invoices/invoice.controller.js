@@ -14,13 +14,23 @@ async function listInvoices(req, res) {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
 
-    const { status, search, invoiceType, subscriberId, beneficiaryId } = req.query;
+    const { status, search, invoiceType, subscriberId, beneficiaryId, startDate, endDate } = req.query;
 
     const where = {};
     if (status) where.status = status;
     if (invoiceType) where.invoiceType = invoiceType;
     if (subscriberId) where.subscriberId = subscriberId;     // Admin: filter by subscriber
     if (beneficiaryId) where.beneficiaryId = beneficiaryId; // Admin: filter by beneficiary
+
+    if (startDate || endDate) {
+      where.issuedAt = {};
+      if (startDate) where.issuedAt.gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        if (endDate.length <= 10) end.setUTCHours(23, 59, 59, 999);
+        where.issuedAt.lte = end;
+      }
+    }
 
     if (search && search.trim()) {
       const q = search.trim();
@@ -703,8 +713,276 @@ async function updateInvoiceCounter(req, res) {
   }
 }
 
+/**
+ * GET /api/invoices/summary
+ * Computes financial summary aggregates (Gross Invoiced, Tax Breakdown, Discounts, Credit Notes, Net Realized)
+ * for a specified date range and optional filters.
+ */
+async function getInvoiceSummary(req, res) {
+  try {
+    const { status, invoiceType, subscriberId, beneficiaryId, startDate, endDate } = req.query;
+
+    const where = {};
+    if (status) where.status = status;
+    if (invoiceType) where.invoiceType = invoiceType;
+    if (subscriberId) where.subscriberId = subscriberId;
+    if (beneficiaryId) where.beneficiaryId = beneficiaryId;
+
+    if (startDate || endDate) {
+      where.issuedAt = {};
+      if (startDate) where.issuedAt.gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        if (endDate.length <= 10) end.setUTCHours(23, 59, 59, 999);
+        where.issuedAt.lte = end;
+      }
+    }
+
+    const [invoiceAgg, statusCounts, creditNoteAgg] = await Promise.all([
+      prisma.invoice.aggregate({
+        where,
+        _sum: {
+          baseAmount: true,
+          taxAmount: true,
+          cgstAmount: true,
+          sgstAmount: true,
+          igstAmount: true,
+          discountAmount: true,
+          saathiDiscountAmount: true,
+          totalAmount: true,
+        },
+        _count: {
+          id: true,
+        },
+      }),
+      prisma.invoice.groupBy({
+        by: ['status'],
+        where,
+        _count: {
+          id: true,
+        },
+      }),
+      prisma.creditNote.aggregate({
+        where: {
+          status: 'ISSUED',
+          ...(startDate || endDate
+            ? {
+                issuedAt: {
+                  ...(startDate ? { gte: new Date(startDate) } : {}),
+                  ...(endDate
+                    ? {
+                        lte: (() => {
+                          const e = new Date(endDate);
+                          if (endDate.length <= 10) e.setUTCHours(23, 59, 59, 999);
+                          return e;
+                        })(),
+                      }
+                    : {}),
+                },
+              }
+            : {}),
+        },
+        _sum: {
+          baseAmount: true,
+          taxAmount: true,
+          cgstAmount: true,
+          sgstAmount: true,
+          igstAmount: true,
+          totalAmount: true,
+        },
+        _count: {
+          id: true,
+        },
+      }),
+    ]);
+
+    const grossInvoiced = invoiceAgg._sum.totalAmount || 0;
+    const totalTax = invoiceAgg._sum.taxAmount || 0;
+    const cgst = invoiceAgg._sum.cgstAmount || 0;
+    const sgst = invoiceAgg._sum.sgstAmount || 0;
+    const igst = invoiceAgg._sum.igstAmount || 0;
+    const baseTaxable = invoiceAgg._sum.baseAmount || 0;
+    const regularDiscounts = invoiceAgg._sum.discountAmount || 0;
+    const saathiDiscounts = invoiceAgg._sum.saathiDiscountAmount || 0;
+    const totalDiscounts = regularDiscounts + saathiDiscounts;
+
+    const totalRefunded = creditNoteAgg._sum.totalAmount || 0;
+    const refundedTax = creditNoteAgg._sum.taxAmount || 0;
+    const refundedBase = creditNoteAgg._sum.baseAmount || 0;
+    const netRevenue = Math.max(0, grossInvoiced - totalRefunded);
+
+    const countsByStatus = {};
+    for (const sc of statusCounts) {
+      countsByStatus[sc.status] = sc._count.id;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        totalInvoices: invoiceAgg._count.id || 0,
+        totalCreditNotes: creditNoteAgg._count.id || 0,
+        grossInvoiced: Number(grossInvoiced.toFixed(2)),
+        netRevenue: Number(netRevenue.toFixed(2)),
+        baseTaxable: Number(baseTaxable.toFixed(2)),
+        totalTax: Number(totalTax.toFixed(2)),
+        cgst: Number(cgst.toFixed(2)),
+        sgst: Number(sgst.toFixed(2)),
+        igst: Number(igst.toFixed(2)),
+        totalDiscounts: Number(totalDiscounts.toFixed(2)),
+        totalRefunded: Number(totalRefunded.toFixed(2)),
+        refundedTax: Number(refundedTax.toFixed(2)),
+        refundedBase: Number(refundedBase.toFixed(2)),
+        countsByStatus,
+      },
+    });
+  } catch (err) {
+    console.error('[InvoiceController] getInvoiceSummary error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+/**
+ * GET /api/invoices/export
+ * Exports invoices as a CSV file matching GSTR-1 and corporate audit requirements.
+ */
+async function exportInvoicesCsv(req, res) {
+  try {
+    const { status, search, invoiceType, subscriberId, beneficiaryId, startDate, endDate } = req.query;
+
+    const where = {};
+    if (status) where.status = status;
+    if (invoiceType) where.invoiceType = invoiceType;
+    if (subscriberId) where.subscriberId = subscriberId;
+    if (beneficiaryId) where.beneficiaryId = beneficiaryId;
+
+    if (startDate || endDate) {
+      where.issuedAt = {};
+      if (startDate) where.issuedAt.gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        if (endDate.length <= 10) end.setUTCHours(23, 59, 59, 999);
+        where.issuedAt.lte = end;
+      }
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { invoiceNumber: { contains: q, mode: 'insensitive' } },
+        { subscriber: { name: { contains: q, mode: 'insensitive' } } },
+        { subscriber: { phone: { contains: q, mode: 'insensitive' } } },
+        { beneficiary: { name: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const invoices = await prisma.invoice.findMany({
+      where,
+      include: {
+        subscriber: { select: { id: true, name: true, phone: true, email: true } },
+        beneficiary: { select: { id: true, name: true } },
+        subscription: {
+          select: {
+            id: true,
+            package: { select: { name: true, type: true } },
+          },
+        },
+        items: true,
+        payments: {
+          select: { id: true, paymentMethod: true, paymentStatus: true, transactionId: true, paidAt: true },
+        },
+        creditNotes: {
+          where: { status: 'ISSUED' },
+          select: { creditNoteNumber: true, totalAmount: true },
+        },
+      },
+      orderBy: { issuedAt: 'desc' },
+      take: 5000,
+    });
+
+    const headers = [
+      'Invoice Number',
+      'Invoice Date',
+      'Status',
+      'Invoice Type',
+      'Subscriber Name',
+      'Subscriber Phone',
+      'Subscriber Email',
+      'Beneficiary (Elder)',
+      'Package / Service',
+      'Place of Supply (State)',
+      'Taxable Value (INR)',
+      'Discount (INR)',
+      'CGST (INR)',
+      'SGST (INR)',
+      'IGST (INR)',
+      'Total GST (INR)',
+      'Total Invoice Amount (INR)',
+      'Total Refunded (INR)',
+      'Net Amount (INR)',
+      'Payment Status',
+      'Payment Method',
+      'Transaction Ref ID',
+      'Credit Notes Issued',
+    ];
+
+    const escapeCsv = (val) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = invoices.map((inv) => {
+      const issuedDateStr = inv.issuedAt ? new Date(inv.issuedAt).toISOString().split('T')[0] : '';
+      const totalRefunded = (inv.creditNotes || []).reduce((sum, cn) => sum + (Number(cn.totalAmount) || 0), 0);
+      const net = Math.max(0, (inv.totalAmount || 0) - totalRefunded);
+      const payment = inv.payments?.[0] || {};
+      const cnList = (inv.creditNotes || []).map((cn) => `${cn.creditNoteNumber} (INR ${cn.totalAmount})`).join('; ');
+
+      return [
+        escapeCsv(inv.invoiceNumber),
+        escapeCsv(issuedDateStr),
+        escapeCsv(inv.status),
+        escapeCsv(inv.invoiceType),
+        escapeCsv(inv.subscriber?.name || 'N/A'),
+        escapeCsv(inv.subscriber?.phone || 'N/A'),
+        escapeCsv(inv.subscriber?.email || ''),
+        escapeCsv(inv.beneficiary?.name || 'N/A'),
+        escapeCsv(inv.subscription?.package?.name || inv.invoiceType),
+        escapeCsv(inv.placeOfSupply || 'Haryana'),
+        inv.baseAmount.toFixed(2),
+        (inv.discountAmount + (inv.saathiDiscountAmount || 0)).toFixed(2),
+        inv.cgstAmount.toFixed(2),
+        inv.sgstAmount.toFixed(2),
+        inv.igstAmount.toFixed(2),
+        inv.taxAmount.toFixed(2),
+        inv.totalAmount.toFixed(2),
+        totalRefunded.toFixed(2),
+        net.toFixed(2),
+        escapeCsv(payment.paymentStatus || inv.status),
+        escapeCsv(payment.paymentMethod || 'ONLINE'),
+        escapeCsv(payment.transactionId || ''),
+        escapeCsv(cnList || 'None'),
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const startStr = startDate ? startDate.split('T')[0] : 'all';
+    const endStr = endDate ? endDate.split('T')[0] : 'latest';
+    const filename = `MHN-Invoices-${startStr}-to-${endStr}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(csvContent);
+  } catch (err) {
+    console.error('[InvoiceController] exportInvoicesCsv error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
 module.exports = {
   listInvoices,
+  getInvoiceSummary,
+  exportInvoicesCsv,
   getInvoiceById,
   getInvoiceHtml,
   getInvoicePdfUrl,

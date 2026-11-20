@@ -69,13 +69,15 @@ async function issueCreditNote(req, res) {
  */
 async function listCreditNotes(req, res) {
   try {
-    const { page, limit, search, invoiceId, subscriberId } = req.query;
+    const { page, limit, search, invoiceId, subscriberId, startDate, endDate } = req.query;
     const result = await creditNoteService.listCreditNotes({
       page,
       limit,
       search,
       invoiceId,
       subscriberId,
+      startDate,
+      endDate,
     });
 
     res.json({

@@ -36,6 +36,7 @@ import {
   Mic,
   LayoutDashboard,
   BarChart3,
+  Receipt,
 } from 'lucide-react';
 import { cn } from '../ui/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
@@ -212,6 +213,17 @@ const navigationSections: NavSection[] = [
         label: 'Callback Requests',
         icon: PhoneCall,
         roles: ['master_admin', 'admin', 'operations_manager', 'customer_service_manager', 'customer_service'],
+      },
+    ]
+  },
+  {
+    title: 'FINANCE & BILLING',
+    items: [
+      {
+        path: '/invoices',
+        label: 'Invoices & Reports',
+        icon: Receipt,
+        roles: ['master_admin', 'admin', 'operations_manager'],
       },
     ]
   },

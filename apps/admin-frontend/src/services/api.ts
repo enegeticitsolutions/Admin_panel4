@@ -2102,8 +2102,32 @@ export const fileAccessApi = {
   }
 };
 
+export interface InvoiceSummary {
+  totalInvoices: number;
+  totalCreditNotes: number;
+  grossInvoiced: number;
+  netRevenue: number;
+  baseTaxable: number;
+  totalTax: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  totalDiscounts: number;
+  totalRefunded: number;
+  refundedTax: number;
+  refundedBase: number;
+  countsByStatus: Record<string, number>;
+}
+
 export const invoicesApi = {
-  getInvoices: async (params?: { page?: number; limit?: number; search?: string; status?: string }): Promise<{
+  getInvoices: async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
     data: any[];
     pagination: { page: number; limit: number; total: number; totalPages: number };
   }> => {
@@ -2112,6 +2136,8 @@ export const invoicesApi = {
     if (params?.limit) query.append('limit', String(params.limit));
     if (params?.search) query.append('search', params.search);
     if (params?.status) query.append('status', params.status);
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
     const qStr = query.toString();
     const res = await apiFetch(`${API_BASE}/invoices${qStr ? `?${qStr}` : ''}`);
     const data = await res.json();
@@ -2119,6 +2145,50 @@ export const invoicesApi = {
       throw new Error(data.message || 'Failed to fetch invoices');
     }
     return data;
+  },
+
+  getInvoiceSummary: async (params?: {
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+  }): Promise<InvoiceSummary> => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
+    if (params?.status) query.append('status', params.status);
+    const qStr = query.toString();
+    const res = await apiFetch(`${API_BASE}/invoices/summary${qStr ? `?${qStr}` : ''}`);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to fetch invoice summary');
+    }
+    return data.data;
+  },
+
+  getExportCsvUrl: (params?: {
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+    search?: string;
+  }): string => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
+    if (params?.status) query.append('status', params.status);
+    if (params?.search) query.append('search', params.search);
+
+    let token = '';
+    const savedAuth = localStorage.getItem('maihonna_user');
+    if (savedAuth) {
+      try {
+        const authData = JSON.parse(savedAuth);
+        token = authData.accessToken || authData.token || '';
+      } catch (e) {}
+    }
+    if (token) query.append('token', token);
+
+    const qStr = query.toString();
+    return `${API_BASE}/invoices/export${qStr ? `?${qStr}` : ''}`;
   },
 
   getInvoiceById: async (id: string): Promise<any> => {
@@ -2177,6 +2247,19 @@ export const invoicesApi = {
       throw new Error(data.message || 'Failed to load invoice PDF');
     }
     return data.data;
+  },
+
+  getInvoicePdfDownloadUrl: (id: string): string => {
+    let token = '';
+    const savedAuth = localStorage.getItem('maihonna_user');
+    if (savedAuth) {
+      try {
+        const authData = JSON.parse(savedAuth);
+        token = authData.accessToken || authData.token || '';
+      } catch (e) {}
+    }
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE}/invoices/${encodeURIComponent(id)}/pdf${query}`;
   },
 
   createInvoice: async (payload: FormData | Record<string, any>): Promise<any> => {
@@ -2301,7 +2384,15 @@ export const creditNotesApi = {
     return data.data;
   },
 
-  getCreditNotes: async (params?: { page?: number; limit?: number; search?: string; invoiceId?: string; subscriberId?: string }): Promise<{
+  getCreditNotes: async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    invoiceId?: string;
+    subscriberId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
     data: any[];
     pagination: { page: number; limit: number; total: number; totalPages: number };
   }> => {
@@ -2311,6 +2402,8 @@ export const creditNotesApi = {
     if (params?.search) query.append('search', params.search);
     if (params?.invoiceId) query.append('invoiceId', params.invoiceId);
     if (params?.subscriberId) query.append('subscriberId', params.subscriberId);
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
     const qStr = query.toString();
     const res = await apiFetch(`${API_BASE}/credit-notes${qStr ? `?${qStr}` : ''}`);
     const data = await res.json();
