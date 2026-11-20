@@ -288,6 +288,15 @@ export default function HealthInformationScreen() {
                     <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
                 </TouchableOpacity>
 
+                <TouchableOpacity
+                    style={styles.summaryLinkBtn}
+                    onPress={() => router.push('/(beneficiary)/health-summary')}
+                    activeOpacity={0.8}
+                >
+                    <Feather name="file-text" size={18} color="#FE6700" style={{ marginRight: 8 }} />
+                    <Text style={styles.summaryLinkBtnText}>View & Share Full Health Summary</Text>
+                </TouchableOpacity>
+
                 <View style={{ height: Platform.OS === 'ios' ? 112 : 96 }} />
             </ScrollView>
 
@@ -544,6 +553,22 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: 16,
         lineHeight: 24,
+        fontFamily: 'Poppins-Medium',
+    },
+    summaryLinkBtn: {
+        height: 50,
+        backgroundColor: '#FFF0E6',
+        borderRadius: 14,
+        borderWidth: 1.5,
+        borderColor: '#FE6700',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 12,
+    },
+    summaryLinkBtnText: {
+        color: '#FE6700',
+        fontSize: 15,
         fontFamily: 'Poppins-Medium',
     },
     backdrop: {

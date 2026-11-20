@@ -1,21 +1,7 @@
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { numberToWords } from '../../utils/numberToWords';
-
-const getPrintModule = async () => {
-  try {
-    return await import('expo-print');
-  } catch {
-    return null;
-  }
-};
-
-const getSharingModule = async () => {
-  try {
-    return await import('expo-sharing');
-  } catch {
-    return null;
-  }
-};
 
 export interface InvoiceItem {
   description: string;
@@ -430,67 +416,12 @@ export const generateInvoicePDF = async (data: InvoiceData) => {
       }
     }
 
-    const Print = await getPrintModule();
-    const Sharing = await getSharingModule();
-    let FileSystem: any = null;
-    try {
-      FileSystem = await import('expo-file-system/legacy');
-    } catch (_) {}
-
-    if (!Print) {
-      Alert.alert('Notice', 'Invoice printing is not available on this platform/configuration.');
-      return;
-    }
-
     const { uri } = await Print.printToFileAsync({
       html,
       base64: false,
     });
 
-    const sanitizedInvoiceNumber = (data.invoiceNumber || 'INV').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `Invoice-${sanitizedInvoiceNumber}.pdf`;
-
-    if (Platform.OS === 'android' && FileSystem?.StorageAccessFramework) {
-      try {
-        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (permissions.granted) {
-          const destinationUri = await FileSystem.StorageAccessFramework.createFileAsync(
-            permissions.directoryUri,
-            fileName,
-            'application/pdf'
-          );
-          const base64Content = await FileSystem.readAsStringAsync(uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          await FileSystem.writeAsStringAsync(destinationUri, base64Content, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          Alert.alert('Download Complete', 'Invoice saved successfully to your selected folder.');
-          return;
-        }
-      } catch (safErr) {
-        console.warn('StorageAccessFramework save failed or cancelled, falling back to share sheet:', safErr);
-      }
-    }
-
-    if (Platform.OS === 'ios' && FileSystem?.documentDirectory) {
-      try {
-        const targetPath = `${FileSystem.documentDirectory}${fileName}`;
-        await FileSystem.copyAsync({ from: uri, to: targetPath });
-        if (Sharing) {
-          await Sharing.shareAsync(targetPath, {
-            mimeType: 'application/pdf',
-            dialogTitle: 'Save Invoice to Files',
-            UTI: 'com.adobe.pdf'
-          });
-          return;
-        }
-      } catch (iosErr) {
-        console.warn('iOS document copy failed, using original uri:', iosErr);
-      }
-    }
-
-    if (Sharing) {
+    if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(uri, {
         mimeType: 'application/pdf',
         dialogTitle: 'Download Invoice',
@@ -520,30 +451,6 @@ export const downloadS3InvoicePDF = async (pdfUrl: string, fileName?: string) =>
       }
     }
 
-    let FileSystem: any = null;
-    try {
-      FileSystem = await import('expo-file-system/legacy');
-    } catch (_) {}
-    const Sharing = await getSharingModule();
-
-    const name = fileName || `Invoice-${Date.now()}.pdf`;
-
-    if (FileSystem?.documentDirectory) {
-      const localUri = `${FileSystem.documentDirectory}${name}`;
-      const downloadResult = await FileSystem.downloadAsync(pdfUrl, localUri);
-
-      if (Sharing && downloadResult?.uri) {
-        await Sharing.shareAsync(downloadResult.uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: 'Save Invoice to Files',
-          UTI: 'com.adobe.pdf',
-        });
-        return;
-      }
-    }
-
-    // Fallback: Native browser/linking
-    const Linking = (await import('react-native')).Linking;
     await Linking.openURL(pdfUrl);
   } catch (err: any) {
     console.error('[downloadS3InvoicePDF] Error downloading PDF:', err);

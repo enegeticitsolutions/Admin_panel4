@@ -572,6 +572,361 @@ router.patch('/:id/complete', async (req, res) => {
   }
 });
 
+/**
+ * Auto-complete stale in_progress visits exceeding max shift limit (> 12 hours or prior to today).
+ * Caps actual duration to scheduled/reasonable duration and settles benefit reservations.
+ */
+async function autoCompleteStaleVisits() {
+  try {
+    const maxShiftMs = 12 * 60 * 60 * 1000; // 12 hours
+    const cutoff = new Date(Date.now() - maxShiftMs);
+
+    const staleVisits = await prisma.visit.findMany({
+      where: {
+        status: 'in_progress',
+        checkInTime: { lt: cutoff },
+      },
+      include: {
+        beneficiary: { select: { id: true, name: true, userId: true } },
+      },
+    });
+
+    for (const visit of staleVisits) {
+      try {
+        const checkIn = new Date(visit.checkInTime || visit.scheduledTime || Date.now());
+        const cappedDuration = Math.min(visit.durationMinutes || 60, 180);
+        const checkOut = new Date(checkIn.getTime() + cappedDuration * 60000);
+
+        await prisma.$transaction(async (tx) => {
+          await tx.visit.update({
+            where: { id: visit.id },
+            data: {
+              status: 'completed',
+              checkOutTime: checkOut,
+              durationMinutes: cappedDuration,
+              notes: (visit.notes ? visit.notes + ' • ' : '') + 'Auto-closed by system: visit duration exceeded 12h max limit.',
+            },
+          });
+
+          // Settle or release any HELD benefit reservation
+          const reservation = await tx.benefitReservation.findFirst({
+            where: { visitId: visit.id, status: 'HELD' },
+          });
+
+          if (reservation) {
+            await tx.benefitReservation.update({
+              where: { id: reservation.id },
+              data: { status: 'CONSUMED' },
+            });
+
+            const balance = await tx.subscriptionBenefitBalance.findUnique({
+              where: { id: reservation.balanceId },
+            });
+
+            if (balance) {
+              const reservedAfter = Math.max(0, balance.reservedUnits - reservation.units);
+              const usedAfter = balance.usedUnits + reservation.units;
+              const newAvailable = Math.max(0, balance.totalUnits - usedAfter - reservedAfter);
+
+              await tx.subscriptionBenefitBalance.update({
+                where: { id: balance.id },
+                data: {
+                  usedUnits: usedAfter,
+                  reservedUnits: reservedAfter,
+                  availableUnits: newAvailable,
+                },
+              });
+            }
+          }
+        });
+        console.log(`[autoCompleteStaleVisits] Stale visit ${visit.visitCode || visit.id} auto-completed.`);
+      } catch (innerErr) {
+        console.error(`[autoCompleteStaleVisits] Error closing visit ${visit.id}:`, innerErr.message);
+      }
+    }
+
+    return staleVisits.length;
+  } catch (err) {
+    console.error('[autoCompleteStaleVisits] Global error:', err.message);
+    return 0;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/visits/close-stuck — Force-complete stale ongoing visits (single or all)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/close-stuck', requirePermission('visits.list'), async (req, res) => {
+  try {
+    const { visitId } = req.body || {};
+    let closedCount = 0;
+
+    if (visitId) {
+      const visit = await prisma.visit.findUnique({ where: { id: visitId } });
+      if (!visit) {
+        return res.status(404).json({ success: false, message: 'Visit not found' });
+      }
+      const checkIn = new Date(visit.checkInTime || visit.scheduledTime || Date.now());
+      const cappedDuration = Math.min(visit.durationMinutes || 60, 180);
+      const checkOut = new Date(checkIn.getTime() + cappedDuration * 60000);
+
+      await prisma.visit.update({
+        where: { id: visitId },
+        data: {
+          status: 'completed',
+          checkOutTime: checkOut,
+          durationMinutes: cappedDuration,
+          notes: (visit.notes ? visit.notes + ' • ' : '') + 'Force closed by Operations Manager / Admin.',
+        },
+      });
+      closedCount = 1;
+    } else {
+      closedCount = await autoCompleteStaleVisits();
+
+      // Also close any visit started > 8 hours ago
+      const cutoff = new Date(Date.now() - 8 * 60 * 60 * 1000);
+      const remainingStuck = await prisma.visit.findMany({
+        where: {
+          status: 'in_progress',
+          checkInTime: { lt: cutoff },
+        },
+      });
+
+      for (const v of remainingStuck) {
+        const checkIn = new Date(v.checkInTime || Date.now());
+        const cappedDuration = Math.min(v.durationMinutes || 60, 120);
+        await prisma.visit.update({
+          where: { id: v.id },
+          data: {
+            status: 'completed',
+            checkOutTime: new Date(checkIn.getTime() + cappedDuration * 60000),
+            durationMinutes: cappedDuration,
+            notes: (v.notes ? v.notes + ' • ' : '') + 'Closed by Operations Manager / Admin.',
+          },
+        });
+        closedCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully closed ${closedCount} stuck visit(s).`,
+      closedCount,
+    });
+  } catch (err) {
+    console.error('POST /visits/close-stuck error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/visits/ongoing — real-time ongoing Care Companion visits for FM/OM/Admins
+// NOTE: Registered before /:id to avoid param route conflict.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/ongoing', requirePermission('visits.list'), async (req, res) => {
+  try {
+    // 1. Automatically auto-complete stale/stuck visits (>12h) before returning active visits
+    await autoCompleteStaleVisits();
+
+    const scopeFilter = await getVisitFilter(req.user);
+    const visits = await prisma.visit.findMany({
+      where: {
+        status: 'in_progress',
+        ...scopeFilter,
+      },
+      include: {
+        careCompanion: {
+          select: {
+            id: true,
+            name: true,
+            photo: true,
+            zone: true,
+            ccType: true,
+            teamId: true,
+            team: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            user: {
+              select: {
+                id: true,
+                phone: true,
+                profilePhoto: true,
+              },
+            },
+          },
+        },
+        beneficiary: {
+          select: {
+            id: true,
+            name: true,
+            photo: true,
+            age: true,
+            gender: true,
+            address: true,
+            flatPlot: true,
+            streetArea: true,
+            landmark: true,
+            city: true,
+            state: true,
+            pincode: true,
+            latitude: true,
+            longitude: true,
+            user: {
+              select: {
+                id: true,
+                phone: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        checkInTime: 'desc',
+      },
+    });
+
+    const now = new Date();
+
+    const formattedVisits = await Promise.all(
+      visits.map(async (visit) => {
+        const cc = visit.careCompanion;
+        const b = visit.beneficiary;
+
+        let ccPhoto = cc?.photo || cc?.user?.profilePhoto || cc?.user?.staffProfile?.profilePhoto || null;
+        if (ccPhoto) {
+          try {
+            ccPhoto = await resolveFileUrl(ccPhoto);
+          } catch (e) {
+            console.warn('[ongoing-cc-visits] CC Photo resolution failed:', e.message);
+          }
+        }
+
+        let benPhoto = b?.photo || null;
+        if (benPhoto) {
+          try {
+            benPhoto = await resolveFileUrl(benPhoto);
+          } catch (e) {
+            console.warn('[ongoing-cc-visits] Ben photo resolution failed:', e.message);
+          }
+        }
+
+        const checkIn = visit.checkInTime ? new Date(visit.checkInTime) : new Date(visit.updatedAt || now);
+        const elapsedMs = Math.max(0, now.getTime() - checkIn.getTime());
+        const elapsedMinutes = Math.floor(elapsedMs / (1000 * 60));
+        const elapsedSeconds = Math.floor(elapsedMs / 1000);
+
+        // CC coordinates (use checkInLat/Lng if non-zero, otherwise locationLat/Lng)
+        let ccLat =
+          visit.checkInLat != null && visit.checkInLat !== 0
+            ? visit.checkInLat
+            : visit.locationLat != null && visit.locationLat !== 0
+            ? visit.locationLat
+            : null;
+        let ccLng =
+          visit.checkInLng != null && visit.checkInLng !== 0
+            ? visit.checkInLng
+            : visit.locationLng != null && visit.locationLng !== 0
+            ? visit.locationLng
+            : null;
+
+        // Beneficiary coordinates
+        let benLat = b?.latitude != null && b?.latitude !== 0 ? b.latitude : null;
+        let benLng = b?.longitude != null && b?.longitude !== 0 ? b.longitude : null;
+
+        // Calculate Haversine distance
+        let distanceMeters = null;
+        let isWithBeneficiary = false;
+
+        if (ccLat != null && ccLng != null && benLat != null && benLng != null) {
+          const R = 6371e3;
+          const toRad = (deg) => (deg * Math.PI) / 180;
+          const dLat = toRad(benLat - ccLat);
+          const dLon = toRad(benLng - ccLng);
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(ccLat)) * Math.cos(toRad(benLat)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          distanceMeters = Math.round(R * c);
+          isWithBeneficiary = distanceMeters <= 100;
+        } else if (visit.geoDistanceMeters != null) {
+          distanceMeters = Math.round(visit.geoDistanceMeters);
+          isWithBeneficiary = visit.isGeoVerified || distanceMeters <= 100;
+        } else if (visit.isGeoVerified) {
+          isWithBeneficiary = true;
+        }
+
+        const benAddress = b
+          ? [b.flatPlot, b.streetArea, b.landmark, b.city, b.pincode].filter(Boolean).join(', ') ||
+            b.address ||
+            null
+          : null;
+
+        const isManualCheckIn = Boolean(visit.manualCheckInReason);
+
+        return {
+          id: visit.id,
+          visitCode: visit.visitCode,
+          encounterId: visit.encounterId,
+          status: visit.status,
+          type: 'cc',
+          scheduledTime: visit.scheduledTime,
+          checkInTime: visit.checkInTime || checkIn.toISOString(),
+          durationMinutes: visit.durationMinutes || 60,
+          elapsedMinutes,
+          elapsedSeconds,
+          distanceMeters,
+          isWithBeneficiary,
+          isManualCheckIn,
+          manualCheckInReason: visit.manualCheckInReason || null,
+          isGeoVerified: visit.isGeoVerified || false,
+          geoDistanceMeters: visit.geoDistanceMeters || null,
+          notes: visit.notes,
+          careCompanion: cc
+            ? {
+                id: cc.id,
+                name: cc.name,
+                phone: cc.user?.phone || null,
+                profilePhoto: ccPhoto,
+                zone: cc.zone,
+                teamId: cc.teamId,
+                teamName: cc.team?.name || null,
+                latitude: ccLat,
+                longitude: ccLng,
+              }
+            : null,
+          beneficiary: b
+            ? {
+                id: b.id,
+                name: b.name,
+                phone: b.user?.phone || null,
+                photo: benPhoto,
+                age: b.age,
+                gender: b.gender,
+                address: benAddress,
+                city: b.city,
+                pincode: b.pincode,
+                latitude: benLat,
+                longitude: benLng,
+              }
+            : null,
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      count: formattedVisits.length,
+      data: formattedVisits,
+    });
+  } catch (err) {
+    console.error('GET /api/visits/ongoing error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/visits/check-availability
 // ─────────────────────────────────────────────────────────────────────────────

@@ -454,9 +454,11 @@ router.post('/visits/:visitId/request-change', authenticate, async (req: AuthReq
 import interactionsRouter from './interactions.routes';
 import medicalRecordsRouter from './medical-records.routes';
 import profileRouter from './profile.routes';
+import healthSummaryRouter from './health-summary.routes';
 
 router.use('/interactions', interactionsRouter);
 router.use('/medical-records', medicalRecordsRouter);
 router.use('/profile', profileRouter);
+router.use('/health-summary', healthSummaryRouter);
 
 export default router;

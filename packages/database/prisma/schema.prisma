@@ -99,6 +99,7 @@ model User {
   eventRegistrations             EventRegistration[]
   contentBookmarks               ContentBookmark[]
   contentLikes                   ContentLike[]
+  staffAttendances               StaffAttendance[]
 
   @@index([name])
   @@index([role])
@@ -372,6 +373,7 @@ model CareCompanion {
   user                      User                       @relation("CareCompanionToUser", fields: [userId], references: [id])
   blockers                  StaffAvailabilityBlocker[]
   visits                    Visit[]
+  attendances               StaffAttendance[]
 
   @@index([name])
   @@index([teamId])
@@ -3084,3 +3086,48 @@ model ContentView {
   @@index([itemType, podcastEpisodeId, createdAt])
   @@map("content_views")
 }
+
+enum AttendanceStatus {
+  WORKING
+  LOGGED_OUT
+  ON_LEAVE
+}
+
+model StaffAttendance {
+  id               String           @id @default(uuid())
+  userId           String
+  careCompanionId  String?
+  date             DateTime         @db.Date
+  status           AttendanceStatus @default(WORKING)
+
+  loginTime        DateTime         @default(now())
+  loginLat         Float?
+  loginLng         Float?
+  loginAddress     String?
+
+  logoutTime       DateTime?
+  logoutLat        Float?
+  logoutLng        Float?
+  logoutAddress    String?
+
+  durationMinutes  Int?             @default(0)
+
+  lastLocationLat  Float?
+  lastLocationLng  Float?
+  lastLocationTime DateTime?
+  batteryLevel     Int?
+  isGpsActive      Boolean          @default(true)
+
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  careCompanion    CareCompanion?   @relation(fields: [careCompanionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([careCompanionId, status])
+  @@index([date])
+  @@index([status])
+  @@map("staff_attendances")
+}
+

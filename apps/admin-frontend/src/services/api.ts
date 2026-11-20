@@ -41,6 +41,7 @@ import type {
   StaffOnboardingPayload,
   CallbackRequest,
   OngoingVolunteerVisit,
+  OngoingCCVisit,
 } from '../types';
 
 // Simulate network delay for realistic behavior
@@ -375,13 +376,14 @@ export const careCompanionApi = {
   async getAll(): Promise<any[]> {
     return apiJson('/users/care-companions');
   },
-  async getAllPaginated(params: { search: string; searchBy?: string; page: number; limit: number; ccType?: string }): Promise<any> {
+  async getAllPaginated(params: { search: string; searchBy?: string; page: number; limit: number; ccType?: string; dutyStatus?: string }): Promise<any> {
     const query = new URLSearchParams({
       search: params.search,
       searchBy: params.searchBy || '',
       page: params.page.toString(),
       limit: params.limit.toString(),
-      ccType: params.ccType || 'all'
+      ccType: params.ccType || 'all',
+      dutyStatus: params.dutyStatus || 'all',
     }).toString();
     return apiJson(`/users/care-companions?${query}`);
   },
@@ -394,6 +396,10 @@ export const careCompanionApi = {
   async getByZone(zoneId: string): Promise<CareCompanion[]> {
     await delay();
     return mockCareCompanions.filter(cc => cc.zoneId === zoneId);
+  },
+
+  async getDutyHistory(id: string): Promise<any> {
+    return apiJson(`/users/care-companions/${id}/duty-history`);
   },
 };
 
@@ -1435,6 +1441,9 @@ export const subscriptionApi = {
 };
 
 export const visitApi = {
+  async getOngoingVisits(): Promise<OngoingCCVisit[]> {
+    return apiJson<OngoingCCVisit[]>('/visits/ongoing');
+  },
   async getAll(params: { beneficiaryId?: string; careCompanionId?: string; date?: string; fmUserId?: string; visitCode?: string }): Promise<any[]> {
     // Filter out empty string params to avoid sending ?visitCode= to the backend
     const clean = Object.fromEntries(Object.entries(params as any).filter(([, v]) => v !== '' && v != null));
@@ -1491,6 +1500,13 @@ export const visitApi = {
     return apiJson(`/visits/${id}/complete`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    });
+  },
+  /** Force-close or auto-complete stuck ongoing visits (>12h) */
+  async closeStuckVisits(visitId?: string): Promise<any> {
+    return apiJson('/visits/close-stuck', {
+      method: 'POST',
+      body: JSON.stringify({ visitId }),
     });
   },
   async approveRoster(data: { date: string; periodType: 'daily' | 'weekly'; zoneId: string }): Promise<any> {

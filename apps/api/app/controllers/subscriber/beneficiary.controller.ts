@@ -4,6 +4,7 @@ import { getStorageService } from '../../services/storage';
 import prisma from '../../core/database';
 import { v4 as uuidv4 } from 'uuid';
 import { getProfileAccess } from '../../services/access/profile_access_service';
+import { HealthSummaryService } from '../../services/shared/health_summary_service';
 
 async function verifyBeneficiaryAccess(userId?: string, userRole?: string, beneficiaryId?: string): Promise<boolean> {
   const access = await getProfileAccess(userId, beneficiaryId, userRole);
@@ -267,3 +268,19 @@ export const deleteMedication = async (req: Request, res: Response) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
+export const getBeneficiaryHealthSummary = async (req: Request, res: Response) => {
+  try {
+    const beneficiaryId = req.params.beneficiaryId as string;
+    const authReq = req as any;
+    const access = await getProfileAccess(authReq.userId, beneficiaryId, authReq.userRole);
+    if (!access.canView) {
+      return res.status(403).json({ success: false, message: 'Access denied: You do not have permission to view this beneficiary.' });
+    }
+    const summary = await HealthSummaryService.getBeneficiaryHealthSummary(beneficiaryId);
+    res.json({ success: true, data: summary });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+

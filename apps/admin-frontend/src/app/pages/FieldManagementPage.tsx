@@ -63,11 +63,11 @@ export default function FieldManagementPage() {
           <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
         </div>
         <Link
-          to="/saathi-tracking"
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-sm hover:shadow transition-all shrink-0 self-start sm:self-auto"
+          to="/saathi-tracking?type=cc"
+          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white shadow-sm hover:shadow transition-all shrink-0 self-start sm:self-auto"
         >
           <Navigation size={14} className="animate-pulse" />
-          <span>Live Saathi Tracker</span>
+          <span>Live Map Tracker</span>
         </Link>
       </div>
 

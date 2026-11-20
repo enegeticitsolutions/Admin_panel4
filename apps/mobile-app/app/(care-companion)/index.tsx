@@ -9,6 +9,9 @@ import { API_URL } from '@/constants/api';
 import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold } from '@expo-google-fonts/poppins';
 import { CompanionBottomNav } from '../../components/care-companion/CompanionBottomNav';
 import { UpcomingCelebrationsCard } from '../../components/care-companion/UpcomingCelebrationsCard';
+import { DutyAttendanceCard } from '@/components/care-companion/DutyAttendanceCard';
+import { LocationEnforcementModal } from '@/components/care-companion/LocationEnforcementModal';
+import { useDutyLocationEnforcer } from '@/hooks/useDutyLocationEnforcer';
 import NotificationBell from '@/components/shared/NotificationBell';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { useNavigationStack } from '@/contexts/NavigationStackContext';
@@ -25,6 +28,7 @@ export default function DashboardScreen() {
     const { push, replace, pop } = useNavigationStack();
     useAndroidBackHandler();
     const { width } = useWindowDimensions();
+    const duty = useDutyLocationEnforcer();
 
     const [loading, setLoading] = useState(true);
     const [currentTime, setCurrentTime] = useState('');
@@ -187,6 +191,18 @@ export default function DashboardScreen() {
                         <Text style={styles.dotSeparator}>•</Text>
                         <Text style={styles.dateTimeText}>{currentDate}</Text>
                     </View>
+
+                    {/* SHIFT ATTENDANCE LOGIN / LOGOUT CARD */}
+                    <DutyAttendanceCard
+                        isWorking={duty.isWorking}
+                        activeSession={duty.activeSession}
+                        todaySummary={duty.todaySummary}
+                        elapsedSeconds={duty.elapsedSeconds}
+                        actionLoading={duty.actionLoading}
+                        onPunchIn={duty.punchIn}
+                        onPunchOut={duty.punchOut}
+                        style={responsiveContentStyle}
+                    />
 
                     {/* CHECK-IN CARD (inside header) */}
                     <View style={[styles.checkInCard, responsiveContentStyle]}>
@@ -408,6 +424,13 @@ export default function DashboardScreen() {
             </ScrollView>
 
             <CompanionBottomNav />
+
+            {/* MANDATORY LIVE LOCATION ENFORCEMENT MODAL */}
+            <LocationEnforcementModal
+                visible={duty.isLocationBlocked}
+                onRetryCheck={duty.verifyLocationEnabled}
+                onEmergencyPunchOut={duty.punchOut}
+            />
         </SafeAreaView>
     );
 }

@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { API_URL } from '@/constants/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -624,11 +624,23 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                 {/* Overall Adherence Card */}
                 <View style={styles.statsCard}>
                     <View style={styles.statsHeader}>
-                        <Image source={calendarIcon} style={styles.statsIconImage} resizeMode="contain" />
-                        <View style={styles.statsTitleBlock}>
-                            <Text style={styles.statsTitle}>Overall Adherence</Text>
-                            <Text style={styles.statsSubtitle}>Last 30 days</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                            <Image source={calendarIcon} style={styles.statsIconImage} resizeMode="contain" />
+                            <View style={styles.statsTitleBlock}>
+                                <Text style={styles.statsTitle}>Overall Adherence</Text>
+                                <Text style={styles.statsSubtitle}>Last 30 days</Text>
+                            </View>
                         </View>
+                        <TouchableOpacity
+                            style={styles.statsExportBtn}
+                            onPress={() => router.push({
+                                pathname: '/(beneficiary)/health-summary',
+                                params: routeParams.beneficiaryId ? { beneficiaryId: routeParams.beneficiaryId } : undefined
+                            })}
+                        >
+                            <Feather name="share-2" size={13} color="#FE6700" style={{ marginRight: 4 }} />
+                            <Text style={styles.statsExportBtnText}>Report</Text>
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.metricsRow}>
@@ -991,6 +1003,20 @@ const styles = StyleSheet.create({
     statsHeader: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    statsExportBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 8,
+    },
+    statsExportBtnText: {
+        fontSize: 12,
+        fontFamily: 'Poppins-Bold',
+        color: '#FE6700',
     },
     statsTitleBlock: {
         marginLeft: 12,
