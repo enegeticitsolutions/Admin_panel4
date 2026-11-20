@@ -2191,6 +2191,34 @@ export const invoicesApi = {
     return `${API_BASE}/invoices/export${qStr ? `?${qStr}` : ''}`;
   },
 
+  getDownloadZipUrl: (params?: {
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+    search?: string;
+    ids?: string[];
+  }): string => {
+    const query = new URLSearchParams();
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
+    if (params?.status) query.append('status', params.status);
+    if (params?.search) query.append('search', params.search);
+    if (params?.ids && params.ids.length > 0) query.append('ids', params.ids.join(','));
+
+    let token = '';
+    const savedAuth = localStorage.getItem('maihonna_user');
+    if (savedAuth) {
+      try {
+        const authData = JSON.parse(savedAuth);
+        token = authData.accessToken || authData.token || '';
+      } catch (e) {}
+    }
+    if (token) query.append('token', token);
+
+    const qStr = query.toString();
+    return `${API_BASE}/invoices/download-zip${qStr ? `?${qStr}` : ''}`;
+  },
+
   getInvoiceById: async (id: string): Promise<any> => {
     return apiJson<any>(`/invoices/${encodeURIComponent(id)}`);
   },

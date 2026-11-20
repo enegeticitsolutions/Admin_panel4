@@ -3,6 +3,7 @@ const { render: renderInvoiceHtml } = require('./invoice.html.renderer');
 const { InvoicePdfService } = require('./invoice.pdf.service');
 const storage = require('../../services/storage');
 const { currentIndianFinancialYear, generateInvoiceNumber: billingGenerateInvoiceNumber } = require('@maihoonna/billing');
+const archiver = require('archiver');
 
 /**
  * GET /api/invoices
@@ -979,10 +980,127 @@ async function exportInvoicesCsv(req, res) {
   }
 }
 
+/**
+ * Concurrency helper: processes an array of items with a fixed concurrency limit.
+ */
+async function mapConcurrent(items, concurrency, fn) {
+  const results = [];
+  let index = 0;
+  async function worker() {
+    while (index < items.length) {
+      const i = index++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, worker);
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * GET /api/invoices/download-zip
+ * Bundles all invoices matching the active filters into a single ZIP archive.
+ */
+async function downloadInvoicesZip(req, res) {
+  try {
+    const { status, search, invoiceType, subscriberId, beneficiaryId, startDate, endDate, ids } = req.query;
+
+    const where = {};
+    if (ids && ids.trim()) {
+      const idList = ids
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (idList.length > 0) where.id = { in: idList };
+    }
+    if (status) where.status = status;
+    if (invoiceType) where.invoiceType = invoiceType;
+    if (subscriberId) where.subscriberId = subscriberId;
+    if (beneficiaryId) where.beneficiaryId = beneficiaryId;
+
+    if (startDate || endDate) {
+      where.issuedAt = {};
+      if (startDate) where.issuedAt.gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        if (endDate.length <= 10) end.setUTCHours(23, 59, 59, 999);
+        where.issuedAt.lte = end;
+      }
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { invoiceNumber: { contains: q, mode: 'insensitive' } },
+        { subscriber: { name: { contains: q, mode: 'insensitive' } } },
+        { subscriber: { phone: { contains: q, mode: 'insensitive' } } },
+        { beneficiary: { name: { contains: q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const invoices = await prisma.invoice.findMany({
+      where,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        issuedAt: true,
+      },
+      orderBy: { issuedAt: 'desc' },
+      take: 1000,
+    });
+
+    if (!invoices || invoices.length === 0) {
+      return res.status(404).json({ success: false, message: 'No invoices found matching the specified filters' });
+    }
+
+    const startStr = startDate ? startDate.split('T')[0] : 'all';
+    const endStr = endDate ? endDate.split('T')[0] : 'latest';
+    const zipFilename = `MHN-Invoices-${startStr}-to-${endStr}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.pipe(res);
+
+    archive.on('error', (err) => {
+      console.error('[DownloadZip] Archive stream error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: err.message });
+      }
+    });
+
+    // Process with concurrency 4 to balance performance and server memory
+    await mapConcurrent(invoices, 4, async (inv) => {
+      try {
+        const { downloadUrl, fileName } = await InvoicePdfService.getInvoicePdfUrl(inv.id);
+        const fetchRes = await fetch(downloadUrl);
+        if (fetchRes.ok) {
+          const buffer = Buffer.from(await fetchRes.arrayBuffer());
+          const cleanName = (fileName || `Invoice-${inv.invoiceNumber}.pdf`).replace(/[\\/]/g, '_');
+          archive.append(buffer, { name: cleanName });
+        } else {
+          console.warn(`[DownloadZip] HTTP ${fetchRes.status} fetching PDF for ${inv.invoiceNumber}`);
+        }
+      } catch (err) {
+        console.error(`[DownloadZip] Failed to pack PDF for ${inv.invoiceNumber}:`, err.message);
+      }
+    });
+
+    await archive.finalize();
+  } catch (err) {
+    console.error('[InvoiceController] downloadInvoicesZip error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+}
+
 module.exports = {
   listInvoices,
   getInvoiceSummary,
   exportInvoicesCsv,
+  downloadInvoicesZip,
   getInvoiceById,
   getInvoiceHtml,
   getInvoicePdfUrl,
