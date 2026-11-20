@@ -12,13 +12,7 @@ import {
   IndianRupee,
   Eye,
   FileDown,
-  CheckCircle2,
-  Clock,
   Building,
-  Filter,
-  Archive,
-  CheckSquare,
-  Square,
 } from 'lucide-react';
 import { invoicesApi, creditNotesApi, InvoiceSummary } from '../../services/api';
 import { InvoiceViewModal } from '../components/InvoiceViewModal';
@@ -47,9 +41,6 @@ export const InvoicesPage: React.FC = () => {
   const [invoicePage, setInvoicePage] = useState(1);
   const [invoiceTotalPages, setInvoiceTotalPages] = useState(1);
   const [invoiceTotalCount, setInvoiceTotalCount] = useState(0);
-
-  // Multi-select for bulk actions
-  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<string>>(new Set());
 
   // Credit notes data
   const [creditNotes, setCreditNotes] = useState<any[]>([]);
@@ -186,50 +177,6 @@ export const InvoicesPage: React.FC = () => {
     }
   }, [activeTab, fetchInvoices, fetchCreditNotes]);
 
-  // Clear selections on page change or tab switch
-  useEffect(() => {
-    setSelectedInvoiceIds(new Set());
-  }, [invoicePage, activeTab, periodPreset]);
-
-  // Selection handlers
-  const isAllOnPageSelected = invoices.length > 0 && invoices.every((inv) => selectedInvoiceIds.has(inv.id));
-
-  const toggleSelectAllOnPage = () => {
-    if (isAllOnPageSelected) {
-      setSelectedInvoiceIds(new Set());
-    } else {
-      setSelectedInvoiceIds(new Set(invoices.map((inv) => inv.id)));
-    }
-  };
-
-  const toggleSelectInvoice = (id: string) => {
-    setSelectedInvoiceIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  // 1-Click ZIP Download Action (Handles "all filtered" or "selected")
-  const handleDownloadZip = () => {
-    const { startDate, endDate } = getDateRange();
-    const ids = selectedInvoiceIds.size > 0 ? Array.from(selectedInvoiceIds) : undefined;
-    const zipUrl = invoicesApi.getDownloadZipUrl({
-      startDate,
-      endDate,
-      status: statusFilter || undefined,
-      search: search.trim() || undefined,
-      ids,
-    });
-    window.open(zipUrl, '_blank');
-    if (ids && ids.length > 0) {
-      toast.success(`Packaging ${ids.length} selected invoices into ZIP archive...`);
-    } else {
-      toast.success(`Packaging all ${invoiceTotalCount} filtered invoices into ZIP archive...`);
-    }
-  };
-
   // Download CSV Action
   const handleExportCsv = () => {
     const { startDate, endDate } = getDateRange();
@@ -281,26 +228,6 @@ export const InvoicesPage: React.FC = () => {
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Refresh</span>
           </button>
-
-          {/* ── 1-Click Bulk PDF ZIP Download ── */}
-          {activeTab === 'invoices' && (
-            <button
-              onClick={handleDownloadZip}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition-all active:scale-[0.98]"
-              title={
-                selectedInvoiceIds.size > 0
-                  ? `Download ${selectedInvoiceIds.size} selected invoices as ZIP`
-                  : `Download all ${invoiceTotalCount} invoices matching current view as ZIP`
-              }
-            >
-              <Archive className="w-4 h-4" />
-              <span>
-                {selectedInvoiceIds.size > 0
-                  ? `Download Selected (${selectedInvoiceIds.size}) (.ZIP)`
-                  : `Download All Invoices (${invoiceTotalCount}) (.ZIP)`}
-              </span>
-            </button>
-          )}
 
           {/* ── Export Report CSV ── */}
           <button
@@ -540,48 +467,12 @@ export const InvoicesPage: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Selection Action Banner (when checkboxes are selected) ── */}
-        {activeTab === 'invoices' && selectedInvoiceIds.size > 0 && (
-          <div className="bg-blue-50 dark:bg-blue-950/40 border-b border-blue-100 dark:border-blue-900 px-4 py-2.5 flex items-center justify-between text-xs text-blue-900 dark:text-blue-200 animate-fadeIn">
-            <div className="flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span className="font-bold">
-                {selectedInvoiceIds.size} invoice{selectedInvoiceIds.size > 1 ? 's' : ''} selected
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSelectedInvoiceIds(new Set())}
-                className="px-2.5 py-1 text-xs text-blue-700 dark:text-blue-300 hover:underline font-semibold"
-              >
-                Clear Selection
-              </button>
-              <button
-                onClick={handleDownloadZip}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all active:scale-[0.98]"
-              >
-                <Archive className="w-3.5 h-3.5" />
-                <span>Download {selectedInvoiceIds.size} PDF(s) as ZIP</span>
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* ── Tab 1: Invoices Table ── */}
         {activeTab === 'invoices' && (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-gray-50/80 dark:bg-gray-900/40 text-gray-500 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200 dark:border-gray-700">
-                  <th className="py-3 px-3 w-10 text-center">
-                    <input
-                      type="checkbox"
-                      checked={isAllOnPageSelected}
-                      onChange={toggleSelectAllOnPage}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                      title="Select all on this page"
-                    />
-                  </th>
                   <th className="py-3 px-4">Invoice #</th>
                   <th className="py-3 px-4">Date</th>
                   <th className="py-3 px-4">Subscriber</th>
@@ -598,13 +489,13 @@ export const InvoicesPage: React.FC = () => {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {loadingTable ? (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-gray-400">
+                    <td colSpan={11} className="py-12 text-center text-gray-400">
                       Loading invoices...
                     </td>
                   </tr>
                 ) : invoices.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-gray-400">
+                    <td colSpan={11} className="py-12 text-center text-gray-400">
                       No invoices found for the selected reporting period.
                     </td>
                   </tr>
@@ -617,25 +508,12 @@ export const InvoicesPage: React.FC = () => {
                           year: 'numeric',
                         })
                       : 'N/A';
-                    const isSelected = selectedInvoiceIds.has(inv.id);
 
                     return (
                       <tr
                         key={inv.id}
-                        className={`transition-colors ${
-                          isSelected
-                            ? 'bg-blue-50/50 dark:bg-blue-950/30'
-                            : 'hover:bg-gray-50/60 dark:hover:bg-gray-800/40'
-                        }`}
+                        className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40 transition-colors"
                       >
-                        <td className="py-3 px-3 text-center">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleSelectInvoice(inv.id)}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                          />
-                        </td>
                         <td className="py-3 px-4 font-mono font-bold text-gray-900 dark:text-gray-100">
                           {inv.invoiceNumber}
                         </td>
@@ -673,10 +551,10 @@ export const InvoicesPage: React.FC = () => {
                             <span
                               className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${
                                 inv.status === 'PAID'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : inv.status === 'DRAFT'
-                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                  : 'bg-gray-50 text-gray-700 border-gray-200'
+                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                   : inv.status === 'DRAFT'
+                                   ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                   : 'bg-gray-50 text-gray-700 border-gray-200'
                               }`}
                             >
                               {inv.status}
@@ -695,13 +573,13 @@ export const InvoicesPage: React.FC = () => {
                               <Eye className="w-4 h-4" />
                             </button>
 
-                            {/* Direct PDF Download */}
+                            {/* Direct Print / Save Invoice */}
                             <a
-                              href={invoicesApi.getInvoicePdfDownloadUrl(inv.id)}
+                              href={invoicesApi.getInvoiceHtmlUrl(inv.id)}
                               target="_blank"
                               rel="noreferrer"
                               className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Download PDF"
+                              title="Print / Save Invoice (PDF)"
                             >
                               <FileDown className="w-4 h-4" />
                             </a>
