@@ -1,0 +1,16 @@
+# MaiHoonNa Eldercare Private Limited
+
+> India's First Connected Senior Care Ecosystem — combining background-verified Care Mitra home visits, real-time vitals & Happiness Score tracking via the Family Connect app, and a volunteer Saathi Network for seniors in Gurugram & Delhi NCR.
+
+## Core Services & Offerings
+- **Care Mitra Home Visits** (https://www.maihoonna.com/services): Geo-fenced (within 50m), scheduled visits by background-verified caregivers and nurses (5-tier grading ladder: Saathi Volunteer, ANM, GNM, B.Sc. Nurse, Specialist Mitra). Includes BP, SpO2, temperature, and weight logging, medication adherence, mood tracking, and clinic accompaniment.
+- **Family Connect App**: Real-time visibility dashboard for NRI and out-of-station families across any time zone, featuring instant WhatsApp alerts, vitals trend graphs, downloadable doctor PDFs, and a live Happiness Score.
+- **Saathi Network & Legacy Circles**: Background-verified community volunteers providing companionship, walks, errands, and interest-based peer circles.
+- **24/7 Emergency Response**: One-tap emergency alert triggering the Care Mitra, Field Manager, Operations team, and family simultaneously.
+- **Healthcare Partner Network** (https://www.maihoonna.com/partners): Coordinated pharmacy delivery, home diagnostic lab collection, physiotherapy, tele-consultations, and ambulance services.
+
+## Service Coverage & Contact
+- **Active Launch Zone**: Gurugram (Sectors 53 to 57) & expanding across Delhi NCR.
+- **Plans**: Prepaid hourly packages (Starter, Plus, Premium) with 30-day automatic hour rollover and zero hidden fees (https://www.maihoonna.com/plans).
+- **Helpline**: +91-7965560310
+- **Website**: https://www.maihoonna.com
