@@ -30,9 +30,19 @@ const verifyToken = async (req, res, next) => {
     });
   }
 
+  const userId = decoded.id || decoded.sub || decoded.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid session token: missing user ID. Please log in again.',
+      code: 'INVALID_TOKEN'
+    });
+  }
+
   try {
     const dbUser = await prisma.user.findUnique({
-      where: { id: decoded.id },
+      where: { id: userId },
       select: { id: true, name: true, phone: true, role: true, isActive: true }
     });
 
