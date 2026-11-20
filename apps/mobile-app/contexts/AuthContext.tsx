@@ -348,9 +348,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       await Promise.all(savePromises);
 
-      setState({
+      setState(prev => ({
+        ...prev,
         isLoading: false,
         isLoggedIn: true,
+        isGuest: false,
         token,
         user: userData,
         role: targetRole,
@@ -358,7 +360,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         selfBeneficiaryId: selfBeneficiaryId ?? null,
         isSwitchingRole: false,
         isLoggingOut: false,
-      });
+        isGuestAuthModalVisible: false,
+        guestPromptReason: null,
+      }));
 
       registerForPushNotifications(token).catch(err => {
         console.warn('[AuthContext] Push token sync on switchRole failed:', err);
