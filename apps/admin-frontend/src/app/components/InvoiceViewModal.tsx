@@ -95,7 +95,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
-      <div 
+      <div
         className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] shadow-2xl flex flex-col overflow-hidden border border-gray-100"
         onClick={(e) => e.stopPropagation()}
       >

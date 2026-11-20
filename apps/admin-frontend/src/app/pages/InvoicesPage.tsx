@@ -265,11 +265,10 @@ export const InvoicesPage: React.FC = () => {
                   setInvoicePage(1);
                   setCnPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  periodPreset === p.id
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${periodPreset === p.id
                     ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                }`}
+                  }`}
               >
                 {p.label}
               </button>
@@ -409,11 +408,10 @@ export const InvoicesPage: React.FC = () => {
                 setActiveTab('invoices');
                 setSearch('');
               }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'invoices'
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'invoices'
                   ? 'bg-orange-500 text-white shadow-sm'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <FileText className="w-4 h-4" />
               <span>Tax Invoices ({invoiceTotalCount})</span>
@@ -424,11 +422,10 @@ export const InvoicesPage: React.FC = () => {
                 setActiveTab('credit_notes');
                 setSearch('');
               }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'credit_notes'
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'credit_notes'
                   ? 'bg-purple-600 text-white shadow-sm'
                   : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <RotateCcw className="w-4 h-4" />
               <span>Credit Notes ({cnTotalCount})</span>
@@ -503,10 +500,10 @@ export const InvoicesPage: React.FC = () => {
                   invoices.map((inv) => {
                     const formattedDate = inv.issuedAt
                       ? new Date(inv.issuedAt).toLocaleDateString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })
                       : 'N/A';
 
                     return (
@@ -549,13 +546,12 @@ export const InvoicesPage: React.FC = () => {
                         <td className="py-3 px-4 text-center">
                           <div className="flex flex-col items-center gap-1">
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${
-                                inv.status === 'PAID'
-                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                   : inv.status === 'DRAFT'
-                                   ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                   : 'bg-gray-50 text-gray-700 border-gray-200'
-                              }`}
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${inv.status === 'PAID'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : inv.status === 'DRAFT'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-gray-50 text-gray-700 border-gray-200'
+                                }`}
                             >
                               {inv.status}
                             </span>
@@ -664,10 +660,10 @@ export const InvoicesPage: React.FC = () => {
                   creditNotes.map((cn) => {
                     const formattedDate = cn.issuedAt
                       ? new Date(cn.issuedAt).toLocaleDateString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })
                       : 'N/A';
 
                     return (
@@ -690,11 +686,10 @@ export const InvoicesPage: React.FC = () => {
                         </td>
                         <td className="py-3 px-4">
                           <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                              cn.refundMode === 'GATEWAY_ONLINE'
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${cn.refundMode === 'GATEWAY_ONLINE'
                                 ? 'bg-blue-50 text-blue-700 border border-blue-200'
                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}
+                              }`}
                           >
                             {cn.refundMode === 'GATEWAY_ONLINE' ? 'Razorpay Online' : 'Bank UTR'}
                           </span>
@@ -710,11 +705,10 @@ export const InvoicesPage: React.FC = () => {
                         </td>
                         <td className="py-3 px-4 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${
-                              cn.status === 'ISSUED'
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border ${cn.status === 'ISSUED'
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 : 'bg-red-50 text-red-700 border-red-200'
-                            }`}
+                              }`}
                           >
                             {cn.status}
                           </span>
