@@ -31,18 +31,23 @@ const SEO_CONFIG = {
     schemas: [
       {
         "@context": "https://schema.org",
-        "@type": "LocalBusiness",
-        "@id": "https://maihoonna.com/#localbusiness",
+        "@type": ["LocalBusiness", "MedicalBusiness"],
+        "@id": "https://www.maihoonna.com/#localbusiness",
         "name": "MaiHoonNa Eldercare",
         "alternateName": "MaiHoonNa Senior Care",
-        "url": "https://maihoonna.com",
-        "logo": "https://maihoonna.com/logo.svg",
-        "image": "https://maihoonna.com/og-image.jpg",
+        "url": "https://www.maihoonna.com",
+        "logo": "https://www.maihoonna.com/logo.svg",
+        "image": "https://www.maihoonna.com/og-image.jpg",
         "description":
           "Trusted senior care companions and elder health monitoring in Gurugram & Delhi NCR. Care Mitra visits, Saathi companionship, and family updates.",
         "priceRange": "₹₹",
-        "telephone": "+91-85270-70049",
+        "telephone": "+91-7965560310",
         "email": "info@maihoonna.com",
+        "medicalSpecialty": [
+          "Geriatrics",
+          "Nursing",
+          "HomeHealthCare"
+        ],
         "address": {
           "@type": "PostalAddress",
           "streetAddress": "Gurugram Sectors 53 to 57",
@@ -76,12 +81,13 @@ const SEO_CONFIG = {
       {
         "@context": "https://schema.org",
         "@type": "Organization",
-        "@id": "https://maihoonna.com/#organization",
+        "@id": "https://www.maihoonna.com/#organization",
         "name": "MaiHoonNa Eldercare Private Limited",
-        "url": "https://maihoonna.com",
-        "logo": "https://maihoonna.com/logo.svg",
+        "url": "https://www.maihoonna.com",
+        "logo": "https://www.maihoonna.com/logo.svg",
         "description":
           "India's connected senior care ecosystem — blending human companionship with smart healthcare technology.",
+        "telephone": "+91-7965560310",
         "address": {
           "@type": "PostalAddress",
           "streetAddress": "Gurugram Sectors 53 to 57",
@@ -91,6 +97,7 @@ const SEO_CONFIG = {
         },
         "contactPoint": {
           "@type": "ContactPoint",
+          "telephone": "+91-7965560310",
           "email": "info@maihoonna.com",
           "contactType": "customer service",
           "availableLanguage": ["en", "hi"]
