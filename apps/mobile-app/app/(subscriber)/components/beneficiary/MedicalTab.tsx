@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Dimensions, Alert, Modal, TextInput, Linking } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { API_URL } from '@/constants/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -172,6 +173,7 @@ const MedicalRecordItem = ({ doc, onRefresh, existingRecords, canEdit = true }: 
 };
 
 export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary: any, conditions: string[], onRefresh: () => void }) => {
+    const router = useRouter();
     const canEdit = beneficiary?.canEditDetails !== false;
     const [uploading, setUploading] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<any>(null);
@@ -345,6 +347,27 @@ export const MedicalTab = ({ beneficiary, conditions, onRefresh }: { beneficiary
 
     return (
         <View style={{ paddingHorizontal: scale(20) }}>
+            {/* Health Summary Download & Share Action Card */}
+            <TouchableOpacity
+                style={styles.healthSummaryBanner}
+                onPress={() => router.push({
+                    pathname: '/(beneficiary)/health-summary',
+                    params: { beneficiaryId: beneficiary?.id }
+                })}
+                activeOpacity={0.8}
+            >
+                <View style={styles.summaryBannerLeft}>
+                    <View style={styles.summaryBannerIconWrap}>
+                        <Feather name="file-text" size={scale(20)} color="#FE6700" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.summaryBannerTitle}>Download & Share Health Report</Text>
+                        <Text style={styles.summaryBannerSub}>Conditions, vitals, meds & 30-day adherence</Text>
+                    </View>
+                </View>
+                <Feather name="chevron-right" size={scale(20)} color="#FE6700" />
+            </TouchableOpacity>
+
             {/* Medical Conditions */}
             <View style={styles.medCard}>
                 <Text style={styles.medCardTitle}>Medical Conditions</Text>
@@ -572,6 +595,49 @@ const styles = StyleSheet.create({
     },
     freqPillTextActive: {
         color: '#FFFFFF',
+    },
+
+    healthSummaryBanner: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: scale(14),
+        padding: scale(14),
+        marginBottom: scale(16),
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderWidth: 1.5,
+        borderColor: '#FED7AA',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    summaryBannerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: scale(10),
+    },
+    summaryBannerIconWrap: {
+        width: scale(38),
+        height: scale(38),
+        borderRadius: scale(10),
+        backgroundColor: '#FFF0E6',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: scale(12),
+    },
+    summaryBannerTitle: {
+        fontSize: scale(14),
+        fontFamily: 'Poppins-Bold',
+        color: '#111827',
+    },
+    summaryBannerSub: {
+        fontSize: scale(11),
+        fontFamily: 'Poppins-Regular',
+        color: '#6B7280',
+        marginTop: scale(2),
     },
 
     conditionsBox: { backgroundColor: '#FFF0E5', borderRadius: scale(12), padding: scale(16) },

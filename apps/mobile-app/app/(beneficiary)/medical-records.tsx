@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { API_URL } from '@/constants/api';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -53,6 +53,7 @@ export default function MedicalRecordsScreen() {
     const MAX_CONTENT_WIDTH = 440;
     const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
 
+    const router = useRouter();
     useAndroidBackHandler();
     const safeBack = useSafeBack();
 
@@ -111,7 +112,13 @@ export default function MedicalRecordsScreen() {
                     <Feather name="arrow-left" size={22} color="#111827" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Medical Records</Text>
-                <View style={styles.headerSpacer} />
+                <TouchableOpacity
+                    onPress={() => router.push('/(beneficiary)/health-summary')}
+                    style={styles.summaryBtn}
+                >
+                    <Feather name="file-text" size={16} color="#FE6700" style={{ marginRight: 4 }} />
+                    <Text style={styles.summaryBtnText}>Report</Text>
+                </TouchableOpacity>
             </View>
 
             {loading ? (
@@ -133,6 +140,24 @@ export default function MedicalRecordsScreen() {
                     showsVerticalScrollIndicator={false}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />}
                 >
+                    {/* Health Summary Export Banner */}
+                    <TouchableOpacity
+                        style={styles.exportCard}
+                        onPress={() => router.push('/(beneficiary)/health-summary')}
+                        activeOpacity={0.8}
+                    >
+                        <View style={styles.exportCardLeft}>
+                            <View style={styles.exportCardIconWrap}>
+                                <Feather name="file-text" size={20} color="#FE6700" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.exportCardTitle}>Health Summary & Report</Text>
+                                <Text style={styles.exportCardSub}>Download or share PDF of conditions, vitals, meds & adherence</Text>
+                            </View>
+                        </View>
+                        <Feather name="chevron-right" size={20} color="#FE6700" />
+                    </TouchableOpacity>
+
                     <Text style={styles.subtitle}>Track your vitals</Text>
 
                     {/* ── Latest Readings ── */}
@@ -267,6 +292,63 @@ const styles = StyleSheet.create({
     backBtn:        { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     headerSpacer:   { width: 40, height: 40 },
     headerTitle:    { fontFamily: 'Poppins-Medium', fontSize: 17, color: '#111827' },
+    summaryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        backgroundColor: '#FFF0E6',
+        borderWidth: 1,
+        borderColor: '#FE6700',
+    },
+    summaryBtnText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 12,
+        color: '#FE6700',
+    },
+    exportCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 14,
+        padding: 14,
+        marginBottom: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderWidth: 1,
+        borderColor: '#FED7AA',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    exportCardLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        marginRight: 10,
+    },
+    exportCardIconWrap: {
+        width: 38,
+        height: 38,
+        borderRadius: 10,
+        backgroundColor: '#FFF0E6',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    exportCardTitle: {
+        fontFamily: 'Poppins-Bold',
+        fontSize: 14,
+        color: '#111827',
+    },
+    exportCardSub: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 11,
+        color: '#6B7280',
+        marginTop: 2,
+    },
     content:        { paddingHorizontal: 16, paddingTop: 16 },
     centerWrap: {
         flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24,

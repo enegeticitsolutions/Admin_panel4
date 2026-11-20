@@ -268,6 +268,26 @@ async function mapCareCompanion(companion) {
   const staffProfile = companion.user?.staffProfile || null;
   const latestBackgroundCheck = staffProfile?.backgroundChecks?.[0] || null;
 
+  // Attendance and Duty Telemetry
+  const activeAttendance = companion.attendances?.find((a) => a.status === 'WORKING') || null;
+  const isWorking = Boolean(activeAttendance);
+  const now = new Date();
+  const loginTime = activeAttendance ? activeAttendance.loginTime : null;
+  const elapsedShiftMinutes = activeAttendance
+    ? Math.max(0, Math.floor((now.getTime() - new Date(activeAttendance.loginTime).getTime()) / 60000))
+    : 0;
+  const lastLocation = activeAttendance
+    ? {
+        lat: activeAttendance.lastLocationLat || activeAttendance.loginLat || null,
+        lng: activeAttendance.lastLocationLng || activeAttendance.loginLng || null,
+        updatedAt: activeAttendance.lastLocationTime || activeAttendance.loginTime || null,
+        batteryLevel: activeAttendance.batteryLevel ?? null,
+        isGpsActive: Boolean(activeAttendance.isGpsActive),
+      }
+    : null;
+  const lastLoggedOut = companion.attendances?.find((a) => a.status === 'LOGGED_OUT');
+  const activeVisit = companion.visits?.[0] || null;
+
   return {
     id: companion.id,
     userId: companion.userId,
@@ -303,6 +323,19 @@ async function mapCareCompanion(companion) {
     joinedAt:
       companion.joinedAt || staffProfile?.joinedAt || companion.createdAt,
     createdAt: companion.createdAt,
+    // Real-time Duty & Attendance Roster
+    isWorking,
+    loginTime: loginTime ? loginTime.toISOString() : null,
+    elapsedShiftMinutes,
+    lastLocation,
+    lastLogoutTime: lastLoggedOut?.logoutTime ? lastLoggedOut.logoutTime.toISOString() : null,
+    currentVisit: activeVisit
+      ? {
+          id: activeVisit.id,
+          visitCode: activeVisit.visitCode,
+          beneficiaryName: activeVisit.beneficiary?.name || 'Beneficiary',
+        }
+      : null,
   };
 }
 
@@ -1271,7 +1304,7 @@ router.get('/care-companions', async (req, res) => {
   try {
     if (!ensureOnboardingModels(res)) return;
 
-    const { search, searchBy, page, limit, ccType } = req.query;
+    const { search, searchBy, page, limit, ccType, dutyStatus } = req.query;
     const filterParams = { user: { isActive: true } };
 
     if (ccType && ccType !== 'all') {
@@ -1310,13 +1343,35 @@ router.get('/care-companions', async (req, res) => {
         };
       } else {
         // FM has no profile, return empty
-        return res.json({ success: true, data: [] });
+        return res.json({ success: true, data: [], meta: { total: 0, workingCount: 0, notWorkingCount: 0 } });
       }
+    }
+
+    // Base filter for counting working vs not-working before applying dutyStatus filter
+    const baseFilter = { ...filterParams };
+
+    // Apply dutyStatus filter if provided
+    if (dutyStatus === 'working') {
+      filterParams.attendances = { some: { status: 'WORKING' } };
+    } else if (dutyStatus === 'not_working') {
+      filterParams.attendances = { none: { status: 'WORKING' } };
     }
 
     const listQuery = {
       where: filterParams,
       include: {
+        attendances: {
+          orderBy: { loginTime: 'desc' },
+          take: 5,
+        },
+        visits: {
+          where: { status: 'in_progress' },
+          select: {
+            id: true,
+            visitCode: true,
+            beneficiary: { select: { id: true, name: true } },
+          },
+        },
         user: {
           select: {
             id: true,
@@ -1371,9 +1426,21 @@ router.get('/care-companions', async (req, res) => {
       }
     }
 
-    const [companions, total] = await Promise.all([
+    const [companions, total, workingCount, notWorkingCount] = await Promise.all([
       prisma.careCompanion.findMany(listQuery),
       prisma.careCompanion.count({ where: filterParams }),
+      prisma.careCompanion.count({
+        where: {
+          ...baseFilter,
+          attendances: { some: { status: 'WORKING' } },
+        },
+      }),
+      prisma.careCompanion.count({
+        where: {
+          ...baseFilter,
+          attendances: { none: { status: 'WORKING' } },
+        },
+      }),
     ]);
 
     const mapped = await Promise.all(companions.map(mapCareCompanion));
@@ -1385,16 +1452,133 @@ router.get('/care-companions', async (req, res) => {
           total,
           page: Number(page),
           totalPages: Math.ceil(total / Number(limit)),
+          meta: {
+            total,
+            workingCount,
+            notWorkingCount,
+          },
         },
       });
     } else {
-      res.json({ success: true, data: mapped });
+      res.json({
+        success: true,
+        data: mapped,
+        meta: {
+          total,
+          workingCount,
+          notWorkingCount,
+        },
+      });
     }
   } catch (err) {
     console.error('GET /care-companions error:', err);
     res
       .status(500)
       .json({ success: false, message: 'Failed to fetch care companions' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/users/care-companions/:id/duty-history — Shift & attendance history
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/care-companions/:id/duty-history', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let companion = await prisma.careCompanion.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, name: true, phone: true, profilePhoto: true } },
+        team: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!companion) {
+      companion = await prisma.careCompanion.findUnique({
+        where: { userId: id },
+        include: {
+          user: { select: { id: true, name: true, phone: true, profilePhoto: true } },
+          team: { select: { id: true, name: true } },
+        },
+      });
+    }
+
+    if (!companion) {
+      return res.status(404).json({ success: false, message: 'Care companion not found' });
+    }
+
+    const attendances = await prisma.staffAttendance.findMany({
+      where: { careCompanionId: companion.id },
+      orderBy: { loginTime: 'desc' },
+      take: 60,
+    });
+
+    const now = new Date();
+    let totalMinutesWorked = 0;
+    let activeAttendance = null;
+
+    const formattedHistory = attendances.map((att) => {
+      let durationMins = att.durationMinutes || 0;
+      if (att.status === 'WORKING') {
+        activeAttendance = att;
+        durationMins = Math.max(0, Math.floor((now.getTime() - new Date(att.loginTime).getTime()) / 60000));
+      }
+      totalMinutesWorked += durationMins;
+
+      return {
+        id: att.id,
+        date: att.date ? att.date.toISOString().split('T')[0] : att.loginTime.toISOString().split('T')[0],
+        status: att.status,
+        loginTime: att.loginTime.toISOString(),
+        loginLat: att.loginLat,
+        loginLng: att.loginLng,
+        loginAddress: att.loginAddress,
+        logoutTime: att.logoutTime ? att.logoutTime.toISOString() : null,
+        logoutLat: att.logoutLat,
+        logoutLng: att.logoutLng,
+        logoutAddress: att.logoutAddress,
+        durationMinutes: durationMins,
+        durationHours: Math.round((durationMins / 60) * 10) / 10,
+        lastLocation: {
+          lat: att.lastLocationLat,
+          lng: att.lastLocationLng,
+          updatedAt: att.lastLocationTime ? att.lastLocationTime.toISOString() : null,
+          batteryLevel: att.batteryLevel,
+          isGpsActive: att.isGpsActive,
+        },
+      };
+    });
+
+    const photoUrl = (companion.user?.profilePhoto || companion.photo)
+      ? await resolveFileUrl(companion.user?.profilePhoto || companion.photo)
+      : null;
+
+    res.json({
+      success: true,
+      data: {
+        companion: {
+          id: companion.id,
+          name: companion.user?.name || companion.name,
+          phone: companion.user?.phone || '',
+          photo: photoUrl,
+          zone: companion.zone,
+          teamName: companion.team?.name || null,
+          isWorking: Boolean(activeAttendance),
+        },
+        metrics: {
+          totalShifts: attendances.length,
+          totalMinutesWorked,
+          totalHoursWorked: Math.round((totalMinutesWorked / 60) * 10) / 10,
+          isWorking: Boolean(activeAttendance),
+          currentShiftMinutes: activeAttendance
+            ? Math.max(0, Math.floor((now.getTime() - new Date(activeAttendance.loginTime).getTime()) / 60000))
+            : 0,
+        },
+        history: formattedHistory,
+      },
+    });
+  } catch (err) {
+    console.error('GET /care-companions/:id/duty-history error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch duty history' });
   }
 });
 

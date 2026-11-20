@@ -149,7 +149,7 @@ const navigationSections: NavSection[] = [
       },
       {
         path: '/saathi-tracking',
-        label: 'Live Saathi Tracker',
+        label: 'Live Companion Tracker',
         icon: Navigation,
         roles: ['master_admin', 'admin', 'operations_manager', 'field_manager', 'saathi_coordinator'],
       },

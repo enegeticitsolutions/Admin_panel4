@@ -28,7 +28,13 @@ const CC_DOT_FILL = '#FFFFFF';       // white fill — CC readings
 const SELF_DOT_FILL = '#DBEAFE';     // light-blue fill — self-reported readings
 const SELF_DOT_BORDER = '#3B82F6';   // blue border — self-reported
 
-export const VitalsCharts = ({ trends }: { trends: VitalTrend[] }) => {
+export interface VitalsChartsProps {
+    trends: VitalTrend[];
+    showHeader?: boolean;
+    title?: string;
+}
+
+export const VitalsCharts = ({ trends, showHeader = true, title }: VitalsChartsProps) => {
     const [chartWidth, setChartWidth] = useState(screenWidth - 40 - 45); // fallback default
     const chartHeight = 120;
 
@@ -207,13 +213,15 @@ export const VitalsCharts = ({ trends }: { trends: VitalTrend[] }) => {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <View style={styles.trendIconContainer}>
-                    <Text style={{ fontSize: 16 }}>📈</Text>
+        <View style={showHeader ? styles.container : undefined}>
+            {showHeader && (
+                <View style={styles.header}>
+                    <View style={styles.trendIconContainer}>
+                        <Text style={{ fontSize: 16 }}>📈</Text>
+                    </View>
+                    <Text style={styles.title}>{title || 'Vitals Trends'}</Text>
                 </View>
-                <Text style={styles.title}>Vitals Trends (Last 7 Data Points)</Text>
-            </View>
+            )}
 
             {trends.map(vital => renderChart(vital))}
         </View>

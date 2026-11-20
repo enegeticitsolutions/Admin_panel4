@@ -641,6 +641,7 @@ export interface OngoingVolunteerVisit {
   elapsedSeconds: number;
   notes?: string | null;
   status: string;
+  type?: 'saathi';
   distanceMeters?: number | null;
   isWithBeneficiary?: boolean;
   volunteer: {
@@ -667,3 +668,57 @@ export interface OngoingVolunteerVisit {
     address?: string | null;
   } | null;
 }
+
+// ============================================================================
+// ONGOING CARE COMPANION (CC) VISIT TYPES
+// ============================================================================
+
+export interface OngoingCCVisit {
+  id: string;
+  visitCode?: string | null;
+  encounterId?: string | null;
+  status: string;
+  type: 'cc';
+  scheduledTime?: string | null;
+  checkInTime: string;
+  durationMinutes: number;
+  elapsedMinutes: number;
+  elapsedSeconds: number;
+  distanceMeters?: number | null;
+  isWithBeneficiary?: boolean;
+  isManualCheckIn?: boolean;
+  manualCheckInReason?: string | null;
+  isGeoVerified?: boolean;
+  geoDistanceMeters?: number | null;
+  notes?: string | null;
+  careCompanionId?: string | null;
+  careCompanion: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    profilePhoto?: string | null;
+    zone?: string | null;
+    teamId?: string | null;
+    teamName?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null;
+  beneficiary: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    photo?: string | null;
+    age?: number | null;
+    gender?: string | null;
+    address?: string | null;
+    city?: string | null;
+    pincode?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null;
+}
+
+export type LiveCompanionVisit =
+  | (OngoingVolunteerVisit & { type?: 'saathi' })
+  | OngoingCCVisit;
+

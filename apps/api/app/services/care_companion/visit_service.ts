@@ -1064,6 +1064,65 @@ export const autoUpdateMissedVisits = async () => {
         status: 'missed',
       },
     });
+
+    // ── Auto-complete stale in_progress visits (> 12 hours old) ──────────
+    const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+    const staleInProgress = await prisma.visit.findMany({
+      where: {
+        status: 'in_progress',
+        checkInTime: { lt: twelveHoursAgo },
+      },
+    });
+
+    for (const sv of staleInProgress) {
+      try {
+        const checkIn = new Date(sv.checkInTime || sv.scheduledTime || now);
+        const cappedMins = Math.min(sv.durationMinutes || 60, 180);
+        const checkOut = new Date(checkIn.getTime() + cappedMins * 60000);
+
+        await prisma.visit.update({
+          where: { id: sv.id },
+          data: {
+            status: 'completed',
+            checkOutTime: checkOut,
+            durationMinutes: cappedMins,
+            notes: (sv.notes ? sv.notes + ' • ' : '') + 'Auto-closed by system: visit exceeded 12h maximum duration.',
+          },
+        });
+
+        const reservation = await prisma.benefitReservation.findFirst({
+          where: { visitId: sv.id, status: 'HELD' },
+        });
+
+        if (reservation) {
+          await prisma.benefitReservation.update({
+            where: { id: reservation.id },
+            data: { status: 'CONSUMED' },
+          });
+
+          const balance = await prisma.subscriptionBenefitBalance.findUnique({
+            where: { id: reservation.balanceId },
+          });
+
+          if (balance) {
+            const reservedAfter = Math.max(0, balance.reservedUnits - reservation.units);
+            const usedAfter = balance.usedUnits + reservation.units;
+            const newAvailable = Math.max(0, balance.totalUnits - usedAfter - reservedAfter);
+
+            await prisma.subscriptionBenefitBalance.update({
+              where: { id: balance.id },
+              data: {
+                usedUnits: usedAfter,
+                reservedUnits: reservedAfter,
+                availableUnits: newAvailable,
+              },
+            });
+          }
+        }
+      } catch (err: any) {
+        console.error(`[autoUpdateMissedVisits] Failed to auto-complete in_progress visit ${sv.id}:`, err.message);
+      }
+    }
   } catch (err) {
     console.error('Error auto-updating missed visits:', err);
   }
