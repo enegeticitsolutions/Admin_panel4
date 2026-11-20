@@ -63,6 +63,7 @@ import CommunityPodcastsPage from './pages/community/CommunityPodcastsPage';
 import CommunityCategoriesPage from './pages/community/CommunityCategoriesPage';
 import CommunityAuthorsPage from './pages/community/CommunityAuthorsPage';
 import CommunityAnalyticsPage from './pages/community/CommunityAnalyticsPage';
+import InvoicesPage from './pages/InvoicesPage';
 
 export const router = createBrowserRouter([
   {
@@ -177,6 +178,14 @@ export const router = createBrowserRouter([
       {
         path: 'subscriptions',
         Component: SubscriptionsPage,
+      },
+      {
+        path: 'invoices',
+        Component: InvoicesPage,
+      },
+      {
+        path: 'billing/invoices',
+        Component: InvoicesPage,
       },
       {
         path: 'admin-users',

@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 interface IssueCreditNoteModalProps {
   isOpen: boolean;
   invoiceId: string | null;
+  invoiceNumber?: string;
+  invoiceTotalAmount?: number;
   onClose: () => void;
   onSuccess: (creditNote: any) => void;
 }

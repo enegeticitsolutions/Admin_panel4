@@ -403,7 +403,7 @@ class CreditNoteService {
   /**
    * Lists Credit Notes with search and pagination.
    */
-  async listCreditNotes({ page = 1, limit = 20, search = '', invoiceId = null, subscriberId = null }) {
+  async listCreditNotes({ page = 1, limit = 20, search = '', invoiceId = null, subscriberId = null, startDate = null, endDate = null }) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
@@ -411,6 +411,16 @@ class CreditNoteService {
     const where = {};
     if (invoiceId) where.invoiceId = invoiceId;
     if (subscriberId) where.subscriberId = subscriberId;
+
+    if (startDate || endDate) {
+      where.issuedAt = {};
+      if (startDate) where.issuedAt.gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        if (endDate.length <= 10) end.setUTCHours(23, 59, 59, 999);
+        where.issuedAt.lte = end;
+      }
+    }
 
     if (search && search.trim()) {
       const q = search.trim();

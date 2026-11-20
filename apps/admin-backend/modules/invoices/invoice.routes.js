@@ -15,6 +15,11 @@ router.post('/counter', invoiceController.updateInvoiceCounter);
 // GET /api/invoices
 router.get('/', invoiceController.listInvoices);
 
+// Summary & Export reporting routes (must precede /:id)
+router.get('/summary', invoiceController.getInvoiceSummary);
+router.get('/export', invoiceController.exportInvoicesCsv);
+router.get('/download-zip', invoiceController.downloadInvoicesZip);
+
 // POST /api/invoices (Create manual invoice / attach invoice with optional PDF)
 router.post('/', upload.single('pdf'), invoiceController.createInvoice);
 

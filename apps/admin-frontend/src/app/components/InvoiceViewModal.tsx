@@ -10,13 +10,16 @@ interface InvoiceViewModalProps {
 
 export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onClose, invoiceId }) => {
   const [pdfUrl, setPdfUrl] = useState<string>('');
+  const [htmlContent, setHtmlContent] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'pdf' | 'html'>('pdf');
 
   useEffect(() => {
     if (!isOpen || !invoiceId) {
       setPdfUrl('');
+      setHtmlContent('');
       setFileName('');
       setError('');
       return;
@@ -26,17 +29,31 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
     setLoading(true);
     setError('');
 
+    // Try fetching presigned PDF URL first
     invoicesApi.fetchInvoicePdfUrl(invoiceId)
       .then((res) => {
         if (isMounted) {
           setPdfUrl(res.downloadUrl);
           setFileName(res.fileName);
+          setViewMode('pdf');
           setLoading(false);
         }
       })
       .catch((err) => {
+        console.warn('[InvoiceViewModal] PDF fetch unavailable, falling back to statutory HTML:', err);
+        // Seamless fallback to pure statutory HTML preview
+        return invoicesApi.fetchInvoiceHtml(invoiceId);
+      })
+      .then((html) => {
+        if (html && isMounted) {
+          setHtmlContent(html);
+          setViewMode('html');
+          setLoading(false);
+        }
+      })
+      .catch((finalErr) => {
         if (isMounted) {
-          setError(err.message || 'Failed to load statutory invoice PDF');
+          setError(finalErr.message || 'Failed to load statutory invoice');
           setLoading(false);
         }
       });
@@ -55,24 +72,30 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
       iframe.contentWindow.print();
     } else if (pdfUrl) {
       window.open(pdfUrl, '_blank');
+    } else if (invoiceId) {
+      window.open(invoicesApi.getInvoiceHtmlUrl(invoiceId), '_blank');
     }
   };
 
   const handleDownload = () => {
-    if (!pdfUrl) return;
-    const a = document.createElement('a');
-    a.href = pdfUrl;
-    a.download = fileName || `Invoice-${invoiceId}.pdf`;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if (pdfUrl) {
+      const a = document.createElement('a');
+      a.href = pdfUrl;
+      a.download = fileName || `Invoice-${invoiceId}.pdf`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else if (invoiceId) {
+      // Direct print-to-PDF via printable document view
+      handlePrint();
+    }
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110] p-4 animate-in fade-in duration-200">
-      <div 
+      <div
         className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] shadow-2xl flex flex-col overflow-hidden border border-gray-100"
         onClick={(e) => e.stopPropagation()}
       >
@@ -83,7 +106,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
               <FileText size={20} />
             </div>
             <div>
-              <h3 className="font-bold text-gray-900 text-base">GST Tax Invoice (PDF)</h3>
+              <h3 className="font-bold text-gray-900 text-base">GST Tax Invoice</h3>
               <p className="text-xs text-gray-500 font-medium">Ref: {invoiceId}</p>
             </div>
           </div>
@@ -91,19 +114,19 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
           <div className="flex items-center gap-3">
             <button
               onClick={handlePrint}
-              disabled={loading || !!error || !pdfUrl}
+              disabled={loading || !!error || (!pdfUrl && !htmlContent)}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Printer size={15} />
-              Print
+              Print / Save PDF
             </button>
             <button
               onClick={handleDownload}
-              disabled={loading || !!error || !pdfUrl}
+              disabled={loading || !!error || (!pdfUrl && !htmlContent)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#FF7A00] text-white text-xs font-bold hover:bg-[#e66e00] transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Download size={15} />
-              Download PDF
+              {pdfUrl ? 'Download PDF' : 'Print / Save PDF'}
             </button>
             <button
               onClick={onClose}
@@ -119,7 +142,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
           {loading && (
             <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center gap-3 z-10">
               <Loader2 size={32} className="animate-spin text-[#FF7A00]" />
-              <p className="text-sm font-semibold text-gray-600">Generating and loading statutory PDF...</p>
+              <p className="text-sm font-semibold text-gray-600">Loading statutory tax invoice...</p>
             </div>
           )}
 
@@ -128,7 +151,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
               <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center text-red-500 mb-3">
                 <AlertCircle size={28} />
               </div>
-              <p className="text-sm font-bold text-gray-800 mb-1">Unable to load invoice PDF</p>
+              <p className="text-sm font-bold text-gray-800 mb-1">Unable to load invoice</p>
               <p className="text-xs text-gray-500 max-w-md mb-4">{error}</p>
               <button
                 onClick={onClose}
@@ -139,11 +162,20 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ isOpen, onCl
             </div>
           )}
 
-          {pdfUrl && !loading && (
+          {!loading && viewMode === 'pdf' && pdfUrl && (
             <iframe
               id="admin-invoice-pdf-frame"
               title="Tax Invoice PDF"
               src={pdfUrl}
+              className="w-full h-full border-none bg-white"
+            />
+          )}
+
+          {!loading && viewMode === 'html' && htmlContent && (
+            <iframe
+              id="admin-invoice-pdf-frame"
+              title="Tax Invoice HTML"
+              srcDoc={htmlContent}
               className="w-full h-full border-none bg-white"
             />
           )}
