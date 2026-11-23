@@ -26,9 +26,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { triggerEmergencyAlert, dialEmergencyHelpline, EMERGENCY_HELPLINE_NUMBER } from '@/services/emergencyTrigger';
 import { useCustomAlert } from '@/contexts/CustomAlertContext';
 import {
+    HomeHeader,
+    HeroOverviewCard,
+    FloatingQuickActions,
     UnlinkedPlansBanner,
     FamilyCareSection,
     PersonalCareOverview,
+    PersonalCareData,
     PersonalCarePromoCard,
     QuickActionsSection,
     CommunityShowcaseSection,
@@ -37,6 +41,7 @@ import {
     JoinCareCircleModal,
     RenewOrLinkModal,
 } from '@/components/dashboard';
+import { HomeColors } from '@/constants/homeTheme';
 import {
     SaathiIntroModal,
     SaathiBeneficiaryPickerModal,
@@ -488,201 +493,222 @@ export default function BeneficiaryDashboard() {
         setShowSaathiPickerModal(true);
     };
 
+    const heroSubtext = familyBeneficiaries.length > 0
+        ? `${familyBeneficiaries[0].name.split(' ')[0]}'s vitals look steady and care schedule is active.`
+        : hasPersonalCarePlan
+        ? "Your daily health vitals and wellness plan are in sync."
+        : "Explore verified care companions, vitals tracking, and family care plans.";
+
+    const personalWellnessData: PersonalCareData = personalData || {
+        adherence: '95%',
+        todaysMedications: [],
+        careCoordinator: {
+            id: 'coord-default',
+            name: 'Dr. Sneha Rao',
+            role: 'Care Coordinator',
+            phone: '011-42258823',
+        },
+    };
+
     return (
-        <ScrollView
-            style={styles.container}
-            contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}
-            bounces={true}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            refreshControl={
-                <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={handlePullToRefresh}
-                    colors={['#FE6700']}
-                    tintColor="#FE6700"
-                    progressBackgroundColor="#FFFFFF"
+        <View style={styles.rootContainer}>
+            {/* Sticky Header with Safe Insets */}
+            <View style={{ paddingTop: insets.top, backgroundColor: 'rgba(250, 243, 235, 0.95)' }}>
+                <HomeHeader
+                    greeting={isGuest ? 'Welcome' : greeting}
+                    userName={isGuest ? 'Guest' : firstName}
+                    userPhoto={(user as any)?.profilePhoto || (user as any)?.photo || null}
+                    onSosPress={handleEmergencyPress}
+                    triggeringSos={triggeringEmergency}
                 />
-            }
-        >
-            <View style={styles.headerWrapper}>
-                <ImageBackground
-                    source={headerPattern}
-                    style={styles.headerBackground}
-                    resizeMode="cover"
-                >
-                    <View
-                        style={{
-                            paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 24 : 16) + 10,
-                            paddingBottom: 22,
-                        }}
-                    >
-                        <View style={responsiveContainerStyle}>
-                            <View style={styles.headerContent}>
-                                <View style={{ flex: 1, marginRight: 10 }}>
-                                    <Text style={styles.greetingTitle} numberOfLines={1} adjustsFontSizeToFit>
-                                        {isGuest ? 'Welcome to MaiHoonNa!' : `${greeting}, ${firstName}!`}
-                                    </Text>
-                                    <Text style={styles.greetingSubtitle} numberOfLines={1}>
-                                        {isGuest ? 'Explore our trusted senior care services' : 'How are you feeling today?'}
-                                    </Text>
-                                </View>
-
-                                {isGuest ? (
-                                    <TouchableOpacity
-                                        style={styles.guestHeaderSignInBtn}
-                                        onPress={() => requireAuth('Create an account or sign in to unlock all features.')}
-                                        activeOpacity={0.8}
-                                    >
-                                        <Feather name="user-plus" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                                        <Text style={styles.guestHeaderSignInText}>Create Account</Text>
-                                    </TouchableOpacity>
-                                ) : (
-                                    <View style={styles.headerRightGroup}>
-                                        <TouchableOpacity
-                                            style={styles.switchHeaderPill}
-                                            onPress={() => {
-                                                if (!hasFamilyOrPlans) {
-                                                    setShowFamilyIntroModal(true);
-                                                } else {
-                                                    router.push('/(subscriber)');
-                                                }
-                                            }}
-                                            activeOpacity={0.8}
-                                        >
-                                            <Ionicons name="people-outline" size={14} color="#FF6A00" style={{ marginRight: 4 }} />
-                                            <Text style={styles.switchHeaderPillText}>Family</Text>
-                                        </TouchableOpacity>
-
-                                        <View style={styles.notificationWrapper}>
-                                            <NotificationBell />
-                                        </View>
-                                    </View>
-                                )}
-                            </View>
-
-                            {!isGuest && emergencyEligible && (
-                                <Animated.View style={{ transform: [{ scale: pulseAnim }], width: '100%', marginTop: 12 }}>
-                                    <TouchableOpacity
-                                        style={[styles.emergencyBtn, triggeringEmergency && { opacity: 0.85 }]}
-                                        activeOpacity={0.85}
-                                        onPress={handleEmergencyPress}
-                                        disabled={triggeringEmergency}
-                                    >
-                                        {triggeringEmergency ? (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                                <ActivityIndicator color="#FFFFFF" size="small" />
-                                                <Text style={styles.emergencyText}>
-                                                    {locationStatus === 'locating' ? 'Locating & Calling...' : 'Dialing Helpline...'}
-                                                </Text>
-                                            </View>
-                                        ) : (
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Feather name="phone-call" size={22} color="#FFFFFF" />
-                                                <View style={{ marginLeft: 10 }}>
-                                                    <Text style={styles.emergencyText}>Emergency Support</Text>
-                                                    <Text style={styles.emergencySubtext}>24/7 Helpline: 011-42258823</Text>
-                                                </View>
-                                            </View>
-                                        )}
-                                    </TouchableOpacity>
-                                </Animated.View>
-                            )}
-                        </View>
-                    </View>
-                </ImageBackground>
             </View>
 
-            <View style={[styles.mainContent, responsiveContainerStyle]}>
-                {/* ── Guest Exploration Banner ── */}
-                {isGuest && (
-                    <TouchableOpacity
-                        style={styles.guestBannerCard}
-                        onPress={() => requireAuth('Create an account to track your daily vitals and request care.')}
-                        activeOpacity={0.88}
-                    >
-                        <View style={styles.guestBannerIconWrap}>
-                            <MaterialCommunityIcons name="shield-star" size={24} color="#FF6A00" />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                <Text style={styles.guestBannerTitle}>Guest Exploration Mode</Text>
-                                <View style={styles.guestPill}>
-                                    <Text style={styles.guestPillText}>PREVIEW</Text>
-                                </View>
-                            </View>
-                            <Text style={styles.guestBannerDesc}>
-                                Create an account to track vitals, book companions, and get 24/7 care support.
-                            </Text>
-                        </View>
-                        <View style={styles.guestBannerCta}>
-                            <Text style={styles.guestBannerCtaText}>Create Account</Text>
-                            <Feather name="arrow-right" size={12} color="#FFFFFF" />
-                        </View>
-                    </TouchableOpacity>
-                )}
+            <ScrollView
+                style={styles.container}
+                contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 40 }]}
+                bounces={true}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={handlePullToRefresh}
+                        colors={[HomeColors.brandOrange]}
+                        tintColor={HomeColors.brandOrange}
+                        progressBackgroundColor="#FFFFFF"
+                    />
+                }
+            >
+                <View style={[styles.mainContent, responsiveContainerStyle]}>
+                    {/* 1. Hero Overview Banner */}
+                    <HeroOverviewCard subtext={heroSubtext} />
 
-                {/* ── Unlinked Care Plans Alert (High Priority Action) ── */}
-                <UnlinkedPlansBanner
-                    unlinkedCount={unlinkedSubs.length}
-                    packageName={unlinkedSubs[0]?.package?.name}
-                    onAssignPress={() => router.push('/(subscriber)')}
-                />
+                    {/* 2. Floating Quick Actions Bar */}
+                    <FloatingQuickActions
+                        onBookSaathi={handleSaathiPress}
+                        onAddMedicine={() => {
+                            if (isGuest && requireAuth('Create an account to manage medications.')) return;
+                            router.push('/(beneficiary)/meds' as any);
+                        }}
+                        onJoinCircle={() => {
+                            if (isGuest && requireAuth('Create an account to join a family care circle.')) return;
+                            setShowJoinCircleModal(true);
+                        }}
+                        onLogVitals={() => {
+                            if (requireAuth('Track and monitor your daily health vitals.')) return;
+                            router.push('/(beneficiary)/vitals' as any);
+                        }}
+                    />
 
-                {/* ── Pending Profile Access Requests & Invitations Banner ── */}
-                <AccessRequestsBanner
-                    pendingCount={subscriberData?.pendingIncomingRequestsCount || 0}
-                    onChanged={refetchAllData}
-                />
-
-                {/* ── Pending Care Profile Verification Banner (Self-Activation) ── */}
-                {isBeneficiaryPending && (
-                    <View style={styles.pendingActivationCard}>
-                        <View style={styles.pendingActivationHeader}>
-                            <View style={styles.pendingBadge}>
-                                <Feather name="clock" size={13} color="#D97706" />
-                                <Text style={styles.pendingBadgeText}>PENDING ACTIVATION</Text>
-                            </View>
-                            <Text style={styles.pendingPackageName}>
-                                {personalData?.pendingSubscription?.packageName || personalData?.subscription?.packageName || 'Prepaid Care Plan'}
-                            </Text>
-                        </View>
-                        <Text style={styles.pendingActivationTitle}>Activate Your Care Plan</Text>
-                        <Text style={styles.pendingActivationDesc}>
-                            Your profile has been pre-enrolled for care support. Review and confirm your details, medical info, and emergency contacts to activate your plan.
-                        </Text>
+                    {/* ── Guest Exploration Banner ── */}
+                    {isGuest && (
                         <TouchableOpacity
-                            style={styles.pendingActivateBtn}
-                            onPress={() => {
-                                const benId = personalData?.beneficiaryId || user?.id;
+                            style={styles.guestBannerCard}
+                            onPress={() => requireAuth('Create an account to track your daily vitals and request care.')}
+                            activeOpacity={0.88}
+                        >
+                            <View style={styles.guestBannerIconWrap}>
+                                <MaterialCommunityIcons name="shield-star" size={24} color="#FF6A00" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                    <Text style={styles.guestBannerTitle}>Guest Exploration Mode</Text>
+                                    <View style={styles.guestPill}>
+                                        <Text style={styles.guestPillText}>PREVIEW</Text>
+                                    </View>
+                                </View>
+                                <Text style={styles.guestBannerDesc}>
+                                    Create an account to track vitals, book companions, and get 24/7 care support.
+                                </Text>
+                            </View>
+                            <View style={styles.guestBannerCta}>
+                                <Text style={styles.guestBannerCtaText}>Create Account</Text>
+                                <Feather name="arrow-right" size={12} color="#FFFFFF" />
+                            </View>
+                        </TouchableOpacity>
+                    )}
+
+                    {/* ── Unlinked Care Plans Alert (High Priority Action) ── */}
+                    {unlinkedSubs.length > 0 && (
+                        <UnlinkedPlansBanner
+                            unlinkedCount={unlinkedSubs.length}
+                            packageName={unlinkedSubs[0]?.package?.name}
+                            onAssignPress={() => router.push('/(subscriber)')}
+                        />
+                    )}
+
+                    {/* ── Pending Profile Access Requests & Invitations Banner ── */}
+                    <AccessRequestsBanner
+                        pendingCount={subscriberData?.pendingIncomingRequestsCount || 0}
+                        onChanged={refetchAllData}
+                    />
+
+                    {/* ── Pending Care Profile Verification Banner (Self-Activation) ── */}
+                    {isBeneficiaryPending && (
+                        <View style={styles.pendingActivationCard}>
+                            <View style={styles.pendingActivationHeader}>
+                                <View style={styles.pendingBadge}>
+                                    <Feather name="clock" size={13} color="#D97706" />
+                                    <Text style={styles.pendingBadgeText}>PENDING ACTIVATION</Text>
+                                </View>
+                                <Text style={styles.pendingPackageName}>
+                                    {personalData?.pendingSubscription?.packageName || personalData?.subscription?.packageName || 'Prepaid Care Plan'}
+                                </Text>
+                            </View>
+                            <Text style={styles.pendingActivationTitle}>Activate Your Care Plan</Text>
+                            <Text style={styles.pendingActivationDesc}>
+                                Your profile has been pre-enrolled for care support. Review and confirm your details, medical info, and emergency contacts to activate your plan.
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.pendingActivateBtn}
+                                onPress={() => {
+                                    const benId = personalData?.beneficiaryId || user?.id;
+                                    router.push({
+                                        pathname: '/(setup)/beneficiary-info',
+                                        params: { isVerificationFlow: 'true', beneficiaryId: benId }
+                                    });
+                                }}
+                                activeOpacity={0.85}
+                            >
+                                <Feather name="check-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.pendingActivateBtnText}>Review & Activate Profile</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* ── Loved Ones (Family Care Section) ── */}
+                    <FamilyCareSection
+                        beneficiaries={familyBeneficiaries}
+                        remainingHours={remainingHours}
+                        visitsThisWeek={visitsThisWeek}
+                        onSelectBeneficiary={(b) => {
+                            const isPending = b.packageStatus === 'pending' || b.verificationStatus === 'pending';
+                            const isExpired = b.packageStatus === 'expired';
+                            if (isPending) {
                                 router.push({
                                     pathname: '/(setup)/beneficiary-info',
-                                    params: { isVerificationFlow: 'true', beneficiaryId: benId }
+                                    params: { isVerificationFlow: 'true', beneficiaryId: b.id }
                                 });
-                            }}
-                            activeOpacity={0.85}
-                        >
-                            <Feather name="check-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                            <Text style={styles.pendingActivateBtnText}>Review & Activate Profile</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
+                            } else if (isExpired) {
+                                if (unlinkedSubs.length > 0) {
+                                    setRenewalTargetBen(b);
+                                    setShowRenewalModal(true);
+                                } else {
+                                    router.push({
+                                        pathname: '/(setup)/subscription-packages',
+                                        params: { beneficiaryId: b.id, beneficiaryName: b.name }
+                                    });
+                                }
+                            } else {
+                                AsyncStorage.setItem('selectedBeneficiaryId', b.id);
+                                router.push(`/(subscriber)/beneficiary-profile?id=${b.id}`);
+                            }
+                        }}
+                        onAddMember={() => {
+                            if (isGuest && requireAuth('Create an account to add and manage family care members.')) return;
+                            router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } });
+                        }}
+                        onOpenFamilyConnect={() => {
+                            if (isGuest && requireAuth('Create an account to access Family Connect.')) return;
+                            if (!hasFamilyOrPlans) {
+                                setShowFamilyIntroModal(true);
+                            } else {
+                                router.push('/(subscriber)');
+                            }
+                        }}
+                        onOpenCareCircle={(b) => {
+                            if (isGuest && requireAuth('Create an account to view and manage care circles.')) return;
+                            setSelectedCircleBen({ id: b.id, name: b.name });
+                            setShowCareCircleModal(true);
+                        }}
+                        onOpenJoinCircle={() => {
+                            if (isGuest && requireAuth('Create an account to join a family care circle.')) return;
+                            setShowJoinCircleModal(true);
+                        }}
+                        pendingAccessRequestsCount={subscriberData?.pendingIncomingRequestsCount || 0}
+                        onAccessChanged={refetchAllData}
+                    />
 
-                {/* ── Personal Care Plan (If Active) ── */}
-                {hasPersonalCarePlan && personalData && (
+                    {/* ── Personal Wellness (Today For You) ── */}
                     <PersonalCareOverview
-                        data={personalData}
+                        data={personalWellnessData}
                         onViewTeam={() => router.push('/(beneficiary)/team')}
-                        onViewAllMeds={() => router.push({
-                            pathname: '/(beneficiary)/meds',
-                            params: { beneficiaryId: personalData.beneficiaryId }
-                        } as any)}
-                        onSelectMed={(medId) => router.push({
-                            pathname: '/(beneficiary)/meds',
-                            params: { beneficiaryId: personalData.beneficiaryId, highlightMedId: medId }
-                        } as any)}
+                        onViewAllMeds={() => {
+                            const targetId = personalData?.beneficiaryId || user?.id;
+                            router.push({
+                                pathname: '/(beneficiary)/meds',
+                                params: { beneficiaryId: targetId }
+                            } as any);
+                        }}
+                        onSelectMed={(medId) => {
+                            const targetId = personalData?.beneficiaryId || user?.id;
+                            router.push({
+                                pathname: '/(beneficiary)/meds',
+                                params: { beneficiaryId: targetId, highlightMedId: medId }
+                            } as any);
+                        }}
                         onOpenCareCircle={() => {
-                            if (personalData.beneficiaryId) {
+                            if (personalData?.beneficiaryId) {
                                 setSelectedCircleBen({
                                     id: personalData.beneficiaryId,
                                     name: personalData.beneficiaryName ? `${personalData.beneficiaryName} (My Care)` : 'My Profile (Self)'
@@ -691,124 +717,22 @@ export default function BeneficiaryDashboard() {
                             }
                         }}
                     />
-                )}
 
-                {/* ── Brand-New User with No Plan AND No Family Members Added ── */}
-                {!hasPersonalCarePlan && !isBeneficiaryPending && familyBeneficiaries.length === 0 && (
-                    <PersonalCarePromoCard
-                        isCompact={false}
-                        isGuest={isGuest}
+                    {/* ── Community Showcase Section ── */}
+                    <CommunityShowcaseSection
+                        events={communityEvents}
+                        loading={communityLoading}
+                        horizontalGutter={horizontalGutter}
+                        onEventPress={(eventId) => {
+                            router.push(`/(community)/events/${eventId}` as any);
+                        }}
                         onExplorePress={() => {
-                            if (isGuest && requireAuth('Create an account to explore and subscribe to care plans.')) return;
-                            router.push('/(setup)/subscription-packages');
+                            router.push('/(community)' as any);
                         }}
                     />
-                )}
 
-                {/* ── Family Care Activity ── */}
-                <FamilyCareSection
-                    beneficiaries={familyBeneficiaries}
-                    remainingHours={remainingHours}
-                    visitsThisWeek={visitsThisWeek}
-                    onSelectBeneficiary={(b) => {
-                        const isPending = b.packageStatus === 'pending' || b.verificationStatus === 'pending';
-                        const isExpired = b.packageStatus === 'expired';
-                        if (isPending) {
-                            router.push({
-                                pathname: '/(setup)/beneficiary-info',
-                                params: { isVerificationFlow: 'true', beneficiaryId: b.id }
-                            });
-                        } else if (isExpired) {
-                            if (unlinkedSubs.length > 0) {
-                                setRenewalTargetBen(b);
-                                setShowRenewalModal(true);
-                            } else {
-                                router.push({
-                                    pathname: '/(setup)/subscription-packages',
-                                    params: { beneficiaryId: b.id, beneficiaryName: b.name }
-                                });
-                            }
-                        } else {
-                            AsyncStorage.setItem('selectedBeneficiaryId', b.id);
-                            router.push(`/(subscriber)/beneficiary-profile?id=${b.id}`);
-                        }
-                    }}
-                    onAddMember={() => {
-                        if (isGuest && requireAuth('Create an account to add and manage family care members.')) return;
-                        router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } });
-                    }}
-                    onOpenFamilyConnect={() => {
-                        if (isGuest && requireAuth('Create an account to access Family Connect.')) return;
-                        if (!hasFamilyOrPlans) {
-                            setShowFamilyIntroModal(true);
-                        } else {
-                            router.push('/(subscriber)');
-                        }
-                    }}
-                    onOpenCareCircle={(b) => {
-                        if (isGuest && requireAuth('Create an account to view and manage care circles.')) return;
-                        setSelectedCircleBen({ id: b.id, name: b.name });
-                        setShowCareCircleModal(true);
-                    }}
-                    onOpenJoinCircle={() => {
-                        if (isGuest && requireAuth('Create an account to join a family care circle.')) return;
-                        setShowJoinCircleModal(true);
-                    }}
-                    pendingAccessRequestsCount={subscriberData?.pendingIncomingRequestsCount || 0}
-                    onAccessChanged={refetchAllData}
-                />
-
-                {/* ── Personal Wellness Card (when user manages family but has no personal plan yet) ── */}
-                {!hasPersonalCarePlan && familyBeneficiaries.length > 0 && (
-                    <PersonalCarePromoCard
-                        isCompact={true}
-                        isGuest={isGuest}
-                        onExplorePress={() => {
-                            if (isGuest && requireAuth('Create an account to explore and subscribe to care plans.')) return;
-                            router.push('/(setup)/subscription-packages');
-                        }}
-                    />
-                )}
-
-                {/* ── Quick Actions Grid ── */}
-                <QuickActionsSection
-                    actionCardWidth={actionCardWidth}
-                    sathiEligible={sathiEligible || sathiEligibleBeneficiaries.length > 0}
-                    hasFamilyOrPlans={hasFamilyOrPlans}
-                    onFamilyConnectPress={() => {
-                        if (requireAuth('Monitor family reports, care hours, and care circles.')) return;
-                        if (!hasFamilyOrPlans) {
-                            setShowFamilyIntroModal(true);
-                        } else {
-                            router.push('/(subscriber)');
-                        }
-                    }}
-                    onLogVitalsPress={() => {
-                        if (requireAuth('Track and monitor your daily health vitals.')) return;
-                        router.push('/(beneficiary)/vitals');
-                    }}
-                    onSaathiPress={handleSaathiPress}
-                    onActionPress={(route) => {
-                        if (route === '/(beneficiary)/request-service' && requireAuth('Request home care, nursing, or attendant services.')) return;
-                        router.push(route as any);
-                    }}
-                />
-
-                {/* ── Community Showcase Section ── */}
-                <CommunityShowcaseSection
-                    events={communityEvents}
-                    loading={communityLoading}
-                    horizontalGutter={horizontalGutter}
-                    onEventPress={(eventId) => {
-                        router.push(`/(community)/events/${eventId}` as any);
-                    }}
-                    onExplorePress={() => {
-                        router.push('/(community)' as any);
-                    }}
-                />
-
-                <View style={{ height: 40 }} />
-            </View>
+                    <View style={{ height: 32 }} />
+                </View>
 
             {/* Emergency Success Overlay Modal */}
             {emergencySuccessModal && (
@@ -947,19 +871,24 @@ export default function BeneficiaryDashboard() {
                 }}
             />
         </ScrollView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    rootContainer: {
+        flex: 1,
+        backgroundColor: HomeColors.pageBackground,
+    },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: HomeColors.pageBackground,
     },
     container: {
         flex: 1,
-        backgroundColor: '#FFF0E6',
+        backgroundColor: HomeColors.pageBackground,
     },
     scrollContent: {
         flexGrow: 1,

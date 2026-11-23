@@ -1,3 +1,6 @@
+export * from './HomeHeader';
+export * from './HeroOverviewCard';
+export * from './FloatingQuickActions';
 export * from './UnlinkedPlansBanner';
 export * from './FamilyCareSection';
 export * from './PersonalCareOverview';

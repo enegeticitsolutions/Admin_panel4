@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const visibleTabs = ['index', 'schedule', 'meds', 'inbox', 'more'];
+const visibleTabs = ['index', 'schedule', 'meds', 'community', 'more'];
 
 export default function BeneficiaryLayout() {
     const insets = useSafeAreaInsets();
@@ -16,14 +16,14 @@ export default function BeneficiaryLayout() {
 
                 return {
                     headerShown: false,
-                    tabBarActiveTintColor: '#FF6A00',
-                    tabBarInactiveTintColor: '#6B7280',
+                    tabBarActiveTintColor: '#FE6700',
+                    tabBarInactiveTintColor: '#68707D',
                     tabBarButton: showInTabBar ? undefined : () => null,
                     tabBarItemStyle: showInTabBar ? undefined : { display: 'none' },
                     tabBarStyle: {
-                        backgroundColor: '#FFFFFF',
-                        borderTopWidth: 1,
-                        borderTopColor: '#E5E7EB',
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        borderTopWidth: 1.08,
+                        borderTopColor: '#E7DED6',
                         height: Platform.OS === 'ios' ? 88 : Platform.OS === 'web' ? 68 : 60 + insets.bottom,
                         paddingBottom: Platform.OS === 'ios' ? 32 : Platform.OS === 'web' ? 8 : 8 + insets.bottom,
                         paddingTop: Platform.OS === 'web' ? 8 : 8,
@@ -70,8 +70,8 @@ export default function BeneficiaryLayout() {
             <Tabs.Screen
                 name="meds"
                 options={{
-                    title: 'Meds',
-                    tabBarLabel: 'Meds',
+                    title: 'Health',
+                    tabBarLabel: 'Health',
                     tabBarIcon: ({ color }) => (
                         <MaterialCommunityIcons name="pill" size={24} color={color} />
                     ),
@@ -79,12 +79,12 @@ export default function BeneficiaryLayout() {
             />
 
             <Tabs.Screen
-                name="inbox"
+                name="community"
                 options={{
-                    title: 'Inbox',
-                    tabBarLabel: 'Inbox',
+                    title: 'Community',
+                    tabBarLabel: 'Community',
                     tabBarIcon: ({ color }) => (
-                        <Feather name="inbox" size={24} color={color} />
+                        <MaterialCommunityIcons name="account-group-outline" size={24} color={color} />
                     ),
                 }}
             />
