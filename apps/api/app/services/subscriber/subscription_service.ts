@@ -559,7 +559,7 @@ export const purchaseSubscription = async (
         });
       }
 
-      // 1c. Upsert BeneficiaryVitalConfigs
+      // 1c. Upsert BeneficiaryVitalConfigs (Additive merge — existing active vitals are preserved)
       const checkedVitalCodes = Object.entries(vitalsInput)
         .filter(([, checked]) => !!checked)
         .map(([code]) => code.trim().toUpperCase());
@@ -580,6 +580,7 @@ export const purchaseSubscription = async (
             update: {
               isActive: true,
               selectedBySubscriberId: userId,
+              ...(medicalData?.templateId ? { templateId: medicalData.templateId } : {}),
             },
             create: {
               id: generateUUID(),
@@ -588,6 +589,7 @@ export const purchaseSubscription = async (
               isActive: true,
               frequency: 'every_visit',
               selectedBySubscriberId: userId,
+              ...(medicalData?.templateId ? { templateId: medicalData.templateId } : {}),
             }
           });
         }
@@ -1677,7 +1679,7 @@ export const activateSubscription = async (
       });
     }
 
-    // E. Sync Vitals Config
+    // E. Sync Vitals Config (Additive merge — existing active vitals are preserved)
     const checkedVitalCodes = Object.entries(vitalsInput)
       .filter(([, checked]) => !!checked)
       .map(([code]) => code.trim().toUpperCase());
@@ -1698,6 +1700,7 @@ export const activateSubscription = async (
           update: {
             isActive: true,
             selectedBySubscriberId: userId,
+            ...(medicalData?.templateId ? { templateId: medicalData.templateId } : {}),
           },
           create: {
             id: generateUUID(),
@@ -1706,6 +1709,7 @@ export const activateSubscription = async (
             isActive: true,
             frequency: 'every_visit',
             selectedBySubscriberId: userId,
+            ...(medicalData?.templateId ? { templateId: medicalData.templateId } : {}),
           }
         });
       }

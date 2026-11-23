@@ -1,6 +1,7 @@
 import prisma from '../../core/database';
 import { generateUUID } from '../../utils/helpers';
 import { MedicationAdherenceManager } from './MedicationAdherenceManager';
+import { ensureSelfBeneficiaryProfile } from '../subscriber/beneficiary_service';
 
 export interface MedicationPreset {
   id: string;
@@ -112,7 +113,7 @@ export const getMedicationPresets = () => {
 
 export const getBeneficiaryMedications = async (beneficiaryId: string) => {
   // Resolve beneficiary ID if user ID was passed
-  const beneficiary = await prisma.beneficiary.findFirst({
+  let beneficiary = await prisma.beneficiary.findFirst({
     where: {
       OR: [
         { id: beneficiaryId },
@@ -121,6 +122,14 @@ export const getBeneficiaryMedications = async (beneficiaryId: string) => {
       ]
     }
   });
+
+  if (!beneficiary) {
+    const user = await prisma.user.findUnique({ where: { id: beneficiaryId } });
+    if (user) {
+      beneficiary = await ensureSelfBeneficiaryProfile(user.id);
+    }
+  }
+
   const actualId = beneficiary ? beneficiary.id : beneficiaryId;
 
   return prisma.medication.findMany({
@@ -149,7 +158,7 @@ export const createMedication = async (data: {
 }) => {
   // Resolve actual beneficiary profile ID if given a User ID
   let targetBeneficiaryId = data.beneficiaryId;
-  const beneficiary = await prisma.beneficiary.findFirst({
+  let beneficiary = await prisma.beneficiary.findFirst({
     where: {
       OR: [
         { id: data.beneficiaryId },
@@ -158,6 +167,14 @@ export const createMedication = async (data: {
       ]
     }
   });
+
+  if (!beneficiary) {
+    const user = await prisma.user.findUnique({ where: { id: data.beneficiaryId } });
+    if (user) {
+      beneficiary = await ensureSelfBeneficiaryProfile(user.id);
+    }
+  }
+
   if (beneficiary) {
     targetBeneficiaryId = beneficiary.id;
   }

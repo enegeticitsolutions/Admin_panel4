@@ -83,6 +83,9 @@ export default function MedicalInfoScreen() {
     
     // Config States
     const [vitalsConfig, setVitalsConfig] = useState<any[]>([]);
+    const [templates, setTemplates] = useState<any[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+    const [showAllVitals, setShowAllVitals] = useState(false);
     const [loadingVitals, setLoadingVitals] = useState(true);
 
     // Modal States
@@ -145,43 +148,81 @@ export default function MedicalInfoScreen() {
         setEndDatePickerVisibility(false);
     };
 
+    const handleSelectTemplate = (tpl: any) => {
+        setSelectedTemplateId(tpl.id);
+        setVitals(prev => {
+            const next = { ...prev };
+            (tpl.items || []).forEach((item: any) => {
+                if (item.code) next[item.code] = true;
+            });
+            return next;
+        });
+    };
+
     useEffect(() => {
         const fetchVitals = async () => {
             try {
-                const res = await fetch(`${API_URL}/public/vitals?activeOnly=true`);
-                const data = await res.json();
-                if (data.success && data.data) {
-                    setVitalsConfig(data.data);
-                    const initial: Record<string, boolean> = {};
-                    
-                    // By default, system vitals are pre-checked
-                    data.data.forEach((v: any) => {
+                const [resVitals, resTemplates] = await Promise.allSettled([
+                    fetch(`${API_URL}/public/vitals?activeOnly=true`).then(r => r.json()),
+                    fetch(`${API_URL}/public/vitals/templates`).then(r => r.json())
+                ]);
+
+                let loadedDefs: any[] = [];
+                if (resVitals.status === 'fulfilled' && resVitals.value?.success && resVitals.value.data) {
+                    loadedDefs = resVitals.value.data;
+                    setVitalsConfig(loadedDefs);
+                }
+
+                let loadedTemplates: any[] = [];
+                if (resTemplates.status === 'fulfilled' && resTemplates.value?.success && Array.isArray(resTemplates.value.data)) {
+                    loadedTemplates = resTemplates.value.data;
+                    setTemplates(loadedTemplates);
+                }
+
+                const initial: Record<string, boolean> = {};
+
+                // Determine matched template based on package hint if present
+                const pkgHint = String(params.packageType || params.packageId || '').toLowerCase();
+                let matchedTemplate = loadedTemplates.find(t => 
+                    pkgHint && t.name.toLowerCase().includes(pkgHint)
+                );
+                if (!matchedTemplate) {
+                    matchedTemplate = loadedTemplates.find(t => t.isDefault) || loadedTemplates[0];
+                }
+
+                if (matchedTemplate) {
+                    setSelectedTemplateId(matchedTemplate.id);
+                    (matchedTemplate.items || []).forEach((item: any) => {
+                        if (item.code) initial[item.code] = true;
+                    });
+                } else {
+                    // Fallback to system vitals
+                    loadedDefs.forEach((v: any) => {
                         initial[v.code] = !!v.isSystemVital;
                     });
-
-                    // Pre-fill active vitals in verification flow if saved configs exist
-                    if (isVerificationFlow && pendingDetailsRaw) {
-                        try {
-                            const b = JSON.parse(pendingDetailsRaw);
-                            if (b.vitalConfigs && Array.isArray(b.vitalConfigs) && b.vitalConfigs.length > 0) {
-                                // Reset to false first so we accurately reflect the saved configuration
-                                data.data.forEach((v: any) => {
-                                    initial[v.code] = false;
-                                });
-                                b.vitalConfigs.forEach((vc: any) => {
-                                    const code = vc.vitalDefinition?.code || vc.code;
-                                    if (code) {
-                                        initial[code] = vc.isActive !== false;
-                                    }
-                                });
-                            }
-                        } catch (err) {
-                            console.error('Error pre-filling vitals configuration:', err);
-                        }
-                    }
-
-                    setVitals(initial);
                 }
+
+                // Pre-fill active vitals in verification flow if saved configs exist
+                if (isVerificationFlow && pendingDetailsRaw) {
+                    try {
+                        const b = JSON.parse(pendingDetailsRaw);
+                        if (b.vitalConfigs && Array.isArray(b.vitalConfigs) && b.vitalConfigs.length > 0) {
+                            loadedDefs.forEach((v: any) => {
+                                initial[v.code] = false;
+                            });
+                            b.vitalConfigs.forEach((vc: any) => {
+                                const code = vc.vitalDefinition?.code || vc.code;
+                                if (code) {
+                                    initial[code] = vc.isActive !== false;
+                                }
+                            });
+                        }
+                    } catch (err) {
+                        console.error('Error pre-filling vitals configuration:', err);
+                    }
+                }
+
+                setVitals(initial);
             } catch (err) {
                 console.error('Failed to fetch vitals', err);
             } finally {
@@ -317,7 +358,8 @@ export default function MedicalInfoScreen() {
             physicianName,
             physicianPhone: cleanedPhysicianPhone,
             hobbies: hobbiesText.split(',').map(s => s.trim()).filter(Boolean),
-            vitals
+            vitals,
+            templateId: selectedTemplateId,
         };
 
         saveSetupDraft({
@@ -560,17 +602,112 @@ export default function MedicalInfoScreen() {
                     {/* Large Unified Form Block */}
                     <View style={styles.card}>
                         
-                        <Text style={styles.subHeading}>Vitals to Track During Home Visits</Text>
+                        <Text style={styles.subHeading}>Care Category & Vitals to Track</Text>
+                        <Text style={styles.subHeadingDesc}>Select a care package template for home visits, or customize individual vitals.</Text>
+
+                        {/* Template / Care Category Selector */}
+                        {templates.length > 0 && (
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.templateScroll}>
+                                {templates.map((t: any) => {
+                                    const isSelected = selectedTemplateId === t.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={t.id}
+                                            style={[styles.templateChip, isSelected && styles.templateChipSelected]}
+                                            onPress={() => handleSelectTemplate(t)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Ionicons
+                                                name={isSelected ? "checkmark-circle" : "pulse-outline"}
+                                                size={15}
+                                                color={isSelected ? "#FFFFFF" : "#4B5563"}
+                                                style={{ marginRight: 6 }}
+                                            />
+                                            <Text style={[styles.templateChipText, isSelected && styles.templateChipTextSelected]}>
+                                                {t.name}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                        )}
+
+                        {/* Selected Template Description */}
+                        {(() => {
+                            const activeTpl = templates.find((t: any) => t.id === selectedTemplateId) || templates.find((t: any) => t.isDefault);
+                            if (!activeTpl?.description) return null;
+                            return (
+                                <View style={styles.templateDescBanner}>
+                                    <Ionicons name="information-circle-outline" size={15} color="#C2410C" style={{ marginRight: 6, marginTop: 1 }} />
+                                    <Text style={styles.templateDescText}>{activeTpl.description}</Text>
+                                </View>
+                            );
+                        })()}
+
+                        {/* Vitals Checkboxes with Frequencies & Mandatory Badges */}
                         {loadingVitals ? (
                             <ActivityIndicator size="small" color="#F97316" style={{ alignSelf: 'flex-start', marginVertical: 10 }} />
-                        ) : vitalsConfig.map((v) => (
-                            <Checkbox 
-                                key={v.id} 
-                                label={v.name + (v.unit ? ` (${v.unit})` : '')} 
-                                checked={!!vitals[v.code]} 
-                                onPress={() => setVitals({ ...vitals, [v.code]: !vitals[v.code] })} 
-                            />
-                        ))}
+                        ) : (
+                            <>
+                                {vitalsConfig
+                                    .filter((v: any) => {
+                                        if (showAllVitals) return true;
+                                        const activeTpl = templates.find((t: any) => t.id === selectedTemplateId) || templates.find((t: any) => t.isDefault);
+                                        const tplCodes = new Set((activeTpl?.items || []).map((i: any) => i.code));
+                                        return tplCodes.size === 0 || tplCodes.has(v.code) || !!vitals[v.code];
+                                    })
+                                    .map((v: any) => {
+                                        const activeTpl = templates.find((t: any) => t.id === selectedTemplateId) || templates.find((t: any) => t.isDefault);
+                                        const tplItem = (activeTpl?.items || []).find((i: any) => i.code === v.code);
+                                        const isMandatory = !!tplItem?.isMandatory;
+                                        const freqLabel = tplItem?.frequency === 'every_visit' ? 'Every Visit' : (tplItem?.frequency === 'weekly' ? 'Weekly' : (tplItem?.frequency || ''));
+
+                                        return (
+                                            <View key={v.id} style={styles.vitalItemRow}>
+                                                <View style={{ flex: 1 }}>
+                                                    <Checkbox 
+                                                        label={v.name + (v.unit ? ` (${v.unit})` : '')} 
+                                                        checked={!!vitals[v.code]} 
+                                                        onPress={() => {
+                                                            if (isMandatory) return; // Keep mandatory vitals enabled
+                                                            setVitals({ ...vitals, [v.code]: !vitals[v.code] });
+                                                        }} 
+                                                    />
+                                                </View>
+                                                <View style={styles.vitalBadgesRow}>
+                                                    {isMandatory && (
+                                                        <View style={styles.mandatoryBadge}>
+                                                            <Text style={styles.mandatoryBadgeText}>Mandatory</Text>
+                                                        </View>
+                                                    )}
+                                                    {!!freqLabel && (
+                                                        <View style={styles.freqBadge}>
+                                                            <Text style={styles.freqBadgeText}>{freqLabel}</Text>
+                                                        </View>
+                                                    )}
+                                                </View>
+                                            </View>
+                                        );
+                                    })}
+
+                                {vitalsConfig.length > 5 && (
+                                    <TouchableOpacity 
+                                        style={styles.toggleExtraVitalsBtn} 
+                                        onPress={() => setShowAllVitals(!showAllVitals)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Ionicons 
+                                            name={showAllVitals ? "chevron-up" : "add-circle-outline"} 
+                                            size={16} 
+                                            color="#FF5C00" 
+                                        />
+                                        <Text style={styles.toggleExtraVitalsText}>
+                                            {showAllVitals ? "Show standard template vitals only" : "Customize & show all available vitals"}
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </>
+                        )}
 
                         <View style={{ marginTop: 24 }} />
 
@@ -841,7 +978,23 @@ const styles = StyleSheet.create({
     emptyText: { fontSize: 16, color: '#9CA3AF', fontStyle: 'italic', marginTop: 4, marginBottom: 9 },
 
     // Vitals Form & Checkboxes
-    subHeading: { fontSize: 16, lineHeight: 20, fontWeight: '400', color: '#111827', marginTop: 6, marginBottom: 12, paddingHorizontal: 8 },
+    subHeading: { fontSize: 16, lineHeight: 20, fontWeight: '600', color: '#111827', marginTop: 6, marginBottom: 4, paddingHorizontal: 8 },
+    subHeadingDesc: { fontSize: 13, lineHeight: 18, color: '#6B7280', marginBottom: 12, paddingHorizontal: 8 },
+    templateScroll: { marginBottom: 14, paddingHorizontal: 4 },
+    templateChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: '#E5E7EB' },
+    templateChipSelected: { backgroundColor: '#FF5C00', borderColor: '#FF5C00' },
+    templateChipText: { fontSize: 13, color: '#374151', fontWeight: '500' },
+    templateChipTextSelected: { color: '#FFFFFF', fontWeight: '600' },
+    templateDescBanner: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#FFF7ED', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 14, marginHorizontal: 8, borderWidth: 1, borderColor: '#FFEDD5' },
+    templateDescText: { fontSize: 12, color: '#C2410C', flex: 1, lineHeight: 17 },
+    vitalItemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: 8 },
+    vitalBadgesRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    mandatoryBadge: { backgroundColor: '#FEE2E2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    mandatoryBadgeText: { fontSize: 10, color: '#DC2626', fontWeight: '700', textTransform: 'uppercase' },
+    freqBadge: { backgroundColor: '#F3F4F6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+    freqBadgeText: { fontSize: 10, color: '#4B5563', fontWeight: '500' },
+    toggleExtraVitalsBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, marginTop: 10, marginBottom: 8 },
+    toggleExtraVitalsText: { fontSize: 13, color: '#FF5C00', fontWeight: '600', marginLeft: 6 },
     checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 8 },
     checkboxBox: { width: 17, height: 17, borderWidth: 1.2, borderColor: '#111827', borderRadius: 3, marginRight: 8, justifyContent: 'center', alignItems: 'center' },
     checkboxChecked: { backgroundColor: '#FF5C00', borderColor: '#FF5C00' },
