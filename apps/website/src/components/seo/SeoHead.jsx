@@ -4,7 +4,7 @@ import { initGoogleAnalytics, trackPageView } from "../../services/analytics";
 const BASE_URL = "https://www.maihoonna.com";
 
 /**
- * Resolves the full absolute canonical URL strictly pointing to https://maihoonna.com
+ * Resolves the full absolute canonical URL strictly pointing to https://www.maihoonna.com
  * Eliminates URL hash fragments so search engines receive clean indexing targets.
  */
 const resolveCanonicalUrl = (activePage) => {
@@ -27,7 +27,7 @@ const SEO_CONFIG = {
       "senior care Gurugram, care for elderly parents Gurgaon, elder care for NRI families, Saathi volunteer senior care, elderly companionship India, senior health monitoring Gurugram",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg",
+    ogImage: "https://www.maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -101,14 +101,36 @@ const SEO_CONFIG = {
           "email": "info@maihoonna.com",
           "contactType": "customer service",
           "availableLanguage": ["en", "hi"]
-        }
+        },
+        "founder": [
+          {
+            "@type": "Person",
+            "name": "Sumit Kumar",
+            "jobTitle": "Founder & CEO",
+            "sameAs": "https://www.linkedin.com/in/sumit-kumar-a85166a/"
+          },
+          {
+            "@type": "Person",
+            "name": "Rajeev Thukral",
+            "jobTitle": "Co-Founder & Director",
+            "sameAs": "https://www.linkedin.com/in/rajeevthukral/"
+          }
+        ],
+        "member": [
+          {
+            "@type": ["Person", "Physician"],
+            "name": "Dr. Narasimhan Subramanian",
+            "jobTitle": "Medical Advisory Board Member",
+            "sameAs": "https://www.linkedin.com/in/narasimhan-subramanian-63326a73/"
+          }
+        ]
       },
       {
         "@context": "https://schema.org",
         "@type": "WebSite",
-        "@id": "https://maihoonna.com/#website",
+        "@id": "https://www.maihoonna.com/#website",
         "name": "MaiHoonNa",
-        "url": "https://maihoonna.com",
+        "url": "https://www.maihoonna.com",
         "description":
           "MaiHoonNa is India's first connected senior care ecosystem. We keep your parents safe, healthy, and emotionally fulfilled."
       },
@@ -174,16 +196,22 @@ const SEO_CONFIG = {
       "senior care services Gurugram, elderly vitals monitoring Gurgaon, medication adherence seniors, Care Mitra visits Delhi NCR",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg",
+    ogImage: "https://www.maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
         "@type": "Service",
         "serviceType": "Senior Home Care & Vitals Monitoring",
         "provider": {
-          "@type": "LocalBusiness",
+          "@type": ["LocalBusiness", "MedicalBusiness"],
           "name": "MaiHoonNa Eldercare",
-          "url": "https://maihoonna.com"
+          "url": "https://www.maihoonna.com",
+          "telephone": "+91-7965560310",
+          "medicalSpecialty": [
+            "Geriatrics",
+            "Nursing",
+            "HomeHealthCare"
+          ]
         },
         "areaServed": [
           {
@@ -207,7 +235,7 @@ const SEO_CONFIG = {
       "Connect your elderly parents with verified Saathi community companions for meaningful conversations, walks, hobbies, and loneliness support across India.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg",
+    ogImage: "https://www.maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -216,7 +244,7 @@ const SEO_CONFIG = {
         "provider": {
           "@type": "Organization",
           "name": "MaiHoonNa",
-          "url": "https://maihoonna.com"
+          "url": "https://www.maihoonna.com"
         },
         "description":
           "Community companionship program connecting verified volunteers with senior citizens for social interactions, walks, hobby sharing, and loneliness relief."
@@ -274,7 +302,7 @@ const SEO_CONFIG = {
       "senior advisory network, retired executive consulting, senior civil servant advisors, startup mentorship, board advisory India, MaiHoonNa legacy",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg",
+    ogImage: "https://www.maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -283,7 +311,7 @@ const SEO_CONFIG = {
         "provider": {
           "@type": "Organization",
           "name": "MaiHoonNa Legacy Circle",
-          "url": "https://maihoonna.com"
+          "url": "https://www.maihoonna.com"
         },
         "description":
           "Premier network of retired and veteran senior leaders providing strategic counsel, board guidance, and mentorship to businesses and institutions."
@@ -321,13 +349,13 @@ const SEO_CONFIG = {
       "Transparent senior care subscription plans built around prepaid hours with 30-day rollover, no hidden fees, and full family connect app access for NRI families.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg",
+    ogImage: "https://www.maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
         "@type": "OfferCatalog",
         "name": "MaiHoonNa Senior Care Plans",
-        "url": "https://maihoonna.com/",
+        "url": "https://www.maihoonna.com/",
         "numberOfItems": 3,
         "itemListElement": [
           {
@@ -398,7 +426,7 @@ const SEO_CONFIG = {
       "Learn about MaiHoonNa's founding story by Sumit Kejriwal. Dedicated to caring for aging parents in India with trustworthy companionship, medical tracking, and NRI peace of mind.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg",
+    ogImage: "https://www.maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -409,7 +437,7 @@ const SEO_CONFIG = {
         "publisher": {
           "@type": "Organization",
           "name": "MaiHoonNa Eldercare Private Limited",
-          "url": "https://maihoonna.com"
+          "url": "https://www.maihoonna.com"
         }
       }
     ]
@@ -421,7 +449,7 @@ const SEO_CONFIG = {
       "Learn about MaiHoonNa's founding story by Sumit Kejriwal. Dedicated to caring for aging parents in India with trustworthy companionship, medical tracking, and NRI peace of mind.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg",
+    ogImage: "https://www.maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -432,7 +460,7 @@ const SEO_CONFIG = {
         "publisher": {
           "@type": "Organization",
           "name": "MaiHoonNa Eldercare Private Limited",
-          "url": "https://maihoonna.com"
+          "url": "https://www.maihoonna.com"
         }
       }
     ]
@@ -444,18 +472,55 @@ const SEO_CONFIG = {
       "Meet the dedicated leadership, healthcare experts, and operations team behind MaiHoonNa. Led by Sumit Kumar, Rajeev Thukral, and Dr. Narasimhan Subramanian.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg",
+    ogImage: "https://www.maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
         "@type": "AboutPage",
+        "@id": "https://www.maihoonna.com/team#aboutpage",
         "name": "Our Team - MaiHoonNa Eldercare",
         "description":
-          "People who show up, so your parents aren't alone. Meet the team driving India's connected elder care ecosystem.",
+          "Meet the leadership, healthcare specialists, and operations team driving India's connected elder care ecosystem.",
         "publisher": {
           "@type": "Organization",
           "name": "MaiHoonNa Eldercare Private Limited",
-          "url": "https://maihoonna.com"
+          "url": "https://www.maihoonna.com"
+        },
+        "mainEntity": {
+          "@type": "Organization",
+          "name": "MaiHoonNa Eldercare Private Limited",
+          "url": "https://www.maihoonna.com",
+          "member": [
+            {
+              "@type": "Person",
+              "@id": "https://www.maihoonna.com/team#sumit-kumar",
+              "name": "Sumit Kumar",
+              "jobTitle": "Founder & CEO",
+              "description": "Healthcare technology leader with 25+ years of experience across Highmark, Accenture, and Infosys. Founder of MaiHoonNa.",
+              "sameAs": "https://www.linkedin.com/in/sumit-kumar-a85166a/"
+            },
+            {
+              "@type": "Person",
+              "@id": "https://www.maihoonna.com/team#rajeev-thukral",
+              "name": "Rajeev Thukral",
+              "jobTitle": "Co-Founder & Director",
+              "description": "35+ years corporate strategy and finance veteran with GE Capital, Genpact, and MIT Sloan alumnus. Co-founder of MaiHoonNa.",
+              "sameAs": "https://www.linkedin.com/in/rajeevthukral/"
+            },
+            {
+              "@type": ["Person", "Physician"],
+              "@id": "https://www.maihoonna.com/team#dr-narasimhan-subramanian",
+              "name": "Dr. Narasimhan Subramanian",
+              "jobTitle": "Medical Advisory Board Member",
+              "medicalSpecialty": "Urology",
+              "description": "Senior Urologist and Robotic Surgeon at Indraprastha Apollo Hospitals Delhi with 34+ years of clinical and surgical expertise. Member of the Urological Society of India.",
+              "hospitalAffiliation": {
+                "@type": "Hospital",
+                "name": "Indraprastha Apollo Hospitals, Delhi"
+              },
+              "sameAs": "https://www.linkedin.com/in/narasimhan-subramanian-63326a73/"
+            }
+          ]
         }
       }
     ]
@@ -469,7 +534,7 @@ const SEO_CONFIG = {
       "partner with MaiHoonNa, eldercare healthcare partners, ambulance emergency Gurugram, diagnostics lab partnership, pharmacy senior care network",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg",
+    ogImage: "https://www.maihoonna.com/og-image.jpg",
     schemas: [
       {
         "@context": "https://schema.org",
@@ -480,7 +545,7 @@ const SEO_CONFIG = {
         "publisher": {
           "@type": "Organization",
           "name": "MaiHoonNa Eldercare Private Limited",
-          "url": "https://maihoonna.com"
+          "url": "https://www.maihoonna.com"
         }
       }
     ]
@@ -492,7 +557,7 @@ const SEO_CONFIG = {
       "Read the terms and conditions governing the use of MaiHoonNa senior care and companionship services, subscription hours, and Care Mitra visits.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   },
 
   privacy: {
@@ -501,7 +566,7 @@ const SEO_CONFIG = {
       "Learn how MaiHoonNa protects and respects your personal, health, and family data across our senior care mobile apps and web platform.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   },
 
   "refund-policy": {
@@ -510,7 +575,7 @@ const SEO_CONFIG = {
       "Understand MaiHoonNa's subscription cancellation rules, refund criteria, and 30-day unused care hour rollover terms.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   },
 
   "cookie-policy": {
@@ -519,7 +584,7 @@ const SEO_CONFIG = {
       "Information on how MaiHoonNa utilizes cookies and analytics to enhance user experience across our senior care website.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   },
 
   "child-safety": {
@@ -528,7 +593,7 @@ const SEO_CONFIG = {
       "MaiHoonNa's zero-tolerance child safety standards, prohibited conduct, reporting channels, and platform compliance guidelines.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   },
 
   "saathi-tc": {
@@ -537,7 +602,7 @@ const SEO_CONFIG = {
       "Volunteer terms and conditions, Saathi credits programme guidelines, and community code of conduct.",
     robots: "index, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   },
 
   auth: {
@@ -546,7 +611,7 @@ const SEO_CONFIG = {
       "Sign up or log in to MaiHoonNa to access family connect dashboard, manage parent care, and track companion visits.",
     robots: "noindex, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   },
 
   account: {
@@ -555,7 +620,7 @@ const SEO_CONFIG = {
       "Manage active senior care subscriptions, view visit logs, and update parent care details.",
     robots: "noindex, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   },
 
   checkout: {
@@ -564,7 +629,7 @@ const SEO_CONFIG = {
       "Securely finalize senior care plan subscription for your parents.",
     robots: "noindex, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   },
 
   "not-found": {
@@ -573,7 +638,7 @@ const SEO_CONFIG = {
       "The requested page does not exist on MaiHoonNa. Explore our senior care services, Saathi network, and subscription plans.",
     robots: "noindex, follow",
     ogType: "website",
-    ogImage: "https://maihoonna.com/og-image.jpg"
+    ogImage: "https://www.maihoonna.com/og-image.jpg"
   }
 };
 
