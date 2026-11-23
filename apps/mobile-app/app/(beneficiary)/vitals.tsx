@@ -33,6 +33,7 @@ export default function VitalsScreen() {
     const { isGuest, requireAuth } = useAuth();
 
     const [authToken, setAuthToken] = useState('');
+    const [userName, setUserName] = useState('');
     const [history, setHistory] = useState<SelfReportedHistoryEntry[]>([]);
     const [historyLoading, setHistoryLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -54,7 +55,16 @@ export default function VitalsScreen() {
 
     const loadData = async () => {
         try {
-            const token = await AsyncStorage.getItem('userToken');
+            const [token, userRaw] = await Promise.all([
+                AsyncStorage.getItem('userToken'),
+                AsyncStorage.getItem('userData')
+            ]);
+            if (userRaw) {
+                try {
+                    const u = JSON.parse(userRaw);
+                    if (u.name) setUserName(u.name);
+                } catch (_) {}
+            }
             if (token) {
                 setAuthToken(token);
                 await fetchHistory(token);
@@ -155,7 +165,9 @@ export default function VitalsScreen() {
                 </TouchableOpacity>
                 <View style={styles.topBarContent}>
                     <Text style={styles.topBarTitle}>My Vitals</Text>
-                    <Text style={styles.topBarSub}>Self-reported health readings</Text>
+                    <Text style={styles.topBarSub}>
+                        {userName ? `Logging for ${userName} (You)` : 'Self-reported personal readings'}
+                    </Text>
                 </View>
                 {!showForm && (
                     <TouchableOpacity onPress={() => setShowForm(true)} style={styles.addBtn}>

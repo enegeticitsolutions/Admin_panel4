@@ -7,6 +7,7 @@ import { notificationProducer } from '@maihoonna/notifications';
 import { resolveFileUrl, resolveFileUrls } from '../storage';
 import { invalidateBeneficiarySoapContext } from '../ai/beneficiary_context_cache';
 import { ensureProfileAccessOnCreate, requestProfileAccess } from '../access/profile_access_service';
+import { ensureDefaultVitalsForBeneficiary } from '../shared/vitals_template_service';
 
 // Map free-text frequencies from the mobile UI to valid DB enum values
 const frequencyMap: Record<string, string> = {
@@ -270,14 +271,16 @@ export const ensureSelfBeneficiaryProfile = async (userId: string) => {
         sponsorUserId: userId,
       });
     });
+    // Ensure standard care vitals are provisioned if none exist yet
+    await ensureDefaultVitalsForBeneficiary(existing.id, prisma);
     return existing;
   }
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new Error('User not found');
 
-  return prisma.$transaction(async (tx) => {
-    const created = await tx.beneficiary.create({
+  const created = await prisma.$transaction(async (tx) => {
+    const ben = await tx.beneficiary.create({
       data: {
         id: generateUUID(),
         userId: user.id,
@@ -295,13 +298,18 @@ export const ensureSelfBeneficiaryProfile = async (userId: string) => {
     });
 
     await ensureProfileAccessOnCreate(tx, {
-      beneficiaryId: created.id,
+      beneficiaryId: ben.id,
       beneficiaryUserId: user.id,
       sponsorUserId: user.id,
     });
 
-    return created;
+    return ben;
   });
+
+  // Provision standard care vitals for the newly created self-profile
+  await ensureDefaultVitalsForBeneficiary(created.id, prisma);
+
+  return created;
 };
 
 export const getBeneficiary = async (beneficiaryId: string) => {

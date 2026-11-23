@@ -17,7 +17,7 @@ export class MedicationAdherenceManager {
      */
     private async resolveBeneficiaryId(): Promise<void> {
         if (this.isResolved) return;
-        const beneficiary = await prisma.beneficiary.findFirst({
+        let beneficiary = await prisma.beneficiary.findFirst({
             where: {
                 OR: [
                     { id: this.beneficiaryId },
@@ -26,6 +26,14 @@ export class MedicationAdherenceManager {
                 ]
             }
         });
+
+        if (!beneficiary) {
+            const user = await prisma.user.findUnique({ where: { id: this.beneficiaryId } });
+            if (user) {
+                const { ensureSelfBeneficiaryProfile } = require('../subscriber/beneficiary_service');
+                beneficiary = await ensureSelfBeneficiaryProfile(user.id);
+            }
+        }
 
         if (beneficiary) {
             this.beneficiaryId = beneficiary.id;
