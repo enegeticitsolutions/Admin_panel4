@@ -90,6 +90,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 8,
     marginTop: -22,
+    marginBottom: 16,
     zIndex: 2,
     ...HomeShadows.floatingBar,
   },

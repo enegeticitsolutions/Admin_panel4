@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { MedicationPresetItem } from '@/constants/medicationPresets';
 
@@ -100,6 +101,7 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
   initialData,
   loading = false,
 }): React.ReactElement | null => {
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [dosage, setDosage] = useState('');
   const [route, setRoute] = useState('oral');
@@ -288,7 +290,12 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
       <View style={styles.modalOverlay}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalContent}
+          style={[
+            styles.modalContent,
+            {
+              maxHeight: Platform.OS === 'ios' ? '88%' : '90%',
+            },
+          ]}
         >
           {/* Header */}
           <View style={styles.headerRow}>
@@ -309,7 +316,12 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollArea}>
+          <ScrollView 
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false} 
+            contentContainerStyle={styles.scrollArea}
+            keyboardShouldPersistTaps="handled"
+          >
             {/* Medication Name */}
             <Text style={styles.fieldLabel}>Medication Name *</Text>
             <TextInput
@@ -585,6 +597,9 @@ export const AddMedicationModal: React.FC<AddMedicationModalProps> = ({
               )}
             </TouchableOpacity>
           </View>
+
+          {/* Dedicated 30px bottom spacer */}
+          <View style={{ height: Math.max(insets.bottom, 30) }} />
         </KeyboardAvoidingView>
 
         <DateTimePickerModal
@@ -609,10 +624,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '92%',
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    width: '100%',
+  },
+  scrollView: {
+    flexShrink: 1,
+    width: '100%',
   },
   headerRow: {
     flexDirection: 'row',
@@ -812,37 +830,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 16,
-    paddingTop: 12,
+    marginTop: 14,
+    paddingTop: 14,
+    paddingBottom: 4,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
+    height: 48,
+    minHeight: 48,
+    borderRadius: 14,
     backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelBtnText: {
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
-    fontWeight: '600',
     color: '#4B5563',
   },
   saveBtn: {
     flex: 2,
+    height: 48,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#FE6700',
+    shadowColor: '#FE6700',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 2,
   },
   saveBtnText: {
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 14,
-    fontWeight: '700',
     color: '#FFFFFF',
   },
 });

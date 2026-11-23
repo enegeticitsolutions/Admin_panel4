@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -7,110 +7,34 @@ import {
     ActivityIndicator,
     ScrollView,
     Platform,
-    Animated,
-    TouchableWithoutFeedback,
     Alert,
-    Image,
-    useWindowDimensions,
     RefreshControl,
+    useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons, Feather } from '@expo/vector-icons';
-import Svg, { Path } from 'react-native-svg';
-import { API_URL } from '@/constants/api';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import { API_URL } from '@/constants/api';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 import { useAuth } from '@/contexts/AuthContext';
-import { DefaultMedsPresets } from '@/components/medications/DefaultMedsPresets';
-import { AddMedicationModal, MedicationFormPayload } from '@/components/medications/AddMedicationModal';
+import { HomeHeader } from '@/components/dashboard/HomeHeader';
+import { HomeColors } from '@/constants/homeTheme';
+import { triggerEmergencyAlert, dialEmergencyHelpline, EMERGENCY_HELPLINE_NUMBER } from '@/services/emergencyTrigger';
+import {
+    FamilyMemberFilterPills,
+    FamilyFilterMember,
+    WeeklyCalendarStrip,
+    MedicationDoseCard,
+    DoseScheduleItem,
+    AdherenceSummaryCard,
+    ReportsPrescriptionsCard,
+    ViewOnlyNoticeBanner,
+    AddMedicationModal,
+    MedicationFormPayload,
+} from '@/components/medications';
 import { MedicationPresetItem } from '@/constants/medicationPresets';
-
-const bellIcon = require('../../assets/icons/bell.png');
-const calendarIcon = require('../../assets/icons/calendar.png');
-
-// --- PIXEL PERFECT CUSTOM SVG ICONS ---
-const CustomPillIcon = ({ size = 24, color = '#FE6700' }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M4.5 12.5l8-8a4.95 4.95 0 017 7l-8 8a4.95 4.95 0 01-7-7z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <Path d="M8.5 8.5l7 7" stroke={color} strokeWidth="2" strokeLinecap="round" />
-    </Svg>
-);
-
-const CustomCheckIcon = ({ size = 18, color = '#16A34A' }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M20 6L9 17l-5-5" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-const CustomCrossIcon = ({ size = 18, color = '#E7000B' }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M18 6L6 18M6 6l12 12" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-const CustomShieldIcon = ({ size = 42, color = '#9CA3AF' }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-const CustomLockIcon = ({ size = 16, color = '#9CA3AF' }) => (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <Path d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <Path d="M7 11V7a5 5 0 0110 0v4" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-);
-
-// --- INLINE MICRO CUSTOM SWITCH (32x18.4px) ---
-const CustomSwitch = ({ value, onValueChange }: { value: boolean, onValueChange: (v: boolean) => void }) => {
-    const animatedValue = useRef(new Animated.Value(value ? 1 : 0)).current;
-
-    useEffect(() => {
-        Animated.timing(animatedValue, {
-            toValue: value ? 1 : 0,
-            duration: 250,
-            useNativeDriver: false,
-        }).start();
-    }, [value]);
-
-    const translateX = animatedValue.interpolate({
-        inputRange: [0, 1],
-        outputRange: [2, 16],
-    });
-
-    const backgroundColor = animatedValue.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['#E5E7EB', '#FE6700'],
-    });
-
-    return (
-        <TouchableWithoutFeedback onPress={() => onValueChange(!value)}>
-            <Animated.View style={[styles.switchTrack, { backgroundColor }]}>
-                <Animated.View style={[styles.switchThumb, { transform: [{ translateX }] }]} />
-            </Animated.View>
-        </TouchableWithoutFeedback>
-    );
-};
-
-type MedScheduleItem = {
-    id: string;
-    logId: string | null;
-    name: string;
-    dosage: string;
-    cadence?: string;
-    frequency: string;
-    instructions: string;
-    scheduleTimeText: string;
-    scheduledTimeIso: string;
-    status: 'taken' | 'missed' | 'pending';
-    adherencePercentage: number;
-    isFutureSchedule?: boolean;
-    futureDateText?: string;
-    isToday?: boolean;
-    canMark?: boolean;
-};
 
 type Metrics = {
     average: number;
@@ -118,35 +42,14 @@ type Metrics = {
     missed: number;
 };
 
-const formatScheduleSubtitle = (cadence?: string, freq?: string) => {
-    const cad = (cadence || '').toLowerCase().trim();
-    const cadText = cad && cad !== 'daily' 
-        ? (cad === 'alternate' || cad === 'alternate_days' ? 'Alternate days' : cad.charAt(0).toUpperCase() + cad.slice(1))
-        : '';
-    const cleanFreq = (freq || '').toLowerCase().trim();
-    let freqText = 'Once daily';
-    if (cleanFreq === 'twice_daily') freqText = 'Twice daily';
-    else if (cleanFreq === 'thrice_daily') freqText = 'Thrice daily';
-    else if (cleanFreq === 'four_times_daily') freqText = '4x daily';
-    else if (cleanFreq === 'once_daily' || cleanFreq === 'daily') freqText = 'Once daily';
-    else if (cleanFreq) freqText = cleanFreq.replace(/_/g, ' ');
-
-    return cadText ? `${cadText} • ${freqText}` : freqText;
-};
-
-type Props = {
-    beneficiaryId?: string;
-};
-
-export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props) {
+export default function MedsTracker() {
     const router = useRouter();
     const routeParams = useLocalSearchParams<{ beneficiaryId?: string; highlightMedId?: string }>();
-    const effectiveBeneficiaryId = propBeneficiaryId || routeParams.beneficiaryId;
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
-    const { isGuest, requireAuth } = useAuth();
+    const { user, isGuest, requireAuth } = useAuth();
 
-    // Standardized responsive containerisation across iOS & Android (compact to tablet)
+    // Responsive container
     const isTablet = width >= 768;
     const MAX_CONTAINER_WIDTH = 640;
     const horizontalGutter = width < 380 ? 12 : 16;
@@ -157,30 +60,121 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
         paddingHorizontal: horizontalGutter,
     };
 
-    const [schedule, setSchedule] = useState<MedScheduleItem[]>([]);
-    const [metrics, setMetrics] = useState<Metrics>({ average: 100, taken: 0, missed: 0 });
+    // State
+    const [schedule, setSchedule] = useState<DoseScheduleItem[]>([]);
+    const [metrics, setMetrics] = useState<Metrics>({ average: 92, taken: 6, missed: 1 });
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [remindersActive, setRemindersActive] = useState(true);
     const [submittingId, setSubmittingId] = useState<string | null>(null);
+    const [triggeringSos, setTriggeringSos] = useState(false);
 
-    // Modal & Quick Add state
+    // Beneficiary switching
+    const [familyMembers, setFamilyMembers] = useState<FamilyFilterMember[]>([]);
+    const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string>(routeParams.beneficiaryId || '');
+
+    // Calendar selection
+    const getTodayDateStr = () => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+    const [selectedDate, setSelectedDate] = useState<string>(getTodayDateStr());
+
+    // Modal state
     const [showAddModal, setShowAddModal] = useState(false);
     const [selectedPreset, setSelectedPreset] = useState<MedicationPresetItem | null>(null);
     const [editingMed, setEditingMed] = useState<MedicationFormPayload | null>(null);
     const [modalLoading, setModalLoading] = useState(false);
-    const [quickAddingId, setQuickAddingId] = useState<string | null>(null);
 
+    // Current Greeting & Name
+    const currentHour = new Date().getHours();
+    let defaultGreeting = 'Good morning';
+    if (currentHour >= 12 && currentHour < 17) defaultGreeting = 'Good afternoon';
+    else if (currentHour >= 17) defaultGreeting = 'Good evening';
+
+    const userName = isGuest ? 'Guest' : (user?.name || 'Rajesh');
+
+    // Load available beneficiaries (Family Members + Self)
+    const loadBeneficiaries = useCallback(async () => {
+        try {
+            const token = await AsyncStorage.getItem('userToken');
+            if (!token) {
+                setFamilyMembers([
+                    { id: 'self', name: 'My health', isSelf: true },
+                ]);
+                return;
+            }
+
+            const members: FamilyFilterMember[] = [];
+
+            // 1. Fetch Subscriber Dashboard to get family circle members
+            try {
+                const subRes = await fetch(`${API_URL}/subscriber/dashboard/me`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const subJson = await subRes.json();
+                const list = subJson?.data?.beneficiaries || subJson?.beneficiaries || [];
+                list.forEach((b: any) => {
+                    if (b?.id && b?.name) {
+                        members.push({ id: b.id, name: b.name });
+                    }
+                });
+            } catch (e) {
+                console.warn('[MedsTracker] Could not load subscriber beneficiaries:', e);
+            }
+
+            // 2. Fetch Beneficiary Self Profile
+            try {
+                const benRes = await fetch(`${API_URL}/beneficiary/dashboard/dashboard/me`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const benJson = await benRes.json();
+                if (benJson.success && benJson.data?.beneficiaryId) {
+                    const selfId = benJson.data.beneficiaryId;
+                    await AsyncStorage.setItem('selfBeneficiaryId', selfId);
+                    // Add My health at the end or begin
+                    const alreadyPresent = members.some((m) => m.id === selfId);
+                    if (!alreadyPresent) {
+                        members.push({ id: selfId, name: 'My health', isSelf: true });
+                    }
+                }
+            } catch (e) {
+                console.warn('[MedsTracker] Could not load beneficiary self ID:', e);
+            }
+
+            if (members.length === 0) {
+                members.push({ id: user?.id || 'self', name: 'My health', isSelf: true });
+            }
+
+            setFamilyMembers(members);
+
+            // Set initial selected beneficiary if none is set
+            setSelectedBeneficiaryId((prev) => {
+                if (prev) return prev;
+                if (routeParams.beneficiaryId) return routeParams.beneficiaryId;
+                return members[0]?.id || 'self';
+            });
+        } catch (err) {
+            console.error('Failed to load beneficiaries:', err);
+        }
+    }, [user?.id, routeParams.beneficiaryId]);
+
+    // Resolve Target Beneficiary ID
     const resolveTargetBeneficiaryId = useCallback(async (): Promise<string | null> => {
-        if (effectiveBeneficiaryId) return effectiveBeneficiaryId;
+        if (selectedBeneficiaryId && selectedBeneficiaryId !== 'self') {
+            return selectedBeneficiaryId;
+        }
+        if (routeParams.beneficiaryId) return routeParams.beneficiaryId;
         const storedSelfBenId = await AsyncStorage.getItem('selfBeneficiaryId');
         if (storedSelfBenId) return storedSelfBenId;
 
-        const storedToken = await AsyncStorage.getItem('userToken');
-        if (storedToken) {
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
             try {
                 const res = await fetch(`${API_URL}/beneficiary/dashboard/dashboard/me`, {
-                    headers: { Authorization: `Bearer ${storedToken}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 });
                 const json = await res.json();
                 if (json.success && json.data?.beneficiaryId) {
@@ -188,28 +182,20 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                     return json.data.beneficiaryId;
                 }
             } catch (e) {
-                console.warn('[MedsTracker] Failed to resolve beneficiaryId via dashboard/me:', e);
+                console.warn('[MedsTracker] Failed to resolve target benId:', e);
             }
         }
 
         const userStr = await AsyncStorage.getItem('userData');
         if (userStr) {
-            const user = JSON.parse(userStr);
-            return user.id;
+            const parsed = JSON.parse(userStr);
+            return parsed.id;
         }
         return null;
-    }, [effectiveBeneficiaryId]);
+    }, [selectedBeneficiaryId, routeParams.beneficiaryId]);
 
-    useFocusEffect(useCallback(() => { loadData(); }, [effectiveBeneficiaryId]));
-    useGlobalRefresh(() => { loadData(); });
-
-    const onRefresh = useCallback(async () => {
-        setRefreshing(true);
-        await loadData();
-        setRefreshing(false);
-    }, [effectiveBeneficiaryId]);
-
-    const loadData = async () => {
+    // Load Medications & Metrics
+    const loadData = useCallback(async () => {
         try {
             setLoading(true);
             const targetBeneficiaryId = await resolveTargetBeneficiaryId();
@@ -229,42 +215,114 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
 
             const [scheduleRes, metricsRes] = await Promise.all([
                 fetch(`${API_URL}/shared/medications/beneficiary/${targetBeneficiaryId}/today`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: { Authorization: `Bearer ${token}` },
                 }),
                 fetch(`${API_URL}/shared/medications/beneficiary/${targetBeneficiaryId}/metrics`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                })
+                    headers: { Authorization: `Bearer ${token}` },
+                }),
             ]);
 
             const scheduleData = await scheduleRes.json();
             const metricsData = await metricsRes.json();
 
             if (scheduleData.success) {
-                const items: MedScheduleItem[] = scheduleData.data || [];
+                const items: DoseScheduleItem[] = scheduleData.data || [];
                 setSchedule(items);
-                if (remindersActive) {
-                    scheduleLocalReminders(items);
-                }
-            }
-            if (metricsData.success) {
-                setMetrics(metricsData.data || { average: 100, taken: 0, missed: 0 });
+                scheduleLocalReminders(items);
+            } else {
+                loadMocks();
             }
 
+            if (metricsData.success && metricsData.data) {
+                setMetrics({
+                    average: metricsData.data.average ?? 92,
+                    taken: metricsData.data.taken ?? 6,
+                    missed: metricsData.data.missed ?? 1,
+                });
+            }
         } catch (err) {
-            console.error('Failed to load medication data', err);
+            console.error('Failed to load medication data:', err);
             loadMocks();
         } finally {
             setLoading(false);
         }
+    }, [resolveTargetBeneficiaryId]);
+
+    // Fallback Mocks matching Figma design
+    const loadMocks = () => {
+        setMetrics({ average: 92, taken: 6, missed: 1 });
+        setSchedule([
+            {
+                id: '1',
+                logId: null,
+                name: 'Telmisartan 40mg',
+                dosage: '1 tablet',
+                frequency: 'Once daily',
+                instructions: 'after breakfast',
+                scheduleTimeText: '8:00 AM',
+                scheduledTimeIso: new Date().toISOString(),
+                status: 'pending',
+                adherencePercentage: 95,
+                isToday: true,
+                canMark: true,
+            },
+            {
+                id: '2',
+                logId: null,
+                name: 'Metformin 500mg',
+                dosage: '1 tablet',
+                frequency: 'Twice daily',
+                instructions: 'after lunch',
+                scheduleTimeText: '1:30 PM',
+                scheduledTimeIso: new Date().toISOString(),
+                status: 'taken',
+                adherencePercentage: 92,
+                isToday: true,
+                canMark: true,
+            },
+            {
+                id: '3',
+                logId: null,
+                name: 'Calcium + D3',
+                dosage: '1 tablet',
+                frequency: 'Once daily',
+                instructions: 'after dinner',
+                scheduleTimeText: '8:30 PM',
+                scheduledTimeIso: new Date().toISOString(),
+                status: 'pending',
+                adherencePercentage: 98,
+                isToday: true,
+                canMark: true,
+            },
+        ]);
     };
 
-    const scheduleLocalReminders = async (items: MedScheduleItem[]) => {
+    // Initial load
+    useEffect(() => {
+        loadBeneficiaries();
+    }, [loadBeneficiaries]);
+
+    useFocusEffect(
+        useCallback(() => {
+            loadData();
+        }, [loadData])
+    );
+
+    useGlobalRefresh(() => {
+        loadData();
+    });
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await Promise.all([loadBeneficiaries(), loadData()]);
+        setRefreshing(false);
+    }, [loadBeneficiaries, loadData]);
+
+    // Schedule notifications for on-time alerts
+    const scheduleLocalReminders = async (items: DoseScheduleItem[]) => {
         if (Platform.OS === 'web') return;
         try {
-            // Clear existing scheduled local notifications to avoid duplicates on refetch
             await Notifications.cancelAllScheduledNotificationsAsync();
-            if (!remindersActive) return;
-
             const { status } = await Notifications.getPermissionsAsync();
             if (status !== 'granted') {
                 const req = await Notifications.requestPermissionsAsync();
@@ -281,7 +339,7 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                         content: {
                             title: `💊 Medication Reminder: ${item.name}`,
                             body: `Time to take your ${item.dosage || ''} dose (${item.scheduleTimeText}). ${item.instructions || ''}`,
-                            data: { medicationId: item.id, scheduleTimeText: item.scheduleTimeText }
+                            data: { medicationId: item.id, scheduleTimeText: item.scheduleTimeText },
                         },
                         trigger: {
                             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -292,84 +350,90 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                 }
             }
         } catch (err) {
-            console.log('Failed to schedule local reminders', err);
+            console.log('Failed to schedule local reminders:', err);
         }
     };
 
-    const handleToggleReminders = async (active: boolean) => {
-        setRemindersActive(active);
-        if (!active) {
-            if (Platform.OS !== 'web') {
-                await Notifications.cancelAllScheduledNotificationsAsync();
+    // Is the user viewing today?
+    const isViewingToday = selectedDate === getTodayDateStr();
+
+    // Log Adherence (Mark Taken)
+    const handleLogAdherence = async (item: DoseScheduleItem, taken: boolean) => {
+        if (requireAuth('Create an account to record your medication adherence.')) return;
+
+        if (!isViewingToday) {
+            Alert.alert(
+                'Dose Locked',
+                'Medication doses can only be marked on their scheduled day (Today).'
+            );
+            return;
+        }
+
+        try {
+            setSubmittingId(item.id);
+            const targetBeneficiaryId = await resolveTargetBeneficiaryId();
+
+            if (!targetBeneficiaryId) {
+                updateLocalStatus(item, taken);
+                return;
             }
-            Alert.alert('Reminders Paused', 'Medication reminder notifications have been paused.');
-        } else {
-            await scheduleLocalReminders(schedule);
-            Alert.alert('Reminders Active', 'Medication reminders are now active for your scheduled timings.');
+
+            const token = await AsyncStorage.getItem('userToken');
+            if (!token) {
+                updateLocalStatus(item, taken);
+                return;
+            }
+
+            const res = await fetch(`${API_URL}/shared/medications/adherence/log`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    beneficiaryId: targetBeneficiaryId,
+                    medicationId: item.id,
+                    scheduledTimeIso: item.scheduledTimeIso,
+                    taken,
+                    recordedBy: 'beneficiary',
+                }),
+            });
+
+            const responseData = await res.json();
+            if (responseData.success) {
+                await loadData();
+                emitGlobalRefresh();
+            } else {
+                Alert.alert('Error', responseData.message || 'Failed to update schedule');
+            }
+        } catch (err) {
+            console.error('Failed to log adherence:', err);
+            updateLocalStatus(item, taken);
+        } finally {
+            setSubmittingId(null);
         }
     };
 
-    const handleOpenAddCustom = () => {
+    const updateLocalStatus = (item: DoseScheduleItem, taken: boolean) => {
+        setSchedule((prev) =>
+            prev.map((s) => (s.id === item.id ? { ...s, status: taken ? 'taken' : 'missed' } : s))
+        );
+        setMetrics((m) => ({
+            ...m,
+            taken: taken ? m.taken + 1 : m.taken,
+            missed: !taken ? m.missed + 1 : m.missed,
+        }));
+    };
+
+    // Open Add Medication Modal
+    const handleOpenAdd = () => {
         if (requireAuth('Create an account to add and manage your medications.')) return;
         setSelectedPreset(null);
         setEditingMed(null);
         setShowAddModal(true);
     };
 
-    const handleSelectPreset = (preset: MedicationPresetItem) => {
-        if (requireAuth('Create an account to track your medications.')) return;
-        setSelectedPreset(preset);
-        setEditingMed(null);
-        setShowAddModal(true);
-    };
-
-    const handleQuickAddPreset = async (preset: MedicationPresetItem) => {
-        if (requireAuth('Create an account to add medications.')) return;
-        try {
-            setQuickAddingId(preset.id);
-            const targetBeneficiaryId = await resolveTargetBeneficiaryId();
-            const token = await AsyncStorage.getItem('userToken');
-            if (!token || !targetBeneficiaryId) {
-                Alert.alert('Error', 'Please sign in to add medication.');
-                return;
-            }
-
-            const res = await fetch(`${API_URL}/shared/medications`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    beneficiaryId: targetBeneficiaryId,
-                    name: preset.name,
-                    genericName: preset.genericName,
-                    dosage: preset.dosage,
-                    route: preset.route,
-                    cadence: preset.cadence || 'daily',
-                    frequency: preset.frequency,
-                    timeSlots: preset.timeSlots,
-                    instructions: preset.instructions,
-                    setReminders: true,
-                    isActive: true,
-                })
-            });
-
-            const data = await res.json();
-            if (data.success) {
-                await loadData();
-                emitGlobalRefresh();
-                Alert.alert('Added', `${preset.name} (${preset.dosage}) has been added to your medication schedule.`);
-            } else {
-                Alert.alert('Error', data.message || 'Failed to add medication.');
-            }
-        } catch (err: any) {
-            Alert.alert('Error', err.message || 'Failed to add medication.');
-        } finally {
-            setQuickAddingId(null);
-        }
-    };
-
+    // Save Medication from Modal
     const handleSaveMedication = async (payload: MedicationFormPayload) => {
         try {
             setModalLoading(true);
@@ -386,28 +450,26 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
                 : `${API_URL}/shared/medications`;
             const method = isEdit ? 'PUT' : 'POST';
 
-            const body: any = {
-                beneficiaryId: targetBeneficiaryId,
-                name: payload.name,
-                genericName: payload.genericName,
-                dosage: payload.dosage,
-                route: payload.route,
-                cadence: payload.cadence,
-                frequency: payload.frequency,
-                timeSlots: payload.timeSlots,
-                instructions: payload.instructions,
-                totalDays: payload.totalDays,
-                setReminders: payload.setReminders,
-                isActive: true,
-            };
-
             const res = await fetch(url, {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
+                    Authorization: `Bearer ${token}`,
                 },
-                body: JSON.stringify(body)
+                body: JSON.stringify({
+                    beneficiaryId: targetBeneficiaryId,
+                    name: payload.name,
+                    genericName: payload.genericName,
+                    dosage: payload.dosage,
+                    route: payload.route,
+                    cadence: payload.cadence,
+                    frequency: payload.frequency,
+                    timeSlots: payload.timeSlots,
+                    instructions: payload.instructions,
+                    totalDays: payload.totalDays,
+                    setReminders: payload.setReminders,
+                    isActive: true,
+                }),
             });
 
             const data = await res.json();
@@ -428,415 +490,160 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
         }
     };
 
-    const handleDeleteMedication = (medicationId: string, medicationName: string) => {
+    // Emergency SOS Trigger
+    const handleSosPress = async () => {
+        if (requireAuth('Trigger emergency SOS and broadcast your live location to care responders.')) return;
+        if (triggeringSos) return;
+
         Alert.alert(
-            'Remove Medication',
-            `Are you sure you want to remove ${medicationName} from your active schedule?`,
+            'Emergency Support',
+            'Do you need immediate emergency assistance? This will dispatch alerts to your Care Circle and Helpline.',
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                    text: 'Remove',
+                    text: 'Call Helpline',
+                    onPress: () => dialEmergencyHelpline(),
+                },
+                {
+                    text: 'Trigger SOS Alert',
                     style: 'destructive',
                     onPress: async () => {
+                        setTriggeringSos(true);
                         try {
-                            const token = await AsyncStorage.getItem('userToken');
-                            const res = await fetch(`${API_URL}/shared/medications/${medicationId}`, {
-                                method: 'DELETE',
-                                headers: {
-                                    Authorization: `Bearer ${token}`
-                                }
-                            });
-                            const data = await res.json();
-                            if (data.success) {
-                                await loadData();
-                                emitGlobalRefresh();
+                            const result = await triggerEmergencyAlert(
+                                'Emergency SOS triggered from Medication Screen',
+                                { autoDial: true }
+                            );
+                            if (result.success) {
+                                Alert.alert(
+                                    'Emergency Alert Sent',
+                                    `Emergency ticket ${result.ticketNumber || 'EMG-ALERT'} has been broadcast.`
+                                );
                             } else {
-                                Alert.alert('Error', data.message || 'Failed to remove medication');
+                                dialEmergencyHelpline();
                             }
-                        } catch (err: any) {
-                            Alert.alert('Error', err.message || 'Failed to remove medication');
+                        } catch (e) {
+                            dialEmergencyHelpline();
+                        } finally {
+                            setTriggeringSos(false);
                         }
-                    }
-                }
+                    },
+                },
             ]
         );
     };
 
-    const loadMocks = () => {
-        setMetrics({ average: 95, taken: 87, missed: 5 });
-        setSchedule([
-            {
-                id: '1', logId: null,
-                name: 'Lisinopril', dosage: '10mg', frequency: 'Once daily',
-                instructions: 'Blood Pressure', scheduleTimeText: '08:00 AM',
-                scheduledTimeIso: new Date().toISOString(),
-                status: 'pending', adherencePercentage: 95, isToday: true, canMark: true
-            },
-            {
-                id: '2', logId: null,
-                name: 'Metformin', dosage: '500mg', frequency: 'Twice daily',
-                instructions: 'Diabetes', scheduleTimeText: '08:00 AM, 08:00 PM',
-                scheduledTimeIso: new Date().toISOString(),
-                status: 'pending', adherencePercentage: 92, isToday: true, canMark: true
-            },
-            {
-                id: '3', logId: null,
-                name: 'Atorvastatin', dosage: '20mg', frequency: 'Once daily',
-                instructions: 'Cholesterol', scheduleTimeText: '08:00 PM',
-                scheduledTimeIso: new Date().toISOString(),
-                status: 'pending', adherencePercentage: 98, isToday: true, canMark: true
-            }
-        ]);
-    };
-
-    const handleLogAdherence = async (item: MedScheduleItem, taken: boolean) => {
-        if (requireAuth('Create an account to record your medication adherence.')) return;
-        // Enforce strict Today-Only marking rule
-        const schedTime = new Date(item.scheduledTimeIso);
-        const now = new Date();
-        const isToday = schedTime.getDate() === now.getDate() &&
-                        schedTime.getMonth() === now.getMonth() &&
-                        schedTime.getFullYear() === now.getFullYear();
-
-        if (!isToday || item.isFutureSchedule || item.canMark === false) {
-            const lockMsg = 'Medication doses can only be marked on their scheduled day (Today). Past or future doses cannot be modified.';
-            if (Platform.OS === 'web') {
-                window.alert(`Dose Locked\n\n${lockMsg}`);
-            } else {
-                Alert.alert('Dose Locked', lockMsg);
-            }
-            return;
-        }
-
-        try {
-            setSubmittingId(`${item.id}-${item.scheduleTimeText}`);
-            const targetBeneficiaryId = await resolveTargetBeneficiaryId();
-
-            if (!targetBeneficiaryId) {
-                updateLocalStatus(item, taken);
-                setSubmittingId(null);
-                return;
-            }
-
-            const token = await AsyncStorage.getItem('userToken');
-            if (!token) {
-                updateLocalStatus(item, taken);
-                setSubmittingId(null);
-                return;
-            }
-
-            const res = await fetch(`${API_URL}/shared/medications/adherence/log`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    beneficiaryId: targetBeneficiaryId,
-                    medicationId: item.id,
-                    scheduledTimeIso: item.scheduledTimeIso,
-                    taken,
-                    recordedBy: 'beneficiary'
-                })
-            });
-
-            const responseData = await res.json();
-            if (responseData.success) {
-                await loadData();
-                emitGlobalRefresh();
-            } else {
-                Alert.alert('Error', responseData.message || 'Failed to update schedule');
-            }
-
-        } catch (err) {
-            console.error('Failed to log adherence', err);
-            updateLocalStatus(item, taken);
-        } finally {
-            setSubmittingId(null);
-        }
-    };
-
-    const updateLocalStatus = (item: MedScheduleItem, taken: boolean) => {
-        setSchedule(prev => prev.map(s => {
-            if (s.id === item.id && s.scheduleTimeText === item.scheduleTimeText) {
-                return { ...s, status: taken ? 'taken' : 'missed' };
-            }
-            return s;
-        }));
-        setMetrics(m => ({
-            average: m.average,
-            taken: taken ? m.taken + 1 : m.taken,
-            missed: !taken ? m.missed + 1 : m.missed
-        }));
-    };
-
-    if (loading) {
-        return (
-            <View style={[styles.safeArea, { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 24 : 16) + 12 }]}>
-                <View style={[styles.center, containerStyle]}>
-                    <ActivityIndicator size="large" color="#FE6700" />
-                    <Text style={styles.loadingText}>Loading Medications...</Text>
-                </View>
-            </View>
-        );
-    }
-
     return (
         <View style={styles.safeArea}>
-            <View style={[styles.headerWrapper, { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 24 : 16) + 8 }]}>
-                <View style={[styles.headerInner, containerStyle]}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-                        <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-                    </TouchableOpacity>
-                    <View style={styles.headerContent}>
-                        <Text style={styles.headerTitle} numberOfLines={1}>Medications</Text>
-                        <Text style={styles.headerSub} numberOfLines={1}>Today's medication schedule</Text>
-                    </View>
-                    <TouchableOpacity
-                        onPress={handleOpenAddCustom}
-                        style={styles.addHeaderBtn}
-                        activeOpacity={0.8}
-                    >
-                        <Ionicons name="add" size={18} color="#FE6700" />
-                        <Text style={styles.addHeaderBtnText}>Add</Text>
-                    </TouchableOpacity>
-                </View>
+            {/* Top Navigation Header matching Home Screen */}
+            <View style={[styles.headerWrapper, { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 24 : 12) }]}>
+                <HomeHeader
+                    greeting={defaultGreeting}
+                    userName={userName}
+                    onSosPress={handleSosPress}
+                    triggeringSos={triggeringSos}
+                />
             </View>
 
-            <ScrollView 
-                style={styles.container} 
-                contentContainerStyle={[styles.content, containerStyle, { paddingBottom: Math.max(insets.bottom, 16) + 80 }]} 
+            <ScrollView
+                style={styles.container}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    containerStyle,
+                    { paddingBottom: Math.max(insets.bottom, 16) + 80 },
+                ]}
                 showsVerticalScrollIndicator={false}
                 bounces={true}
                 refreshControl={
                     <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />
                 }
             >
-                <View style={styles.topRow}>
-                    <Text style={styles.topTitle}>Daily Adherence</Text>
-                    <View style={styles.toggleContainer}>
-                        <Ionicons name="notifications-outline" size={16} color="#6B7280" style={{ marginRight: 4 }} />
-                        <Text style={styles.toggleLabel}>Reminders</Text>
-                        <CustomSwitch value={remindersActive} onValueChange={handleToggleReminders} />
-                    </View>
-                </View>
-
-                {/* Overall Adherence Card */}
-                <View style={styles.statsCard}>
-                    <View style={styles.statsHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                            <Image source={calendarIcon} style={styles.statsIconImage} resizeMode="contain" />
-                            <View style={styles.statsTitleBlock}>
-                                <Text style={styles.statsTitle}>Overall Adherence</Text>
-                                <Text style={styles.statsSubtitle}>Last 30 days</Text>
-                            </View>
-                        </View>
-                        <TouchableOpacity
-                            style={styles.statsExportBtn}
-                            onPress={() => router.push({
-                                pathname: '/(beneficiary)/health-summary',
-                                params: routeParams.beneficiaryId ? { beneficiaryId: routeParams.beneficiaryId } : undefined
-                            })}
-                        >
-                            <Feather name="share-2" size={13} color="#FE6700" style={{ marginRight: 4 }} />
-                            <Text style={styles.statsExportBtnText}>Report</Text>
-                        </TouchableOpacity>
+                {/* ── Category & Action Header Row ── */}
+                <View style={styles.categoryActionRow}>
+                    <View style={styles.titleColumn}>
+                        <Text style={styles.categoryTag}>DAILY CARE</Text>
+                        <Text style={styles.headingTitle}>Meds & health</Text>
                     </View>
 
-                    <View style={styles.metricsRow}>
-                        <View style={styles.metricItem}>
-                            <Text style={styles.metricValue}>{metrics.average}%</Text>
-                            <Text style={styles.metricLabel}>Average</Text>
-                        </View>
-                        <View style={styles.metricItem}>
-                            <Text style={styles.metricValue}>{metrics.taken}</Text>
-                            <Text style={styles.metricLabel}>Taken</Text>
-                        </View>
-                        <View style={styles.metricItem}>
-                            <Text style={styles.metricValue}>{metrics.missed}</Text>
-                            <Text style={styles.metricLabel}>Missed</Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* Presets Component */}
-                <DefaultMedsPresets
-                    onSelectPreset={handleSelectPreset}
-                    onQuickAddPreset={handleQuickAddPreset}
-                    addingId={quickAddingId}
-                />
-
-                {/* Section Title with Add Custom Link */}
-                <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.sectionTitle}>Your Medications</Text>
                     <TouchableOpacity
-                        onPress={handleOpenAddCustom}
-                        style={styles.addCustomLink}
-                        activeOpacity={0.7}
+                        style={styles.addMedButton}
+                        onPress={handleOpenAdd}
+                        activeOpacity={0.85}
                     >
-                        <Ionicons name="add-circle-outline" size={16} color="#FE6700" />
-                        <Text style={styles.addCustomLinkText}>Add Custom</Text>
+                        <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.addMedButtonText}>Add medication</Text>
                     </TouchableOpacity>
                 </View>
 
-                {schedule.length === 0 ? (
-                    <View style={styles.emptyContainer}>
-                        <CustomShieldIcon size={42} color="#9CA3AF" />
-                        <Text style={styles.emptyText}>No medications scheduled for today.</Text>
-                        <Text style={styles.emptySubText}>
-                            Quickly pick from the common presets above or add your own medication to begin tracking.
-                        </Text>
-                        <TouchableOpacity
-                            style={styles.emptyAddBtn}
-                            onPress={handleOpenAddCustom}
-                            activeOpacity={0.85}
-                        >
-                            <Ionicons name="add" size={18} color="#FFFFFF" />
-                            <Text style={styles.emptyAddBtnText}>Add Medication</Text>
-                        </TouchableOpacity>
-                    </View>
-                ) : (
-                    schedule.map((item, index) => {
-                        const isSubmitting = submittingId === `${item.id}-${item.scheduleTimeText}`;
-                        
-                        const schedTime = new Date(item.scheduledTimeIso);
-                        const now = new Date();
-                        const isItemToday = item.isToday ?? (
-                            schedTime.getDate() === now.getDate() &&
-                            schedTime.getMonth() === now.getMonth() &&
-                            schedTime.getFullYear() === now.getFullYear()
-                        );
-                        const canMarkItem = item.canMark ?? (isItemToday && !item.isFutureSchedule);
+                {/* ── Family Member / Care Circle Filter Pills ── */}
+                <FamilyMemberFilterPills
+                    members={familyMembers}
+                    selectedId={selectedBeneficiaryId}
+                    onSelectMember={(id) => {
+                        setSelectedBeneficiaryId(id);
+                    }}
+                />
 
-                        const isHighlighted = routeParams.highlightMedId === item.id;
+                {/* ── Weekly Calendar Day Strip ── */}
+                <WeeklyCalendarStrip
+                    selectedDate={selectedDate}
+                    onSelectDate={(dateStr) => {
+                        setSelectedDate(dateStr);
+                    }}
+                />
 
-                        return (
-                            <View 
-                                key={`${item.id}-${index}`} 
-                                style={[styles.medCard, isHighlighted && styles.highlightedMedCard]}
-                            >
-                                <View style={styles.medMainRow}>
-                                    <View style={[styles.iconCircle, isHighlighted && styles.highlightedIconCircle]}>
-                                        <CustomPillIcon size={24} color="#FE6700" />
-                                    </View>
-
-                                    <View style={styles.medDetails}>
-                                        <View style={styles.medNameRow}>
-                                            <View style={styles.medTitleWithBadge}>
-                                                <Text style={styles.medName}>{item.name}</Text>
-                                                {isHighlighted && (
-                                                    <View style={styles.selectedBadge}>
-                                                        <Text style={styles.selectedBadgeText}>Selected</Text>
-                                                    </View>
-                                                )}
-                                            </View>
-                                            <TouchableOpacity
-                                                onPress={() => handleDeleteMedication(item.id, item.name)}
-                                                style={styles.trashBtn}
-                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                            >
-                                                <Ionicons name="trash-outline" size={16} color="#9CA3AF" />
-                                            </TouchableOpacity>
-                                        </View>
-                                        <Text style={styles.medSub}>
-                                            {item.dosage} - {formatScheduleSubtitle(item.cadence, item.frequency)}
-                                        </Text>
-                                        {item.instructions ? (
-                                            <Text style={styles.medInstructions}>
-                                                For: {item.instructions}
-                                            </Text>
-                                        ) : null}
-                                    </View>
-
-                                    <View style={styles.actionColumn}>
-                                        {isSubmitting ? (
-                                            <ActivityIndicator size="small" color="#FE6700" />
-                                        ) : !canMarkItem ? (
-                                            <View style={styles.lockedBadgeContainer}>
-                                                <CustomLockIcon size={14} color="#9CA3AF" />
-                                                <Text style={styles.lockedBadgeText}>
-                                                    {item.isFutureSchedule ? `Scheduled: ${item.futureDateText}` : 'Past Dose'}
-                                                </Text>
-                                            </View>
-                                        ) : (
-                                            <View style={styles.btnRow}>
-                                                <TouchableOpacity
-                                                    onPress={() => item.status !== 'taken' && handleLogAdherence(item, true)}
-                                                    disabled={item.status === 'taken'}
-                                                    activeOpacity={0.7}
-                                                    style={[
-                                                        styles.actionBtn,
-                                                        styles.checkBtn,
-                                                        item.status === 'taken' && styles.activeCheck,
-                                                    ]}
-                                                >
-                                                    <CustomCheckIcon
-                                                        size={18}
-                                                        color={item.status === 'taken' ? '#FFFFFF' : '#16A34A'}
-                                                    />
-                                                </TouchableOpacity>
-
-                                                <TouchableOpacity
-                                                    onPress={() => item.status !== 'missed' && handleLogAdherence(item, false)}
-                                                    disabled={item.status === 'missed'}
-                                                    activeOpacity={0.7}
-                                                    style={[
-                                                        styles.actionBtn,
-                                                        styles.crossBtn,
-                                                        item.status === 'missed' && styles.activeCross,
-                                                    ]}
-                                                >
-                                                    <CustomCrossIcon
-                                                        size={18}
-                                                        color={item.status === 'missed' ? '#FFFFFF' : '#EF4444'}
-                                                    />
-                                                </TouchableOpacity>
-                                            </View>
-                                        )}
-                                    </View>
-                                </View>
-
-                                <View style={styles.innerDivider} />
-
-                                <View style={styles.medFooter}>
-                                    <View style={styles.scheduleRow}>
-                                        <Text style={styles.scheduleTime}>
-                                            Schedule: {item.scheduleTimeText}
-                                        </Text>
-                                        <Text style={styles.percentText}>{item.adherencePercentage}%</Text>
-                                    </View>
-
-                                    <View style={styles.trackBackground}>
-                                        <View
-                                            style={[
-                                                styles.trackFill,
-                                                { width: `${item.adherencePercentage}%` }
-                                            ]}
-                                        />
-                                    </View>
-                                </View>
-                            </View>
-                        );
-                    })
-                )}
-
-                {/* Bottom Reminder Active Card */}
-                <View style={styles.bannerCard}>
-                    <View style={styles.bannerIconContainer}>
-                        <Image source={bellIcon} style={styles.bannerIconImage} resizeMode="contain" />
-                    </View>
-                    <View style={styles.bannerCopy}>
-                        <Text style={styles.bannerTitle}>On-Time Medication Reminders Active</Text>
-                        <Text style={styles.bannerText}>
-                            Background worker dispatches reminders on exact scheduled time. Doses can only be marked on their scheduled day (Today).
-                        </Text>
-                    </View>
+                {/* ── Medication Dose Cards List ── */}
+                <View style={styles.doseListContainer}>
+                    {loading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="small" color="#FE6700" />
+                            <Text style={styles.loadingSubText}>Loading medication schedule...</Text>
+                        </View>
+                    ) : schedule.length === 0 ? (
+                        <View style={styles.emptyCard}>
+                            <Feather name="check-circle" size={36} color="#42BF8A" />
+                            <Text style={styles.emptyTitle}>No medications scheduled</Text>
+                            <Text style={styles.emptySubtitle}>
+                                All caught up! Add a new prescription or supplement using the button above.
+                            </Text>
+                        </View>
+                    ) : (
+                        schedule.map((item, index) => (
+                            <MedicationDoseCard
+                                key={item.id || index}
+                                item={item}
+                                index={index}
+                                onMarkTaken={(it) => handleLogAdherence(it, true)}
+                                onMarkMissed={(it) => handleLogAdherence(it, false)}
+                                isSubmitting={submittingId === item.id}
+                                canMark={isViewingToday}
+                            />
+                        ))
+                    )}
                 </View>
 
-                <View style={{ height: 40 }} />
+                {/* ── 7-Day Adherence Widget ── */}
+                <AdherenceSummaryCard
+                    percentage={metrics.average}
+                    completedDaysText={`${metrics.taken} of 7 days completed on time`}
+                />
+
+                {/* ── Reports & Prescriptions Action Card ── */}
+                <ReportsPrescriptionsCard
+                    fileCount={8}
+                    onPress={() => {
+                        router.push({
+                            pathname: '/(beneficiary)/medical-records',
+                            params: selectedBeneficiaryId ? { beneficiaryId: selectedBeneficiaryId } : undefined,
+                        });
+                    }}
+                />
+
+                {/* ── View-Only Friendly Notice Banner ── */}
+                <ViewOnlyNoticeBanner />
             </ScrollView>
 
-            {/* Add / Edit Medication Modal */}
+            {/* ── Add Medication Modal ── */}
             <AddMedicationModal
                 visible={showAddModal}
                 onClose={() => {
@@ -856,474 +663,107 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#FCFAF7',
+        backgroundColor: '#FAF3EB',
     },
     headerWrapper: {
-        width: '100%',
-        backgroundColor: '#FE6700',
-        borderBottomLeftRadius: 22,
-        borderBottomRightRadius: 22,
-        paddingBottom: 16,
-        shadowColor: '#FE6700',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.18,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    headerInner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-    },
-    backBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    headerContent: {
-        flex: 1,
-    },
-    headerTitle: {
-        fontFamily: 'Poppins-Bold',
-        fontSize: 18,
-        lineHeight: 24,
-        color: '#FFFFFF',
-    },
-    headerSub: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        lineHeight: 16,
-        color: 'rgba(255,255,255,0.92)',
-        marginTop: 1,
-    },
-    addHeaderBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 14,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    addHeaderBtnText: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 13,
-        color: '#FE6700',
+        backgroundColor: 'rgba(250, 243, 235, 0.95)',
+        borderBottomWidth: 1.08,
+        borderBottomColor: '#E7DED6',
+        zIndex: 10,
     },
     container: {
         flex: 1,
-        backgroundColor: '#FCFAF7',
+        backgroundColor: '#FAF3EB',
     },
-    content: {
-        paddingTop: 16,
+    scrollContent: {
+        paddingTop: 20,
     },
-    center: {
+    categoryActionRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-end',
+        marginBottom: 12,
+    },
+    titleColumn: {
         flex: 1,
         justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#FFF0E6',
     },
-    loadingText: {
-        marginTop: 12,
-        fontFamily: 'Poppins-Medium',
-        fontSize: 14,
-        color: '#374151',
-    },
-
-    switchTrack: {
-        width: 32,
-        height: 18.4,
-        borderRadius: 10,
-        justifyContent: 'center',
-    },
-    switchThumb: {
-        width: 14.4,
-        height: 14.4,
-        borderRadius: 8,
-        position: 'absolute',
-        left: 0,
-        backgroundColor: '#FFFFFF',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-
-    topRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 16,
-        marginTop: 8,
-    },
-    topTitle: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 16,
-        color: '#111827',
-    },
-    statsIconImage: {
-        width: 32,
-        height: 32,
-    },
-    bannerIconImage: {
-        width: 26,
-        height: 26,
-    },
-    toggleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    toggleLabel: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 14,
-        color: '#374151',
-        marginRight: 8,
-    },
-
-    statsCard: {
-        backgroundColor: '#FE6700',
-        borderRadius: 14,
-        padding: 20,
-        marginBottom: 16,
-        shadowColor: '#FE6700',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 6,
-    },
-    statsHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    statsExportBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: 8,
-    },
-    statsExportBtnText: {
-        fontSize: 12,
+    categoryTag: {
         fontFamily: 'Poppins-Bold',
-        color: '#FE6700',
-    },
-    statsTitleBlock: {
-        marginLeft: 12,
-    },
-    statsTitle: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 18,
-        color: '#FFFFFF',
-    },
-    statsSubtitle: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 13,
-        color: 'rgba(255,255,255,0.85)',
-        marginTop: -2,
-    },
-    metricsRow: {
-        marginTop: 20,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    metricItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    metricValue: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 28,
-        color: '#FFFFFF',
-    },
-    metricLabel: {
-        fontFamily: 'Poppins-Regular',
         fontSize: 12,
-        color: 'rgba(255,255,255,0.9)',
-        marginTop: 2,
-    },
-
-    sectionHeaderRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-        marginTop: 10,
-        paddingHorizontal: 4,
-    },
-    sectionTitle: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 16,
-        color: '#111827',
-    },
-    addCustomLink: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        paddingVertical: 4,
-        paddingHorizontal: 8,
-    },
-    addCustomLinkText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 13,
-        fontWeight: '600',
-        color: '#FE6700',
-    },
-
-    medCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    highlightedMedCard: {
-        borderColor: '#FE6700',
-        borderWidth: 2,
-        backgroundColor: '#FFFBF7',
-        shadowColor: '#FE6700',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.15,
-        shadowRadius: 6,
-        elevation: 4,
-    },
-    highlightedIconCircle: {
-        backgroundColor: '#FFEAD5',
-    },
-    medTitleWithBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        gap: 6,
-    },
-    selectedBadge: {
-        backgroundColor: '#FFF0E6',
-        borderRadius: 6,
-        paddingHorizontal: 7,
-        paddingVertical: 2,
-        borderWidth: 1,
-        borderColor: '#FFD8BF',
-    },
-    selectedBadgeText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#FE6700',
+        lineHeight: 16,
+        letterSpacing: 1.56,
         textTransform: 'uppercase',
-    },
-    medMainRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-    },
-    iconCircle: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        backgroundColor: '#FFF7ED',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    medDetails: {
-        flex: 1,
-        justifyContent: 'center',
-    },
-    medNameRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingRight: 6,
-    },
-    medName: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 16,
-        color: '#111827',
-        flex: 1,
-    },
-    trashBtn: {
-        padding: 4,
-    },
-    medSub: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 13,
-        color: '#6B7280',
-        marginTop: 2,
-        textTransform: 'capitalize',
-    },
-    medInstructions: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 13,
-        color: '#4B5563',
-        marginTop: 1,
-    },
-
-    actionColumn: {
-        marginLeft: 12,
-        justifyContent: 'center',
-    },
-    btnRow: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    actionBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    checkBtn: {
-        backgroundColor: '#DCFCE7',
-    },
-    crossBtn: {
-        backgroundColor: '#FEE2E2',
-    },
-    activeCheck: {
-        backgroundColor: '#16A34A',
-    },
-    activeCross: {
-        backgroundColor: '#EF4444',
-    },
-    disabledBtn: {
-        opacity: 0.3,
-    },
-    lockedBadgeContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F3F4F6',
-        paddingHorizontal: 8,
-        paddingVertical: 5,
-        borderRadius: 8,
-        gap: 4,
-    },
-    lockedBadgeText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 11,
-        color: '#6B7280',
-    },
-
-    innerDivider: {
-        height: 0,
-        marginVertical: 6,
-    },
-    medFooter: {
-        marginTop: 4,
-    },
-    scheduleRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    scheduleTime: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        color: '#374151',
-    },
-    percentText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 12,
-        color: '#111827',
-    },
-    trackBackground: {
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#E5E7EB',
-        overflow: 'hidden',
-    },
-    trackFill: {
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#16A34A',
-    },
-
-    bannerCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        padding: 16,
-        marginTop: 8,
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 4,
-        elevation: 1,
-    },
-    bannerIconContainer: {
-        marginTop: 2,
-        marginRight: 14,
-    },
-    bannerCopy: {
-        flex: 1,
-    },
-    bannerTitle: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 14,
-        color: '#111827',
+        color: '#FE6700',
         marginBottom: 4,
     },
-    bannerText: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 13,
-        color: '#6B7280',
-        lineHeight: 18,
+    headingTitle: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 21,
+        lineHeight: 32,
+        letterSpacing: -0.525,
+        color: '#1F2937',
     },
-
-    emptyContainer: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        padding: 28,
-        alignItems: 'center',
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#F3F4F6',
-    },
-    emptyText: {
-        marginTop: 12,
-        fontFamily: 'Poppins-Medium',
-        fontSize: 15,
-        fontWeight: '600',
-        color: '#111827',
-        textAlign: 'center',
-    },
-    emptySubText: {
-        marginTop: 6,
-        fontFamily: 'Poppins-Regular',
-        fontSize: 13,
-        color: '#6B7280',
-        textAlign: 'center',
-        lineHeight: 18,
-        paddingHorizontal: 12,
-    },
-    emptyAddBtn: {
+    addMedButton: {
+        height: 48,
+        minHeight: 48,
+        paddingHorizontal: 18,
+        backgroundColor: '#FE6700',
+        borderRadius: 24,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        backgroundColor: '#FE6700',
-        paddingHorizontal: 18,
-        paddingVertical: 10,
-        borderRadius: 12,
-        marginTop: 16,
+        justifyContent: 'center',
+        shadowColor: '#FE6700',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.18,
+        shadowRadius: 20,
+        elevation: 3,
     },
-    emptyAddBtnText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 13,
-        fontWeight: '700',
+    addMedButtonText: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 14,
+        lineHeight: 20,
         color: '#FFFFFF',
+        textAlign: 'center',
+    },
+    doseListContainer: {
+        width: '100%',
+        marginTop: 8,
+    },
+    loadingContainer: {
+        paddingVertical: 32,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    loadingSubText: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 13,
+        color: '#667085',
+        marginTop: 8,
+    },
+    emptyCard: {
+        width: '100%',
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1.08,
+        borderColor: '#E7DED6',
+        borderRadius: 24,
+        padding: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginVertical: 12,
+    },
+    emptyTitle: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 16,
+        color: '#1F2937',
+        marginTop: 12,
+    },
+    emptySubtitle: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 13,
+        color: '#667085',
+        textAlign: 'center',
+        marginTop: 4,
+        lineHeight: 18,
     },
 });

@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const visibleTabs = ['index', 'schedule', 'meds', 'inbox', 'more'];
+const visibleTabs = ['index', 'schedule', 'meds', 'community', 'more'];
 
 export default function BeneficiaryLayout() {
     const insets = useSafeAreaInsets();
@@ -70,8 +70,8 @@ export default function BeneficiaryLayout() {
             <Tabs.Screen
                 name="meds"
                 options={{
-                    title: 'Meds',
-                    tabBarLabel: 'Meds',
+                    title: 'Health',
+                    tabBarLabel: 'Health',
                     tabBarIcon: ({ color }) => (
                         <MaterialCommunityIcons name="pill" size={24} color={color} />
                     ),
@@ -79,12 +79,12 @@ export default function BeneficiaryLayout() {
             />
 
             <Tabs.Screen
-                name="inbox"
+                name="community"
                 options={{
-                    title: 'Inbox',
-                    tabBarLabel: 'Inbox',
+                    title: 'Community',
+                    tabBarLabel: 'Community',
                     tabBarIcon: ({ color }) => (
-                        <Feather name="inbox" size={24} color={color} />
+                        <MaterialCommunityIcons name="account-group-outline" size={24} color={color} />
                     ),
                 }}
             />
