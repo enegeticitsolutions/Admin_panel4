@@ -11,7 +11,7 @@ interface HeroOverviewCardProps {
 export function HeroOverviewCard({
   dayOverviewText,
   title = "Everyone's care, beautifully in sync.",
-  subtext = "Savitri's vitals look steady and her next companion visit is confirmed.",
+  subtext = "Stay connected with daily updates, health monitoring, and family care routines.",
 }: HeroOverviewCardProps) {
   // Compute default day of week if not passed
   const getDayOverview = () => {

@@ -31,7 +31,7 @@ export default function RequestServiceScreen() {
     try {
       const token = await AsyncStorage.getItem('userToken');
       if (!token) {
-        setSavedAddresses([{ id: 'mock-1', addressLine: '123 Test St, Mumbai', latitude: 19.0760, longitude: 72.8777 }]);
+        setSavedAddresses([]);
         return;
       }
       const res = await fetch(`${API_URL}/subscriber/addresses`, {

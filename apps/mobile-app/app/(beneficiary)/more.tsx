@@ -119,14 +119,16 @@ export default function MoreOptionsScreen() {
         subscriberData?.unlinkedSubscriptions?.[0] ||
         null;
 
-    const packageName = activeSub?.package?.name || 'Shravan Care Gold';
-    const assignedBeneficiary = firstBeneficiary?.name || 'Savitri Devi';
+    const packageName = activeSub?.package?.name || '';
+    const assignedBeneficiary = firstBeneficiary?.name || user?.name || '';
 
     // Benefit hours metrics
-    const hoursUsed = activeSub?.hoursUsed ?? 12;
-    const hoursTotal = activeSub?.hoursTotal ?? 20;
-    const rolloverHours = activeSub?.rolloverHours ?? 2;
-    const usagePercent = Math.min(Math.max((hoursUsed / (hoursTotal || 1)) * 100, 0), 100);
+    const hoursUsed = activeSub?.hoursUsed ?? 0;
+    const hoursTotal = activeSub?.hoursTotal ?? 0;
+    const rolloverHours = activeSub?.rolloverHours ?? 0;
+    const usagePercent = hoursTotal > 0
+        ? Math.min(Math.max((hoursUsed / hoursTotal) * 100, 0), 100)
+        : 0;
 
     const handleRenewTopUp = () => {
         if (isGuest && requireAuth('Explore care packages and subscription plans.')) return;
@@ -189,47 +191,72 @@ export default function MoreOptionsScreen() {
                 </TouchableOpacity>
 
                 {/* ── 2. Active Plan Card (#FFFFFF with progress) ── */}
-                <View style={styles.activePlanCard}>
-                    {/* Top Row: Badge & Renew Button */}
-                    <View style={styles.planTopRow}>
-                        <View style={styles.planBadge}>
-                            <Text style={styles.planBadgeText}>ACTIVE PLAN</Text>
+                {activeSub ? (
+                    <View style={styles.activePlanCard}>
+                        {/* Top Row: Badge & Renew Button */}
+                        <View style={styles.planTopRow}>
+                            <View style={styles.planBadge}>
+                                <Text style={styles.planBadgeText}>ACTIVE PLAN</Text>
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.renewBtn}
+                                onPress={handleRenewTopUp}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={styles.renewBtnText}>Renew / top up</Text>
+                            </TouchableOpacity>
                         </View>
 
-                        <TouchableOpacity
-                            style={styles.renewBtn}
-                            onPress={handleRenewTopUp}
-                            activeOpacity={0.85}
-                        >
-                            <Text style={styles.renewBtnText}>Renew / top up</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Plan Heading & Assignment */}
-                    <Text style={styles.planTitle}>{packageName}</Text>
-                    <Text style={styles.planAssignedText}>Assigned to {assignedBeneficiary}</Text>
-
-                    {/* Hours Stat Row */}
-                    <View style={styles.hoursRow}>
-                        <View>
-                            <Text style={styles.hoursValue}>
-                                {hoursUsed} <Text style={styles.hoursTotal}>/ {hoursTotal} hrs</Text>
-                            </Text>
-                            <Text style={styles.hoursSubtext}>Available this month</Text>
-                        </View>
-
-                        {rolloverHours > 0 && (
-                            <Text style={styles.rolloverText}>
-                                +{rolloverHours} rollover hours{'\n'}valid till 30 Nov
-                            </Text>
+                        {/* Plan Heading & Assignment */}
+                        <Text style={styles.planTitle}>{packageName}</Text>
+                        {Boolean(assignedBeneficiary) && (
+                            <Text style={styles.planAssignedText}>Assigned to {assignedBeneficiary}</Text>
                         )}
-                    </View>
 
-                    {/* Progress Bar Track */}
-                    <View style={styles.progressTrack}>
-                        <View style={[styles.progressFill, { width: `${usagePercent}%` }]} />
+                        {/* Hours Stat Row */}
+                        <View style={styles.hoursRow}>
+                            <View>
+                                <Text style={styles.hoursValue}>
+                                    {hoursUsed} <Text style={styles.hoursTotal}>/ {hoursTotal} hrs</Text>
+                                </Text>
+                                <Text style={styles.hoursSubtext}>Available this month</Text>
+                            </View>
+
+                            {rolloverHours > 0 && (
+                                <Text style={styles.rolloverText}>
+                                    +{rolloverHours} rollover hours
+                                </Text>
+                            )}
+                        </View>
+
+                        {/* Progress Bar Track */}
+                        <View style={styles.progressTrack}>
+                            <View style={[styles.progressFill, { width: `${usagePercent}%` }]} />
+                        </View>
                     </View>
-                </View>
+                ) : (
+                    <View style={styles.activePlanCard}>
+                        <View style={styles.planTopRow}>
+                            <View style={[styles.planBadge, { backgroundColor: '#F1F5F9' }]}>
+                                <Text style={[styles.planBadgeText, { color: '#64748B' }]}>CARE PLANS</Text>
+                            </View>
+
+                            <TouchableOpacity
+                                style={styles.renewBtn}
+                                onPress={handleRenewTopUp}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={styles.renewBtnText}>Browse plans</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={styles.planTitle}>No active plan</Text>
+                        <Text style={[styles.planAssignedText, { marginBottom: 12 }]}>
+                            Choose a care plan to get dedicated companions, vitals monitoring, and emergency support.
+                        </Text>
+                    </View>
+                )}
 
                 {/* ── 3. Dedicated Action Cards (Figma 6-Cards List) ── */}
                 <View style={styles.actionCardsSection}>

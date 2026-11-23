@@ -317,14 +317,8 @@ export default function VisitDetailsScreen() {
             }
         } catch (error) {
             console.error("Error loading dynamic visit details:", error);
-            showAlert("Connection Error", "Failed to retrieve live encounter details. Working with cached records.", "error");
-            
-            // Premium mock fallback
-            setVisitDetail({
-                visit: { id: visitId, status: 'scheduled', encounterId: '' },
-                beneficiary: { name: 'Beneficiary', age: null, flatPlot: '', streetArea: '', city: '' },
-                requiredVitals: []
-            });
+            showAlert("Connection Error", "Failed to retrieve live encounter details. Please check your connection.", "error");
+            setVisitDetail(null);
             setRequiredVitals([]);
         } finally {
             setLoading(false);

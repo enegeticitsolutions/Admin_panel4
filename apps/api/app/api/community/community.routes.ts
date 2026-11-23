@@ -358,6 +358,22 @@ router.delete('/events/:id/register', authenticate, async (req: Request, res: Re
       return res.status(404).json({ success: false, message: 'Active registration not found' });
     }
 
+    // 1-hour cancellation rule
+    const event = await (prisma as any).communityEvent.findUnique({
+      where: { id: eventId },
+      select: { id: true, startDateTime: true },
+    });
+
+    if (event) {
+      const timeUntilStartMs = new Date(event.startDateTime).getTime() - Date.now();
+      if (timeUntilStartMs <= 60 * 60 * 1000) {
+        return res.status(400).json({
+          success: false,
+          message: 'RSVP can only be cancelled up to 1 hour before the session starts.',
+        });
+      }
+    }
+
     await (prisma as any).$transaction(async (tx: any) => {
       await tx.eventRegistration.update({
         where: { id: registration.id },

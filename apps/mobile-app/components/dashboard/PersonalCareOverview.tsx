@@ -52,31 +52,21 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
   const medTiming = nextMed ? (nextMed.time ? `${nextMed.condition ? `${nextMed.condition} · ` : ''}${nextMed.time}` : 'Scheduled for today') : 'All doses complete or none prescribed';
 
   // Parse adherence value (e.g., '95%' -> 95)
-  const adherenceRaw = (data.adherence || '95%').replace('%', '').trim();
-  const adherenceNum = Math.min(100, Math.max(0, parseInt(adherenceRaw, 10) || 95));
+  const adherenceRaw = (data.adherence || '0%').replace('%', '').trim();
+  const adherenceNum = Math.min(100, Math.max(0, parseInt(adherenceRaw, 10) || 0));
   const adherenceDisplay = `${adherenceNum}%`;
 
-  const coordinator = data.careCoordinator || {
-    id: 'coord-default',
-    name: 'Dr. Sneha Rao',
-    role: 'Care Coordinator',
-    phone: '011-42258823',
-    photo: null,
-  };
+  const coordinator = data.careCoordinator || null;
 
   const handlePhonePress = () => {
-    if (coordinator.phone) {
+    if (coordinator?.phone) {
       Linking.openURL(`tel:${coordinator.phone.replace(/[^0-9+]/g, '')}`);
-    } else {
-      Linking.openURL('tel:01142258823');
     }
   };
 
   const handleMessagePress = () => {
-    if (coordinator.phone) {
+    if (coordinator?.phone) {
       Linking.openURL(`sms:${coordinator.phone.replace(/[^0-9+]/g, '')}`);
-    } else {
-      Linking.openURL('sms:01142258823');
     }
   };
 
@@ -129,45 +119,47 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* ── Care Coordinator Card ── */}
-      <View style={styles.coordinatorCard}>
-        <View style={styles.stethoscopeCircle}>
-          <MaterialCommunityIcons name="stethoscope" size={22} color={HomeColors.mintIcon} />
-        </View>
+      {/* ── Care Coordinator Card (if assigned) ── */}
+      {coordinator ? (
+        <View style={styles.coordinatorCard}>
+          <View style={styles.stethoscopeCircle}>
+            <MaterialCommunityIcons name="stethoscope" size={22} color={HomeColors.mintIcon} />
+          </View>
 
-        <View style={styles.coordinatorInfo}>
-          <Text style={styles.coordinatorRole}>{coordinator.role || 'Care coordinator'}</Text>
-          <Text style={styles.coordinatorName} numberOfLines={1}>
-            {coordinator.name}
-          </Text>
-        </View>
+          <View style={styles.coordinatorInfo}>
+            <Text style={styles.coordinatorRole}>{coordinator.role || 'Care coordinator'}</Text>
+            <Text style={styles.coordinatorName} numberOfLines={1}>
+              {coordinator.name}
+            </Text>
+          </View>
 
-        <View style={styles.contactActions}>
-          <ConnectContactButton
-            name={coordinator.name}
-            role={coordinator.role}
-            phone={coordinator.phone || null}
-            photo={coordinator.photo}
-            trigger={
-              <TouchableOpacity
-                style={styles.circleBtnPeach}
-                onPress={handlePhonePress}
-                activeOpacity={0.8}
-              >
-                <Feather name="phone" size={19} color={HomeColors.brandOrange} />
-              </TouchableOpacity>
-            }
-          />
+          <View style={styles.contactActions}>
+            <ConnectContactButton
+              name={coordinator.name}
+              role={coordinator.role}
+              phone={coordinator.phone || null}
+              photo={coordinator.photo}
+              trigger={
+                <TouchableOpacity
+                  style={styles.circleBtnPeach}
+                  onPress={handlePhonePress}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="phone" size={19} color={HomeColors.brandOrange} />
+                </TouchableOpacity>
+              }
+            />
 
-          <TouchableOpacity
-            style={styles.circleBtnBlue}
-            onPress={handleMessagePress}
-            activeOpacity={0.8}
-          >
-            <Feather name="message-square" size={19} color={HomeColors.blueIcon} />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.circleBtnBlue}
+              onPress={handleMessagePress}
+              activeOpacity={0.8}
+            >
+              <Feather name="message-square" size={19} color={HomeColors.blueIcon} />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      ) : null}
     </View>
   );
 };

@@ -8,8 +8,8 @@ interface AdherenceSummaryCardProps {
 }
 
 export function AdherenceSummaryCard({
-  percentage = 92,
-  completedDaysText = '6 of 7 days completed on time',
+  percentage = 0,
+  completedDaysText = 'No dose activity recorded yet',
 }: AdherenceSummaryCardProps) {
   const clampedPercent = Math.min(100, Math.max(0, percentage));
 

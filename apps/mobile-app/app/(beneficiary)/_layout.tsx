@@ -84,7 +84,18 @@ export default function BeneficiaryLayout() {
                     title: 'Community',
                     tabBarLabel: 'Community',
                     tabBarIcon: ({ color }) => (
-                        <MaterialCommunityIcons name="account-group-outline" size={24} color={color} />
+                        <Feather name="users" size={24} color={color} />
+                    ),
+                }}
+            />
+
+            <Tabs.Screen
+                name="inbox"
+                options={{
+                    title: 'Inbox',
+                    tabBarLabel: 'Inbox',
+                    tabBarIcon: ({ color }) => (
+                        <Feather name="inbox" size={24} color={color} />
                     ),
                 }}
             />

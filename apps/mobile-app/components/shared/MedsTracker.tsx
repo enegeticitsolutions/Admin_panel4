@@ -145,15 +145,16 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
             }
 
             if (!targetBeneficiaryId) {
-                // High-fidelity Mock state if no active session
-                loadMocks();
+                setSchedule([]);
+                setMetrics({ average: 0, taken: 0, missed: 0 });
                 setLoading(false);
                 return;
             }
 
             const token = await AsyncStorage.getItem('userToken');
             if (!token) {
-                loadMocks();
+                setSchedule([]);
+                setMetrics({ average: 0, taken: 0, missed: 0 });
                 setLoading(false);
                 return;
             }
@@ -180,40 +181,11 @@ export default function MedsTracker({ beneficiaryId: propBeneficiaryId }: Props)
 
         } catch (err) {
             console.error('Failed to load medication data', err);
-            loadMocks();
+            setSchedule([]);
+            setMetrics({ average: 0, taken: 0, missed: 0 });
         } finally {
             setLoading(false);
         }
-    };
-
-    const loadMocks = () => {
-        setMetrics({ average: 95, taken: 87, missed: 5 });
-        setSchedule([
-            {
-                id: 'mock-med-1',
-                logId: null,
-                name: 'Lisinopril',
-                dosage: '10mg',
-                frequency: 'once daily',
-                instructions: 'Take after food',
-                scheduleTimeText: '08:00 AM',
-                scheduledTimeIso: new Date().toISOString(),
-                status: 'pending',
-                adherencePercentage: 96
-            },
-            {
-                id: 'mock-med-2',
-                logId: null,
-                name: 'Metformin',
-                dosage: '500mg',
-                frequency: 'twice daily',
-                instructions: 'Take before meal',
-                scheduleTimeText: '08:00 PM',
-                scheduledTimeIso: new Date().toISOString(),
-                status: 'pending',
-                adherencePercentage: 92
-            }
-        ]);
     };
 
     const handleLogAdherence = async (item: MedScheduleItem, taken: boolean) => {
