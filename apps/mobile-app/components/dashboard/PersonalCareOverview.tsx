@@ -1,439 +1,359 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { Feather, AntDesign, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { HomeColors, HomeShadows } from '@/constants/homeTheme';
 import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
-import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 
 export interface PersonalCareData {
-    beneficiaryId?: string;
-    beneficiaryName?: string;
-    greeting?: string;
-    firstName?: string;
-    nextVisit?: string | null;
-    adherence?: string;
-    careCoordinator?: {
-        id: string;
-        name: string;
-        role: string;
-        bio: string;
-        photo: string | null;
-        phone?: string | null;
-    } | null;
-    todaysMedications?: Array<{
-        id: string;
-        name: string;
-        dosage: string;
-        condition: string;
-        time: string;
-        completed: boolean;
-        adherenceScore: number;
-    }>;
+  beneficiaryId?: string;
+  beneficiaryName?: string;
+  greeting?: string;
+  firstName?: string;
+  nextVisit?: string | null;
+  adherence?: string;
+  careCoordinator?: {
+    id: string;
+    name: string;
+    role: string;
+    bio?: string;
+    photo?: string | null;
+    phone?: string | null;
+  } | null;
+  todaysMedications?: Array<{
+    id: string;
+    name: string;
+    dosage?: string;
+    condition?: string;
+    time?: string;
+    completed?: boolean;
+    adherenceScore?: number;
+  }>;
 }
 
 interface PersonalCareOverviewProps {
-    data: PersonalCareData;
-    onViewTeam: () => void;
-    onViewAllMeds: () => void;
-    onSelectMed?: (medId: string) => void;
-    onOpenCareCircle?: () => void;
+  data: PersonalCareData;
+  onViewTeam: () => void;
+  onViewAllMeds: () => void;
+  onSelectMed?: (medId: string) => void;
+  onOpenCareCircle?: () => void;
 }
 
 export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
-    data,
-    onViewTeam,
-    onViewAllMeds,
-    onSelectMed,
-    onOpenCareCircle,
+  data,
+  onViewAllMeds,
 }) => {
-    const formatDate = (dateString?: string | null) => {
-        if (!dateString) return 'Not Scheduled';
-        const date = new Date(dateString);
-        if (Number.isNaN(date.getTime())) return dateString;
-        return date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-        });
-    };
+  // Extract next medication
+  const nextMed =
+    data.todaysMedications && data.todaysMedications.length > 0
+      ? data.todaysMedications[0]
+      : null;
 
-    return (
-        <View style={styles.container}>
-            {/* ── Care Circle Share Banner for My Profile ── */}
-            {onOpenCareCircle && (
-                <View style={styles.careCircleBanner}>
-                    <View style={styles.careCircleLeft}>
-                        <View style={styles.careCircleIconCircle}>
-                            <Ionicons name="people" size={18} color="#FE6700" />
-                        </View>
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                            <Text style={styles.careCircleHeading}>My Care Circle</Text>
-                            <Text style={styles.careCircleSubheading}>
-                                Share your care updates with family (Son, Brother, Spouse)
-                            </Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.careCircleShareBtn}
-                        onPress={onOpenCareCircle}
-                        activeOpacity={0.8}
-                    >
-                        <Feather name="user-plus" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
-                        <Text style={styles.careCircleShareBtnText}>Share Access</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
+  const medName = nextMed ? `${nextMed.name}${nextMed.dosage ? ` ${nextMed.dosage}` : ''}` : 'No medication scheduled';
+  const medTiming = nextMed ? (nextMed.time ? `${nextMed.condition ? `${nextMed.condition} · ` : ''}${nextMed.time}` : 'Scheduled for today') : 'All doses complete or none prescribed';
 
-            {/* ── Personal Stats Row (Symmetrical 2-Card Layout) ── */}
-            <View style={styles.statsRow}>
-                <View style={styles.statCard}>
-                    <View style={[styles.statIconBadge, { backgroundColor: '#EFF6FF' }]}>
-                        <Feather name="calendar" size={18} color="#2563EB" />
-                    </View>
-                    <Text style={styles.statLabel}>Next Visit</Text>
-                    <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
-                        {formatDate(data.nextVisit)}
-                    </Text>
-                </View>
+  // Parse adherence value (e.g., '95%' -> 95)
+  const adherenceRaw = (data.adherence || '95%').replace('%', '').trim();
+  const adherenceNum = Math.min(100, Math.max(0, parseInt(adherenceRaw, 10) || 95));
+  const adherenceDisplay = `${adherenceNum}%`;
 
-                <View style={styles.statCard}>
-                    <View style={[styles.statIconBadge, { backgroundColor: '#ECFDF5' }]}>
-                        <Feather name="trending-up" size={18} color="#059669" />
-                    </View>
-                    <Text style={styles.statLabel}>Adherence</Text>
-                    <Text style={styles.statValue} numberOfLines={1}>
-                        {data.adherence || '100%'}
-                    </Text>
-                </View>
-            </View>
+  const coordinator = data.careCoordinator || {
+    id: 'coord-default',
+    name: 'Dr. Sneha Rao',
+    role: 'Care Coordinator',
+    phone: '011-42258823',
+    photo: null,
+  };
 
-            {/* ── Care Coordinator ── */}
-            {data.careCoordinator && (
-                <>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Your Care Coordinator</Text>
-                        <TouchableOpacity onPress={onViewTeam} activeOpacity={0.7}>
-                            <Text style={styles.linkText}>View Team</Text>
-                        </TouchableOpacity>
-                    </View>
+  const handlePhonePress = () => {
+    if (coordinator.phone) {
+      Linking.openURL(`tel:${coordinator.phone.replace(/[^0-9+]/g, '')}`);
+    } else {
+      Linking.openURL('tel:01142258823');
+    }
+  };
 
-                    <View style={styles.ccCard}>
-                        <View style={styles.ccHeader}>
-                            <View style={styles.ccAvatar}>
-                                {data.careCoordinator.photo ? (
-                                    <Image
-                                        source={{ uri: sanitizeImageUri(data.careCoordinator.photo) }}
-                                        style={styles.ccImage}
-                                    />
-                                ) : (
-                                    <AntDesign name="user" size={30} color="#AAAAAA" />
-                                )}
-                            </View>
+  const handleMessagePress = () => {
+    if (coordinator.phone) {
+      Linking.openURL(`sms:${coordinator.phone.replace(/[^0-9+]/g, '')}`);
+    } else {
+      Linking.openURL('sms:01142258823');
+    }
+  };
 
-                            <View style={styles.ccInfo}>
-                                <Text style={styles.ccName}>{data.careCoordinator.name}</Text>
-                                <Text style={styles.ccRole}>{data.careCoordinator.role}</Text>
-                            </View>
-                        </View>
+  return (
+    <View style={styles.container}>
+      {/* ── Section Title Row ── */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionCategory}>PERSONAL WELLNESS</Text>
+        <Text style={styles.sectionTitle}>Today for you</Text>
+      </View>
 
-                        <Text style={styles.ccBio} numberOfLines={2}>
-                            {data.careCoordinator.bio}
-                        </Text>
+      {/* ── Dark Navy Medication & Adherence Card ── */}
+      <View style={styles.darkCard}>
+        {/* Top: Next medication & icon */}
+        <View style={styles.darkTopRow}>
+          <View style={styles.medTextCol}>
+            <Text style={styles.nextMedLabel}>Next medication</Text>
+            <Text style={styles.medTitle} numberOfLines={1}>
+              {medName}
+            </Text>
+            <Text style={styles.medTimingText} numberOfLines={1}>
+              {medTiming}
+            </Text>
+          </View>
 
-                        <ConnectContactButton
-                            name={data.careCoordinator.name}
-                            role={data.careCoordinator.role}
-                            phone={data.careCoordinator.phone || null}
-                            photo={data.careCoordinator.photo}
-                            trigger={
-                                <View style={styles.primaryBtn}>
-                                    <Text style={styles.primaryBtnText}>Call Now</Text>
-                                </View>
-                            }
-                        />
-                    </View>
-                </>
-            )}
-
-            {/* ── Today's Medications ── */}
-            {data.todaysMedications && data.todaysMedications.length > 0 && (
-                <>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Today's Medications</Text>
-                        <TouchableOpacity onPress={onViewAllMeds} activeOpacity={0.7}>
-                            <Text style={styles.linkText}>View All</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {data.todaysMedications.map((med) => (
-                        <TouchableOpacity
-                            key={med.id}
-                            style={styles.medCard}
-                            activeOpacity={0.7}
-                            onPress={() => onSelectMed ? onSelectMed(med.id) : onViewAllMeds()}
-                        >
-                            <View style={styles.medHeader}>
-                                <View style={styles.medIconBadge}>
-                                    <MaterialCommunityIcons name="pill" size={20} color="#FE6700" />
-                                </View>
-                                <View style={styles.medInfo}>
-                                    <Text style={styles.medName}>{med.name}</Text>
-                                    <Text style={styles.medDosage}>
-                                        {med.dosage} • {med.condition}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.medFooter}>
-                                <Text style={styles.medTime}>⏰ {med.time}</Text>
-                                <View style={styles.adherenceBadge}>
-                                    <Text style={styles.adherenceBadgeText}>
-                                        Adherence {med.adherenceScore}%
-                                    </Text>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </>
-            )}
+          <View style={styles.pillIconBox}>
+            <MaterialCommunityIcons name="pill" size={24} color="#FFA15F" />
+          </View>
         </View>
-    );
+
+        {/* Middle: Weekly Adherence Progress */}
+        <View style={styles.adherenceSection}>
+          <View style={styles.adherenceTextRow}>
+            <Text style={styles.adherenceLabel}>Weekly adherence</Text>
+            <Text style={styles.adherenceValue}>{adherenceDisplay}</Text>
+          </View>
+
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${adherenceNum}%` }]} />
+          </View>
+        </View>
+
+        {/* Bottom Button */}
+        <TouchableOpacity
+          style={styles.openScheduleBtn}
+          onPress={onViewAllMeds}
+          activeOpacity={0.88}
+        >
+          <Text style={styles.openScheduleBtnText}>Open medication schedule</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Care Coordinator Card ── */}
+      <View style={styles.coordinatorCard}>
+        <View style={styles.stethoscopeCircle}>
+          <MaterialCommunityIcons name="stethoscope" size={22} color={HomeColors.mintIcon} />
+        </View>
+
+        <View style={styles.coordinatorInfo}>
+          <Text style={styles.coordinatorRole}>{coordinator.role || 'Care coordinator'}</Text>
+          <Text style={styles.coordinatorName} numberOfLines={1}>
+            {coordinator.name}
+          </Text>
+        </View>
+
+        <View style={styles.contactActions}>
+          <ConnectContactButton
+            name={coordinator.name}
+            role={coordinator.role}
+            phone={coordinator.phone || null}
+            photo={coordinator.photo}
+            trigger={
+              <TouchableOpacity
+                style={styles.circleBtnPeach}
+                onPress={handlePhonePress}
+                activeOpacity={0.8}
+              >
+                <Feather name="phone" size={19} color={HomeColors.brandOrange} />
+              </TouchableOpacity>
+            }
+          />
+
+          <TouchableOpacity
+            style={styles.circleBtnBlue}
+            onPress={handleMessagePress}
+            activeOpacity={0.8}
+          >
+            <Feather name="message-square" size={19} color={HomeColors.blueIcon} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        width: '100%',
-        marginBottom: 8,
-    },
-    careCircleBanner: {
-        width: '100%',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#FFF8F3',
-        borderWidth: 1,
-        borderColor: '#FED7AA',
-        borderRadius: 14,
-        padding: 12,
-        marginBottom: 16,
-    },
-    careCircleLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        marginRight: 8,
-    },
-    careCircleIconCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#FFEDD5',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    careCircleHeading: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 13,
-        color: '#111827',
-    },
-    careCircleSubheading: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 11,
-        color: '#6B7280',
-        marginTop: 1,
-    },
-    careCircleShareBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FE6700',
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 8,
-        flexShrink: 0,
-    },
-    careCircleShareBtnText: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 12,
-        color: '#FFFFFF',
-    },
-    statsRow: {
-        width: '100%',
-        flexDirection: 'row',
-        gap: 12,
-        marginBottom: 18,
-    },
-    statCard: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 14,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    statIconBadge: {
-        width: 34,
-        height: 34,
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    statLabel: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        lineHeight: 16,
-        color: '#64748B',
-    },
-    statValue: {
-        fontFamily: 'Poppins-Bold',
-        fontSize: 15,
-        lineHeight: 22,
-        color: '#0F172A',
-        marginTop: 2,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 12,
-        marginTop: 8,
-    },
-    sectionTitle: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 18,
-        lineHeight: 24,
-        color: '#0F172A',
-    },
-    linkText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 14,
-        lineHeight: 20,
-        color: '#FF6A00',
-    },
-    ccCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 20,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    ccHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    ccAvatar: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#F1F5F9',
-        justifyContent: 'center',
-        alignItems: 'center',
-        overflow: 'hidden',
-    },
-    ccImage: {
-        width: 48,
-        height: 48,
-    },
-    ccInfo: {
-        marginLeft: 12,
-        flex: 1,
-    },
-    ccName: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 16,
-        lineHeight: 22,
-        color: '#0F172A',
-    },
-    ccRole: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        lineHeight: 16,
-        color: '#64748B',
-    },
-    ccBio: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 13,
-        lineHeight: 18,
-        color: '#334155',
-        marginBottom: 14,
-    },
-    primaryBtn: {
-        backgroundColor: '#FF6A00',
-        borderRadius: 12,
-        paddingVertical: 10,
-        alignItems: 'center',
-    },
-    primaryBtnText: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 14,
-        color: '#FFFFFF',
-    },
-    medCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    medHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    medIconBadge: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: '#FFF7ED',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    medInfo: {
-        marginLeft: 12,
-        flex: 1,
-    },
-    medName: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 15,
-        color: '#0F172A',
-    },
-    medDosage: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        color: '#64748B',
-    },
-    medFooter: {
-        marginTop: 12,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#F1F5F9',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    medTime: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 13,
-        color: '#334155',
-    },
-    adherenceBadge: {
-        backgroundColor: '#F0FDF4',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    adherenceBadgeText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 12,
-        color: '#16A34A',
-    },
+  container: {
+    width: '100%',
+    marginTop: 28,
+  },
+  sectionHeader: {
+    marginBottom: 14,
+  },
+  sectionCategory: {
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 1.56,
+    color: HomeColors.brandOrange,
+    textTransform: 'uppercase',
+  },
+  sectionTitle: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 21,
+    lineHeight: 30,
+    letterSpacing: -0.5,
+    color: HomeColors.textPrimary,
+  },
+  darkCard: {
+    width: '100%',
+    backgroundColor: HomeColors.cardDark,
+    borderRadius: 26,
+    padding: 20,
+    ...HomeShadows.darkCard,
+  },
+  darkTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  medTextCol: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  nextMedLabel: {
+    fontFamily: 'Poppins-Regular',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  medTitle: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 18,
+    lineHeight: 26,
+    color: '#FFFFFF',
+    marginTop: 4,
+  },
+  medTimingText: {
+    fontFamily: 'Poppins-Regular',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255, 255, 255, 0.65)',
+    marginTop: 4,
+  },
+  pillIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  adherenceSection: {
+    marginTop: 20,
+  },
+  adherenceTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  adherenceLabel: {
+    fontFamily: 'Poppins-Regular',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255, 255, 255, 0.65)',
+  },
+  adherenceValue: {
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    fontSize: 14,
+    lineHeight: 20,
+    color: HomeColors.adherenceText,
+  },
+  progressTrack: {
+    width: '100%',
+    height: 8,
+    backgroundColor: HomeColors.progressTrack,
+    borderRadius: 36,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 8,
+    backgroundColor: HomeColors.adherenceGreen,
+    borderRadius: 36,
+  },
+  openScheduleBtn: {
+    width: '100%',
+    height: 48,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  openScheduleBtnText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 15,
+    lineHeight: 22,
+    color: HomeColors.cardDark,
+  },
+  coordinatorCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: HomeColors.cardWhite,
+    borderRadius: 24,
+    borderWidth: 1.08,
+    borderColor: HomeColors.borderSubtle,
+    padding: 16,
+    marginTop: 16,
+    gap: 12,
+    ...HomeShadows.card,
+  },
+  stethoscopeCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 36,
+    backgroundColor: HomeColors.mintBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  coordinatorInfo: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  coordinatorRole: {
+    fontFamily: 'Poppins-Regular',
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 16,
+    color: HomeColors.textMuted,
+  },
+  coordinatorName: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 22,
+    color: HomeColors.textPrimary,
+    marginTop: 2,
+  },
+  contactActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  circleBtnPeach: {
+    width: 44,
+    height: 44,
+    borderRadius: 36,
+    backgroundColor: HomeColors.peachBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circleBtnBlue: {
+    width: 44,
+    height: 44,
+    borderRadius: 36,
+    backgroundColor: HomeColors.blueBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

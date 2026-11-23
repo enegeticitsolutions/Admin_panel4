@@ -1,597 +1,691 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import { HomeColors, HomeShadows } from '@/constants/homeTheme';
 import { ProfileAccessActionButtons } from '@/components/access';
+import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 
 export interface BeneficiaryItem {
-    id: string;
-    name: string;
-    relationship?: string;
-    subscriberRelationship?: string;
-    photo?: string | null;
-    dateOfBirth?: string | null;
-    age?: number | null;
-    packageStatus?: 'active' | 'expired' | 'pending' | 'none';
-    verificationStatus?: string;
-    isSelf?: boolean;
-    accessRole?: 'SELF' | 'MANAGER' | 'EDITOR' | 'VIEWER';
-    isCareCircleMember?: boolean;
-    careCircleRole?: string;
-    canEditDetails?: boolean;
-    careCircleMembersCount?: number;
+  id: string;
+  name: string;
+  relationship?: string;
+  subscriberRelationship?: string;
+  photo?: string | null;
+  dateOfBirth?: string | null;
+  age?: number | null;
+  packageStatus?: 'active' | 'expired' | 'pending' | 'none';
+  verificationStatus?: string;
+  isSelf?: boolean;
+  accessRole?: 'SELF' | 'MANAGER' | 'EDITOR' | 'VIEWER';
+  isCareCircleMember?: boolean;
+  careCircleRole?: string;
+  canEditDetails?: boolean;
+  careCircleMembersCount?: number;
+  // Optional health & visit info from subscriber dashboard
+  latestVitals?: {
+    bloodPressure?: string;
+    bloodPressureStatus?: string;
+    pulseRate?: string | number;
+    pulseStatus?: string;
+    spo2?: string | number;
+    spo2Status?: string;
+    bloodGlucose?: string | number;
+    temperature?: string | number;
+  };
+  nextVisit?: {
+    scheduledTime?: string;
+    companionName?: string;
+    status?: string;
+  };
+  visits?: Array<{
+    scheduledTime?: string;
+    primaryCC?: { user?: { name?: string } };
+    companionName?: string;
+    status?: string;
+  }>;
 }
 
 interface FamilyCareSectionProps {
-    beneficiaries: BeneficiaryItem[];
-    remainingHours: number;
-    visitsThisWeek: number;
-    onSelectBeneficiary: (beneficiary: BeneficiaryItem) => void;
-    onAddMember: () => void;
-    onOpenFamilyConnect: () => void;
-    onOpenCareCircle?: (beneficiary: BeneficiaryItem) => void;
-    onOpenJoinCircle?: () => void;
-    pendingAccessRequestsCount?: number;
-    onAccessChanged?: () => void;
+  beneficiaries: BeneficiaryItem[];
+  remainingHours?: number;
+  visitsThisWeek?: number;
+  onSelectBeneficiary: (beneficiary: BeneficiaryItem) => void;
+  onAddMember: () => void;
+  onOpenFamilyConnect?: () => void;
+  onOpenCareCircle?: (beneficiary: BeneficiaryItem) => void;
+  onOpenJoinCircle?: () => void;
+  pendingAccessRequestsCount?: number;
+  onAccessChanged?: () => void;
 }
 
 export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
-    beneficiaries,
-    remainingHours,
-    visitsThisWeek,
-    onSelectBeneficiary,
-    onAddMember,
-    onOpenFamilyConnect,
-    onOpenCareCircle,
-    onOpenJoinCircle,
-    pendingAccessRequestsCount = 0,
-    onAccessChanged,
+  beneficiaries,
+  onSelectBeneficiary,
+  onAddMember,
+  onOpenCareCircle,
+  onOpenJoinCircle,
+  pendingAccessRequestsCount = 0,
+  onAccessChanged,
 }) => {
-    const getDisplayAge = (b: BeneficiaryItem): string => {
-        if (b.dateOfBirth) {
-            try {
-                const dob = new Date(b.dateOfBirth);
-                if (!isNaN(dob.getTime())) {
-                    const today = new Date();
-                    let age = today.getFullYear() - dob.getFullYear();
-                    const m = today.getMonth() - dob.getMonth();
-                    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-                    return `${age} yrs`;
-                }
-            } catch (_) { }
-        }
-        return b.age ? `${b.age} yrs` : '';
-    };
+  // Track currently selected family member in the pills row
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
+  const getDisplayAge = (b: BeneficiaryItem): string => {
+    if (b.dateOfBirth) {
+      try {
+        const dob = new Date(b.dateOfBirth);
+        if (!isNaN(dob.getTime())) {
+          const today = new Date();
+          let age = today.getFullYear() - dob.getFullYear();
+          const m = today.getMonth() - dob.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+          return `${age} yrs`;
+        }
+      } catch (_) {}
+    }
+    return b.age ? `${b.age} yrs` : '';
+  };
+
+  const getInitials = (name: string): string => {
+    if (!name) return 'FM';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const formatVisitSchedule = (dateStr?: string) => {
+    if (!dateStr) return { day: 'Not Scheduled', time: '' };
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return { day: 'Scheduled', time: '' };
+      const now = new Date();
+      const isTomorrow =
+        d.getDate() === now.getDate() + 1 &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+      const isToday =
+        d.getDate() === now.getDate() &&
+        d.getMonth() === now.getMonth() &&
+        d.getFullYear() === now.getFullYear();
+
+      const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (isToday) return { day: 'Today', time: `· ${timeStr}` };
+      if (isTomorrow) return { day: 'Tomorrow', time: `· ${timeStr}` };
+      const dayName = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+      return { day: dayName, time: `· ${timeStr}` };
+    } catch {
+      return { day: 'Scheduled', time: '' };
+    }
+  };
+
+  if (!beneficiaries || beneficiaries.length === 0) {
     return (
-        <View style={styles.container}>
-            <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Family Care Activity</Text>
-                <TouchableOpacity onPress={onOpenFamilyConnect} activeOpacity={0.7}>
-                    <Text style={styles.linkText}>Family Connect</Text>
-                </TouchableOpacity>
+      <View style={styles.container}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionCategory}>FAMILY CARE</Text>
+            <Text style={styles.sectionTitle}>Loved ones</Text>
+          </View>
+          <TouchableOpacity style={styles.addMemberHeaderBtn} onPress={onAddMember} activeOpacity={0.75}>
+            <Feather name="plus" size={16} color={HomeColors.brandOrange} />
+            <Text style={styles.addMemberHeaderText}>Add member</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIconBox}>
+            <Ionicons name="people-outline" size={28} color={HomeColors.brandOrange} />
+          </View>
+          <Text style={styles.emptyTitle}>No Family Members Added</Text>
+          <Text style={styles.emptySub}>
+            Add your parents or family members to monitor their health, coordinate visits, and share care circles.
+          </Text>
+          <View style={styles.emptyActionsRow}>
+            <TouchableOpacity style={styles.emptyPrimaryBtn} onPress={onAddMember} activeOpacity={0.85}>
+              <Ionicons name="person-add-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.emptyPrimaryBtnText}>Add Member</Text>
+            </TouchableOpacity>
+
+            {onOpenJoinCircle && (
+              <TouchableOpacity style={styles.emptySecondaryBtn} onPress={onOpenJoinCircle} activeOpacity={0.85}>
+                <Ionicons name="key-outline" size={15} color={HomeColors.brandOrange} style={{ marginRight: 6 }} />
+                <Text style={styles.emptySecondaryBtnText}>Join Circle</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        <ProfileAccessActionButtons pendingCount={pendingAccessRequestsCount} onChanged={onAccessChanged} />
+      </View>
+    );
+  }
+
+  // Active selected beneficiary
+  const currentBen = beneficiaries[selectedIndex] || beneficiaries[0];
+  const ageStr = getDisplayAge(currentBen);
+  const relStr = currentBen.relationship || currentBen.subscriberRelationship || 'Family Member';
+  const circleCount = currentBen.careCircleMembersCount || 1;
+
+  // Next visit info
+  const rawVisit =
+    currentBen.nextVisit ||
+    (currentBen.visits && currentBen.visits.length > 0 ? currentBen.visits[0] : null);
+  const companion =
+    rawVisit?.companionName ||
+    (rawVisit as any)?.primaryCC?.user?.name ||
+    'Care Coordinator';
+  const visitSchedule = formatVisitSchedule(rawVisit?.scheduledTime);
+
+  // Vitals info
+  const bpVal = currentBen.latestVitals?.bloodPressure || '124/82';
+  const bpStatus = currentBen.latestVitals?.bloodPressureStatus || 'Normal';
+  const pulseVal = currentBen.latestVitals?.pulseRate ? `${currentBen.latestVitals.pulseRate}` : '74';
+  const spo2Val = currentBen.latestVitals?.spo2 ? `${currentBen.latestVitals.spo2}%` : '98%';
+
+  return (
+    <View style={styles.container}>
+      {/* ── Section Title Row ── */}
+      <View style={styles.sectionHeader}>
+        <View>
+          <Text style={styles.sectionCategory}>FAMILY CARE</Text>
+          <Text style={styles.sectionTitle}>Loved ones</Text>
+        </View>
+        <TouchableOpacity style={styles.addMemberHeaderBtn} onPress={onAddMember} activeOpacity={0.75}>
+          <Feather name="plus" size={16} color={HomeColors.brandOrange} />
+          <Text style={styles.addMemberHeaderText}>Add member</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Horizontal Member Selector Pills ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.memberPillsScroll}
+      >
+        {beneficiaries.map((b, idx) => {
+          const isSelected = idx === selectedIndex;
+          const initials = getInitials(b.name);
+          const displayLabel = b.relationship || b.name.split(' ')[0];
+
+          return (
+            <TouchableOpacity
+              key={b.id || `member-pill-${idx}`}
+              style={[styles.memberPill, isSelected ? styles.memberPillActive : styles.memberPillInactive]}
+              onPress={() => setSelectedIndex(idx)}
+              activeOpacity={0.8}
+            >
+              <View
+                style={[
+                  styles.pillAvatarCircle,
+                  isSelected ? styles.pillAvatarActive : styles.pillAvatarInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.pillAvatarText,
+                    isSelected ? { color: HomeColors.brandOrange } : { color: '#5C6370' },
+                  ]}
+                >
+                  {initials}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.pillLabelText,
+                  isSelected ? { color: HomeColors.brandOrange } : { color: '#5C6370' },
+                ]}
+              >
+                {displayLabel}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* ── Selected Loved One Detail Card ── */}
+      <View style={styles.lovedOneCard}>
+        {/* Card Header */}
+        <View style={styles.cardHeader}>
+          <View style={styles.avatarLarge}>
+            {currentBen.photo ? (
+              <Image
+                source={{
+                  uri: sanitizeImageUri(
+                    currentBen.photo,
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(currentBen.name)}&background=FDE7D5&color=8D3C11&bold=true`
+                  ),
+                }}
+                style={styles.avatarLargeImg}
+              />
+            ) : (
+              <Text style={styles.avatarLargeText}>{getInitials(currentBen.name)}</Text>
+            )}
+          </View>
+
+          <View style={styles.headerInfo}>
+            <Text style={styles.seniorName} numberOfLines={1}>
+              {currentBen.name}
+            </Text>
+            <Text style={styles.seniorMeta}>
+              {ageStr ? `${ageStr} · ` : ''}
+              {relStr}
+            </Text>
+          </View>
+
+          {onOpenCareCircle && (
+            <TouchableOpacity
+              style={styles.careCirclePill}
+              onPress={() => onOpenCareCircle(currentBen)}
+              activeOpacity={0.8}
+            >
+              <Feather name="users" size={13} color={HomeColors.blueText} style={{ marginRight: 4 }} />
+              <Text style={styles.careCirclePillText}>Care Circle ({circleCount})</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.cardDivider} />
+
+        {/* Card Body */}
+        <View style={styles.cardBody}>
+          {/* Next Visit Sub-card */}
+          <TouchableOpacity
+            style={styles.visitSubCard}
+            onPress={() => onSelectBeneficiary(currentBen)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.calendarIconSquare}>
+              <Feather name="calendar" size={20} color={HomeColors.brandOrange} />
             </View>
 
-            {beneficiaries.length > 0 ? (
-                <>
-                    {/* ── High-Level Snapshot Row ── */}
-                    <View style={styles.snapshotRow}>
-                        <View style={styles.snapshotCard}>
-                            <View style={[styles.snapshotIconBox, { backgroundColor: '#EFF6FF' }]}>
-                                <Ionicons name="people" size={18} color="#2563EB" />
-                            </View>
-                            <Text style={styles.snapshotValue} numberOfLines={1}>{beneficiaries.length}</Text>
-                            <Text style={styles.snapshotLabel} numberOfLines={1} adjustsFontSizeToFit>Family Members</Text>
-                        </View>
+            <View style={styles.visitInfo}>
+              <Text style={styles.visitLabel}>Next Saathi visit</Text>
+              <Text style={styles.visitTime}>
+                {visitSchedule.day} {visitSchedule.time}
+              </Text>
+              <Text style={styles.visitCompanion}>with {companion}</Text>
+            </View>
 
-                        <View style={styles.snapshotCard}>
-                            <View style={[styles.snapshotIconBox, { backgroundColor: '#ECFDF5' }]}>
-                                <Ionicons name="time" size={18} color="#059669" />
-                            </View>
-                            <Text style={styles.snapshotValue} numberOfLines={1}>{remainingHours}h</Text>
-                            <Text style={styles.snapshotLabel} numberOfLines={1} adjustsFontSizeToFit>Care Hours Left</Text>
-                        </View>
+            <Feather name="chevron-right" size={20} color={HomeColors.brandOrange} />
+          </TouchableOpacity>
 
-                        <View style={styles.snapshotCard}>
-                            <View style={[styles.snapshotIconBox, { backgroundColor: '#FFF7ED' }]}>
-                                <Feather name="calendar" size={18} color="#EA580C" />
-                            </View>
-                            <Text style={styles.snapshotValue} numberOfLines={1}>{visitsThisWeek}</Text>
-                            <Text style={styles.snapshotLabel} numberOfLines={1} adjustsFontSizeToFit>Visits This Week</Text>
-                        </View>
-                    </View>
+          {/* Compact Vitals 3-Box Row */}
+          <View style={styles.vitalsRow}>
+            {/* Box 1: BP */}
+            <View style={styles.vitalBox}>
+              <Text style={styles.vitalValue}>{bpVal}</Text>
+              <Text style={styles.vitalLabel}>BP</Text>
+              <Text style={styles.vitalStatus}>{bpStatus}</Text>
+            </View>
 
-                    {/* ── Beneficiary Cards ── */}
-                    {beneficiaries.map((b) => {
-                        const isSelf = (b.relationship || '').toLowerCase() === 'self' || b.isSelf || b.accessRole === 'SELF';
-                        const isCareCircle = b.isCareCircleMember || b.accessRole === 'EDITOR' || b.accessRole === 'VIEWER';
-                        const isPending = b.packageStatus === 'pending' || b.verificationStatus === 'pending';
-                        const isExpired = b.packageStatus === 'expired';
-                        const isActive = b.packageStatus === 'active';
-                        const relText = isSelf
-                            ? 'Self'
-                            : (isCareCircle
-                                ? (b.relationship && b.relationship !== b.subscriberRelationship ? b.relationship : '')
-                                : (b.relationship || ''));
+            {/* Box 2: Pulse */}
+            <View style={styles.vitalBox}>
+              <Text style={styles.vitalValue}>{pulseVal}</Text>
+              <Text style={styles.vitalLabel}>Pulse</Text>
+              <Text style={styles.vitalStatus}>bpm</Text>
+            </View>
 
-                        return (
-                            <TouchableOpacity
-                                key={b.id}
-                                style={styles.familyCard}
-                                onPress={() => onSelectBeneficiary(b)}
-                                activeOpacity={0.85}
-                            >
-                                <Image
-                                    source={{
-                                        uri: sanitizeImageUri(
-                                            b.photo,
-                                            `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name || 'Member')}&background=FFE3D1&color=FE6700&bold=true`
-                                        )
-                                    }}
-                                    style={styles.familyAvatar}
-                                />
-
-                                <View style={styles.familyInfo}>
-                                    <View style={styles.nameRow}>
-                                        <Text style={styles.familyName}>{b.name}</Text>
-                                        {isSelf && (
-                                            <View style={styles.selfBadge}>
-                                                <Text style={styles.selfBadgeText}>Self</Text>
-                                            </View>
-                                        )}
-                                        {b.isCareCircleMember && (
-                                            <View style={styles.sharedBadge}>
-                                                <Ionicons
-                                                    name={b.accessRole === 'EDITOR' || b.canEditDetails ? 'create-outline' : 'eye-outline'}
-                                                    size={10}
-                                                    color="#2563EB"
-                                                    style={{ marginRight: 2 }}
-                                                />
-                                                <Text style={styles.sharedBadgeText}>
-                                                    {b.accessRole === 'EDITOR' || b.canEditDetails ? 'Shared • Edit' : 'Shared • View'}
-                                                </Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                    <Text style={styles.familyMeta}>
-                                        {getDisplayAge(b)}{relText ? ` • ${relText}` : ''}
-                                    </Text>
-
-                                    {/* Status & Care Circle Badges */}
-                                    <View style={styles.pillRow}>
-                                        {isExpired ? (
-                                            <View style={styles.expiredPill}>
-                                                <Ionicons name="time-outline" size={12} color="#DC2626" style={{ marginRight: 4 }} />
-                                                <Text style={styles.expiredPillText}>Tap to renew package</Text>
-                                            </View>
-                                        ) : isPending ? (
-                                            <View style={styles.pendingPill}>
-                                                <Ionicons name="alert-circle-outline" size={12} color="#D97706" style={{ marginRight: 4 }} />
-                                                <Text style={styles.pendingPillText}>Setup required</Text>
-                                            </View>
-                                        ) : isActive ? (
-                                            <View style={styles.activePill}>
-                                                <View style={styles.activeDot} />
-                                                <Text style={styles.activePillText}>Active Care</Text>
-                                            </View>
-                                        ) : null}
-
-                                        {onOpenCareCircle && (
-                                            <TouchableOpacity
-                                                style={styles.careCirclePill}
-                                                onPress={() => onOpenCareCircle(b)}
-                                                activeOpacity={0.8}
-                                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                            >
-                                                <Ionicons name="people-outline" size={12} color="#FE6700" style={{ marginRight: 3 }} />
-                                                <Text style={styles.careCirclePillText}>
-                                                    Care Circle ({b.careCircleMembersCount || 1})
-                                                </Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                </View>
-
-                                <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-                            </TouchableOpacity>
-                        );
-                    })}
-
-                    <View style={styles.actionsRow}>
-                        <TouchableOpacity
-                            style={styles.addMemberBtn}
-                            onPress={onAddMember}
-                            activeOpacity={0.85}
-                        >
-                            <Ionicons name="person-add-outline" size={15} color="#FE6700" style={{ marginRight: 6 }} />
-                            <Text style={styles.addMemberBtnText}>Add Member</Text>
-                        </TouchableOpacity>
-
-                        {onOpenJoinCircle && (
-                            <TouchableOpacity
-                                style={styles.joinCircleBtn}
-                                onPress={onOpenJoinCircle}
-                                activeOpacity={0.85}
-                            >
-                                <Ionicons name="key-outline" size={15} color="#2563EB" style={{ marginRight: 6 }} />
-                                <Text style={styles.joinCircleBtnText}>Join Circle</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    <ProfileAccessActionButtons
-                        pendingCount={pendingAccessRequestsCount}
-                        onChanged={onAccessChanged}
-                    />
-                </>
-            ) : (
-                <View style={styles.emptyCard}>
-                    <View style={styles.emptyIconBox}>
-                        <Ionicons name="people-outline" size={26} color="#FE6700" />
-                    </View>
-                    <View style={styles.emptyTextWrap}>
-                        <Text style={styles.emptyTitle}>No Family Members Added</Text>
-                        <Text style={styles.emptySub}>
-                            Add your parents or family members, or ask for access to monitor an existing care profile.
-                        </Text>
-                        <View style={styles.emptyActionsRow}>
-                            <TouchableOpacity
-                                style={styles.addFamilyBtn}
-                                onPress={onAddMember}
-                                activeOpacity={0.85}
-                            >
-                                <Ionicons name="person-add-outline" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-                                <Text style={styles.addFamilyBtnText}>Add Member</Text>
-                            </TouchableOpacity>
-
-                            {onOpenJoinCircle && (
-                                <TouchableOpacity
-                                    style={styles.emptyJoinBtn}
-                                    onPress={onOpenJoinCircle}
-                                    activeOpacity={0.85}
-                                >
-                                    <Ionicons name="key-outline" size={14} color="#2563EB" style={{ marginRight: 5 }} />
-                                    <Text style={styles.emptyJoinBtnText}>Join Circle</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-
-                        <ProfileAccessActionButtons
-                            pendingCount={pendingAccessRequestsCount}
-                            onChanged={onAccessChanged}
-                        />
-                    </View>
-                </View>
-            )}
+            {/* Box 3: SpO2 */}
+            <View style={styles.vitalBox}>
+              <Text style={styles.vitalValue}>{spo2Val}</Text>
+              <Text style={styles.vitalLabel}>SpO₂</Text>
+              <Text style={styles.vitalStatus}>Good</Text>
+            </View>
+          </View>
         </View>
-    );
+
+        {/* Card Footer */}
+        <TouchableOpacity
+          style={styles.cardFooterBtn}
+          onPress={() => onSelectBeneficiary(currentBen)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.cardFooterText}>View full health profile</Text>
+          <Feather name="arrow-right" size={18} color={HomeColors.brandOrange} />
+        </TouchableOpacity>
+      </View>
+
+      <ProfileAccessActionButtons pendingCount={pendingAccessRequestsCount} onChanged={onAccessChanged} />
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        width: '100%',
-        marginBottom: 8,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 12,
-        marginTop: 8,
-        width: '100%',
-        flexWrap: 'wrap',
-        gap: 6,
-    },
-    sectionTitle: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 18,
-        lineHeight: 24,
-        color: '#0F172A',
-        flexShrink: 1,
-    },
-    linkText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 14,
-        lineHeight: 20,
-        color: '#FF6A00',
-    },
-    snapshotRow: {
-        width: '100%',
-        flexDirection: 'row',
-        gap: 10,
-        marginBottom: 16,
-    },
-    snapshotCard: {
-        flex: 1,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        paddingVertical: 12,
-        paddingHorizontal: 6,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: '#F1F5F9',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
-        elevation: 2,
-    },
-    snapshotIconBox: {
-        width: 32,
-        height: 32,
-        borderRadius: 10,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 6,
-    },
-    snapshotValue: {
-        fontFamily: 'Poppins-Bold',
-        fontSize: 16,
-        color: '#0F172A',
-        lineHeight: 22,
-    },
-    snapshotLabel: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 10,
-        color: '#64748B',
-        textAlign: 'center',
-        marginTop: 2,
-    },
-    familyCard: {
-        width: '100%',
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 14,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#F3F4F6',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-        elevation: 2,
-    },
-    familyAvatar: {
-        width: 46,
-        height: 46,
-        borderRadius: 23,
-        backgroundColor: '#F3F4F6',
-    },
-    familyInfo: {
-        flex: 1,
-        marginLeft: 12,
-    },
-    nameRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    familyName: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 15,
-        color: '#111827',
-    },
-    selfBadge: {
-        backgroundColor: '#EFF6FF',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6,
-    },
-    selfBadgeText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 10,
-        color: '#2563EB',
-    },
-    familyMeta: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        color: '#6B7280',
-        marginTop: 2,
-    },
-    expiredPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        backgroundColor: '#FEF2F2',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        marginTop: 4,
-    },
-    expiredPillText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 11,
-        color: '#DC2626',
-    },
-    pendingPill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        backgroundColor: '#FFFBEB',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        marginTop: 4,
-    },
-    pendingPillText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 11,
-        color: '#D97706',
-    },
-    activePill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        backgroundColor: '#ECFDF5',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        marginTop: 4,
-        gap: 5,
-    },
-    activeDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: '#10B981',
-    },
-    activePillText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 11,
-        color: '#059669',
-    },
-    actionsRow: {
-        width: '100%',
-        flexDirection: 'row',
-        gap: 10,
-        marginBottom: 18,
-    },
-    addMemberBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 14,
-        paddingVertical: 12,
-        paddingHorizontal: 8,
-        borderWidth: 1,
-        borderColor: '#FED7AA',
-        borderStyle: 'dashed',
-    },
-    addMemberBtnText: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 13,
-        color: '#FE6700',
-    },
-    joinCircleBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#EFF6FF',
-        borderRadius: 14,
-        paddingVertical: 12,
-        paddingHorizontal: 8,
-        borderWidth: 1,
-        borderColor: '#BFDBFE',
-    },
-    joinCircleBtnText: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 13,
-        color: '#2563EB',
-    },
-    emptyCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: '#F3F4F6',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    emptyIconBox: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        backgroundColor: '#FFF5ED',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    emptyTextWrap: {
-        flex: 1,
-        marginLeft: 12,
-    },
-    emptyTitle: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 14,
-        color: '#111827',
-        marginBottom: 2,
-    },
-    emptySub: {
-        fontFamily: 'Poppins-Regular',
-        fontSize: 12,
-        color: '#6B7280',
-        lineHeight: 17,
-        marginBottom: 10,
-    },
-    emptyActionsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        flexWrap: 'wrap',
-    },
-    addFamilyBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FE6700',
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        borderRadius: 8,
-    },
-    addFamilyBtnText: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 12,
-        color: '#FFFFFF',
-    },
-    emptyJoinBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#EFF6FF',
-        borderWidth: 1,
-        borderColor: '#BFDBFE',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 8,
-    },
-    emptyJoinBtnText: {
-        fontFamily: 'Poppins-SemiBold',
-        fontSize: 12,
-        color: '#2563EB',
-    },
-    sharedBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#EFF6FF',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        marginLeft: 6,
-    },
-    sharedBadgeText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: '#2563EB',
-    },
-    pillRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: 6,
-    },
-    careCirclePill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF5ED',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#FED7AA',
-    },
-    careCirclePillText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 10,
-        color: '#FE6700',
-    },
+  container: {
+    width: '100%',
+    marginTop: 28,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 14,
+  },
+  sectionCategory: {
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 1.56,
+    color: HomeColors.brandOrange,
+    textTransform: 'uppercase',
+  },
+  sectionTitle: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 21,
+    lineHeight: 30,
+    letterSpacing: -0.5,
+    color: HomeColors.textPrimary,
+  },
+  addMemberHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+  },
+  addMemberHeaderText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+    color: HomeColors.brandOrange,
+  },
+  memberPillsScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 16,
+  },
+  memberPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingRight: 16,
+    paddingLeft: 8,
+    borderRadius: 36,
+    borderWidth: 1.08,
+    height: 48,
+    gap: 8,
+  },
+  memberPillActive: {
+    backgroundColor: HomeColors.brandOrangeSoft,
+    borderColor: HomeColors.brandOrange,
+  },
+  memberPillInactive: {
+    backgroundColor: HomeColors.cardWhite,
+    borderColor: HomeColors.borderSubtle,
+  },
+  pillAvatarCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pillAvatarActive: {
+    backgroundColor: '#FDE7D5',
+  },
+  pillAvatarInactive: {
+    backgroundColor: '#E7F1ED',
+  },
+  pillAvatarText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  pillLabelText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  lovedOneCard: {
+    width: '100%',
+    backgroundColor: HomeColors.cardWhite,
+    borderRadius: 26,
+    borderWidth: 1.08,
+    borderColor: HomeColors.borderSubtle,
+    overflow: 'hidden',
+    ...HomeShadows.card,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+    gap: 14,
+  },
+  avatarLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: '#FDE7D5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarLargeImg: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarLargeText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 18,
+    lineHeight: 24,
+    color: '#8D3C11',
+  },
+  headerInfo: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  seniorName: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 18,
+    lineHeight: 23,
+    color: HomeColors.textPrimary,
+  },
+  seniorMeta: {
+    fontFamily: 'Poppins-Regular',
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 20,
+    color: HomeColors.textMuted,
+    marginTop: 2,
+  },
+  careCirclePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: HomeColors.blueBg,
+    paddingHorizontal: 12,
+    height: 38,
+    borderRadius: 36,
+  },
+  careCirclePillText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 12,
+    lineHeight: 16,
+    color: HomeColors.blueText,
+  },
+  cardDivider: {
+    height: 1.08,
+    backgroundColor: HomeColors.borderSubtle,
+    marginHorizontal: 20,
+  },
+  cardBody: {
+    padding: 20,
+  },
+  visitSubCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7F0',
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  calendarIconSquare: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  visitInfo: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  visitLabel: {
+    fontFamily: 'Poppins-Medium',
+    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 16,
+    color: HomeColors.textMuted,
+  },
+  visitTime: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+    color: HomeColors.textPrimary,
+    marginTop: 2,
+  },
+  visitCompanion: {
+    fontFamily: 'Poppins-Medium',
+    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 16,
+    color: HomeColors.textMuted,
+    marginTop: 2,
+  },
+  vitalsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 16,
+  },
+  vitalBox: {
+    flex: 1,
+    height: 92,
+    backgroundColor: HomeColors.vitalsBoxBg,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  vitalValue: {
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    fontSize: 14,
+    lineHeight: 20,
+    color: HomeColors.vitalsValueGreen,
+  },
+  vitalLabel: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 16,
+    color: HomeColors.vitalsLabelGreen,
+    marginTop: 4,
+  },
+  vitalStatus: {
+    fontFamily: 'Poppins-Regular',
+    fontWeight: '400',
+    fontSize: 10,
+    lineHeight: 15,
+    color: HomeColors.vitalsUnitGreen,
+    marginTop: 2,
+  },
+  cardFooterBtn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    height: 56,
+    borderTopWidth: 1.08,
+    borderTopColor: HomeColors.borderSubtle,
+  },
+  cardFooterText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#333B47',
+  },
+  emptyCard: {
+    backgroundColor: HomeColors.cardWhite,
+    borderRadius: 24,
+    borderWidth: 1.08,
+    borderColor: HomeColors.borderSubtle,
+    padding: 24,
+    alignItems: 'center',
+    ...HomeShadows.card,
+  },
+  emptyIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: HomeColors.brandOrangeSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 17,
+    color: HomeColors.textPrimary,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptySub: {
+    fontFamily: 'Poppins-Regular',
+    fontSize: 13,
+    lineHeight: 19,
+    color: HomeColors.textMuted,
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  emptyActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  emptyPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: HomeColors.brandOrange,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  emptyPrimaryBtnText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  emptySecondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: HomeColors.brandOrangeSoft,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  emptySecondaryBtnText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 13,
+    color: HomeColors.brandOrange,
+  },
 });

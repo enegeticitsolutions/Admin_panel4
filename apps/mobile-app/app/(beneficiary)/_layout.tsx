@@ -16,14 +16,14 @@ export default function BeneficiaryLayout() {
 
                 return {
                     headerShown: false,
-                    tabBarActiveTintColor: '#FF6A00',
-                    tabBarInactiveTintColor: '#6B7280',
+                    tabBarActiveTintColor: '#FE6700',
+                    tabBarInactiveTintColor: '#68707D',
                     tabBarButton: showInTabBar ? undefined : () => null,
                     tabBarItemStyle: showInTabBar ? undefined : { display: 'none' },
                     tabBarStyle: {
-                        backgroundColor: '#FFFFFF',
-                        borderTopWidth: 1,
-                        borderTopColor: '#E5E7EB',
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        borderTopWidth: 1.08,
+                        borderTopColor: '#E7DED6',
                         height: Platform.OS === 'ios' ? 88 : Platform.OS === 'web' ? 68 : 60 + insets.bottom,
                         paddingBottom: Platform.OS === 'ios' ? 32 : Platform.OS === 'web' ? 8 : 8 + insets.bottom,
                         paddingTop: Platform.OS === 'web' ? 8 : 8,
