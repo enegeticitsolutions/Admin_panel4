@@ -1,11 +1,10 @@
-export { CommunityHeroBanner } from './CommunityHeroBanner';
-export type { } from './CommunityHeroBanner';
+export * from './CommunityHeroCard';
+export * from './CommunityEventCard';
+export * from './CommunityArticleCard';
+export * from './CommunityPodcastCard';
 
-export { EventCard } from './EventCard';
-export type { EventCardProps } from './EventCard';
-
-export { WellnessReadCard } from './WellnessReadCard';
-export type { WellnessReadCardProps } from './WellnessReadCard';
-
-export { PodcastPlayerCard } from './PodcastPlayerCard';
-export type { PodcastPlayerCardProps } from './PodcastPlayerCard';
+// Backwards compatibility aliases
+export { CommunityHeroCard as CommunityHeroBanner } from './CommunityHeroCard';
+export { CommunityEventCard as EventCard } from './CommunityEventCard';
+export { CommunityArticleCard as WellnessReadCard } from './CommunityArticleCard';
+export { CommunityPodcastCard as PodcastPlayerCard } from './CommunityPodcastCard';

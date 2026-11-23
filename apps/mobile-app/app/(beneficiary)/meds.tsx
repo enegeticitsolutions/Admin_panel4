@@ -62,7 +62,7 @@ export default function MedsTracker() {
 
     // State
     const [schedule, setSchedule] = useState<DoseScheduleItem[]>([]);
-    const [metrics, setMetrics] = useState<Metrics>({ average: 92, taken: 6, missed: 1 });
+    const [metrics, setMetrics] = useState<Metrics>({ average: 0, taken: 0, missed: 0 });
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [submittingId, setSubmittingId] = useState<string | null>(null);
@@ -94,7 +94,7 @@ export default function MedsTracker() {
     if (currentHour >= 12 && currentHour < 17) defaultGreeting = 'Good afternoon';
     else if (currentHour >= 17) defaultGreeting = 'Good evening';
 
-    const userName = isGuest ? 'Guest' : (user?.name || 'Rajesh');
+    const userName = user?.name || (isGuest ? 'Guest' : 'Member');
 
     // Load available beneficiaries (Family Members + Self)
     const loadBeneficiaries = useCallback(async () => {
@@ -201,14 +201,16 @@ export default function MedsTracker() {
             const targetBeneficiaryId = await resolveTargetBeneficiaryId();
 
             if (!targetBeneficiaryId) {
-                loadMocks();
+                setSchedule([]);
+                setMetrics({ average: 0, taken: 0, missed: 0 });
                 setLoading(false);
                 return;
             }
 
             const token = await AsyncStorage.getItem('userToken');
             if (!token) {
-                loadMocks();
+                setSchedule([]);
+                setMetrics({ average: 0, taken: 0, missed: 0 });
                 setLoading(false);
                 return;
             }
@@ -230,72 +232,26 @@ export default function MedsTracker() {
                 setSchedule(items);
                 scheduleLocalReminders(items);
             } else {
-                loadMocks();
+                setSchedule([]);
             }
 
             if (metricsData.success && metricsData.data) {
                 setMetrics({
-                    average: metricsData.data.average ?? 92,
-                    taken: metricsData.data.taken ?? 6,
-                    missed: metricsData.data.missed ?? 1,
+                    average: metricsData.data.average ?? 0,
+                    taken: metricsData.data.taken ?? 0,
+                    missed: metricsData.data.missed ?? 0,
                 });
+            } else {
+                setMetrics({ average: 0, taken: 0, missed: 0 });
             }
         } catch (err) {
             console.error('Failed to load medication data:', err);
-            loadMocks();
+            setSchedule([]);
+            setMetrics({ average: 0, taken: 0, missed: 0 });
         } finally {
             setLoading(false);
         }
     }, [resolveTargetBeneficiaryId]);
-
-    // Fallback Mocks matching Figma design
-    const loadMocks = () => {
-        setMetrics({ average: 92, taken: 6, missed: 1 });
-        setSchedule([
-            {
-                id: '1',
-                logId: null,
-                name: 'Telmisartan 40mg',
-                dosage: '1 tablet',
-                frequency: 'Once daily',
-                instructions: 'after breakfast',
-                scheduleTimeText: '8:00 AM',
-                scheduledTimeIso: new Date().toISOString(),
-                status: 'pending',
-                adherencePercentage: 95,
-                isToday: true,
-                canMark: true,
-            },
-            {
-                id: '2',
-                logId: null,
-                name: 'Metformin 500mg',
-                dosage: '1 tablet',
-                frequency: 'Twice daily',
-                instructions: 'after lunch',
-                scheduleTimeText: '1:30 PM',
-                scheduledTimeIso: new Date().toISOString(),
-                status: 'taken',
-                adherencePercentage: 92,
-                isToday: true,
-                canMark: true,
-            },
-            {
-                id: '3',
-                logId: null,
-                name: 'Calcium + D3',
-                dosage: '1 tablet',
-                frequency: 'Once daily',
-                instructions: 'after dinner',
-                scheduleTimeText: '8:30 PM',
-                scheduledTimeIso: new Date().toISOString(),
-                status: 'pending',
-                adherencePercentage: 98,
-                isToday: true,
-                canMark: true,
-            },
-        ]);
-    };
 
     // Initial load
     useEffect(() => {
@@ -625,7 +581,11 @@ export default function MedsTracker() {
                 {/* ── 7-Day Adherence Widget ── */}
                 <AdherenceSummaryCard
                     percentage={metrics.average}
-                    completedDaysText={`${metrics.taken} of 7 days completed on time`}
+                    completedDaysText={
+                        (metrics.taken + metrics.missed) === 0
+                            ? 'No dose activity recorded yet'
+                            : `${metrics.taken} of 7 days completed on time`
+                    }
                 />
 
                 {/* ── Reports & Prescriptions Action Card ── */}

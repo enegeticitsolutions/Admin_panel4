@@ -16,18 +16,9 @@ export const CommunityShowcaseSection: React.FC<CommunityShowcaseSectionProps> =
   onEventPress,
   onExplorePress,
 }) => {
-  // Use first event from API if available, else use fallback
-  const firstEvent = events.length > 0 ? events[0] : null;
-
-  const eventTitle = firstEvent?.title || 'Morning Chair Yoga';
-  const eventHost = firstEvent?.host?.name ? `Live with ${firstEvent.host.name}` : 'Live with Ritu Mehra';
-  const eventTimeTag = firstEvent?.startDateTime
-    ? new Date(firstEvent.startDateTime).toLocaleDateString([], {
-        weekday: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).toUpperCase()
-    : 'SAT · 8:00 AM';
+  const hasEvents = events.length > 0;
+  const firstEvent = hasEvents ? events[0] : null;
+  const secondEvent = events.length > 1 ? events[1] : null;
 
   return (
     <View style={styles.container}>
@@ -43,57 +34,133 @@ export const CommunityShowcaseSection: React.FC<CommunityShowcaseSectionProps> =
         </TouchableOpacity>
       </View>
 
-      {/* ── Card 1: Event Card (Mint) ── */}
-      <TouchableOpacity
-        style={styles.mintCard}
-        onPress={() => (firstEvent?.id ? onEventPress(firstEvent.id) : onExplorePress())}
-        activeOpacity={0.85}
-      >
-        <View style={styles.cardLeftContent}>
-          <View style={styles.timePillMint}>
-            <Text style={styles.timePillMintText}>{eventTimeTag}</Text>
+      {hasEvents && firstEvent ? (
+        <>
+          {/* ── Card 1: Live Event Card (Mint) ── */}
+          <TouchableOpacity
+            style={styles.mintCard}
+            onPress={() => onEventPress(firstEvent.id)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.cardLeftContent}>
+              <View style={styles.timePillMint}>
+                <Text style={styles.timePillMintText}>
+                  {firstEvent.startDateTime
+                    ? new Date(firstEvent.startDateTime).toLocaleDateString([], {
+                        weekday: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }).toUpperCase()
+                    : 'UPCOMING'}
+                </Text>
+              </View>
+
+              <View style={styles.textWrap}>
+                <Text style={styles.itemTitle} numberOfLines={2}>
+                  {firstEvent.title}
+                </Text>
+                <Text style={styles.itemSubtitleMint} numberOfLines={1}>
+                  {firstEvent.host?.name
+                    ? `Live with ${firstEvent.host.name}`
+                    : firstEvent.venueName || 'Live on video'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.iconSideMint}>
+              <MaterialCommunityIcons name="pulse" size={38} color={HomeColors.mintIcon} />
+            </View>
+          </TouchableOpacity>
+
+          {/* ── Card 2: Second Event if available, or Explore Hub ── */}
+          {secondEvent ? (
+            <TouchableOpacity
+              style={styles.peachCard}
+              onPress={() => onEventPress(secondEvent.id)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.cardLeftContent}>
+                <View style={styles.timePillPeach}>
+                  <Text style={styles.timePillPeachText}>
+                    {secondEvent.startDateTime
+                      ? new Date(secondEvent.startDateTime).toLocaleDateString([], {
+                          weekday: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        }).toUpperCase()
+                      : 'UPCOMING'}
+                  </Text>
+                </View>
+
+                <View style={styles.textWrap}>
+                  <Text style={styles.itemTitle} numberOfLines={2}>
+                    {secondEvent.title}
+                  </Text>
+                  <Text style={styles.itemSubtitlePeach} numberOfLines={1}>
+                    {secondEvent.host?.name
+                      ? `Live with ${secondEvent.host.name}`
+                      : secondEvent.venueName || 'Live on video'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.iconSidePeach}>
+                <MaterialCommunityIcons name="calendar-clock" size={38} color={HomeColors.brandOrange} />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.peachCard}
+              onPress={onExplorePress}
+              activeOpacity={0.85}
+            >
+              <View style={styles.cardLeftContent}>
+                <View style={styles.timePillPeach}>
+                  <Text style={styles.timePillPeachText}>COMMUNITY HUB</Text>
+                </View>
+
+                <View style={styles.textWrap}>
+                  <Text style={styles.itemTitle} numberOfLines={2}>
+                    Explore Wellness & Support
+                  </Text>
+                  <Text style={styles.itemSubtitlePeach} numberOfLines={1}>
+                    Join webinars, sessions, and audio shows
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.iconSidePeach}>
+                <MaterialCommunityIcons name="heart-pulse" size={38} color={HomeColors.brandOrange} />
+              </View>
+            </TouchableOpacity>
+          )}
+        </>
+      ) : (
+        <TouchableOpacity
+          style={styles.peachCard}
+          onPress={onExplorePress}
+          activeOpacity={0.85}
+        >
+          <View style={styles.cardLeftContent}>
+            <View style={styles.timePillPeach}>
+              <Text style={styles.timePillPeachText}>COMMUNITY HUB</Text>
+            </View>
+
+            <View style={styles.textWrap}>
+              <Text style={styles.itemTitle} numberOfLines={2}>
+                Explore Community & Wellness
+              </Text>
+              <Text style={styles.itemSubtitlePeach} numberOfLines={1}>
+                Interactive sessions, wellness reads & audio shows
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.textWrap}>
-            <Text style={styles.itemTitle} numberOfLines={2}>
-              {eventTitle}
-            </Text>
-            <Text style={styles.itemSubtitleMint} numberOfLines={1}>
-              {eventHost}
-            </Text>
+          <View style={styles.iconSidePeach}>
+            <MaterialCommunityIcons name="account-group" size={38} color={HomeColors.brandOrange} />
           </View>
-        </View>
-
-        <View style={styles.iconSideMint}>
-          <MaterialCommunityIcons name="pulse" size={38} color={HomeColors.mintIcon} />
-        </View>
-      </TouchableOpacity>
-
-      {/* ── Card 2: Article / Wellness Card (Peach) ── */}
-      <TouchableOpacity
-        style={styles.peachCard}
-        onPress={onExplorePress}
-        activeOpacity={0.85}
-      >
-        <View style={styles.cardLeftContent}>
-          <View style={styles.timePillPeach}>
-            <Text style={styles.timePillPeachText}>8 MIN READ</Text>
-          </View>
-
-          <View style={styles.textWrap}>
-            <Text style={styles.itemTitle} numberOfLines={2}>
-              A heart-healthy Indian plate
-            </Text>
-            <Text style={styles.itemSubtitlePeach} numberOfLines={1}>
-              Simple everyday swaps
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.iconSidePeach}>
-          <MaterialCommunityIcons name="heart-pulse" size={38} color={HomeColors.brandOrange} />
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };

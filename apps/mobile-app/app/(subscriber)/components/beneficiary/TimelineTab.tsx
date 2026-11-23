@@ -117,7 +117,7 @@ export const TimelineTab = ({
         try {
             const token = await AsyncStorage.getItem('userToken');
 
-            if (token && !visitId.startsWith('fallback')) {
+            if (token) {
                 const res = await fetch(`${API_URL}/subscriber/visits/${visitId}/rate`, {
                     method: 'POST',
                     headers: {

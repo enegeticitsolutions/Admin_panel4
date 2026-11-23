@@ -500,14 +500,9 @@ export default function BeneficiaryDashboard() {
         : "Explore verified care companions, vitals tracking, and family care plans.";
 
     const personalWellnessData: PersonalCareData = personalData || {
-        adherence: '95%',
+        adherence: '0%',
         todaysMedications: [],
-        careCoordinator: {
-            id: 'coord-default',
-            name: 'Dr. Sneha Rao',
-            role: 'Care Coordinator',
-            phone: '011-42258823',
-        },
+        careCoordinator: null,
     };
 
     return (
@@ -727,7 +722,7 @@ export default function BeneficiaryDashboard() {
                             router.push(`/(community)/events/${eventId}` as any);
                         }}
                         onExplorePress={() => {
-                            router.push('/(community)' as any);
+                            router.push('/(beneficiary)/community' as any);
                         }}
                     />
 

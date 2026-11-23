@@ -151,7 +151,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
 
             try {
                 const token = await AsyncStorage.getItem('userToken');
-                if (token && !msg.id.startsWith('fallback-')) {
+                if (token) {
                     await fetch(`${API_URL}/shared/users/notifications/${msg.id}/read`, {
                         method: 'PATCH',
                         headers: { Authorization: `Bearer ${token}` },
@@ -189,13 +189,10 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
             const token = await AsyncStorage.getItem('userToken');
             if (token) {
                 await Promise.all(idsToDelete.map(id => {
-                    if (!id.startsWith('fallback-')) {
-                        return fetch(`${API_URL}/shared/users/notifications/${id}`, {
-                            method: 'DELETE',
-                            headers: { Authorization: `Bearer ${token}` },
-                        });
-                    }
-                    return Promise.resolve();
+                    return fetch(`${API_URL}/shared/users/notifications/${id}`, {
+                        method: 'DELETE',
+                        headers: { Authorization: `Bearer ${token}` },
+                    });
                 }));
                 emitGlobalRefresh();
             }
@@ -209,7 +206,7 @@ export function InboxView({ showBackButton = false, accentColor = '#FE6700' }: I
         setSelectedMessage(null);
         try {
             const token = await AsyncStorage.getItem('userToken');
-            if (token && !msgId.startsWith('fallback-')) {
+            if (token) {
                 await fetch(`${API_URL}/shared/users/notifications/${msgId}`, {
                     method: 'DELETE',
                     headers: { Authorization: `Bearer ${token}` },
