@@ -705,8 +705,10 @@ router.post('/admin-enroll', async (req, res) => {
     secondaryContactEmail = '',
     // Schedule
     preferredSlot = 'Morning',
-    // Package
+    // Package & Mode
     packageId,
+    skipBeneficiary = false,
+    existingSubscriptionId = null,
     duration = 'monthly',
     durationDays: inputDurationDays,
     durationMonths: inputDurationMonths,
@@ -728,36 +730,75 @@ router.post('/admin-enroll', async (req, res) => {
     totalDiscount: inputTotalDiscount,
   } = req.body;
 
-  if (!subscriberPhone || typeof subscriberPhone !== 'string' || !subscriberName || typeof subscriberName !== 'string' || !packageId) {
+  if (!subscriberPhone || typeof subscriberPhone !== 'string' || !subscriberName || typeof subscriberName !== 'string' || (!packageId && !existingSubscriptionId)) {
     return res
       .status(400)
       .json({
         success: false,
-        message: 'subscriberPhone, subscriberName, and packageId are required and must be valid strings',
+        message: 'subscriberPhone, subscriberName, and packageId (or existingSubscriptionId) are required',
       });
+  }
+
+  if (existingSubscriptionId && skipBeneficiary) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cannot skip beneficiary when linking to an existing subscription',
+    });
   }
 
   // If beneficiary is different, we generate a placeholder phone if not provided
 
   try {
+    let resolvedPackageId = packageId;
+    let existingSubRecord = null;
+    if (existingSubscriptionId) {
+      existingSubRecord = await prisma.subscription.findUnique({
+        where: { id: existingSubscriptionId },
+        include: { packageVersion: true },
+      });
+      if (!existingSubRecord) {
+        return res.status(404).json({ success: false, message: 'Existing subscription not found' });
+      }
+      if (existingSubRecord.beneficiaryId) {
+        return res.status(400).json({ success: false, message: 'This subscription is already linked to a beneficiary' });
+      }
+      if (!resolvedPackageId) {
+        const matchedPkg = await prisma.subscriptionPackage.findFirst({
+          where: { type: existingSubRecord.packageType },
+        });
+        resolvedPackageId = matchedPkg?.id || null;
+      }
+    }
+
     // Fetch package
-    const pkg = await prisma.subscriptionPackage.findUnique({
-      where: { id: packageId },
-      include: { packageBenefits: { include: { benefit: true } } },
-    });
-    if (!pkg)
+    const pkg = resolvedPackageId
+      ? await prisma.subscriptionPackage.findUnique({
+          where: { id: resolvedPackageId },
+          include: { packageBenefits: { include: { benefit: true } } },
+        })
+      : null;
+    if (!pkg && !existingSubRecord)
       return res
         .status(404)
         .json({ success: false, message: 'Package not found' });
 
     // Compute duration details and exact calendar dates
-    const durationInfo = resolveSubscriptionDuration(
-      pkg,
-      duration,
-      inputDurationDays,
-      inputDurationMonths,
-      startDate
-    );
+    const durationInfo = pkg
+      ? resolveSubscriptionDuration(
+          pkg,
+          duration,
+          inputDurationDays,
+          inputDurationMonths,
+          startDate
+        )
+      : {
+          startDate: existingSubRecord.startDate,
+          endDate: existingSubRecord.endDate,
+          dbDurationEnum: existingSubRecord.duration,
+          displayMonths: 1,
+          isDays: false,
+          days: 30,
+        };
     const start = durationInfo.startDate;
     const end = durationInfo.endDate;
 
@@ -833,39 +874,42 @@ router.post('/admin-enroll', async (req, res) => {
       }
 
       // ──────────────────────────────────────────────────────────────────
-      // 2. Find or create Beneficiary User
+      // 2. Find or create Beneficiary User & Profile (unless skipBeneficiary)
       // ──────────────────────────────────────────────────────────────────
-      let beneficiaryUser;
-      if (sameAsSubscriber) {
-        beneficiaryUser = subscriberUser;
-      } else {
-        // If no beneficiary phone given, generate a placeholder (BEN- prefix + subscriber phone suffix)
-        const safeSubPhone = typeof subscriberPhone === 'string' ? subscriberPhone : String(subscriberPhone || '');
-        const benPhone = (typeof beneficiaryPhone === 'string' && beneficiaryPhone) || (safeSubPhone ? `BEN${safeSubPhone.slice(-8)}` : 'BEN-UNKNOWN');
-        const benHash = await bcrypt.hash('otp-only-' + benPhone, 8);
-        beneficiaryUser = await tx.user.findUnique({
-          where: { phone: benPhone },
-        });
-        if (!beneficiaryUser) {
-          beneficiaryUser = await tx.user.create({
-            data: {
-              phone: benPhone,
-              name: beneficiaryName || subscriberName,
-              role: 'beneficiary',
-              password: benHash,
-              isActive: true,
-            },
-          });
-        }
-      }
+      let beneficiaryUser = null;
+      let beneficiary = null;
 
-      // ──────────────────────────────────────────────────────────────────
-      // 3. Find or create Beneficiary profile
-      // ──────────────────────────────────────────────────────────────────
-      let beneficiary = await tx.beneficiary.findUnique({
-        where: { userId: beneficiaryUser.id },
-      });
-      if (!beneficiary) {
+      if (!skipBeneficiary) {
+        if (sameAsSubscriber) {
+          beneficiaryUser = subscriberUser;
+        } else {
+          // If no beneficiary phone given, generate a placeholder (BEN- prefix + subscriber phone suffix)
+          const safeSubPhone = typeof subscriberPhone === 'string' ? subscriberPhone : String(subscriberPhone || '');
+          const benPhone = (typeof beneficiaryPhone === 'string' && beneficiaryPhone) || (safeSubPhone ? `BEN${safeSubPhone.slice(-8)}` : 'BEN-UNKNOWN');
+          const benHash = await bcrypt.hash('otp-only-' + benPhone, 8);
+          beneficiaryUser = await tx.user.findUnique({
+            where: { phone: benPhone },
+          });
+          if (!beneficiaryUser) {
+            beneficiaryUser = await tx.user.create({
+              data: {
+                phone: benPhone,
+                name: beneficiaryName || subscriberName,
+                role: 'beneficiary',
+                password: benHash,
+                isActive: true,
+              },
+            });
+          }
+        }
+
+        // ──────────────────────────────────────────────────────────────────
+        // 3. Find or create Beneficiary profile
+        // ──────────────────────────────────────────────────────────────────
+        beneficiary = await tx.beneficiary.findUnique({
+          where: { userId: beneficiaryUser.id },
+        });
+        if (!beneficiary) {
         beneficiary = await tx.beneficiary.create({
           data: {
             userId: beneficiaryUser.id,
@@ -1058,16 +1102,57 @@ router.post('/admin-enroll', async (req, res) => {
           },
         });
       }
+      } // end if (!skipBeneficiary)
 
-      // 4. Deactivate existing active subscriptions for this beneficiary
+      let sub = null;
+      let pVersion = null;
+      let invoice = null;
+      let invoiceNumber = null;
+      const isFree = pkg ? Number(pkg.basePrice) === 0 : false;
+
+      if (existingSubscriptionId) {
+        const targetSub = await tx.subscription.findUnique({
+          where: { id: existingSubscriptionId },
+        });
+        if (!targetSub || targetSub.subscriberId !== subscriberUser.id) {
+          throw new Error('Existing subscription does not belong to this subscriber');
+        }
+        if (targetSub.beneficiaryId) {
+          throw new Error('This subscription is already linked to a beneficiary');
+        }
+
+        // Deactivate any other active subscriptions for this beneficiary
+        await tx.subscription.updateMany({
+          where: { beneficiaryId: beneficiary.id, isActive: true, id: { not: targetSub.id } },
+          data: { isActive: false },
+        });
+
+        sub = await tx.subscription.update({
+          where: { id: targetSub.id },
+          data: { beneficiaryId: beneficiary.id },
+        });
+
+        // Backfill beneficiaryId on existing invoice & payment records for this subscription
+        await tx.payment.updateMany({
+          where: { subscriptionId: sub.id, beneficiaryId: null },
+          data: { beneficiaryId: beneficiary.id },
+        });
+        await tx.invoice.updateMany({
+          where: { subscriptionId: sub.id, beneficiaryId: null },
+          data: { beneficiaryId: beneficiary.id },
+        });
+      } else {
+      // 4. Deactivate existing active subscriptions for this beneficiary (if provided)
       // ──────────────────────────────────────────────────────────────────
-      await tx.subscription.updateMany({
-        where: { beneficiaryId: beneficiary.id, isActive: true },
-        data: { isActive: false },
-      });
+      if (beneficiary) {
+        await tx.subscription.updateMany({
+          where: { beneficiaryId: beneficiary.id, isActive: true },
+          data: { isActive: false },
+        });
+      }
 
       // 4b. Find or publish latest PackageVersion
-      let pVersion = await tx.packageVersion.findFirst({
+      pVersion = await tx.packageVersion.findFirst({
         where: { packageCode: pkg.type, isLatest: true },
         include: { versionBenefits: true },
       });
@@ -1083,11 +1168,10 @@ router.post('/admin-enroll', async (req, res) => {
       // ──────────────────────────────────────────────────────────────────
       // 5. Create new Subscription
       // ──────────────────────────────────────────────────────────────────
-      const isFree = Number(pkg.basePrice) === 0;
-      const sub = await tx.subscription.create({
+      sub = await tx.subscription.create({
         data: {
           subscriberId: subscriberUser.id,
-          beneficiaryId: beneficiary.id,
+          beneficiaryId: beneficiary ? beneficiary.id : null,
           packageType: pkg.type,
           packageVersionId: pVersion.id,
           duration: durationInfo.dbDurationEnum,
@@ -1124,8 +1208,6 @@ router.post('/admin-enroll', async (req, res) => {
       // 7. Create Invoice & Payment record (offline / admin-enrolled / trial / CSA mode)
       // Always generated so subscriber profile consistently has statutory invoice
       // ──────────────────────────────────────────────────────────────────
-      let invoice = null;
-      let invoiceNumber = null;
       {
         const durationMonths = durationInfo.displayMonths;
         const paid = isFree ? 0 : (parseFloat(amountPaid) || 0);
@@ -1252,7 +1334,7 @@ router.post('/admin-enroll', async (req, res) => {
           discountAmount: discount,
           amountPaid: paid,
           subscriberId: subscriberUser.id,
-          beneficiaryId: beneficiary.id,
+          beneficiaryId: beneficiary ? beneficiary.id : null,
           status: (paid > 0 || isFree) ? 'PAID' : 'ISSUED',
           addons: resolvedAddons,
         });
@@ -1297,7 +1379,7 @@ router.post('/admin-enroll', async (req, res) => {
             invoiceId: invoice.id,
             invoiceNumber: invoice.invoiceNumber,
             subscriberId: subscriberUser.id,
-            beneficiaryId: beneficiary.id,
+            beneficiaryId: beneficiary ? beneficiary.id : null,
             subscriptionId: sub.id,
             packageType: pkg.type,
             packageVersionId: pVersion.id,
@@ -1356,17 +1438,19 @@ router.post('/admin-enroll', async (req, res) => {
           }
         }
       }
+      } // end else (new subscription)
 
       await tx.activityLog.create({
         data: {
           userId: subscriberUser.id,
           type: 'SUBSCRIPTION',
-          action: 'ENROLLED',
+          action: existingSubscriptionId ? 'BENEFICIARY_LINKED' : (skipBeneficiary ? 'ENROLLED_UNASSIGNED' : 'ENROLLED'),
           details: {
             entity: 'subscription',
             entityId: sub.id,
-            packageId: pkg.id,
-            beneficiaryId: beneficiary.id,
+            packageId: pkg?.id || null,
+            beneficiaryId: beneficiary ? beneficiary.id : null,
+            skipBeneficiary: Boolean(skipBeneficiary),
             updatedByRole: req.user?.role || 'system',
             updatedByName: req.user?.name || 'Admin',
           }
@@ -1381,12 +1465,12 @@ router.post('/admin-enroll', async (req, res) => {
           phone: subscriberUser.phone,
           email: subscriberUser.email,
         },
-        beneficiary: { id: beneficiary.id, name: beneficiary.name },
+        beneficiary: beneficiary ? { id: beneficiary.id, name: beneficiary.name } : null,
         package: { 
-          name: pkg.name, 
-          type: pkg.type, 
-          basePrice: pkg.basePrice,
-          isGlobal: pkg.isGlobal
+          name: pkg?.name || existingSubRecord?.packageVersion?.name || sub.packageType, 
+          type: pkg?.type || sub.packageType, 
+          basePrice: pkg?.basePrice ?? existingSubRecord?.packageVersion?.basePrice ?? 0,
+          isGlobal: pkg?.isGlobal ?? false
         },
         invoiceId: invoice?.id || null,
         invoiceNumber: invoiceNumber || null,

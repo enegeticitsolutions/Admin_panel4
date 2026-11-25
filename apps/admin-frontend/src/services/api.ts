@@ -1755,7 +1755,9 @@ export const enrollmentApi = {
     secondaryContactRelationship?: string;
     secondaryContactEmail?: string;
     preferredSlot?: string;
-    packageId: string;
+    packageId?: string;
+    skipBeneficiary?: boolean;
+    existingSubscriptionId?: string;
     duration: string;
     startDate: string;
     amountPaid: number;
@@ -1771,9 +1773,9 @@ export const enrollmentApi = {
   }): Promise<{
     subscription: any;
     subscriber: { id: string; name: string; phone: string };
-    beneficiary: { id: string; name: string };
+    beneficiary: { id: string; name: string } | null;
     package: { name: string; type: string; basePrice: number };
-    invoiceNumber: string;
+    invoiceNumber: string | null;
   }> {
     return apiJson('/subscriptions/admin-enroll', {
       method: 'POST',
