@@ -132,7 +132,10 @@ export default function SubscribeFormScreen() {
                             params: {
                                 packageId: params.packageId,
                                 subscriberData: JSON.stringify(subscriberData),
-                                isLinkingFlow: 'true'
+                                isLinkingFlow: 'true',
+                                selectedSubscriptionId: params.selectedSubscriptionId,
+                                selectedPackageName: params.selectedPackageName,
+                                skipPackageAssignment: params.skipPackageAssignment,
                             }
                         });
                     } else {
@@ -292,7 +295,10 @@ export default function SubscribeFormScreen() {
                 phone: cleanedPhone,
                 pincode: cleanedPincode
             }),
-            isLinkingFlow: params.isLinkingFlow || 'false'
+            isLinkingFlow: params.isLinkingFlow || 'false',
+            selectedSubscriptionId: params.selectedSubscriptionId,
+            selectedPackageName: params.selectedPackageName,
+            skipPackageAssignment: params.skipPackageAssignment,
         });
     };
 

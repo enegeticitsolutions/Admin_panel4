@@ -3,6 +3,5 @@ export * from './WeeklyCalendarStrip';
 export * from './MedicationDoseCard';
 export * from './AdherenceSummaryCard';
 export * from './ReportsPrescriptionsCard';
-export * from './ViewOnlyNoticeBanner';
 export * from './AddMedicationModal';
 export * from './DefaultMedsPresets';

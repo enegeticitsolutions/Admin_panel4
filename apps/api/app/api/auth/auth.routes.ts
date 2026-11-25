@@ -32,7 +32,7 @@ const otpLimiter = rateLimit({
 // Rate Limiter for Password Logins (max 10 requests per 15 mins per IP + Phone)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP + Phone combo to 10 password login attempts per window
+  max: 1000, // Limit each IP + Phone combo to 10 password login attempts per window
   message: { success: false, message: 'Too many login attempts. Please try again after 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,

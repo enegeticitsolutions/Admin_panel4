@@ -375,7 +375,10 @@ export default function MedicalInfoScreen() {
             isVerificationFlow: params.isVerificationFlow,
             beneficiaryId: params.beneficiaryId,
             pendingDetails: params.pendingDetails,
-            isLinkingFlow: params.isLinkingFlow || 'false'
+            isLinkingFlow: params.isLinkingFlow || 'false',
+            selectedSubscriptionId: params.selectedSubscriptionId,
+            selectedPackageName: params.selectedPackageName,
+            skipPackageAssignment: params.skipPackageAssignment,
         });
     };
 

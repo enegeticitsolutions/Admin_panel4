@@ -112,22 +112,39 @@ export default function MoreOptionsScreen() {
         ? 'Tap to sign in or create account'
         : `${profileRole} · ${careCircleCount} care circle${careCircleCount !== 1 ? 's' : ''}`;
 
-    // Active Plan details
-    const firstBeneficiary = subscriberData?.beneficiaries?.[0];
+    // Active Plan details from live subscriberData.activeSubscriptions
+    const beneficiariesList: any[] = subscriberData?.beneficiaries || [];
+    const activeSubscriptions: any[] = subscriberData?.activeSubscriptions || [];
+    const selfProfile = subscriberData?.selfProfile || beneficiariesList.find((b: any) => b.isSelf);
+
     const activeSub =
-        firstBeneficiary?.subscriptions?.[0] ||
-        subscriberData?.unlinkedSubscriptions?.[0] ||
+        (selfProfile && activeSubscriptions.find((s: any) => s.beneficiaryId === selfProfile.id)) ||
+        activeSubscriptions.find((s: any) => Boolean(s.beneficiaryId)) ||
+        activeSubscriptions[0] ||
         null;
 
-    const packageName = activeSub?.package?.name || '';
-    const assignedBeneficiary = firstBeneficiary?.name || user?.name || '';
+    const packageName = activeSub?.package?.name || activeSub?.packageType || '';
+    const linkedBeneficiary = activeSub?.beneficiaryId
+        ? beneficiariesList.find((b: any) => b.id === activeSub.beneficiaryId)
+        : null;
+    const assignedBeneficiary = activeSub
+        ? (linkedBeneficiary?.name || (activeSub.beneficiaryId ? (user?.name || '') : 'Unassigned (ready to link)'))
+        : '';
 
-    // Benefit hours metrics
-    const hoursUsed = activeSub?.hoursUsed ?? 0;
-    const hoursTotal = activeSub?.hoursTotal ?? 0;
+    // Benefit hours metrics (prefer relational benefitBalances, fallback to subscription columns)
+    const hourBalances = (activeSub?.benefitBalances || []).filter((b: any) =>
+        b.benefit?.unitLabel?.toLowerCase().includes('hour')
+    );
+    const hoursUsed = hourBalances.length > 0
+        ? hourBalances.reduce((sum: number, b: any) => sum + (b.usedUnits || 0), 0)
+        : (activeSub?.hoursUsed ?? 0);
+    const hoursTotal = hourBalances.length > 0
+        ? hourBalances.reduce((sum: number, b: any) => sum + (b.totalUnits || 0), 0)
+        : (activeSub?.hoursTotal ?? 0);
+    const hoursRemaining = Math.max(0, hoursTotal - hoursUsed);
     const rolloverHours = activeSub?.rolloverHours ?? 0;
     const usagePercent = hoursTotal > 0
-        ? Math.min(Math.max((hoursUsed / hoursTotal) * 100, 0), 100)
+        ? Math.min(Math.max((hoursRemaining / hoursTotal) * 100, 0), 100)
         : 0;
 
     const handleRenewTopUp = () => {
@@ -204,7 +221,7 @@ export default function MoreOptionsScreen() {
                                 onPress={handleRenewTopUp}
                                 activeOpacity={0.85}
                             >
-                                <Text style={styles.renewBtnText}>Renew / top up</Text>
+                                <Text style={styles.renewBtnText}>Other Packages</Text>
                             </TouchableOpacity>
                         </View>
 
@@ -218,7 +235,7 @@ export default function MoreOptionsScreen() {
                         <View style={styles.hoursRow}>
                             <View>
                                 <Text style={styles.hoursValue}>
-                                    {hoursUsed} <Text style={styles.hoursTotal}>/ {hoursTotal} hrs</Text>
+                                    {hoursRemaining} <Text style={styles.hoursTotal}>/ {hoursTotal} hrs</Text>
                                 </Text>
                                 <Text style={styles.hoursSubtext}>Available this month</Text>
                             </View>
@@ -260,12 +277,12 @@ export default function MoreOptionsScreen() {
 
                 {/* ── 3. Dedicated Action Cards (Figma 6-Cards List) ── */}
                 <View style={styles.actionCardsSection}>
-                    {/* 1. Manage care circles */}
+                    {/* 1. Family Connect */}
                     <ActionCard
                         icon={<Feather name="users" size={21} color="#2865C7" />}
                         iconBg="#EAF2FF"
-                        title="Manage care circles"
-                        subtitle="Members, permissions & invites"
+                        title="Family Connect"
+                        subtitle="Manage members subscription"
                         onPress={() => {
                             if (requireAuth('Manage family care circles and members.')) return;
                             router.push('/(subscriber)');
@@ -317,13 +334,16 @@ export default function MoreOptionsScreen() {
                         }}
                     />
 
-                    {/* 6. Help & care support */}
+                    {/* 6. Medical Records */}
                     <ActionCard
-                        icon={<Ionicons name="help-buoy-outline" size={22} color="#D83E3E" />}
-                        iconBg="#FDE7E7"
-                        title="Help & care support"
-                        subtitle="Chat or call us, anytime"
-                        onPress={() => setSupportModalVisible(true)}
+                        icon={<Feather name="folder" size={21} color="#2563EB" />}
+                        iconBg="#EFF6FF"
+                        title="Medical Records"
+                        subtitle="Prescriptions, reports & health files"
+                        onPress={() => {
+                            if (requireAuth('Access medical records.')) return;
+                            router.push('/(beneficiary)/medical-records');
+                        }}
                     />
                 </View>
 
@@ -331,14 +351,11 @@ export default function MoreOptionsScreen() {
                 <View style={styles.secondaryServicesRow}>
                     <TouchableOpacity
                         style={styles.secondaryServicePill}
-                        onPress={() => {
-                            if (requireAuth('Access medical records.')) return;
-                            router.push('/(beneficiary)/medical-records');
-                        }}
+                        onPress={() => setSupportModalVisible(true)}
                         activeOpacity={0.75}
                     >
-                        <Feather name="folder" size={14} color="#667085" />
-                        <Text style={styles.secondaryServiceText}>Medical Records</Text>
+                        <Ionicons name="help-buoy-outline" size={18} color="#D83E3E" />
+                        <Text style={styles.secondaryServiceText}>Help & Support</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -349,7 +366,7 @@ export default function MoreOptionsScreen() {
                         }}
                         activeOpacity={0.75}
                     >
-                        <Feather name="user-check" size={14} color="#667085" />
+                        <Feather name="user-check" size={18} color="#4B5563" />
                         <Text style={styles.secondaryServiceText}>Care Team</Text>
                     </TouchableOpacity>
                 </View>
@@ -676,26 +693,28 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        gap: 8,
+        gap: 12,
         marginBottom: 24,
     },
     secondaryServicePill: {
         flex: 1,
+        minHeight: 54,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#FFFFFF',
         borderWidth: 1.08,
         borderColor: HomeColors.borderSubtle,
-        borderRadius: 14,
-        paddingVertical: 10,
-        paddingHorizontal: 8,
-        gap: 6,
+        borderRadius: 16,
+        paddingVertical: 15,
+        paddingHorizontal: 14,
+        gap: 8,
+        ...HomeShadows.card,
     },
     secondaryServiceText: {
-        fontFamily: 'Poppins-Medium',
-        fontSize: 11,
-        color: '#4B5563',
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 14,
+        color: '#374151',
     },
 
     /* ── Account Actions ── */

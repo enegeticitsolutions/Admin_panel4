@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { useRouter } from 'expo-router';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { useRouter, usePathname } from 'expo-router';
 
 export type RouteState = { pathname: string; params?: any };
 
@@ -17,21 +17,40 @@ const NavigationStackContext = createContext<NavigationStackContextType | undefi
 export function NavigationStackProvider({ children }: { children: ReactNode }) {
   const [stack, setStack] = useState<RouteState[]>([]);
   const router = useRouter();
+  const pathname = usePathname();
+  const historyRef = useRef<string[]>([]);
+  const isPoppingRef = useRef(false);
 
-  const push = useCallback((pathname: string | { pathname: string, params?: any }, params?: any) => {
-    const path = typeof pathname === 'string' ? pathname : pathname.pathname;
-    const p = typeof pathname === 'string' ? params : pathname.params;
+  // Automatically record every visited route so back navigation always knows the real previous page
+  useEffect(() => {
+    if (!pathname) return;
+    if (isPoppingRef.current) {
+      isPoppingRef.current = false;
+      return;
+    }
+    const hist = historyRef.current;
+    if (hist[hist.length - 1] !== pathname) {
+      hist.push(pathname);
+      if (hist.length > 50) {
+        hist.shift();
+      }
+    }
+  }, [pathname]);
+
+  const push = useCallback((pathnameArg: string | { pathname: string, params?: any }, params?: any) => {
+    const path = typeof pathnameArg === 'string' ? pathnameArg : pathnameArg.pathname;
+    const p = typeof pathnameArg === 'string' ? params : pathnameArg.params;
     setStack(prev => [...prev, { pathname: path, params: p }]);
-    if (typeof pathname === 'string') {
+    if (typeof pathnameArg === 'string') {
       router.push({ pathname: path, params: p } as any);
     } else {
-      router.push(pathname as any);
+      router.push(pathnameArg as any);
     }
   }, [router]);
 
-  const replace = useCallback((pathname: string | { pathname: string, params?: any }, params?: any) => {
-    const path = typeof pathname === 'string' ? pathname : pathname.pathname;
-    const p = typeof pathname === 'string' ? params : pathname.params;
+  const replace = useCallback((pathnameArg: string | { pathname: string, params?: any }, params?: any) => {
+    const path = typeof pathnameArg === 'string' ? pathnameArg : pathnameArg.pathname;
+    const p = typeof pathnameArg === 'string' ? params : pathnameArg.params;
     setStack(prev => {
       const newStack = [...prev];
       if (newStack.length > 0) {
@@ -41,18 +60,16 @@ export function NavigationStackProvider({ children }: { children: ReactNode }) {
       }
       return newStack;
     });
-    if (typeof pathname === 'string') {
+    if (typeof pathnameArg === 'string') {
       router.replace({ pathname: path, params: p } as any);
     } else {
-      router.replace(pathname as any);
+      router.replace(pathnameArg as any);
     }
   }, [router]);
 
   const pop = useCallback((fallback?: string) => {
-    let hasStackItem = false;
     setStack(prev => {
       if (prev.length > 0) {
-        hasStackItem = true;
         const newStack = [...prev];
         newStack.pop();
         return newStack;
@@ -60,24 +77,39 @@ export function NavigationStackProvider({ children }: { children: ReactNode }) {
       return prev;
     });
 
+    const hist = historyRef.current;
+    const hasPreviousInHistory = hist.length > 1;
+    let previousRoute: string | undefined;
+    if (hasPreviousInHistory) {
+      hist.pop(); // remove current route
+      previousRoute = hist[hist.length - 1];
+    }
+
     if (router.canGoBack()) {
+      isPoppingRef.current = true;
       router.back();
       return true;
+    } else if (previousRoute) {
+      isPoppingRef.current = true;
+      router.replace(previousRoute as any);
+      return true;
     } else if (fallback) {
+      isPoppingRef.current = true;
       router.replace(fallback as any);
       return true;
     }
-    
+
     return false;
   }, [router]);
 
   const resetStack = useCallback(() => {
     setStack([]);
-  }, []);
+    historyRef.current = pathname ? [pathname] : [];
+  }, [pathname]);
 
   const canGoBack = useCallback(() => {
-    return stack.length > 0;
-  }, [stack]);
+    return router.canGoBack() || stack.length > 0 || historyRef.current.length > 1;
+  }, [router, stack]);
 
   return (
     <NavigationStackContext.Provider value={{ stack, push, pop, replace, resetStack, canGoBack }}>

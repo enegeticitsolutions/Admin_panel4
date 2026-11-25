@@ -11,6 +11,7 @@ export default function BeneficiaryLayout() {
 
     return (
         <Tabs
+            backBehavior="history"
             screenOptions={({ route }) => {
                 const showInTabBar = visibleTabs.includes(route.name);
 

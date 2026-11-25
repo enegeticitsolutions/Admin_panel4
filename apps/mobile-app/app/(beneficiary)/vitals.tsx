@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { VitalEntrySheet } from '@/components/shared/VitalEntrySheet';
+import { VitalsTrendsSection } from '@/components/shared/VitalsTrendsSection';
+import { VitalTrend } from '@/app/(subscriber)/components/beneficiary/VitalsCharts';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { API_URL } from '@/constants/api';
@@ -35,9 +37,10 @@ export default function VitalsScreen() {
     const [authToken, setAuthToken] = useState('');
     const [userName, setUserName] = useState('');
     const [history, setHistory] = useState<SelfReportedHistoryEntry[]>([]);
+    const [trends, setTrends] = useState<VitalTrend[]>([]);
     const [historyLoading, setHistoryLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [showForm, setShowForm] = useState(true); // start with form visible
+    const [showForm, setShowForm] = useState(false);
 
     useFocusEffect(
         useCallback(() => {
@@ -81,12 +84,15 @@ export default function VitalsScreen() {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
-            if (data.success && data.data?.history) {
-                // Only show self-reported entries on this page
-                const selfOnly = (data.data.history as SelfReportedHistoryEntry[]).filter(
-                    h => h.recorderType === 'beneficiary'
-                );
-                setHistory(selfOnly);
+            if (data.success && data.data) {
+                setTrends(data.data.trends || []);
+                if (data.data.history) {
+                    // Only show self-reported entries in the self-reported history list
+                    const selfOnly = (data.data.history as SelfReportedHistoryEntry[]).filter(
+                        h => h.recorderType === 'beneficiary'
+                    );
+                    setHistory(selfOnly);
+                }
             }
         } catch (e) {
             console.error('Fetch history error', e);
@@ -100,7 +106,6 @@ export default function VitalsScreen() {
         const token = await AsyncStorage.getItem('userToken');
         if (token) await fetchHistory(token);
         emitGlobalRefresh();
-        router.replace('/(beneficiary)');
     };
 
     // ── Render ───────────────────────────────────────────────────────────────
@@ -169,11 +174,6 @@ export default function VitalsScreen() {
                         {userName ? `Logging for ${userName} (You)` : 'Self-reported personal readings'}
                     </Text>
                 </View>
-                {!showForm && (
-                    <TouchableOpacity onPress={() => setShowForm(true)} style={styles.addBtn}>
-                        <Ionicons name="add" size={20} color="#FFFFFF" />
-                    </TouchableOpacity>
-                )}
             </View>
 
             <ScrollView
@@ -190,10 +190,7 @@ export default function VitalsScreen() {
                             <VitalEntrySheet
                                 authToken={authToken}
                                 onSuccess={handleSuccess}
-                                onClose={() => {
-                                    if (history.length > 0) setShowForm(false);
-                                    else safeBack();
-                                }}
+                                onClose={() => setShowForm(false)}
                             />
                         ) : (
                             <ActivityIndicator size="large" color="#FF6900" />
@@ -201,30 +198,44 @@ export default function VitalsScreen() {
                     </View>
                 )}
 
+                {/* Trends + Log Vitals CTA */}
+                {!showForm && (
+                    <>
+                        <TouchableOpacity
+                            style={styles.logVitalsBannerBtn}
+                            onPress={() => setShowForm(true)}
+                            activeOpacity={0.85}
+                        >
+                            <View style={styles.logVitalsIconWrap}>
+                                <Ionicons name="pulse" size={20} color="#FE6700" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.logVitalsTitle}>Log Vitals</Text>
+                            </View>
+                            <View style={styles.logVitalsPill}>
+                                <Ionicons name="add" size={16} color="#FFFFFF" />
+                                <Text style={styles.logVitalsPillText}>Record</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        {historyLoading && trends.length === 0 ? (
+                            <ActivityIndicator style={{ marginTop: 32 }} size="large" color="#FF6900" />
+                        ) : (
+                            <VitalsTrendsSection trends={trends} defaultLimit={7} />
+                        )}
+                    </>
+                )}
+
                 {/* History */}
                 {!showForm && history.length > 0 && (
                     <>
-                        <View style={styles.sectionRow}>
-                            <Text style={styles.sectionTitle}>Previous Readings</Text>
+                        <View style={[styles.sectionRow, { marginTop: 24 }]}>
+                            <Text style={styles.sectionTitle}>Previous Self-Reported Readings</Text>
                         </View>
                         {history.map(entry => (
                             <HistoryCard key={entry.id} entry={entry} />
                         ))}
                     </>
-                )}
-
-                {!showForm && history.length === 0 && !historyLoading && (
-                    <View style={styles.emptyHistory}>
-                        <Ionicons name="pulse-outline" size={44} color="#D1D5DB" />
-                        <Text style={styles.emptyHistoryText}>No self-reported readings yet.</Text>
-                        <TouchableOpacity style={styles.recordNowBtn} onPress={() => setShowForm(true)}>
-                            <Text style={styles.recordNowText}>Record Now</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-
-                {historyLoading && !showForm && (
-                    <ActivityIndicator style={{ marginTop: 32 }} size="large" color="#FF6900" />
                 )}
 
                 <View style={{ height: 48 }} />
@@ -280,11 +291,6 @@ const styles = StyleSheet.create({
     topBarContent: { flex: 1 },
     topBarTitle: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
     topBarSub: { fontSize: 12, color: 'rgba(255,255,255,0.9)', marginTop: 1 },
-    addBtn: {
-        width: 36, height: 36, borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.2)',
-        justifyContent: 'center', alignItems: 'center',
-    },
 
     scroll: { flex: 1 },
     scrollContent: { padding: 16 },
@@ -302,6 +308,48 @@ const styles = StyleSheet.create({
 
     sectionRow: { marginBottom: 12, marginTop: 4 },
     sectionTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
+
+    logVitalsBannerBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 18,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: '#FED7AA',
+        gap: 12,
+        ...Platform.select({
+            ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 },
+            android: { elevation: 2 },
+        }),
+    },
+    logVitalsIconWrap: {
+        width: 42,
+        height: 42,
+        borderRadius: 12,
+        backgroundColor: '#FFF3E8',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    logVitalsTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#111827',
+    },
+    logVitalsPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FE6700',
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 999,
+        gap: 4,
+    },
+    logVitalsPillText: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '700',
+    },
 
     historyCard: {
         backgroundColor: '#FFFFFF',

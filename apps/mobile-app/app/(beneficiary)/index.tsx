@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import { API_URL } from '@/constants/api';
 import NotificationBell from '@/components/shared/NotificationBell';
+import { EmergencyAssistanceModal } from '@/components/shared/EmergencyAssistanceModal';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { useAuth } from '@/contexts/AuthContext';
 import { triggerEmergencyAlert, dialEmergencyHelpline, EMERGENCY_HELPLINE_NUMBER } from '@/services/emergencyTrigger';
@@ -40,6 +41,7 @@ import {
     CareCircleModal,
     JoinCareCircleModal,
     RenewOrLinkModal,
+    SelectPackageForMemberModal,
 } from '@/components/dashboard';
 import { HomeColors } from '@/constants/homeTheme';
 import {
@@ -122,6 +124,7 @@ export default function BeneficiaryDashboard() {
     const { user, isGuest, requireAuth } = useAuth();
 
     const [triggeringEmergency, setTriggeringEmergency] = useState(false);
+    const [showEmergencyModal, setShowEmergencyModal] = useState(false);
     const [locationStatus, setLocationStatus] = useState<'idle' | 'locating' | 'done'>('idle');
     const [emergencySuccessModal, setEmergencySuccessModal] = useState<{
         ticketNumber: string;
@@ -138,6 +141,7 @@ export default function BeneficiaryDashboard() {
     const [showJoinCircleModal, setShowJoinCircleModal] = useState<boolean>(false);
     const [showRenewalModal, setShowRenewalModal] = useState<boolean>(false);
     const [renewalTargetBen, setRenewalTargetBen] = useState<{ id: string; name: string; relationship?: string } | null>(null);
+    const [showAddMemberPackageModal, setShowAddMemberPackageModal] = useState<boolean>(false);
     const [sathiEligibleBeneficiaries, setSathiEligibleBeneficiaries] = useState<any[]>([]);
     const [showSaathiIntroModal, setShowSaathiIntroModal] = useState<boolean>(false);
     const [showSaathiPickerModal, setShowSaathiPickerModal] = useState<boolean>(false);
@@ -318,57 +322,45 @@ export default function BeneficiaryDashboard() {
         }, [refetchAllData])
     );
 
-    const handleEmergencyPress = async () => {
+    const executeEmergency = async () => {
+        setShowEmergencyModal(false);
+        setTriggeringEmergency(true);
+        setLocationStatus('locating');
+
+        try {
+            const result = await triggerEmergencyAlert(
+                'SOS Emergency Support triggered from MaiHoonNa Mobile App',
+                { autoDial: true }
+            );
+            setLocationStatus('done');
+
+            if (result.success) {
+                setEmergencySuccessModal({
+                    ticketNumber: result.ticketNumber || 'EMG-ALERT',
+                    message: `Your Subscriber, Care Companions, and Admin Emergency Center have been alerted with your location.`,
+                    locationAddress: result.locationAddress,
+                    lat: result.lat,
+                    lng: result.lng,
+                });
+            } else {
+                const errMsg = result.error || 'Failed to dispatch emergency alert.';
+                if (Platform.OS === 'web') window.alert(`Alert: ${errMsg}`);
+                else showAlert('Emergency Alert', errMsg, 'error');
+            }
+        } catch (err: any) {
+            const errMsg = err.message || 'Network error while triggering emergency alert.';
+            if (Platform.OS === 'web') window.alert(`Notice: ${errMsg}`);
+            else showAlert('Notice', errMsg, 'warning');
+        } finally {
+            setTriggeringEmergency(false);
+            setLocationStatus('idle');
+        }
+    };
+
+    const handleEmergencyPress = () => {
         if (requireAuth('Trigger emergency SOS and broadcast your live location to care responders.')) return;
         if (triggeringEmergency) return;
-
-        // Optimistic confirmation dialog first — then locate & dial 01142258823
-        const executeEmergency = async () => {
-            setTriggeringEmergency(true);
-            setLocationStatus('locating');
-
-            try {
-                const result = await triggerEmergencyAlert(
-                    'SOS Emergency Support triggered from MaiHoonNa Mobile App',
-                    { autoDial: false } // already dialed above
-                );
-                setLocationStatus('done');
-
-                if (result.success) {
-                    setEmergencySuccessModal({
-                        ticketNumber: result.ticketNumber || 'EMG-ALERT',
-                        message: `Your Subscriber, Care Companions, and Admin Emergency Center have been alerted with your location.`,
-                        locationAddress: result.locationAddress,
-                        lat: result.lat,
-                        lng: result.lng,
-                    });
-                } else {
-                    const errMsg = result.error || 'Failed to dispatch emergency alert.';
-                    if (Platform.OS === 'web') window.alert(`Alert: ${errMsg}`);
-                    else showAlert('Emergency Alert', errMsg, 'error');
-                }
-            } catch (err: any) {
-                const errMsg = err.message || 'Network error while triggering emergency alert.';
-                if (Platform.OS === 'web') window.alert(`Notice: ${errMsg}`);
-                else showAlert('Notice', errMsg, 'warning');
-            } finally {
-                setTriggeringEmergency(false);
-                setLocationStatus('idle');
-            }
-        };
-
-        if (Platform.OS === 'web') {
-            if (window.confirm(`🚨 TRIGGER EMERGENCY SOS ALERT?\n\nThis will immediately alert your Subscriber, Care Companions, and Emergency Center with your live location.`)) {
-                executeEmergency();
-            }
-        } else {
-            showConfirm(
-                '🚨 Trigger Emergency Alert?',
-                `This will broadcast your live GPS location to your care team & emergency response center.`,
-                executeEmergency,
-                'SEND SOS'
-            );
-        }
+        setShowEmergencyModal(true);
     };
 
     if (personalLoading && subscriberLoading) {
@@ -493,12 +485,6 @@ export default function BeneficiaryDashboard() {
         setShowSaathiPickerModal(true);
     };
 
-    const heroSubtext = familyBeneficiaries.length > 0
-        ? `${familyBeneficiaries[0].name.split(' ')[0]}'s vitals look steady and care schedule is active.`
-        : hasPersonalCarePlan
-        ? "Your daily health vitals and wellness plan are in sync."
-        : "Explore verified care companions, vitals tracking, and family care plans.";
-
     const personalWellnessData: PersonalCareData = personalData || {
         adherence: '0%',
         todaysMedications: [],
@@ -536,52 +522,23 @@ export default function BeneficiaryDashboard() {
             >
                 <View style={[styles.mainContent, responsiveContainerStyle]}>
                     {/* 1. Hero Overview Banner */}
-                    <HeroOverviewCard subtext={heroSubtext} />
+                    <HeroOverviewCard />
 
                     {/* 2. Floating Quick Actions Bar */}
                     <FloatingQuickActions
                         onBookSaathi={handleSaathiPress}
+                        onBookCareMitra={() => {
+                            router.push('/(setup)/subscription-packages');
+                        }}
                         onAddMedicine={() => {
                             if (isGuest && requireAuth('Create an account to manage medications.')) return;
                             router.push('/(beneficiary)/meds' as any);
-                        }}
-                        onJoinCircle={() => {
-                            if (isGuest && requireAuth('Create an account to join a family care circle.')) return;
-                            setShowJoinCircleModal(true);
                         }}
                         onLogVitals={() => {
                             if (requireAuth('Track and monitor your daily health vitals.')) return;
                             router.push('/(beneficiary)/vitals' as any);
                         }}
                     />
-
-                    {/* ── Guest Exploration Banner ── */}
-                    {isGuest && (
-                        <TouchableOpacity
-                            style={styles.guestBannerCard}
-                            onPress={() => requireAuth('Create an account to track your daily vitals and request care.')}
-                            activeOpacity={0.88}
-                        >
-                            <View style={styles.guestBannerIconWrap}>
-                                <MaterialCommunityIcons name="shield-star" size={24} color="#FF6A00" />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                    <Text style={styles.guestBannerTitle}>Guest Exploration Mode</Text>
-                                    <View style={styles.guestPill}>
-                                        <Text style={styles.guestPillText}>PREVIEW</Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.guestBannerDesc}>
-                                    Create an account to track vitals, book companions, and get 24/7 care support.
-                                </Text>
-                            </View>
-                            <View style={styles.guestBannerCta}>
-                                <Text style={styles.guestBannerCtaText}>Create Account</Text>
-                                <Feather name="arrow-right" size={12} color="#FFFFFF" />
-                            </View>
-                        </TouchableOpacity>
-                    )}
 
                     {/* ── Unlinked Care Plans Alert (High Priority Action) ── */}
                     {unlinkedSubs.length > 0 && (
@@ -636,6 +593,12 @@ export default function BeneficiaryDashboard() {
                         beneficiaries={familyBeneficiaries}
                         remainingHours={remainingHours}
                         visitsThisWeek={visitsThisWeek}
+                        onPressVisit={(b) => {
+                            router.push({
+                                pathname: '/(beneficiary)/schedule',
+                                params: { beneficiaryId: b.id, beneficiaryName: b.name },
+                            });
+                        }}
                         onSelectBeneficiary={(b) => {
                             const isPending = b.packageStatus === 'pending' || b.verificationStatus === 'pending';
                             const isExpired = b.packageStatus === 'expired';
@@ -661,7 +624,14 @@ export default function BeneficiaryDashboard() {
                         }}
                         onAddMember={() => {
                             if (isGuest && requireAuth('Create an account to add and manage family care members.')) return;
-                            router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } });
+                            if (unlinkedSubs.length > 0) {
+                                setShowAddMemberPackageModal(true);
+                            } else {
+                                router.push({
+                                    pathname: '/(setup)/subscribe-form',
+                                    params: { isLinkingFlow: 'true', skipPackageAssignment: 'true' },
+                                });
+                            }
                         }}
                         onOpenFamilyConnect={() => {
                             if (isGuest && requireAuth('Create an account to access Family Connect.')) return;
@@ -682,6 +652,7 @@ export default function BeneficiaryDashboard() {
                         }}
                         pendingAccessRequestsCount={subscriberData?.pendingIncomingRequestsCount || 0}
                         onAccessChanged={refetchAllData}
+                        isGuest={isGuest}
                     />
 
                     {/* ── Personal Wellness (Today For You) ── */}
@@ -728,6 +699,14 @@ export default function BeneficiaryDashboard() {
 
                     <View style={{ height: 32 }} />
                 </View>
+
+            {/* Emergency Assistance 5s Countdown Modal */}
+            <EmergencyAssistanceModal
+                visible={showEmergencyModal}
+                loading={triggeringEmergency}
+                onCancel={() => setShowEmergencyModal(false)}
+                onConfirmCall={executeEmergency}
+            />
 
             {/* Emergency Success Overlay Modal */}
             {emergencySuccessModal && (
@@ -784,8 +763,46 @@ export default function BeneficiaryDashboard() {
                 visible={showFamilyIntroModal}
                 onClose={() => setShowFamilyIntroModal(false)}
                 onExplorePackages={() => router.push('/(setup)/subscription-packages')}
-                onAddFamilyMember={() => router.push({ pathname: '/(setup)/subscribe-form', params: { isLinkingFlow: 'true' } })}
+                onAddFamilyMember={() => {
+                    if (unlinkedSubs.length > 0) {
+                        setShowAddMemberPackageModal(true);
+                    } else {
+                        router.push({
+                            pathname: '/(setup)/subscribe-form',
+                            params: { isLinkingFlow: 'true', skipPackageAssignment: 'true' },
+                        });
+                    }
+                }}
                 onJoinWithCode={() => setShowJoinCircleModal(true)}
+            />
+
+            {/* Select Unassigned Package or Continue Without Package Modal */}
+            <SelectPackageForMemberModal
+                visible={showAddMemberPackageModal}
+                unassignedPackages={unlinkedSubs}
+                onClose={() => setShowAddMemberPackageModal(false)}
+                onSelectPackage={(sub) => {
+                    setShowAddMemberPackageModal(false);
+                    const pkgName = sub.package?.name || sub.packageType || 'Care Package';
+                    router.push({
+                        pathname: '/(setup)/subscribe-form',
+                        params: {
+                            isLinkingFlow: 'true',
+                            selectedSubscriptionId: sub.id,
+                            selectedPackageName: pkgName,
+                        },
+                    });
+                }}
+                onContinueWithoutPackage={() => {
+                    setShowAddMemberPackageModal(false);
+                    router.push({
+                        pathname: '/(setup)/subscribe-form',
+                        params: {
+                            isLinkingFlow: 'true',
+                            skipPackageAssignment: 'true',
+                        },
+                    });
+                }}
             />
 
             {/* Care Circle Management Modal */}
@@ -933,71 +950,6 @@ const styles = StyleSheet.create({
         borderRadius: 16,
     },
     guestHeaderSignInText: {
-        fontSize: 12,
-        fontFamily: 'Poppins-SemiBold',
-        color: '#FFFFFF',
-    },
-    guestBannerCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        marginBottom: 16,
-        borderWidth: 1.5,
-        borderColor: '#FFEDD5',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    guestBannerIconWrap: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: '#FFF7ED',
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#FFEDD5',
-    },
-    guestBannerTitle: {
-        fontSize: 14,
-        fontFamily: 'Poppins-SemiBold',
-        color: '#111827',
-    },
-    guestPill: {
-        backgroundColor: '#FFF7ED',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 6,
-        borderWidth: 1,
-        borderColor: '#FFEDD5',
-    },
-    guestPillText: {
-        fontSize: 9,
-        fontFamily: 'Poppins-Bold',
-        color: '#EA580C',
-        letterSpacing: 0.5,
-    },
-    guestBannerDesc: {
-        fontSize: 11,
-        fontFamily: 'Poppins-Regular',
-        color: '#6B7280',
-        lineHeight: 16,
-    },
-    guestBannerCta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FF6A00',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 10,
-        gap: 4,
-    },
-    guestBannerCtaText: {
         fontSize: 12,
         fontFamily: 'Poppins-SemiBold',
         color: '#FFFFFF',

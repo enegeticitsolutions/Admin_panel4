@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Platform, ScrollView } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -92,6 +92,21 @@ export const VitalsCharts = ({ trends, showHeader = true, title }: VitalsChartsP
         const labels = hasV1 ? vital.v1.map(p => p.date) : (hasV2 ? vital.v2!.map(p => p.date) : []);
         const gridValues = [...vital.gridValues].reverse(); // high to low for display
 
+        const POINT_SPACING = 52;
+        const HORIZONTAL_PAD = 20;
+        const effectivePlotWidth = Math.max(
+            chartWidth,
+            labels.length <= 1
+                ? chartWidth
+                : (labels.length - 1) * POINT_SPACING + HORIZONTAL_PAD * 2
+        );
+        const needsScroll = effectivePlotWidth > chartWidth + 1;
+
+        const getPointX = (index: number, count: number) => {
+            if (count <= 1) return effectivePlotWidth / 2;
+            return HORIZONTAL_PAD + (index / (count - 1)) * (effectivePlotWidth - HORIZONTAL_PAD * 2);
+        };
+
         // Check if any reading in this chart has a self-reported entry
         const allPoints = [...(vital.v1 || []), ...(vital.v2 || [])];
         const hasSelfReported = allPoints.some(p => p.source === 'beneficiary');
@@ -100,7 +115,7 @@ export const VitalsCharts = ({ trends, showHeader = true, title }: VitalsChartsP
             const points = data
                 .map((pt, i) => {
                     const val = pt.value;
-                    const x = data.length === 1 ? chartWidth / 2 : (i / (data.length - 1)) * chartWidth;
+                    const x = getPointX(i, data.length);
                     const y = chartHeight - (Math.min(val, vital.gridMax) / vital.gridMax) * chartHeight;
                     return { x, y, val, source: pt.source ?? 'care_companion' };
                 });
@@ -147,7 +162,7 @@ export const VitalsCharts = ({ trends, showHeader = true, title }: VitalsChartsP
                 <Text style={styles.chartTitle}>{vital.name} {vital.unit ? `(${vital.unit})` : ''}</Text>
                 
                 <View style={styles.chartRow}>
-                    {/* Y-Axis Labels */}
+                    {/* Fixed Y-Axis Labels */}
                     <View style={styles.yAxis}>
                         {gridValues.map((val, idx) => (
                             <Text key={idx} style={styles.axisText}>
@@ -156,42 +171,61 @@ export const VitalsCharts = ({ trends, showHeader = true, title }: VitalsChartsP
                         ))}
                     </View>
 
-                    {/* Chart Plot Area */}
-                    <View 
-                        style={styles.plotArea}
+                    {/* Horizontally Scrollable Plot + X-Axis Labels */}
+                    <View
+                        style={styles.scrollViewport}
                         onLayout={(e) => {
                             const { width } = e.nativeEvent.layout;
                             if (width > 0) setChartWidth(width);
                         }}
                     >
-                        {/* Dotted Grid Lines */}
-                        {gridValues.map((_, idx) => {
-                            const topPercent = (idx / (gridValues.length - 1)) * 100;
-                            return (
-                                <View
-                                    key={idx}
-                                    style={[
-                                        styles.gridLine,
-                                        { top: `${topPercent}%` }
-                                    ]}
-                                />
-                            );
-                        })}
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={needsScroll}
+                            bounces={false}
+                            contentContainerStyle={{ width: effectivePlotWidth }}
+                        >
+                            <View style={{ width: effectivePlotWidth }}>
+                                <View style={[styles.plotArea, { width: effectivePlotWidth }]}>
+                                    {/* Dotted Grid Lines */}
+                                    {gridValues.map((_, idx) => {
+                                        const topPercent = (idx / (gridValues.length - 1)) * 100;
+                                        return (
+                                            <View
+                                                key={idx}
+                                                style={[
+                                                    styles.gridLine,
+                                                    { top: `${topPercent}%` }
+                                                ]}
+                                            />
+                                        );
+                                    })}
 
-                        {hasV1 && renderPoints(vital.v1, vital.color)}
-                        {hasV2 && renderPoints(vital.v2!, '#6B7280')}
-                    </View>
-                </View>
+                                    {hasV1 && renderPoints(vital.v1, vital.color)}
+                                    {hasV2 && renderPoints(vital.v2!, '#6B7280')}
+                                </View>
 
-                {/* X-Axis Labels */}
-                <View style={styles.xAxisRow}>
-                    <View style={{ width: 35 }} />
-                    <View style={styles.xAxisLabels}>
-                        {labels.map((label, idx) => (
-                            <Text key={idx} style={[styles.axisText, { textAlign: 'center' }]}>
-                                {label}
-                            </Text>
-                        ))}
+                                {/* X-Axis Labels aligned to points */}
+                                <View style={[styles.xAxisLabels, { width: effectivePlotWidth }]}>
+                                    {labels.map((label, idx) => {
+                                        const x = getPointX(idx, labels.length);
+                                        return (
+                                            <Text
+                                                key={idx}
+                                                style={[
+                                                    styles.axisText,
+                                                    styles.xAxisLabelItem,
+                                                    { left: x - 24 },
+                                                ]}
+                                                numberOfLines={1}
+                                            >
+                                                {label}
+                                            </Text>
+                                        );
+                                    })}
+                                </View>
+                            </View>
+                        </ScrollView>
                     </View>
                 </View>
 
@@ -246,7 +280,7 @@ const styles = StyleSheet.create({
     },
     chartTitle: { fontSize: 13, fontWeight: '700', color: '#1F2937', marginBottom: 18 },
     
-    chartRow: { flexDirection: 'row', height: 130 },
+    chartRow: { flexDirection: 'row', minHeight: 152 },
     yAxis: { 
         width: 30, 
         justifyContent: 'space-between', 
@@ -255,9 +289,12 @@ const styles = StyleSheet.create({
         height: 120 
     },
     axisText: { fontSize: 10, color: '#9CA3AF', fontWeight: '500' },
-    
+
+    scrollViewport: {
+        flex: 1,
+        overflow: 'hidden',
+    },
     plotArea: { 
-        flex: 1, 
         height: 120, 
         position: 'relative' 
     },
@@ -277,11 +314,15 @@ const styles = StyleSheet.create({
         zIndex: 10,
     },
     
-    xAxisRow: { flexDirection: 'row', marginTop: 10 },
     xAxisLabels: { 
-        flex: 1, 
-        flexDirection: 'row', 
-        justifyContent: 'space-between' 
+        height: 22,
+        marginTop: 8,
+        position: 'relative',
+    },
+    xAxisLabelItem: {
+        position: 'absolute',
+        width: 48,
+        textAlign: 'center',
     },
 
     // Source legend

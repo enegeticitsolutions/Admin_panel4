@@ -5,16 +5,18 @@ import { HomeColors, HomeShadows } from '@/constants/homeTheme';
 
 interface FloatingQuickActionsProps {
   onBookSaathi: () => void;
+  onBookCareMitra: () => void;
   onAddMedicine: () => void;
-  onJoinCircle: () => void;
   onLogVitals: () => void;
+  onJoinCircle?: () => void;
 }
 
 export function FloatingQuickActions({
   onBookSaathi,
+  onBookCareMitra,
   onAddMedicine,
-  onJoinCircle,
   onLogVitals,
+  onJoinCircle,
 }: FloatingQuickActionsProps) {
   return (
     <View style={styles.floatingContainer}>
@@ -32,7 +34,21 @@ export function FloatingQuickActions({
         </Text>
       </TouchableOpacity>
 
-      {/* 2. Add Medicine */}
+      {/* 2. Book Care Mitra */}
+      <TouchableOpacity
+        style={styles.actionItem}
+        onPress={onBookCareMitra}
+        activeOpacity={0.75}
+      >
+        <View style={[styles.iconBox, { backgroundColor: HomeColors.blueBg }]}>
+          <Feather name="user-check" size={19} color={HomeColors.blueIcon} />
+        </View>
+        <Text style={styles.actionLabel} numberOfLines={2}>
+          Book Care Mitra
+        </Text>
+      </TouchableOpacity>
+
+      {/* 3. Med & Health */}
       <TouchableOpacity
         style={styles.actionItem}
         onPress={onAddMedicine}
@@ -42,11 +58,25 @@ export function FloatingQuickActions({
           <MaterialCommunityIcons name="pill" size={20} color={HomeColors.yellowIcon} />
         </View>
         <Text style={styles.actionLabel} numberOfLines={2}>
-          Add medicine
+          Med & Health
         </Text>
       </TouchableOpacity>
 
-      {/* 3. Join Circle */}
+      {/* 4. My Vitals */}
+      <TouchableOpacity
+        style={styles.actionItem}
+        onPress={onLogVitals}
+        activeOpacity={0.75}
+      >
+        <View style={[styles.iconBox, { backgroundColor: HomeColors.mintBg }]}>
+          <Feather name="activity" size={19} color={HomeColors.mintIcon} />
+        </View>
+        <Text style={styles.actionLabel} numberOfLines={2}>
+          My Vitals
+        </Text>
+      </TouchableOpacity>
+
+      {/* Join Circle (commented out per request — kept in code for future use)
       <TouchableOpacity
         style={styles.actionItem}
         onPress={onJoinCircle}
@@ -59,20 +89,7 @@ export function FloatingQuickActions({
           Join circle
         </Text>
       </TouchableOpacity>
-
-      {/* 4. Log Vitals */}
-      <TouchableOpacity
-        style={styles.actionItem}
-        onPress={onLogVitals}
-        activeOpacity={0.75}
-      >
-        <View style={[styles.iconBox, { backgroundColor: HomeColors.mintBg }]}>
-          <Feather name="activity" size={19} color={HomeColors.mintIcon} />
-        </View>
-        <Text style={styles.actionLabel} numberOfLines={2}>
-          Log vitals
-        </Text>
-      </TouchableOpacity>
+      */}
     </View>
   );
 }

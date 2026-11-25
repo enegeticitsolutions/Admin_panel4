@@ -310,11 +310,11 @@ export const createAdherenceRecord = async (data: {
 };
 
 /**
- * Instantiate MedicationAdherenceManager to get today's dynamic schedule.
+ * Instantiate MedicationAdherenceManager to get dynamic schedule for a target date (defaults to today).
  */
-export const getTodayMedications = async (beneficiaryId: string) => {
+export const getTodayMedications = async (beneficiaryId: string, dateStr?: string) => {
   const manager = new MedicationAdherenceManager(beneficiaryId);
-  return manager.getTodaySchedule();
+  return manager.getScheduleForDate(dateStr);
 };
 
 /**

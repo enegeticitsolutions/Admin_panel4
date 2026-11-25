@@ -16,7 +16,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@/constants/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { HomeHeader } from '@/components/dashboard/HomeHeader';
-import { triggerEmergencyAlert } from '@/services/emergencyTrigger';
+import { EmergencyAssistanceModal } from '@/components/shared/EmergencyAssistanceModal';
+import { triggerEmergencyAlert, dialEmergencyHelpline } from '@/services/emergencyTrigger';
 import {
   CommunityHeroCard,
   CommunityEventCard,
@@ -39,6 +40,8 @@ export default function BeneficiaryCommunityScreen() {
   const [blogs, setBlogs] = useState<CommunityArticleItem[]>([]);
   const [podcasts, setPodcasts] = useState<CommunityPodcastItem[]>([]);
   const [rsvpLoadingId, setRsvpLoadingId] = useState<string | null>(null);
+  const [showEmergencyModal, setShowEmergencyModal] = useState<boolean>(false);
+  const [triggeringSos, setTriggeringSos] = useState<boolean>(false);
 
   // Time-aware greeting
   const greeting = useMemo(() => {
@@ -185,11 +188,33 @@ export default function BeneficiaryCommunityScreen() {
   };
 
   // SOS Emergency Press
-  const handleSosPress = async () => {
+  const handleSosPress = () => {
+    if (requireAuth('Trigger emergency SOS and broadcast your live location to care responders.')) return;
+    if (triggeringSos) return;
+    setShowEmergencyModal(true);
+  };
+
+  const executeSosCall = async () => {
+    setShowEmergencyModal(false);
+    setTriggeringSos(true);
     try {
-      await triggerEmergencyAlert();
+      const result = await triggerEmergencyAlert(
+        'Emergency SOS triggered from Community Screen',
+        { autoDial: true }
+      );
+      if (result.success) {
+        Alert.alert(
+          'Emergency Alert Sent',
+          `Emergency ticket ${result.ticketNumber || 'EMG-ALERT'} has been broadcast.`
+        );
+      } else {
+        dialEmergencyHelpline();
+      }
     } catch (err) {
       console.warn('SOS trigger error:', err);
+      dialEmergencyHelpline();
+    } finally {
+      setTriggeringSos(false);
     }
   };
 
@@ -210,6 +235,7 @@ export default function BeneficiaryCommunityScreen() {
           userName={userName}
           userPhoto={user?.avatarUrl}
           onSosPress={handleSosPress}
+          triggeringSos={triggeringSos}
         />
       </View>
 
@@ -323,6 +349,13 @@ export default function BeneficiaryCommunityScreen() {
           </View>
         </ScrollView>
       )}
+
+      <EmergencyAssistanceModal
+        visible={showEmergencyModal}
+        loading={triggeringSos}
+        onCancel={() => setShowEmergencyModal(false)}
+        onConfirmCall={executeSosCall}
+      />
     </View>
   );
 }

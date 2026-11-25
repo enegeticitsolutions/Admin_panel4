@@ -20,6 +20,7 @@ import { API_URL } from '@/constants/api';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 import { useAuth } from '@/contexts/AuthContext';
 import { HomeHeader } from '@/components/dashboard/HomeHeader';
+import { EmergencyAssistanceModal } from '@/components/shared/EmergencyAssistanceModal';
 import { HomeColors } from '@/constants/homeTheme';
 import { triggerEmergencyAlert, dialEmergencyHelpline, EMERGENCY_HELPLINE_NUMBER } from '@/services/emergencyTrigger';
 import {
@@ -30,7 +31,6 @@ import {
     DoseScheduleItem,
     AdherenceSummaryCard,
     ReportsPrescriptionsCard,
-    ViewOnlyNoticeBanner,
     AddMedicationModal,
     MedicationFormPayload,
 } from '@/components/medications';
@@ -40,6 +40,9 @@ type Metrics = {
     average: number;
     taken: number;
     missed: number;
+    totalExpected?: number;
+    completedDays?: number;
+    totalDays?: number;
 };
 
 export default function MedsTracker() {
@@ -67,6 +70,7 @@ export default function MedsTracker() {
     const [refreshing, setRefreshing] = useState(false);
     const [submittingId, setSubmittingId] = useState<string | null>(null);
     const [triggeringSos, setTriggeringSos] = useState(false);
+    const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
     // Beneficiary switching
     const [familyMembers, setFamilyMembers] = useState<FamilyFilterMember[]>([]);
@@ -216,7 +220,7 @@ export default function MedsTracker() {
             }
 
             const [scheduleRes, metricsRes] = await Promise.all([
-                fetch(`${API_URL}/shared/medications/beneficiary/${targetBeneficiaryId}/today`, {
+                fetch(`${API_URL}/shared/medications/beneficiary/${targetBeneficiaryId}/today?date=${encodeURIComponent(selectedDate)}`, {
                     headers: { Authorization: `Bearer ${token}` },
                 }),
                 fetch(`${API_URL}/shared/medications/beneficiary/${targetBeneficiaryId}/metrics`, {
@@ -230,7 +234,9 @@ export default function MedsTracker() {
             if (scheduleData.success) {
                 const items: DoseScheduleItem[] = scheduleData.data || [];
                 setSchedule(items);
-                scheduleLocalReminders(items);
+                if (selectedDate === getTodayDateStr()) {
+                    scheduleLocalReminders(items);
+                }
             } else {
                 setSchedule([]);
             }
@@ -240,18 +246,21 @@ export default function MedsTracker() {
                     average: metricsData.data.average ?? 0,
                     taken: metricsData.data.taken ?? 0,
                     missed: metricsData.data.missed ?? 0,
+                    totalExpected: metricsData.data.totalExpected ?? 0,
+                    completedDays: metricsData.data.completedDays ?? 0,
+                    totalDays: metricsData.data.totalDays ?? 7,
                 });
             } else {
-                setMetrics({ average: 0, taken: 0, missed: 0 });
+                setMetrics({ average: 0, taken: 0, missed: 0, totalExpected: 0, completedDays: 0, totalDays: 7 });
             }
         } catch (err) {
             console.error('Failed to load medication data:', err);
             setSchedule([]);
-            setMetrics({ average: 0, taken: 0, missed: 0 });
+            setMetrics({ average: 0, taken: 0, missed: 0, totalExpected: 0, completedDays: 0, totalDays: 7 });
         } finally {
             setLoading(false);
         }
-    }, [resolveTargetBeneficiaryId]);
+    }, [resolveTargetBeneficiaryId, selectedDate]);
 
     // Initial load
     useEffect(() => {
@@ -321,6 +330,14 @@ export default function MedsTracker() {
             Alert.alert(
                 'Dose Locked',
                 'Medication doses can only be marked on their scheduled day (Today).'
+            );
+            return;
+        }
+
+        if (item.scheduledTimeIso && new Date(item.scheduledTimeIso).getTime() > Date.now()) {
+            Alert.alert(
+                'Scheduled for Later',
+                `This dose is scheduled for ${item.scheduleTimeText}. You can mark it taken once that time arrives.`
             );
             return;
         }
@@ -447,46 +464,33 @@ export default function MedsTracker() {
     };
 
     // Emergency SOS Trigger
-    const handleSosPress = async () => {
+    const handleSosPress = () => {
         if (requireAuth('Trigger emergency SOS and broadcast your live location to care responders.')) return;
         if (triggeringSos) return;
+        setShowEmergencyModal(true);
+    };
 
-        Alert.alert(
-            'Emergency Support',
-            'Do you need immediate emergency assistance? This will dispatch alerts to your Care Circle and Helpline.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Call Helpline',
-                    onPress: () => dialEmergencyHelpline(),
-                },
-                {
-                    text: 'Trigger SOS Alert',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setTriggeringSos(true);
-                        try {
-                            const result = await triggerEmergencyAlert(
-                                'Emergency SOS triggered from Medication Screen',
-                                { autoDial: true }
-                            );
-                            if (result.success) {
-                                Alert.alert(
-                                    'Emergency Alert Sent',
-                                    `Emergency ticket ${result.ticketNumber || 'EMG-ALERT'} has been broadcast.`
-                                );
-                            } else {
-                                dialEmergencyHelpline();
-                            }
-                        } catch (e) {
-                            dialEmergencyHelpline();
-                        } finally {
-                            setTriggeringSos(false);
-                        }
-                    },
-                },
-            ]
-        );
+    const executeSosCall = async () => {
+        setShowEmergencyModal(false);
+        setTriggeringSos(true);
+        try {
+            const result = await triggerEmergencyAlert(
+                'Emergency SOS triggered from Medication Screen',
+                { autoDial: true }
+            );
+            if (result.success) {
+                Alert.alert(
+                    'Emergency Alert Sent',
+                    `Emergency ticket ${result.ticketNumber || 'EMG-ALERT'} has been broadcast.`
+                );
+            } else {
+                dialEmergencyHelpline();
+            }
+        } catch (e) {
+            dialEmergencyHelpline();
+        } finally {
+            setTriggeringSos(false);
+        }
     };
 
     return (
@@ -566,7 +570,7 @@ export default function MedsTracker() {
                     ) : (
                         schedule.map((item, index) => (
                             <MedicationDoseCard
-                                key={item.id || index}
+                                key={`${item.id}-${item.scheduledTimeIso || item.scheduleTimeText}-${index}`}
                                 item={item}
                                 index={index}
                                 onMarkTaken={(it) => handleLogAdherence(it, true)}
@@ -582,15 +586,14 @@ export default function MedsTracker() {
                 <AdherenceSummaryCard
                     percentage={metrics.average}
                     completedDaysText={
-                        (metrics.taken + metrics.missed) === 0
+                        (metrics.totalExpected ?? 0) === 0 && metrics.taken === 0
                             ? 'No dose activity recorded yet'
-                            : `${metrics.taken} of 7 days completed on time`
+                            : `${metrics.completedDays ?? 0} of ${metrics.totalDays ?? 7} days completed on time`
                     }
                 />
 
                 {/* ── Reports & Prescriptions Action Card ── */}
                 <ReportsPrescriptionsCard
-                    fileCount={8}
                     onPress={() => {
                         router.push({
                             pathname: '/(beneficiary)/medical-records',
@@ -598,9 +601,6 @@ export default function MedsTracker() {
                         });
                     }}
                 />
-
-                {/* ── View-Only Friendly Notice Banner ── */}
-                <ViewOnlyNoticeBanner />
             </ScrollView>
 
             {/* ── Add Medication Modal ── */}
@@ -615,6 +615,13 @@ export default function MedsTracker() {
                 initialPreset={selectedPreset}
                 initialData={editingMed}
                 loading={modalLoading}
+            />
+
+            <EmergencyAssistanceModal
+                visible={showEmergencyModal}
+                loading={triggeringSos}
+                onCancel={() => setShowEmergencyModal(false)}
+                onConfirmCall={executeSosCall}
             />
         </View>
     );

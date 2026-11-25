@@ -1219,7 +1219,14 @@ router.get('/unlinked-check', authenticate, async (req: AuthRequest, res: Respon
 router.post('/link-beneficiary', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!;
-    const { beneficiaryData, medicalData, emergencyContacts, preferencesData } = req.body;
+    const {
+      beneficiaryData,
+      medicalData,
+      emergencyContacts,
+      preferencesData,
+      subscriptionId,
+      skipPackageAssignment,
+    } = req.body;
 
     if (!beneficiaryData) {
       return res.status(400).json({ success: false, message: 'beneficiaryData is required' });
@@ -1230,7 +1237,11 @@ router.post('/link-beneficiary', authenticate, async (req: AuthRequest, res: Res
       beneficiaryData,
       medicalData,
       emergencyContacts,
-      preferencesData
+      preferencesData,
+      {
+        subscriptionId: subscriptionId || null,
+        skipPackageAssignment: Boolean(skipPackageAssignment),
+      }
     );
 
     // Generate new token containing the updated subscriber role
@@ -1243,9 +1254,10 @@ router.post('/link-beneficiary', authenticate, async (req: AuthRequest, res: Res
 
     res.json({
       success: true,
-      message: 'Beneficiary linked successfully',
+      message: result.message || 'Beneficiary linked successfully',
       beneficiaryId: result.beneficiaryId,
       beneficiaryName: result.beneficiaryName,
+      subscriptionId: result.subscriptionId,
       token: newToken,
       user: updatedUser
     });

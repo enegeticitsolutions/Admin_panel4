@@ -5,6 +5,7 @@ import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
 import bcrypt from 'bcryptjs';
 import { generateInvoiceNumber, calculateItemizedInvoice, BenefitTaxItem } from '../../utils/invoice_utils';
 import { notificationProducer } from '@maihoonna/notifications';
+import { ensureProfileAccessOnCreate } from '../access/profile_access_service';
 
 function normalizeUnit(unitLabel: string | null | undefined): string {
   if (!unitLabel) return 'visits';
@@ -1016,26 +1017,54 @@ export const linkBeneficiaryToSubscription = async (
   },
   medicalData?: any,
   emergencyContactsRaw?: any,
-  preferencesData?: any
-) => {
-  // 1. Find the active unlinked subscription for this subscriber
-  const unlinkedSubscription = await prisma.subscription.findFirst({
-    where: {
-      subscriberId: userId,
-      isActive: true,
-      beneficiaryId: null,
-      isQueued: { not: true },
-      cancelledAt: null,
-    },
-    orderBy: { createdAt: 'desc' },
-    include: { package: true }
-  });
-
-  if (!unlinkedSubscription) {
-    throw new Error('No unassigned care package found for your account. Please purchase a package first.');
+  preferencesData?: any,
+  options?: {
+    subscriptionId?: string | null;
+    skipPackageAssignment?: boolean;
   }
+) => {
+  // 1. Resolve which subscription (if any) to link to this beneficiary
+  let subIdToLink: string | null = null;
 
-  const subIdToLink: string = unlinkedSubscription.id;
+  if (!options?.skipPackageAssignment) {
+    if (options?.subscriptionId) {
+      const selectedSub = await prisma.subscription.findFirst({
+        where: {
+          id: options.subscriptionId,
+          subscriberId: userId,
+          isActive: true,
+          beneficiaryId: null,
+          isQueued: { not: true },
+          cancelledAt: null,
+        },
+        include: { package: true }
+      });
+
+      if (!selectedSub) {
+        throw new Error('Selected care package is no longer available or already assigned.');
+      }
+
+      subIdToLink = selectedSub.id;
+    } else {
+      const unlinkedSubscription = await prisma.subscription.findFirst({
+        where: {
+          subscriberId: userId,
+          isActive: true,
+          beneficiaryId: null,
+          isQueued: { not: true },
+          cancelledAt: null,
+        },
+        orderBy: { createdAt: 'desc' },
+        include: { package: true }
+      });
+
+      if (!unlinkedSubscription) {
+        throw new Error('No unassigned care package found for your account. Please purchase a package first.');
+      }
+
+      subIdToLink = unlinkedSubscription.id;
+    }
+  }
 
   const beneficiaryName = beneficiaryData.name || (beneficiaryData as any).fullName || 'Beneficiary';
   const dobDate = parseDob(beneficiaryData.dob);
@@ -1046,7 +1075,14 @@ export const linkBeneficiaryToSubscription = async (
   if (beneficiaryData.phone) {
     beneficiaryPhone = beneficiaryData.phone.replace(/\D/g, '').slice(-10);
     if (beneficiaryPhone) {
-      const existingUser = await prisma.user.findUnique({ where: { phone: beneficiaryPhone } });
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { phone: beneficiaryPhone },
+            { phone: `+91${beneficiaryPhone}` },
+          ],
+        },
+      });
       if (existingUser) {
         beneficiaryUser = existingUser;
       }
@@ -1195,6 +1231,7 @@ export const linkBeneficiaryToSubscription = async (
       beneficiary = await tx.beneficiary.update({
         where: { id: beneficiary.id },
         data: {
+          ...(beneficiary.subscriberId ? {} : { subscriberId: userId }),
           name: beneficiaryName,
           age: calculateAge(dobDate, beneficiaryData.age),
           dateOfBirth: dobDate,
@@ -1212,9 +1249,20 @@ export const linkBeneficiaryToSubscription = async (
           primaryPhysicianName: medicalData?.physicianName || beneficiary.primaryPhysicianName,
           primaryPhysicianPhone: medicalData?.physicianPhone || beneficiary.primaryPhysicianPhone,
           hobbiesInterests: medicalData?.hobbies || beneficiary.hobbiesInterests,
+          isActive: true,
+          status: 'active',
         }
       });
     }
+
+    // Ensure Care Circle access rows (SELF for beneficiary, MANAGER for subscriber) exist
+    await ensureProfileAccessOnCreate(tx, {
+      beneficiaryId: beneficiary.id,
+      beneficiaryUserId: beneficiaryUser.id,
+      sponsorUserId: userId,
+      relationship: beneficiaryData.relationship,
+      grantSponsorManager: true,
+    });
 
     // 5b. Link subscription and payments to the new beneficiary
     let isQueued = false;
@@ -1389,9 +1437,11 @@ export const linkBeneficiaryToSubscription = async (
 
   return {
     success: true,
-    message: result.isQueued
-      ? 'Beneficiary linked successfully! This plan is in Queue behind their active plan.'
-      : 'Beneficiary enrolled and linked to subscription successfully!',
+    message: !subIdToLink
+      ? 'Beneficiary enrolled successfully without a care package.'
+      : result.isQueued
+        ? 'Beneficiary linked successfully! This plan is in Queue behind their active plan.'
+        : 'Beneficiary enrolled and linked to subscription successfully!',
     beneficiaryId: result.beneficiaryId,
     beneficiaryName: result.beneficiaryName,
     subscriptionId: subIdToLink,

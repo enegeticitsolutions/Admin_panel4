@@ -41,6 +41,9 @@ export default function SchedulePreferencesScreen() {
 
     const isVerificationFlow = params.isVerificationFlow === 'true';
     const isLinkingFlow = params.isLinkingFlow === 'true';
+    const selectedSubscriptionId = (params.selectedSubscriptionId as string) || null;
+    const selectedPackageName = (params.selectedPackageName as string) || null;
+    const skipPackageAssignment = params.skipPackageAssignment === 'true';
     const beneficiaryId = params.beneficiaryId as string;
     const pendingDetailsRaw = params.pendingDetails as string;
     const [isLinking, setIsLinking] = useState(false);
@@ -129,7 +132,9 @@ export default function SchedulePreferencesScreen() {
                         beneficiaryData,
                         medicalData,
                         emergencyContacts,
-                        preferencesData: { preferredTiming: visitTiming }
+                        preferencesData: { preferredTiming: visitTiming },
+                        subscriptionId: skipPackageAssignment ? null : selectedSubscriptionId,
+                        skipPackageAssignment,
                     })
                 });
                 const result = await response.json();
@@ -173,13 +178,17 @@ export default function SchedulePreferencesScreen() {
                     await AsyncStorage.removeItem('beneficiaryDashboardCache');
                     await clearSetupDraft();
                     queryClient.invalidateQueries({ queryKey: ['subscriberDashboard'] });
+                    queryClient.invalidateQueries({ queryKey: ['subscriberSummary'] });
                     queryClient.invalidateQueries({ queryKey: ['beneficiaries'] });
 
                     if (result.token && result.user) {
                         await updateUser(result.token, result.user);
                     }
+                    const enrolledMsg = skipPackageAssignment
+                        ? `${result.beneficiaryName || 'Beneficiary'} has been enrolled without a care package.`
+                        : `${result.beneficiaryName || 'Beneficiary'} has been linked to ${selectedPackageName || 'your subscription'}.`;
                     if (Platform.OS === 'web') {
-                        alert(`Beneficiary enrolled successfully!\n\n${result.beneficiaryName || 'Beneficiary'} has been linked to your subscription.`);
+                        alert(`Beneficiary enrolled successfully!\n\n${enrolledMsg}`);
                         router.replace('/(beneficiary)');
                     } else {
                         setEnrolledName(result.beneficiaryName || 'Beneficiary');
@@ -376,7 +385,11 @@ export default function SchedulePreferencesScreen() {
                             <Ionicons name="checkmark-circle" size={54} color="#10B981" />
                         </View>
                         <Text style={styles.modalTitle}>Beneficiary Enrolled!</Text>
-                        <Text style={styles.modalDesc}>{enrolledName} has been linked to your subscription.</Text>
+                        <Text style={styles.modalDesc}>
+                            {skipPackageAssignment
+                                ? `${enrolledName} has been enrolled without a care package.`
+                                : `${enrolledName} has been linked to ${selectedPackageName || 'your subscription'}.`}
+                        </Text>
                         <TouchableOpacity style={styles.modalBtn} onPress={() => {
                             setShowSuccessModal(false);
                             router.replace('/(beneficiary)');

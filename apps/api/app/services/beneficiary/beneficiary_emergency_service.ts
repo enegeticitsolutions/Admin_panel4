@@ -1,67 +1,39 @@
 import prisma from '../../core/database';
 import { ApiError } from '../../utils/ApiError';
 
-import { isEmergencyBenefit } from '../../constants/systemBenefits';
-import { benefitLedgerService } from '../shared/benefit_ledger_service';
-
 export const getBeneficiaryEmergencyEligibility = async (beneficiaryId: string) => {
-  const activeSubscriptions = await prisma.subscription.findMany({
+  const activeSubscription = await prisma.subscription.findFirst({
     where: {
       isActive: true,
+      isQueued: false,
+      endDate: { gte: new Date() },
       OR: [
-        { beneficiaryId: beneficiaryId },
+        { beneficiaryId },
         { subscriberId: beneficiaryId },
         { beneficiary: { userId: beneficiaryId } },
-        { beneficiary: { id: beneficiaryId } }
-      ]
+        { beneficiary: { id: beneficiaryId } },
+      ],
     },
-    include: {
-      packageVersion: {
-        include: {
-          versionBenefits: {
-            include: {
-              benefit: {
-                include: { benefitType: true }
-              }
-            }
-          }
-        }
-      },
-      benefitBalances: {
-        include: {
-          benefit: {
-            include: { benefitType: true }
-          }
-        }
-      }
-    }
+    select: { id: true },
   });
 
-  let eligible = false;
-  let benefitName = '';
-  let balanceId: string | null = null;
-  let remaining = 0;
-
-  for (const sub of activeSubscriptions) {
-    if (sub.benefitBalances) {
-      for (const bal of sub.benefitBalances) {
-        if (isEmergencyBenefit(bal.benefit)) {
-          const rem = bal.totalUnits - bal.usedUnits;
-          if (rem > 0) {
-            eligible = true;
-            benefitName = bal.benefit?.benefitType?.name || bal.benefit?.name || 'Emergency Support';
-            balanceId = bal.id;
-            remaining = rem;
-            break;
-          }
-          // benefit exists but exhausted — keep eligible=false, continue scanning
-        }
-      }
-    }
-    if (eligible) break;
+  if (activeSubscription) {
+    return {
+      eligible: true,
+      benefitName: 'Emergency Support',
+      balanceId: null,
+      remaining: null,
+      unlimited: true,
+    };
   }
 
-  return { eligible, benefitName, balanceId, remaining };
+  return {
+    eligible: false,
+    benefitName: '',
+    balanceId: null,
+    remaining: 0,
+    unlimited: false,
+  };
 };
 
 export const triggerEmergencyRequest = async (
@@ -69,10 +41,10 @@ export const triggerEmergencyRequest = async (
   requestedByUserId: string,
   locationDetails?: { lat?: number; lng?: number; address?: string; description?: string }
 ) => {
-  // Check eligibility — also validates remaining balance > 0
-  const { eligible, balanceId } = await getBeneficiaryEmergencyEligibility(beneficiaryId);
+  // Emergency Support is free and unlimited for all users with an active subscription
+  const { eligible } = await getBeneficiaryEmergencyEligibility(beneficiaryId);
   if (!eligible) {
-    throw new ApiError(403, 'Your Emergency Support uses are exhausted. Please renew or upgrade your plan to enable Emergency Support again.');
+    throw new ApiError(403, 'An active subscription is required to use Emergency Support. Please subscribe or renew your plan.');
   }
 
   // Fetch full beneficiary details to assemble complete location and emergency contacts
@@ -106,55 +78,34 @@ export const triggerEmergencyRequest = async (
 
   const ticketNumber = `EMG-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  // Wrap emergency request creation + unit reservation in a transaction
-  const emergencyReq = await prisma.$transaction(async (tx) => {
-    // 1. Create the emergency request record
-    const emg = await tx.emergencyRequest.create({
-      data: {
-        ticketNumber,
-        beneficiaryId,
-        requestedBy: beneficiary.userId,  // always use the beneficiary's actual user FK
-        status: 'open',
-        type: 'EMERGENCY_SUPPORT',
-        description: locationDetails?.description || 'SOS Emergency Alert triggered from mobile app',
-        locationLat: locationDetails?.lat || beneficiary.user?.latitude || null,
-        locationLng: locationDetails?.lng || beneficiary.user?.longitude || null,
-        locationAddress: fullAddress,
-        notes: [
-          {
-            timestamp: new Date().toISOString(),
-            note: `🚨 Emergency alert triggered by ${beneficiary.name}`
-          }
-        ]
-      },
-      include: {
-        beneficiary: {
-          include: {
-            user: true,
-            subscriber: true,
-            primaryCC: { include: { user: true } },
-            secondaryCC: { include: { user: true } }
-          }
+  const emergencyReq = await prisma.emergencyRequest.create({
+    data: {
+      ticketNumber,
+      beneficiaryId,
+      requestedBy: beneficiary.userId,  // always use the beneficiary's actual user FK
+      status: 'open',
+      type: 'EMERGENCY_SUPPORT',
+      description: locationDetails?.description || 'SOS Emergency Alert triggered from mobile app',
+      locationLat: locationDetails?.lat || beneficiary.user?.latitude || null,
+      locationLng: locationDetails?.lng || beneficiary.user?.longitude || null,
+      locationAddress: fullAddress,
+      notes: [
+        {
+          timestamp: new Date().toISOString(),
+          note: `🚨 Emergency alert triggered by ${beneficiary.name}`
+        }
+      ]
+    },
+    include: {
+      beneficiary: {
+        include: {
+          user: true,
+          subscriber: true,
+          primaryCC: { include: { user: true } },
+          secondaryCC: { include: { user: true } }
         }
       }
-    });
-
-    // 2. Reserve 1 Emergency unit (HELD) in the double-entry ledger
-    if (balanceId) {
-      await benefitLedgerService.reserveBenefit(
-        {
-          balanceId,
-          beneficiaryId,
-          units: 1,
-          emergencyRequestId: emg.id,
-          reason: `Emergency SOS Alert Ticket: ${ticketNumber}`,
-          performedByUserId: requestedByUserId,
-        },
-        tx
-      );
     }
-
-    return emg;
   });
 
 
