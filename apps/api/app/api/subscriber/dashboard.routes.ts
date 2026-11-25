@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticate, AuthRequest } from '../shared/deps';
 import prisma from '../../core/database';
 import { resolveFileUrl } from '../../services/storage/urlResolver';
-import { listIncomingRequests } from '../../services/access/profile_access_service';
+import { listIncomingRequests, ensureProfileAccessOnCreate } from '../../services/access/profile_access_service';
 
 const router = Router();
 
@@ -126,42 +126,209 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
     const now = new Date();
 
     // ── Unified single-index lookup via care_circle_members (covers SELF, MANAGER, EDITOR, VIEWER) ──
-    const [memberships, incomingRequests] = await Promise.all([
+    const membershipInclude = {
+      beneficiary: {
+        include: {
+          careCircleMembers: {
+            where: { status: 'active' },
+            select: {
+              id: true,
+              userId: true,
+              accessRole: true,
+              role: true,
+              relationship: true,
+              canRenew: true,
+              canViewVitals: true,
+              canEditDetails: true,
+              canManageAccess: true,
+            },
+          },
+        },
+      },
+    };
+
+    const [initialMemberships, ownedOrSelfBeneficiaries, incomingRequests] = await Promise.all([
       prisma.careCircleMember.findMany({
         where: {
           userId,
           status: 'active',
           beneficiary: { status: { not: 'deleted' } },
         },
-        include: {
-          beneficiary: {
-            include: {
-              careCircleMembers: {
-                where: { status: 'active' },
-                select: {
-                  id: true,
-                  userId: true,
-                  accessRole: true,
-                  role: true,
-                  relationship: true,
-                  canRenew: true,
-                  canViewVitals: true,
-                  canEditDetails: true,
-                  canManageAccess: true,
-                },
-              },
-            },
-          },
-        },
+        include: membershipInclude,
         orderBy: { createdAt: 'asc' },
+      }),
+      prisma.beneficiary.findMany({
+        where: {
+          OR: [{ subscriberId: userId }, { userId }],
+          status: { not: 'deleted' },
+        },
+        select: {
+          id: true,
+          userId: true,
+          subscriberId: true,
+          relationship: true,
+        },
       }),
       listIncomingRequests(userId),
     ]);
+
+    let memberships = initialMemberships;
+    const existingMemberBenIds = new Set(memberships.map((m) => m.beneficiaryId));
+    const missingBeneficiaries = ownedOrSelfBeneficiaries.filter((b) => !existingMemberBenIds.has(b.id));
+
+    // Self-heal missing CareCircleMember rows for legacy/unlinked-flow beneficiaries
+    if (missingBeneficiaries.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        for (const b of missingBeneficiaries) {
+          await ensureProfileAccessOnCreate(tx, {
+            beneficiaryId: b.id,
+            beneficiaryUserId: b.userId,
+            sponsorUserId: b.subscriberId,
+            relationship: b.relationship,
+            grantSponsorManager: Boolean(b.subscriberId),
+          });
+        }
+      });
+
+      memberships = await prisma.careCircleMember.findMany({
+        where: {
+          userId,
+          status: 'active',
+          beneficiary: { status: { not: 'deleted' } },
+        },
+        include: membershipInclude,
+        orderBy: { createdAt: 'asc' },
+      });
+    }
 
     const membershipByBenId = new Map(memberships.map((m) => [m.beneficiaryId, m]));
     const beneficiaries = memberships.map((m) => m.beneficiary);
 
     const accessibleBenIds = beneficiaries.map((b: any) => b.id);
+
+    // ── Live Latest Vitals (CC + self-recorded, ordered newest first) & Next Upcoming Visit per beneficiary ──
+    const [recentVitalRows, upcomingVisitRows, moodVisitRows] = accessibleBenIds.length > 0
+      ? await Promise.all([
+          prisma.vitalReading.findMany({
+            where: {
+              beneficiaryId: { in: accessibleBenIds },
+              OR: [
+                { valueNumeric: { not: null } },
+                { valueNumeric2: { not: null } },
+                {
+                  AND: [
+                    { valueText: { not: null } },
+                    { valueText: { not: '' } },
+                    { valueText: { not: 'N/A' } },
+                  ],
+                },
+              ],
+            },
+            include: {
+              vitalDefinition: { select: { code: true } },
+            },
+            orderBy: { capturedAt: 'desc' },
+          }),
+          prisma.visit.findMany({
+            where: {
+              beneficiaryId: { in: accessibleBenIds },
+              scheduledTime: { gte: now },
+              status: { in: ['scheduled', 'in_progress'] },
+            },
+            orderBy: { scheduledTime: 'asc' },
+            include: {
+              careCompanion: { include: { user: { select: { name: true } } } },
+            },
+          }),
+          prisma.visit.findMany({
+            where: {
+              beneficiaryId: { in: accessibleBenIds },
+              mood: { not: null },
+            },
+            orderBy: { scheduledTime: 'desc' },
+            select: { beneficiaryId: true, mood: true },
+          }),
+        ])
+      : [[], [], []];
+
+    const latestVitalsByBenId = new Map<string, {
+      bloodPressure: string | null;
+      bloodPressureStatus: string | null;
+      pulseRate: number | null;
+      pulseStatus: string | null;
+      spo2: number | null;
+      spo2Status: string | null;
+    }>();
+
+    for (const r of recentVitalRows as any[]) {
+      const code = r.vitalDefinition?.code?.toUpperCase();
+      if (!code) continue;
+      let entry = latestVitalsByBenId.get(r.beneficiaryId);
+      if (!entry) {
+        entry = {
+          bloodPressure: null,
+          bloodPressureStatus: null,
+          pulseRate: null,
+          pulseStatus: null,
+          spo2: null,
+          spo2Status: null,
+        };
+        latestVitalsByBenId.set(r.beneficiaryId, entry);
+      }
+
+      if (code === 'BP' && entry.bloodPressure === null && r.valueNumeric != null) {
+        const sys = Math.round(r.valueNumeric);
+        const dia = r.valueNumeric2 != null ? Math.round(r.valueNumeric2) : null;
+        entry.bloodPressure = dia != null ? `${sys}/${dia}` : `${sys}`;
+        if (sys >= 140 || (dia != null && dia >= 90)) entry.bloodPressureStatus = 'High';
+        else if (sys >= 120 || (dia != null && dia >= 80)) entry.bloodPressureStatus = 'Elevated';
+        else if (sys < 90 || (dia != null && dia < 60)) entry.bloodPressureStatus = 'Low';
+        else entry.bloodPressureStatus = 'Normal';
+      } else if ((code === 'PULSE' || code === 'HEART_RATE') && entry.pulseRate === null && r.valueNumeric != null) {
+        const pulse = Math.round(r.valueNumeric);
+        entry.pulseRate = pulse;
+        entry.pulseStatus = pulse > 100 ? 'High' : pulse < 60 ? 'Low' : 'Normal';
+      } else if ((code === 'SPO2' || code === 'OXYGEN_LEVEL') && entry.spo2 === null && r.valueNumeric != null) {
+        const spo2 = Math.round(r.valueNumeric);
+        entry.spo2 = spo2;
+        entry.spo2Status = spo2 < 92 ? 'Low' : spo2 <= 94 ? 'Borderline' : 'Good';
+      }
+    }
+
+    const nextVisitByBenId = new Map<string, {
+      scheduledTime: Date;
+      companionName: string | null;
+      status: string;
+    }>();
+
+    for (const v of upcomingVisitRows as any[]) {
+      if (!nextVisitByBenId.has(v.beneficiaryId)) {
+        nextVisitByBenId.set(v.beneficiaryId, {
+          scheduledTime: v.scheduledTime,
+          companionName: v.careCompanion?.user?.name || null,
+          status: v.status,
+        });
+      }
+    }
+
+    const MOOD_SCORE_MAP: Record<string, number> = {
+      happy: 100,
+      neutral: 80,
+      sad: 50,
+      anxious: 20,
+      depressed: 0,
+    };
+    const happinessByBenId = new Map<string, { score: number | null; mood: string | null }>();
+    for (const mv of moodVisitRows as any[]) {
+      if (!happinessByBenId.has(mv.beneficiaryId) && mv.mood) {
+        const lower = String(mv.mood).toLowerCase();
+        const label = lower.charAt(0).toUpperCase() + lower.slice(1);
+        happinessByBenId.set(mv.beneficiaryId, {
+          score: MOOD_SCORE_MAP[lower] ?? null,
+          mood: label,
+        });
+      }
+    }
 
     // ── Subscriptions: Direct purchases OR active plans belonging to accessible beneficiaries ──
     const allUserSubscriptions = await prisma.subscription.findMany({
@@ -314,6 +481,12 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
           endDate: queuedSub.endDate,
         } : null,
         activeSubscriptionsCount: activeSubs.length,
+        latestVitals: latestVitalsByBenId.get(b.id) || null,
+        nextVisit: nextVisitByBenId.get(b.id) || null,
+        happinessScore:
+          happinessByBenId.get(b.id)?.score ??
+          (b.emotionalScore === 8.0 ? null : (b.emotionalScore ?? null)),
+        happinessMood: happinessByBenId.get(b.id)?.mood || null,
         // Only map default Prisma seed score (8.0) → null; real scores pass through as-is
         emotionalScore: b.emotionalScore === 8.0 ? null : (b.emotionalScore ?? null)
       };

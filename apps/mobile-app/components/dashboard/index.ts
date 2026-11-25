@@ -11,3 +11,4 @@ export * from './FamilyConnectIntroModal';
 export * from './CareCircleModal';
 export * from './JoinCareCircleModal';
 export * from './RenewOrLinkModal';
+export * from './SelectPackageForMemberModal';

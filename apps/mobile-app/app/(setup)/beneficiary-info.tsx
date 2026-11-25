@@ -657,7 +657,10 @@ export default function BeneficiaryInfoScreen() {
             beneficiaryId: params.beneficiaryId,
             beneficiaryData: JSON.stringify(beneficiaryPayload),
             pendingDetails: pendingData ? JSON.stringify(pendingData) : undefined,
-            isLinkingFlow: params.isLinkingFlow || 'false'
+            isLinkingFlow: params.isLinkingFlow || 'false',
+            selectedSubscriptionId: params.selectedSubscriptionId,
+            selectedPackageName: params.selectedPackageName,
+            skipPackageAssignment: params.skipPackageAssignment,
         });
 
     };

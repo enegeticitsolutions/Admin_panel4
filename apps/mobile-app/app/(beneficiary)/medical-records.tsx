@@ -10,7 +10,7 @@ import { API_URL } from '@/constants/api';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
-import { VitalsCharts } from '../(subscriber)/components/beneficiary/VitalsCharts';
+import { VitalsTrendsSection } from '@/components/shared/VitalsTrendsSection';
 import { useGlobalRefresh } from '@/utils/events';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -195,17 +195,7 @@ export default function MedicalRecordsScreen() {
                     )}
 
                     {/* ── Trends ── */}
-                    <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Trends (Last 30 days)</Text>
-
-                    {trends.length === 0 ? (
-                        <View style={styles.emptyCard}>
-                            <Text style={styles.emptyCardText}>Not enough data to display trends.</Text>
-                        </View>
-                    ) : (
-                        <View style={styles.trendsCard}>
-                            <VitalsCharts trends={trends} />
-                        </View>
-                    )}
+                    <VitalsTrendsSection trends={trends} defaultLimit={7} />
 
                     {/* ── History ── */}
                     <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Readings History</Text>

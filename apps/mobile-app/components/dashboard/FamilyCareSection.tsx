@@ -37,6 +37,9 @@ export interface BeneficiaryItem {
     companionName?: string;
     status?: string;
   };
+  happinessScore?: number | null;
+  happinessMood?: string | null;
+  emotionalScore?: number | null;
   visits?: Array<{
     scheduledTime?: string;
     primaryCC?: { user?: { name?: string } };
@@ -50,22 +53,26 @@ interface FamilyCareSectionProps {
   remainingHours?: number;
   visitsThisWeek?: number;
   onSelectBeneficiary: (beneficiary: BeneficiaryItem) => void;
+  onPressVisit?: (beneficiary: BeneficiaryItem) => void;
   onAddMember: () => void;
   onOpenFamilyConnect?: () => void;
   onOpenCareCircle?: (beneficiary: BeneficiaryItem) => void;
   onOpenJoinCircle?: () => void;
   pendingAccessRequestsCount?: number;
   onAccessChanged?: () => void;
+  isGuest?: boolean;
 }
 
 export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
   beneficiaries,
   onSelectBeneficiary,
+  onPressVisit,
   onAddMember,
   onOpenCareCircle,
   onOpenJoinCircle,
   pendingAccessRequestsCount = 0,
   onAccessChanged,
+  isGuest = false,
 }) => {
   // Track currently selected family member in the pills row
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -128,36 +135,27 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
             <Text style={styles.sectionCategory}>FAMILY CARE</Text>
             <Text style={styles.sectionTitle}>Loved ones</Text>
           </View>
-          <TouchableOpacity style={styles.addMemberHeaderBtn} onPress={onAddMember} activeOpacity={0.75}>
-            <Feather name="plus" size={16} color={HomeColors.brandOrange} />
-            <Text style={styles.addMemberHeaderText}>Add member</Text>
-          </TouchableOpacity>
+          {!isGuest && (
+            <TouchableOpacity style={styles.addMemberHeaderBtn} onPress={onAddMember} activeOpacity={0.75}>
+              <Feather name="plus" size={16} color={HomeColors.brandOrange} />
+              <Text style={styles.addMemberHeaderText}>Add member</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.emptyCard}>
           <View style={styles.emptyIconBox}>
             <Ionicons name="people-outline" size={28} color={HomeColors.brandOrange} />
           </View>
-          <Text style={styles.emptyTitle}>No Family Members Added</Text>
+          <Text style={styles.emptyTitle}>Start your Care Circle</Text>
           <Text style={styles.emptySub}>
-            Add your parents or family members to monitor their health, coordinate visits, and share care circles.
+            Invite family to record vitals and medicines, see visit updates, and stay in step on care together.
           </Text>
-          <View style={styles.emptyActionsRow}>
-            <TouchableOpacity style={styles.emptyPrimaryBtn} onPress={onAddMember} activeOpacity={0.85}>
-              <Ionicons name="person-add-outline" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.emptyPrimaryBtnText}>Add Member</Text>
-            </TouchableOpacity>
-
-            {onOpenJoinCircle && (
-              <TouchableOpacity style={styles.emptySecondaryBtn} onPress={onOpenJoinCircle} activeOpacity={0.85}>
-                <Ionicons name="key-outline" size={15} color={HomeColors.brandOrange} style={{ marginRight: 6 }} />
-                <Text style={styles.emptySecondaryBtnText}>Join Circle</Text>
-              </TouchableOpacity>
-            )}
-          </View>
         </View>
 
-        <ProfileAccessActionButtons pendingCount={pendingAccessRequestsCount} onChanged={onAccessChanged} />
+        {!isGuest && (
+          <ProfileAccessActionButtons pendingCount={pendingAccessRequestsCount} onChanged={onAccessChanged} />
+        )}
       </View>
     );
   }
@@ -175,14 +173,28 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
   const companion =
     rawVisit?.companionName ||
     (rawVisit as any)?.primaryCC?.user?.name ||
-    'Care Coordinator';
+    null;
   const visitSchedule = formatVisitSchedule(rawVisit?.scheduledTime);
 
-  // Vitals info
-  const bpVal = currentBen.latestVitals?.bloodPressure || '124/82';
-  const bpStatus = currentBen.latestVitals?.bloodPressureStatus || 'Normal';
-  const pulseVal = currentBen.latestVitals?.pulseRate ? `${currentBen.latestVitals.pulseRate}` : '74';
-  const spo2Val = currentBen.latestVitals?.spo2 ? `${currentBen.latestVitals.spo2}%` : '98%';
+  // Live vitals info (latest recorded by beneficiary/family or Care Mitra)
+  const bpVal = currentBen.latestVitals?.bloodPressure ?? '--';
+  const bpStatus = currentBen.latestVitals?.bloodPressure
+    ? (currentBen.latestVitals.bloodPressureStatus || 'Normal')
+    : 'Not recorded';
+  const pulseVal = currentBen.latestVitals?.pulseRate != null
+    ? `${currentBen.latestVitals.pulseRate}`
+    : '--';
+  const pulseStatus = currentBen.latestVitals?.pulseRate != null ? 'bpm' : 'Not recorded';
+  const spo2Val = currentBen.latestVitals?.spo2 != null
+    ? `${currentBen.latestVitals.spo2}%`
+    : '--';
+  const spo2Status = currentBen.latestVitals?.spo2 != null
+    ? (currentBen.latestVitals.spo2Status || 'Good')
+    : 'Not recorded';
+
+  const rawHappiness = currentBen.happinessScore ?? currentBen.emotionalScore ?? null;
+  const happinessVal = rawHappiness != null ? `${Math.round(rawHappiness)}%` : '--';
+  const happinessSub = currentBen.happinessMood || (rawHappiness != null ? 'Mood' : 'Not recorded');
 
   return (
     <View style={styles.container}>
@@ -192,10 +204,12 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
           <Text style={styles.sectionCategory}>FAMILY CARE</Text>
           <Text style={styles.sectionTitle}>Loved ones</Text>
         </View>
-        <TouchableOpacity style={styles.addMemberHeaderBtn} onPress={onAddMember} activeOpacity={0.75}>
-          <Feather name="plus" size={16} color={HomeColors.brandOrange} />
-          <Text style={styles.addMemberHeaderText}>Add member</Text>
-        </TouchableOpacity>
+        {!isGuest && (
+          <TouchableOpacity style={styles.addMemberHeaderBtn} onPress={onAddMember} activeOpacity={0.75}>
+            <Feather name="plus" size={16} color={HomeColors.brandOrange} />
+            <Text style={styles.addMemberHeaderText}>Add member</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ── Horizontal Member Selector Pills ── */}
@@ -290,26 +304,36 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
 
         {/* Card Body */}
         <View style={styles.cardBody}>
-          {/* Next Visit Sub-card */}
-          <TouchableOpacity
-            style={styles.visitSubCard}
-            onPress={() => onSelectBeneficiary(currentBen)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.calendarIconSquare}>
-              <Feather name="calendar" size={20} color={HomeColors.brandOrange} />
+          {/* Top Row: Happiness Score (Left) + Next Saathi Visit (Right) */}
+          <View style={styles.topSummaryRow}>
+            <View style={styles.happinessCard}>
+              <Text style={styles.happinessValue}>{happinessVal}</Text>
+              <Text style={styles.happinessLabel}>Happiness</Text>
+              <Text style={styles.happinessStatus} numberOfLines={1}>{happinessSub}</Text>
             </View>
 
-            <View style={styles.visitInfo}>
-              <Text style={styles.visitLabel}>Next Saathi visit</Text>
-              <Text style={styles.visitTime}>
-                {visitSchedule.day} {visitSchedule.time}
-              </Text>
-              <Text style={styles.visitCompanion}>with {companion}</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.visitSubCard}
+              onPress={() => (onPressVisit ? onPressVisit(currentBen) : onSelectBeneficiary(currentBen))}
+              activeOpacity={0.85}
+            >
+              <View style={styles.calendarIconSquare}>
+                <Feather name="calendar" size={18} color={HomeColors.brandOrange} />
+              </View>
 
-            <Feather name="chevron-right" size={20} color={HomeColors.brandOrange} />
-          </TouchableOpacity>
+              <View style={styles.visitInfo}>
+                <Text style={styles.visitLabel}>Next Saathi visit</Text>
+                <Text style={styles.visitTime} numberOfLines={1}>
+                  {visitSchedule.day} {visitSchedule.time}
+                </Text>
+                <Text style={styles.visitCompanion} numberOfLines={1}>
+                  {companion ? `with ${companion}` : 'View schedule'}
+                </Text>
+              </View>
+
+              <Feather name="chevron-right" size={18} color={HomeColors.brandOrange} />
+            </TouchableOpacity>
+          </View>
 
           {/* Compact Vitals 3-Box Row */}
           <View style={styles.vitalsRow}>
@@ -324,14 +348,14 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
             <View style={styles.vitalBox}>
               <Text style={styles.vitalValue}>{pulseVal}</Text>
               <Text style={styles.vitalLabel}>Pulse</Text>
-              <Text style={styles.vitalStatus}>bpm</Text>
+              <Text style={styles.vitalStatus}>{pulseStatus}</Text>
             </View>
 
             {/* Box 3: SpO2 */}
             <View style={styles.vitalBox}>
               <Text style={styles.vitalValue}>{spo2Val}</Text>
               <Text style={styles.vitalLabel}>SpO₂</Text>
-              <Text style={styles.vitalStatus}>Good</Text>
+              <Text style={styles.vitalStatus}>{spo2Status}</Text>
             </View>
           </View>
         </View>
@@ -347,7 +371,9 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
         </TouchableOpacity>
       </View>
 
-      <ProfileAccessActionButtons pendingCount={pendingAccessRequestsCount} onChanged={onAccessChanged} />
+      {!isGuest && (
+        <ProfileAccessActionButtons pendingCount={pendingAccessRequestsCount} onChanged={onAccessChanged} />
+      )}
     </View>
   );
 };
@@ -520,13 +546,50 @@ const styles = StyleSheet.create({
   cardBody: {
     padding: 20,
   },
+  topSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 10,
+  },
+  happinessCard: {
+    flex: 1,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  happinessValue: {
+    fontFamily: 'Poppins-Bold',
+    fontWeight: '700',
+    fontSize: 18,
+    lineHeight: 24,
+    color: '#B45309',
+  },
+  happinessLabel: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 15,
+    color: HomeColors.textSecondary,
+    marginTop: 2,
+  },
+  happinessStatus: {
+    fontFamily: 'Poppins-Regular',
+    fontWeight: '400',
+    fontSize: 11,
+    lineHeight: 15,
+    color: HomeColors.textMuted,
+  },
   visitSubCard: {
+    flex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF7F0',
     borderRadius: 16,
-    padding: 16,
-    gap: 12,
+    padding: 14,
+    gap: 10,
   },
   calendarIconSquare: {
     width: 44,

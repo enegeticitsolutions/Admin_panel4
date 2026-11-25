@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../../core/database';
 import { authenticate, AuthRequest } from '../shared/deps';
 import { notificationProducer } from '@maihoonna/notifications';
-import { resolveFileUrl } from '../../services/storage';
+import { resolveFileUrl, resolveFileUrls } from '../../services/storage';
 import { getProfileAccess } from '../../services/access/profile_access_service';
 
 const router = Router();
@@ -191,6 +191,11 @@ router.get('/:userId/team', authenticate, async (req: AuthRequest, res: Response
             return res.status(404).json({ success: false, message: 'Beneficiary profile not found' });
         }
 
+        const access = await getProfileAccess(req.userId, beneficiary.id, req.userRole);
+        if (!access.canView) {
+            return res.status(403).json({ success: false, message: 'Unauthorized access to beneficiary visits' });
+        }
+
         const team = [];
 
         if (beneficiary.primaryCC && (beneficiary.primaryCC as any).user?.isActive !== false) {
@@ -263,12 +268,30 @@ router.get('/:userId/visits', authenticate, async (req: AuthRequest, res: Respon
     try {
         const userId = req.params.userId as string;
 
-        const beneficiary = await prisma.beneficiary.findFirst({
-            where: { userId: userId },
+        let beneficiary = await prisma.beneficiary.findFirst({
+            where: {
+                OR: [{ userId }, { id: userId }],
+                status: { not: 'deleted' },
+            },
         });
 
         if (!beneficiary) {
+            beneficiary = await prisma.beneficiary.findFirst({
+                where: {
+                    subscriberId: userId,
+                    status: { not: 'deleted' },
+                },
+                orderBy: { createdAt: 'asc' },
+            });
+        }
+
+        if (!beneficiary) {
             return res.status(404).json({ success: false, message: 'Beneficiary profile not found' });
+        }
+
+        const access = await getProfileAccess(req.userId, beneficiary.id, req.userRole);
+        if (!access.canView) {
+            return res.status(403).json({ success: false, message: 'Unauthorized access to beneficiary visits' });
         }
 
         const visits = await prisma.visit.findMany({
@@ -276,62 +299,96 @@ router.get('/:userId/visits', authenticate, async (req: AuthRequest, res: Respon
                 beneficiaryId: beneficiary.id,
             },
             include: {
-                careCompanion: true,
+                beneficiary: {
+                    select: { id: true, name: true, streetArea: true, city: true, address: true },
+                },
+                careCompanion: {
+                    include: {
+                        user: { select: { phone: true } },
+                    },
+                },
+                benefit: {
+                    include: { benefitType: true },
+                },
+                vitalReadings: {
+                    include: { vitalDefinition: true },
+                },
             },
             orderBy: {
                 scheduledTime: 'desc',
             },
         });
 
-        const upcomingRaw = visits.filter(v => v.status === 'scheduled').reverse();
-        const pastRaw = visits.filter(v => v.status !== 'scheduled');
+        const upcomingRaw = visits.filter(v => v.status === 'scheduled' || v.status === 'in_progress').reverse();
+        const pastRaw = visits.filter(v => v.status !== 'scheduled' && v.status !== 'in_progress');
 
-        const formatVisit = (v: any, isUpcoming: boolean) => {
-            const dateObj = new Date(v.scheduledTime);
-            
-            // Format time (e.g. 11:00 AM)
-            let hours = dateObj.getHours();
-            const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+        const formatTimeShort = (d: Date) => {
+            let hours = d.getHours();
+            const minutes = d.getMinutes().toString().padStart(2, '0');
             const ampm = hours >= 12 ? 'PM' : 'AM';
-            hours = hours % 12;
-            hours = hours ? hours : 12;
-            const formattedTime = `${hours}:${minutes} ${ampm}`;
+            hours = hours % 12 || 12;
+            return `${hours}:${minutes} ${ampm}`;
+        };
 
-            // Format date for upcoming (e.g. "Thursday, February 26")
-            const optionsUpcoming: Intl.DateTimeFormatOptions = { 
-                weekday: 'long', 
-                month: 'long', 
-                day: 'numeric' 
-            };
-            const formattedDateUpcoming = dateObj.toLocaleDateString('en-US', optionsUpcoming);
+        const formatTimeWindowPart = (d: Date) => {
+            let hours = d.getHours();
+            const minutes = d.getMinutes().toString().padStart(2, '0');
+            hours = hours % 12 || 12;
+            return `${hours}:${minutes}`;
+        };
 
-            // Format date for past (e.g. "Feb 10")
-            const optionsPast: Intl.DateTimeFormatOptions = { 
-                month: 'short', 
-                day: 'numeric' 
-            };
-            const formattedDatePast = dateObj.toLocaleDateString('en-US', optionsPast);
+        const getRelativeDayLabel = (d: Date) => {
+            const now = new Date();
+            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const startOfTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            const diffDays = Math.round((startOfTarget.getTime() - startOfToday.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) return 'Today';
+            if (diffDays === 1) return 'Tomorrow';
+            return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        };
+
+        const formatVisit = async (v: any, isUpcoming: boolean) => {
+            const dateObj = new Date(v.scheduledTime);
+            const defaultMins = (v.durationMinutes && v.durationMinutes >= 15) ? v.durationMinutes : 120;
+            const endObj = new Date(dateObj.getTime() + defaultMins * 60000);
+            const arrivalStartObj = new Date(dateObj.getTime() - 15 * 60000);
+
+            const formattedTime = formatTimeShort(dateObj);
+            const formattedEndTime = formatTimeShort(endObj);
+            const timeRange = `${formattedTime} – ${formattedEndTime}`;
+            const arrivalWindow = `${formatTimeWindowPart(arrivalStartObj)}–${formatTimeWindowPart(dateObj)}`;
+
+            const formattedDateUpcoming = dateObj.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+            });
+            const formattedDatePast = dateObj.toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+            });
+            const fullDateTime = `${dateObj.toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'long',
+            })}, ${formattedTime}`;
 
             let dateStr = isUpcoming ? formattedDateUpcoming : formattedDatePast;
-
-            // If visit is completed, check if check-out date is different from scheduled date
             if (!isUpcoming && v.status === 'completed' && v.checkOutTime) {
                 const checkOutDateObj = new Date(v.checkOutTime);
-                const isDifferentDate = dateObj.toDateString() !== checkOutDateObj.toDateString();
-                if (isDifferentDate) {
-                    const formattedDateCheckOut = checkOutDateObj.toLocaleDateString('en-US', optionsPast);
+                if (dateObj.toDateString() !== checkOutDateObj.toDateString()) {
+                    const formattedDateCheckOut = checkOutDateObj.toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                    });
                     dateStr = `Scheduled: ${formattedDatePast} | Completed: ${formattedDateCheckOut}`;
                 }
             }
 
-            // Compute actual duration strictly from check-in and check-out times for completed visits
             let durationText = '';
             if (v.status === 'completed' && v.checkInTime && v.checkOutTime) {
                 const diffMs = new Date(v.checkOutTime).getTime() - new Date(v.checkInTime).getTime();
                 let diffMins = Math.round(diffMs / 60000);
-                if (diffMins <= 0 && diffMs > 0) {
-                    diffMins = 1;
-                }
+                if (diffMins <= 0 && diffMs > 0) diffMins = 1;
                 if (diffMins < 60) {
                     durationText = `${diffMins} min${diffMins !== 1 ? 's' : ''}`;
                 } else {
@@ -339,25 +396,106 @@ router.get('/:userId/visits', authenticate, async (req: AuthRequest, res: Respon
                     durationText = `${durationHours} hour${durationHours !== 1 ? 's' : ''}`;
                 }
             } else {
-                const defaultMins = v.durationMinutes || 120;
-                const durationHours = defaultMins / 60;
+                const durationHours = parseFloat((defaultMins / 60).toFixed(1));
                 durationText = `${durationHours} hour${durationHours !== 1 ? 's' : ''}`;
             }
 
-            // Alternate default titles based on index or database note
-            const defaultTitles = ['Regular Check-up', 'Health Assessment', 'Medication Review', 'Wellness Visit'];
-            const titleIndex = v.id ? (v.id.charCodeAt(0) % defaultTitles.length) : 0;
-            const title = v.notes || defaultTitles[titleIndex];
+            // Extract vitals for timeline/report display
+            const vitalsList: Array<{ id?: string; name: string; code?: string; value: string; unit?: string }> = [];
+            (v.vitalReadings || []).forEach((r: any) => {
+                const def = r.vitalDefinition;
+                if (!def) return;
+                let valStr = '';
+                if (def.dataType === 'dual_numeric') {
+                    if (r.valueNumeric != null && r.valueNumeric2 != null) {
+                        valStr = `${r.valueNumeric}/${r.valueNumeric2}`;
+                    }
+                } else if (def.dataType === 'numeric') {
+                    if (r.valueNumeric != null) {
+                        valStr = `${r.valueNumeric}${def.unit && def.unit === '%' ? '%' : ''}`;
+                    }
+                } else if (def.dataType === 'boolean') {
+                    const isTrue = r.valueBoolean === true || String(r.valueText).toLowerCase() === 'yes';
+                    valStr = isTrue ? (def.booleanTrueLabel || 'Yes') : (def.booleanFalseLabel || 'No');
+                } else if (def.dataType === 'text') {
+                    if (r.valueText) valStr = r.valueText;
+                }
+                if (valStr) {
+                    vitalsList.push({
+                        id: def.id,
+                        name: def.name,
+                        code: def.code,
+                        value: valStr,
+                        unit: def.unit || '',
+                    });
+                }
+            });
+
+            // Photos extraction
+            const rawPhotos = (() => {
+                const raw = (v as any).imageUrls;
+                if (!raw) return [];
+                if (Array.isArray(raw)) return raw;
+                if (typeof raw === 'string') {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (Array.isArray(parsed)) return parsed;
+                    } catch {
+                        return raw.split(',').map((s: string) => s.trim()).filter(Boolean);
+                    }
+                }
+                return [];
+            })();
+
+            const [photos, companionPhoto] = await Promise.all([
+                resolveFileUrls(rawPhotos, 1800),
+                resolveFileUrl(v.careCompanion?.photo, 1800),
+            ]);
+
+            const companionName = v.careCompanion?.name || v.benefit?.name || 'Care Companion';
+            const companionFirstName = companionName.split(' ')[0] || companionName;
+            const companionInitials = companionName
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((p: string) => p[0]?.toUpperCase() || '')
+                .join('') || 'CC';
+
+            const visitTitle = v.benefit?.name || v.notes || 'Saathi Care Visit';
+            const locationLabel = v.beneficiary?.streetArea || v.beneficiary?.city || 'Home Visit';
 
             return {
                 id: v.id,
-                title,
+                title: visitTitle,
+                beneficiaryId: beneficiary.id,
+                beneficiaryName: v.beneficiary?.name || beneficiary.name,
+                location: locationLabel,
                 date: dateStr,
+                shortDate: formattedDatePast,
+                fullDateTime,
+                relativeDayLabel: getRelativeDayLabel(dateObj),
+                dayShort: dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
+                dayNumber: String(dateObj.getDate()),
                 time: formattedTime,
+                timeRange,
+                arrivalWindow,
                 duration: durationText,
-                companionName: v.careCompanion?.name || 'Care Companion',
-                type: 'Home Visit',
+                companionName,
+                companionFirstName,
+                companionInitials,
+                companionPhoto,
+                companionPhone: v.careCompanion?.user?.phone || null,
+                companionRating: v.careCompanion?.rating ?? 5.0,
+                companionVerified: v.careCompanion?.isVerified ?? true,
+                type: v.benefit?.benefitType?.name || 'Home Visit',
                 status: v.status,
+                visitSummary: v.visitSummary || null,
+                notes: v.visitSummary || v.notes || null,
+                mood: v.mood ? (v.mood.charAt(0).toUpperCase() + v.mood.slice(1).toLowerCase()) : null,
+                vitals: vitalsList,
+                photos,
+                checkInTime: v.checkInTime ? formatTimeShort(new Date(v.checkInTime)) : null,
+                checkOutTime: v.checkOutTime ? formatTimeShort(new Date(v.checkOutTime)) : null,
                 changeRequestedAt: v.changeRequestedAt,
                 changeRequestStatus: v.changeRequestStatus,
                 changeResolutionReason: v.changeResolutionReason,
@@ -365,12 +503,14 @@ router.get('/:userId/visits', authenticate, async (req: AuthRequest, res: Respon
             };
         };
 
-        const upcoming = upcomingRaw.map(v => formatVisit(v, true));
-        const past = pastRaw.map(v => formatVisit(v, false));
+        const [upcoming, past] = await Promise.all([
+            Promise.all(upcomingRaw.map(v => formatVisit(v, true))),
+            Promise.all(pastRaw.map(v => formatVisit(v, false))),
+        ]);
 
         res.json({ 
             success: true, 
-            data: { upcoming, past } 
+            data: { upcoming, past, beneficiaryId: beneficiary.id } 
         });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });

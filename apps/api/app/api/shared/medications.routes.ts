@@ -57,11 +57,12 @@ router.post('/adherence', authenticate, validate(createAdherenceSchema), async (
 
 /**
  * GET /api/shared/medications/beneficiary/:beneficiaryId/today
- * Returns today's personalized medicine schedules.
+ * Returns personalized medicine schedules for today or a specified ?date=YYYY-MM-DD.
  */
 router.get('/beneficiary/:beneficiaryId/today', authenticate, async (req: Request, res: Response) => {
   try {
-    const data = await medicationService.getTodayMedications(req.params.beneficiaryId as string);
+    const dateParam = typeof req.query.date === 'string' ? req.query.date : undefined;
+    const data = await medicationService.getTodayMedications(req.params.beneficiaryId as string, dateParam);
     res.json({ success: true, data });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });

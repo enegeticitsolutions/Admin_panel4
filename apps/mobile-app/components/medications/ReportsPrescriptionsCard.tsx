@@ -3,12 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 interface ReportsPrescriptionsCardProps {
-  fileCount?: number;
   onPress: () => void;
 }
 
 export function ReportsPrescriptionsCard({
-  fileCount = 8,
   onPress,
 }: ReportsPrescriptionsCardProps) {
   return (
@@ -24,8 +22,7 @@ export function ReportsPrescriptionsCard({
 
       {/* Middle Text Details */}
       <View style={styles.textContainer}>
-        <Text style={styles.titleText}>Reports & prescriptions</Text>
-        <Text style={styles.subtitleText}>{fileCount} securely stored files</Text>
+        <Text style={styles.titleText}>Reports &amp; prescriptions</Text>
       </View>
 
       {/* Right Chevron */}
@@ -65,12 +62,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: '#1F2937',
-  },
-  subtitleText: {
-    fontFamily: 'Poppins-Medium',
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#667085',
-    marginTop: 4,
   },
 });

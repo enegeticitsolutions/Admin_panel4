@@ -25,6 +25,7 @@
         "NSLocationAlwaysAndWhenInUseUsageDescription": "MaiHoonNa uses your location to share it with your care team when you trigger an SOS Emergency Alert.",
         "NSLocationAlwaysUsageDescription": "MaiHoonNa needs background location access so your GPS coordinates are shared with caregivers the moment you press the SOS button.",
         "LSApplicationQueriesSchemes": [
+          "tel",
           "tez",
           "phonepe",
           "paytmmp",

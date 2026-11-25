@@ -446,12 +446,8 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
             }
         }
 
-        // ── 3. Trends — both sources, last 30 days, carry-forward ────────────
-        const fromDate = new Date();
-        fromDate.setDate(fromDate.getDate() - 30);
-
-        const recentReadings = allReadings
-            .filter(r => new Date(r.capturedAt) >= fromDate)
+        // ── 3. Trends — both sources, latest 30 readings per vital parameter ──
+        const recentReadings = [...allReadings]
             .sort((a, b) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime());
 
         const grouped = new Map<string, any>();
@@ -484,9 +480,9 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
         }
 
         const trends = Array.from(grouped.values()).map(g => {
-            // Keep last 7 data points per series
-            g.v1 = g.v1.slice(-7);
-            g.v2 = g.v2.slice(-7);
+            // Keep up to last 30 data points per series so frontend can filter 7 / 15 / 30
+            g.v1 = g.v1.slice(-30);
+            g.v2 = g.v2.slice(-30);
 
             // Carry-forward: if no data for a date slot, fill from previous known value
             let maxVal = 0;

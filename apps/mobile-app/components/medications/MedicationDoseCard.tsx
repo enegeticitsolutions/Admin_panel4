@@ -68,6 +68,7 @@ export function MedicationDoseCard({
 }: MedicationDoseCardProps) {
   const isTaken = item.status === 'taken';
   const isMissed = item.status === 'missed';
+  const effectiveCanMark = canMark && item.canMark !== false;
   const slotTheme = getSlotTheme(item.scheduleTimeText, index);
 
   // Subtitle generation
@@ -121,18 +122,23 @@ export function MedicationDoseCard({
           ) : isTaken ? (
             <TouchableOpacity
               style={styles.takenButton}
-              onPress={() => canMark && onMarkMissed?.(item)}
+              onPress={() => effectiveCanMark && onMarkMissed?.(item)}
               activeOpacity={0.8}
-              disabled={!canMark}
+              disabled={!effectiveCanMark}
             >
               <Feather name="check" size={16} color="#14724F" style={{ marginRight: 4 }} />
               <Text style={styles.takenText}>Taken</Text>
             </TouchableOpacity>
-          ) : !canMark ? (
+          ) : !effectiveCanMark ? (
             <View style={styles.lockedBadge}>
-              <Feather name="lock" size={13} color="#9CA3AF" style={{ marginRight: 4 }} />
+              <Feather
+                name={item.isFutureSchedule ? 'clock' : 'lock'}
+                size={13}
+                color="#9CA3AF"
+                style={{ marginRight: 4 }}
+              />
               <Text style={styles.lockedText}>
-                {isMissed ? 'Missed' : item.isFutureSchedule ? 'Scheduled' : 'Past'}
+                {item.isFutureSchedule ? 'Scheduled' : isMissed ? 'Missed' : 'Past'}
               </Text>
             </View>
           ) : (

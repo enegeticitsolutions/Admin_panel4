@@ -43,12 +43,25 @@ export class MedicationAdherenceManager {
 
     /**
      * Determines whether a medication is due on a given target calendar date
-     * based on its cadence (daily, alternate, weekly, monthly) or legacy frequency.
+     * based on its startDate/endDate bounds and cadence (daily, alternate, weekly, monthly).
      */
     public static isMedicationDueOnDate(
-        med: { startDate: Date | string; frequency?: string; cadence?: string },
+        med: { startDate: Date | string; endDate?: Date | string | null; frequency?: string; cadence?: string },
         targetDate: Date
     ): boolean {
+        const start = new Date(med.startDate);
+        start.setHours(0, 0, 0, 0);
+        const target = new Date(targetDate);
+        target.setHours(0, 0, 0, 0);
+
+        if (target < start) return false;
+
+        if (med.endDate) {
+            const end = new Date(med.endDate);
+            end.setHours(23, 59, 59, 999);
+            if (target > end) return false;
+        }
+
         // Resolve cadence (with backward compatibility for legacy frequency values)
         let cadence = med.cadence || 'daily';
         const freq = med.frequency;
@@ -60,13 +73,6 @@ export class MedicationAdherenceManager {
         if (cadence === 'daily') {
             return true;
         }
-
-        const start = new Date(med.startDate);
-        start.setHours(0, 0, 0, 0);
-        const target = new Date(targetDate);
-        target.setHours(0, 0, 0, 0);
-
-        if (target < start) return false;
 
         const diffTime = target.getTime() - start.getTime();
         const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
@@ -87,245 +93,137 @@ export class MedicationAdherenceManager {
     }
 
     /**
-     * Retrieves all active medications scheduled for today.
-     * If no medications are active for today, scans forward to find the most upcoming
-     * active medication start date and generates the schedule timeline for that day instead,
-     * beautifully preventing empty screens.
+     * Helper to resolve time slot strings for a medication.
      */
-    public async getTodaySchedule(): Promise<any[]> {
+    private getMedicationSlots(med: { timeSlots?: string[]; frequency?: string }): string[] {
+        const slots: string[] = med.timeSlots || [];
+        if (slots.length > 0) return slots;
+        const freqStr = (med.frequency as string) || 'once_daily';
+        if (freqStr === 'twice_daily') return ['08:00 AM', '08:00 PM'];
+        if (freqStr === 'thrice_daily') return ['08:00 AM', '02:00 PM', '08:00 PM'];
+        if (freqStr === 'four_times_daily') return ['08:00 AM', '02:00 PM', '06:00 PM', '08:00 PM'];
+        return ['08:00 AM'];
+    }
+
+    /**
+     * Retrieves all active medications scheduled for a specific calendar date (YYYY-MM-DD),
+     * defaulting to today when no date is passed.
+     */
+    public async getScheduleForDate(dateStr?: string): Promise<any[]> {
         await this.resolveBeneficiaryId();
 
-        const todayStart = new Date();
+        const currentTime = new Date();
+        const todayStart = new Date(currentTime);
         todayStart.setHours(0, 0, 0, 0);
-
-        const todayEnd = new Date();
+        const todayEnd = new Date(currentTime);
         todayEnd.setHours(23, 59, 59, 999);
 
-        // Helper to generate schedule slots for a specific calendar range
-        const generateSlotsForDay = async (start: Date, end: Date, isFuture: boolean, futureText: string) => {
-            // 1. Fetch active medications active in this range
-            const medications = await prisma.medication.findMany({
-                where: {
-                    beneficiaryId: this.beneficiaryId,
-                    isActive: true,
-                    startDate: { lte: end },
-                    OR: [
-                        { endDate: null },
-                        { endDate: { gte: start } }
-                    ]
-                }
-            });
+        let targetStart: Date;
+        if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            targetStart = new Date(y, m - 1, d, 0, 0, 0, 0);
+        } else {
+            targetStart = new Date(todayStart);
+        }
 
-            // 2. Fetch existing adherence logs recorded for this range
-            const dayLogs = await prisma.medicationAdherence.findMany({
-                where: {
-                    beneficiaryId: this.beneficiaryId,
-                    scheduledTime: {
-                        gte: start,
-                        lte: end
-                    }
-                }
-            });
+        const targetEnd = new Date(targetStart);
+        targetEnd.setHours(23, 59, 59, 999);
 
-            const scheduleSlots: any[] = [];
-            const currentTime = new Date();
+        const isTodayDate = targetStart.getTime() === todayStart.getTime();
+        const isFutureDate = targetStart.getTime() > todayEnd.getTime();
 
-            for (const med of medications) {
-                // If frequency is alternate, weekly, or monthly, verify if it is due on this day
-                if (!MedicationAdherenceManager.isMedicationDueOnDate(med, start)) {
-                    continue;
-                }
+        const medications = await prisma.medication.findMany({
+            where: {
+                beneficiaryId: this.beneficiaryId,
+                isActive: true,
+                startDate: { lte: targetEnd },
+                OR: [
+                    { endDate: null },
+                    { endDate: { gte: targetStart } }
+                ]
+            }
+        });
 
-                // Translate frequency & time slots
-                let slots: string[] = med.timeSlots || [];
-                if (slots.length === 0) {
-                    const freqStr = (med.frequency as string) || 'once_daily';
-                    if (freqStr === 'twice_daily') {
-                        slots = ['08:00 AM', '08:00 PM'];
-                    } else if (freqStr === 'thrice_daily') {
-                        slots = ['08:00 AM', '02:00 PM', '08:00 PM'];
-                    } else if (freqStr === 'four_times_daily') {
-                        slots = ['08:00 AM', '02:00 PM', '06:00 PM', '08:00 PM'];
-                    } else {
-                        slots = ['08:00 AM']; // once_daily or fallback
-                    }
-                }
-
-                // Calculate adherence rate specifically for this medication (all-time / 30-days)
-                const medLogs = await prisma.medicationAdherence.findMany({
-                    where: {
-                        medicationId: med.id,
-                    }
-                });
-                const medTakenCount = medLogs.filter(l => l.taken).length;
-                const medTotalLogged = medLogs.length;
-                const medAdherencePercentage = medTotalLogged > 0 
-                    ? Math.round((medTakenCount / medTotalLogged) * 100) 
-                    : 100;
-
-                for (const slot of slots) {
-                    // Parse time slot e.g., "08:00 AM" or "morning" or "evening"
-                    const scheduledTime = this.parseTimeSlotToDate(slot);
-                    // Force the parsed time's day/month/year to match the query day start
-                    scheduledTime.setFullYear(start.getFullYear());
-                    scheduledTime.setMonth(start.getMonth());
-                    scheduledTime.setDate(start.getDate());
-
-                    // Find if there is a matching log for this medication at this scheduled hour today
-                    const matchedLog = dayLogs.find(log => 
-                        log.medicationId === med.id && 
-                        Math.abs(new Date(log.scheduledTime).getTime() - scheduledTime.getTime()) < 60000 // within 1 minute
-                    );
-
-                    let status = 'pending';
-                    let logId = null;
-
-                    if (matchedLog) {
-                        status = matchedLog.taken ? 'taken' : 'missed';
-                        logId = matchedLog.id;
-                    } else if (scheduledTime < currentTime) {
-                        status = 'missed'; // Past scheduled time with no log counts as missed
-                    }
-
-                    const isTodaySlot = scheduledTime >= todayStart && scheduledTime <= todayEnd;
-                    const canMark = !isFuture && isTodaySlot;
-
-                    scheduleSlots.push({
-                        id: med.id,
-                        logId,
-                        name: med.name,
-                        dosage: med.dosage,
-                        frequency: med.frequency.replace(/_/g, ' '),
-                        instructions: med.instructions || 'Take as directed',
-                        scheduleTimeText: slot,
-                        scheduledTimeIso: scheduledTime.toISOString(),
-                        status,
-                        adherencePercentage: medAdherencePercentage,
-                        isFutureSchedule: isFuture,
-                        futureDateText: futureText,
-                        isToday: isTodaySlot,
-                        canMark
-                    });
+        const dayLogs = await prisma.medicationAdherence.findMany({
+            where: {
+                beneficiaryId: this.beneficiaryId,
+                scheduledTime: {
+                    gte: targetStart,
+                    lte: targetEnd
                 }
             }
+        });
 
-            return scheduleSlots.sort((a, b) => 
-                new Date(a.scheduledTimeIso).getTime() - new Date(b.scheduledTimeIso).getTime()
-            );
-        };
+        const scheduleSlots: any[] = [];
 
-        // First attempt: generate schedule for today
-        let slots = await generateSlotsForDay(todayStart, todayEnd, false, '');
+        for (const med of medications) {
+            if (!MedicationAdherenceManager.isMedicationDueOnDate(med, targetStart)) {
+                continue;
+            }
 
-        // If today has no medications, scan forward to find the next available medication's start date
-        if (slots.length === 0) {
-            const nextMed = await prisma.medication.findFirst({
-                where: {
-                    beneficiaryId: this.beneficiaryId,
-                    isActive: true,
-                    startDate: { gt: todayEnd }
-                },
-                orderBy: {
-                    startDate: 'asc'
-                }
+            const slots = this.getMedicationSlots(med);
+
+            const medLogs = await prisma.medicationAdherence.findMany({
+                where: { medicationId: med.id }
             });
+            const medTakenCount = medLogs.filter(l => l.taken).length;
+            const medAdherencePercentage = medLogs.length > 0
+                ? Math.round((medTakenCount / medLogs.length) * 100)
+                : 100;
 
-            if (nextMed) {
-                const nextDate = new Date(nextMed.startDate);
-                const nextStart = new Date(nextDate);
-                nextStart.setHours(0, 0, 0, 0);
+            for (const slot of slots) {
+                const scheduledTime = this.parseTimeSlotToDate(slot);
+                scheduledTime.setFullYear(targetStart.getFullYear());
+                scheduledTime.setMonth(targetStart.getMonth());
+                scheduledTime.setDate(targetStart.getDate());
 
-                const nextEnd = new Date(nextDate);
-                nextEnd.setHours(23, 59, 59, 999);
+                const matchedLog = dayLogs.find(log =>
+                    log.medicationId === med.id &&
+                    Math.abs(new Date(log.scheduledTime).getTime() - scheduledTime.getTime()) < 60000
+                );
 
-                const futureText = nextDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                slots = await generateSlotsForDay(nextStart, nextEnd, true, futureText);
+                const isFutureTimeSlot = scheduledTime.getTime() > currentTime.getTime();
+                const isFutureSchedule = isFutureDate || isFutureTimeSlot;
+                const canMark = isTodayDate && !isFutureTimeSlot;
+
+                let status = 'pending';
+                let logId = null;
+
+                if (matchedLog) {
+                    status = matchedLog.taken ? 'taken' : 'missed';
+                    logId = matchedLog.id;
+                } else if (!isFutureSchedule && scheduledTime < currentTime) {
+                    status = 'missed';
+                }
+
+                scheduleSlots.push({
+                    id: med.id,
+                    logId,
+                    name: med.name,
+                    dosage: med.dosage,
+                    frequency: (med.frequency || 'once_daily').replace(/_/g, ' '),
+                    instructions: med.instructions || 'Take as directed',
+                    scheduleTimeText: slot,
+                    scheduledTimeIso: scheduledTime.toISOString(),
+                    status,
+                    adherencePercentage: medAdherencePercentage,
+                    isFutureSchedule,
+                    futureDateText: isFutureDate
+                        ? targetStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                        : '',
+                    isToday: isTodayDate,
+                    canMark
+                });
             }
         }
 
-        // Final fallback: If slots is still empty, but there are active medications configured for this beneficiary,
-        // generate today's schedule slots for them so active medications are always visible and actionable.
-        if (slots.length === 0) {
-            const fallbackMeds = await prisma.medication.findMany({
-                where: {
-                    beneficiaryId: this.beneficiaryId,
-                    isActive: true,
-                }
-            });
+        return scheduleSlots.sort((a, b) =>
+            new Date(a.scheduledTimeIso).getTime() - new Date(b.scheduledTimeIso).getTime()
+        );
+    }
 
-            if (fallbackMeds.length > 0) {
-                // Fetch existing today's logs
-                const todayLogs = await prisma.medicationAdherence.findMany({
-                    where: {
-                        beneficiaryId: this.beneficiaryId,
-                        scheduledTime: {
-                            gte: todayStart,
-                            lte: todayEnd,
-                        }
-                    }
-                });
-
-                const currentTime = new Date();
-
-                for (const med of fallbackMeds) {
-                    let slotsList: string[] = med.timeSlots || [];
-                    if (slotsList.length === 0) {
-                        const freqStr = (med.frequency as string) || 'once_daily';
-                        if (freqStr === 'twice_daily') slotsList = ['08:00 AM', '08:00 PM'];
-                        else if (freqStr === 'thrice_daily') slotsList = ['08:00 AM', '02:00 PM', '08:00 PM'];
-                        else if (freqStr === 'four_times_daily') slotsList = ['08:00 AM', '02:00 PM', '06:00 PM', '08:00 PM'];
-                        else slotsList = ['08:00 AM'];
-                    }
-
-                    // Calculate medication adherence rate
-                    const medLogs = await prisma.medicationAdherence.findMany({
-                        where: { medicationId: med.id }
-                    });
-                    const medTakenCount = medLogs.filter(l => l.taken).length;
-                    const medAdherence = medLogs.length > 0 ? Math.round((medTakenCount / medLogs.length) * 100) : 100;
-
-                    for (const slot of slotsList) {
-                        const scheduledTime = this.parseTimeSlotToDate(slot);
-                        scheduledTime.setFullYear(todayStart.getFullYear());
-                        scheduledTime.setMonth(todayStart.getMonth());
-                        scheduledTime.setDate(todayStart.getDate());
-
-                        const matchedLog = todayLogs.find(log =>
-                            log.medicationId === med.id &&
-                            Math.abs(new Date(log.scheduledTime).getTime() - scheduledTime.getTime()) < 60000
-                        );
-
-                        let status = 'pending';
-                        let logId = null;
-                        if (matchedLog) {
-                            status = matchedLog.taken ? 'taken' : 'missed';
-                            logId = matchedLog.id;
-                        } else if (scheduledTime < currentTime) {
-                            status = 'missed';
-                        }
-
-                        slots.push({
-                            id: med.id,
-                            logId,
-                            name: med.name,
-                            dosage: med.dosage,
-                            frequency: (med.frequency || 'once_daily').replace(/_/g, ' '),
-                            instructions: med.instructions || 'Take as directed',
-                            scheduleTimeText: slot,
-                            scheduledTimeIso: scheduledTime.toISOString(),
-                            status,
-                            adherencePercentage: medAdherence,
-                            isFutureSchedule: false,
-                            futureDateText: '',
-                            isToday: true,
-                            canMark: true
-                        });
-                    }
-                }
-            }
-        }
-
-        return slots;
+    public async getTodaySchedule(): Promise<any[]> {
+        return this.getScheduleForDate();
     }
 
     public async logAdherence(
@@ -344,6 +242,10 @@ export class MedicationAdherenceManager {
 
         if (scheduledTime < todayStart || scheduledTime > todayEnd) {
             throw new Error('Medication adherence can only be marked on the scheduled day (Today). Past or future doses cannot be modified.');
+        }
+
+        if (scheduledTime.getTime() > now.getTime()) {
+            throw new Error('This dose cannot be marked before its scheduled time.');
         }
 
         let finalRecordedBy = recordedBy;
@@ -400,23 +302,26 @@ export class MedicationAdherenceManager {
     }
 
     /**
-     * Computes expected vs taken doses over the last 30 days based on active medications
-     * and their daily frequencies rather than merely counting existing log rows.
+     * Computes 7-day adherence metrics strictly from due doses (scheduledTime <= now)
+     * so future doses later today never deflate adherence prematurely.
      */
-    private async calculate30DayAdherenceMetrics(): Promise<{
+    private async calculate7DayAdherenceMetrics(): Promise<{
         average: number;
         taken: number;
         missed: number;
         totalExpected: number;
+        completedDays: number;
+        totalDays: number;
     }> {
         await this.resolveBeneficiaryId();
 
         const now = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        thirtyDaysAgo.setHours(0, 0, 0, 0);
+        const todayStart = new Date(now);
+        todayStart.setHours(0, 0, 0, 0);
 
-        // 1. Fetch all active medications for this beneficiary
+        const sevenDaysAgo = new Date(todayStart);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
         const medications = await prisma.medication.findMany({
             where: {
                 beneficiaryId: this.beneficiaryId,
@@ -424,96 +329,97 @@ export class MedicationAdherenceManager {
                 startDate: { lte: now },
                 OR: [
                     { endDate: null },
-                    { endDate: { gte: thirtyDaysAgo } }
+                    { endDate: { gte: sevenDaysAgo } }
                 ]
             }
         });
 
-        // 2. Fetch all recorded adherence logs for the last 30 days
         const logs = await prisma.medicationAdherence.findMany({
             where: {
                 beneficiaryId: this.beneficiaryId,
-                scheduledTime: { gte: thirtyDaysAgo, lte: now }
+                scheduledTime: { gte: sevenDaysAgo, lte: now }
             }
         });
 
-        const takenLogsCount = logs.filter(l => l.taken).length;
-
-        // If no medications are configured at all, return 100% adherence and 0 taken / 0 missed
         if (medications.length === 0) {
-            const taken = logs.filter(l => l.taken).length;
-            const missed = logs.filter(l => !l.taken).length;
-            const score = logs.length > 0 ? Math.round((taken / logs.length) * 100) : 100;
             return {
-                average: score,
-                taken,
-                missed,
-                totalExpected: logs.length
+                average: 0,
+                taken: 0,
+                missed: 0,
+                totalExpected: 0,
+                completedDays: 0,
+                totalDays: 7,
             };
         }
 
-        // 3. Calculate expected scheduled doses for active medications over the 30-day window
-        let totalExpectedDoses = 0;
+        let totalDueDoses = 0;
+        let takenDueDoses = 0;
+        let completedDays = 0;
 
-        for (const med of medications) {
-            // Determine daily frequency
-            let dailyDoses = (med.timeSlots && med.timeSlots.length > 0) ? med.timeSlots.length : 0;
-            if (dailyDoses === 0) {
-                if (med.frequency === 'once_daily') dailyDoses = 1;
-                else if (med.frequency === 'twice_daily') dailyDoses = 2;
-                else if (med.frequency === 'thrice_daily') dailyDoses = 3;
-                else if (med.frequency === 'four_times_daily') dailyDoses = 4;
-                else dailyDoses = 1;
+        for (let offset = 0; offset < 7; offset++) {
+            const dayStart = new Date(sevenDaysAgo);
+            dayStart.setDate(sevenDaysAgo.getDate() + offset);
+
+            let dayDue = 0;
+            let dayTaken = 0;
+
+            for (const med of medications) {
+                if (!MedicationAdherenceManager.isMedicationDueOnDate(med, dayStart)) {
+                    continue;
+                }
+                const slots = this.getMedicationSlots(med);
+                for (const slot of slots) {
+                    const slotTime = this.parseTimeSlotToDate(slot);
+                    slotTime.setFullYear(dayStart.getFullYear());
+                    slotTime.setMonth(dayStart.getMonth());
+                    slotTime.setDate(dayStart.getDate());
+
+                    // Skip future doses that have not hit their scheduled time yet
+                    if (slotTime.getTime() > now.getTime()) {
+                        continue;
+                    }
+
+                    dayDue++;
+                    const matchedTaken = logs.some(
+                        (log) =>
+                            log.medicationId === med.id &&
+                            log.taken &&
+                            Math.abs(new Date(log.scheduledTime).getTime() - slotTime.getTime()) < 60000
+                    );
+                    if (matchedTaken) {
+                        dayTaken++;
+                    }
+                }
             }
 
-            // Start of active window for this medication
-            const effectiveStart = new Date(Math.max(new Date(med.startDate).getTime(), thirtyDaysAgo.getTime()));
-            effectiveStart.setHours(0, 0, 0, 0);
-
-            // End of active window for this medication (up to now)
-            const effectiveEnd = med.endDate && new Date(med.endDate) < now
-                ? new Date(med.endDate)
-                : now;
-
-            const diffTime = effectiveEnd.getTime() - effectiveStart.getTime();
-            if (diffTime >= 0) {
-                const daysActive = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1);
-                let multiplier = daysActive;
-                const cadence = (med as any).cadence || med.frequency;
-                if (cadence === 'alternate' || cadence === 'alternate_days') {
-                    multiplier = Math.ceil(daysActive / 2);
-                } else if (cadence === 'weekly') {
-                    multiplier = Math.max(1, Math.ceil(daysActive / 7));
-                } else if (cadence === 'monthly') {
-                    multiplier = Math.max(1, Math.ceil(daysActive / 30));
-                }
-                totalExpectedDoses += multiplier * dailyDoses;
+            totalDueDoses += dayDue;
+            takenDueDoses += dayTaken;
+            if (dayDue > 0 && dayTaken === dayDue) {
+                completedDays++;
             }
         }
 
-        // Total expected is at least the count of logs recorded
-        const totalExpected = Math.max(totalExpectedDoses, logs.length);
-        const taken = takenLogsCount;
-        const missed = Math.max(0, totalExpected - taken);
-        const average = totalExpected > 0 ? Math.min(100, Math.max(0, Math.round((taken / totalExpected) * 100))) : 100;
+        const missed = Math.max(0, totalDueDoses - takenDueDoses);
+        const average = totalDueDoses > 0 ? Math.round((takenDueDoses / totalDueDoses) * 100) : 0;
 
         return {
             average,
-            taken,
+            taken: takenDueDoses,
             missed,
-            totalExpected
+            totalExpected: totalDueDoses,
+            completedDays,
+            totalDays: 7,
         };
     }
 
     /**
-     * Computes the mathematical adherence percentage over the last 30 days
+     * Computes the mathematical adherence percentage over the last 7 days
      * and updates Beneficiary.medicationScore.
      */
     public async recalculateOverallScore(): Promise<number> {
         await this.resolveBeneficiaryId();
-        const metrics = await this.calculate30DayAdherenceMetrics();
+        const metrics = await this.calculate7DayAdherenceMetrics();
 
-        // Persist to database
         await prisma.beneficiary.update({
             where: { id: this.beneficiaryId },
             data: { medicationScore: metrics.average }
@@ -523,15 +429,17 @@ export class MedicationAdherenceManager {
     }
 
     /**
-     * Helper: Returns today's overall metrics (average score, total taken, total missed/skipped)
+     * Helper: Returns 7-day overall metrics (average score, total taken, missed, completedDays)
      */
-    public async getOverallMetrics(): Promise<{ average: number, taken: number, missed: number }> {
-        const metrics = await this.calculate30DayAdherenceMetrics();
-        return {
-            average: metrics.average,
-            taken: metrics.taken,
-            missed: metrics.missed
-        };
+    public async getOverallMetrics(): Promise<{
+        average: number;
+        taken: number;
+        missed: number;
+        totalExpected: number;
+        completedDays: number;
+        totalDays: number;
+    }> {
+        return this.calculate7DayAdherenceMetrics();
     }
 
 

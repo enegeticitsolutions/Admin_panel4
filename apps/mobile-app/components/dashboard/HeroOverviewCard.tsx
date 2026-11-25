@@ -10,8 +10,8 @@ interface HeroOverviewCardProps {
 
 export function HeroOverviewCard({
   dayOverviewText,
-  title = "Everyone's care, beautifully in sync.",
-  subtext = "Stay connected with daily updates, health monitoring, and family care routines.",
+  title = "Everyone's care, in one place.",
+  subtext = "Care Companion visits, Saathi time, vitals and medicines, shared with the people who matter.",
 }: HeroOverviewCardProps) {
   // Compute default day of week if not passed
   const getDayOverview = () => {

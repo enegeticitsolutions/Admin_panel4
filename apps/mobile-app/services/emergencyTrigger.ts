@@ -89,7 +89,7 @@ export async function dialEmergencyHelpline(targetNumber?: string): Promise<void
       if (canOpen) {
         await Linking.openURL(telUrl);
       } else {
-        await Linking.openURL(telUrl);
+        console.warn('[EmergencyTrigger] Device cannot open tel: URL (e.g., iOS Simulator):', telUrl);
       }
     }
   } catch (err) {
