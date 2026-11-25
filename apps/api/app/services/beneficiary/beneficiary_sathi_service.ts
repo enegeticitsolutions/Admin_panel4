@@ -4,6 +4,7 @@ import { UsageType } from '@prisma/client';
 import { isSathiBenefit, findSathiBenefitBalance } from '../../constants/systemBenefits';
 import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
 import { benefitLedgerEngine } from '../benefit/BenefitLedgerEngine';
+import { calculateVisitBillableMinutes } from '../benefit/visitBillingCalculator';
 
 export const getBeneficiarySathiEligibility = async (beneficiaryId: string) => {
   const activeSubscriptions = await prisma.subscription.findMany({
@@ -443,9 +444,8 @@ export const completeSathiVisit = async (beneficiaryId: string, requestId: strin
   } else if (request.updatedAt) {
     rawMinutes = Math.max(1, (checkOutTime.getTime() - new Date(request.updatedAt).getTime()) / 60000);
   }
-  // If visit is less than 1 hr (60 min), credit and hours worth 1 hr are added.
-  // If greater than 1 hr (60 min), credit and hours accrue per minute (rawMinutes / 60).
-  const hoursEarned = rawMinutes < 60 ? 1 : rawMinutes / 60;
+  const billing = calculateVisitBillableMinutes({ elapsedMinutes: rawMinutes });
+  const hoursEarned = billing.hoursConsumed;
 
   // Find active subscription & Sathi benefit balance to deduct from
   const activeSubscription = await prisma.subscription.findFirst({
@@ -470,7 +470,7 @@ export const completeSathiVisit = async (beneficiaryId: string, requestId: strin
 
   const label = (sathiBalance?.snapshotUnitLabel || sathiBalance?.unit || sathiBalance?.benefit?.unitLabel || '').toLowerCase();
   const isHourBenefit = label.includes('hour') || label.includes('hr');
-  const unitsToDeduct = isHourBenefit ? Math.max(1, Math.ceil(hoursEarned)) : 1;
+  const unitsToDeduct = isHourBenefit ? billing.hoursConsumed : 1;
 
   const currentRemaining = sathiBalance ? Math.max(0, sathiBalance.totalUnits - sathiBalance.usedUnits) : 0;
   const newRemaining = sathiBalance ? Math.max(0, currentRemaining - unitsToDeduct) : 0;

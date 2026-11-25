@@ -974,6 +974,13 @@ model Visit {
   checkInTime               DateTime?
   checkOutTime              DateTime?
   durationMinutes           Int?
+  actualDurationMinutes     Int?
+  billableMinutes           Int?
+  overriddenDurationMinutes Int?
+  reminder15mSentAt         DateTime?
+  reminder5mSentAt          DateTime?
+  timeCompleteSentAt        DateTime?
+  overtimeStartedSentAt     DateTime?
   status                    VisitStatus @default(scheduled)
   checkInLat                Float?
   checkInLng                Float?

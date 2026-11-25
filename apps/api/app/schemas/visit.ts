@@ -52,6 +52,7 @@ export const checkOutSchema = saveDetailsSchema.append({
   latitude: Joi.number().optional(),
   longitude: Joi.number().optional(),
   manualCheckOutReason: Joi.string().allow('', null).optional(),
+  actualMinutesOverride: Joi.number().integer().min(1).max(720).optional(),
 });
 
 export const rateVisitSchema = Joi.object({

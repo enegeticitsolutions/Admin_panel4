@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import PackageCard, { getPackageDisplayPrice } from "../components/packages/PackageCard";
 import PlanDetailsModal from "../components/modals/PlanDetailsModal";
 import CustomizePlanModal from "../components/modals/CustomizePlanModal";
+import { detectDefaultBenefitCategory } from "../constants/benefitCategories";
 import planBgVideo from "../assets/Plan-Header-Background-Video.mp4";
 import {
   fetchActiveRegions,
@@ -443,14 +444,22 @@ export default function PlansPage({
     return []; // Don't auto-compare if not flagged
   }, [packagesToDisplay, selectedCycle]);
 
-  // 2. Extract all unique Benefits from live packages (or all packages)
+  const isIncludedPackageBenefit = (pb) => {
+    if (!pb || !pb.benefit || !pb.benefit.id || pb.benefit.isActive === false) {
+      return false;
+    }
+    const category = pb.category || detectDefaultBenefitCategory(pb.benefit);
+    return category === "included";
+  };
+
+  // 2. Extract all unique Included Benefits from live compared packages
   const comparisonBenefits = useMemo(() => {
     const benefitMap = new Map();
 
     comparedPackages.forEach((pkg) => {
       if (Array.isArray(pkg.packageBenefits)) {
         pkg.packageBenefits.forEach((pb) => {
-          if (pb.benefit && pb.benefit.id && !benefitMap.has(pb.benefit.id)) {
+          if (isIncludedPackageBenefit(pb) && !benefitMap.has(pb.benefit.id)) {
             benefitMap.set(pb.benefit.id, {
               id: pb.benefit.id,
               name: pb.benefit.name,
@@ -1108,8 +1117,9 @@ export default function PlansPage({
                           const matchedPb = Array.isArray(pkg.packageBenefits)
                             ? pkg.packageBenefits.find(
                               (pb) =>
-                                pb.benefitId === benefit.id ||
-                                pb.benefit?.id === benefit.id
+                                (pb.benefitId === benefit.id ||
+                                  pb.benefit?.id === benefit.id) &&
+                                isIncludedPackageBenefit(pb)
                             )
                             : null;
                           const isIncluded = !!matchedPb;
