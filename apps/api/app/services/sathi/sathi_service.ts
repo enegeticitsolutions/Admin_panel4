@@ -8,6 +8,7 @@ import { OtpFactory } from '../../core/otp/OtpFactory';
 import { getBeneficiarySathiEligibility } from '../beneficiary/beneficiary_sathi_service';
 import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
 import { benefitLedgerEngine } from '../benefit/BenefitLedgerEngine';
+import { calculateVisitBillableMinutes } from '../benefit/visitBillingCalculator';
 import { UsageType } from '@prisma/client';
 import { notificationProducer } from '@maihoonna/notifications';
 import { findSathiBenefitBalance } from '../../constants/systemBenefits';
@@ -879,10 +880,9 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
   const checkOutTime = new Date();
   const rawMinutes = (checkOutTime.getTime() - visitLog.checkInTime.getTime()) / 60000;
 
-  const billableMinutes = rawMinutes;
-  // If visit is less than 1 hr (60 min), credit and hours worth 1 hr are added.
-  // If greater than 1 hr (60 min), credit and hours accrue per minute (rawMinutes / 60).
-  const hoursEarned = rawMinutes < 60 ? 1 : rawMinutes / 60;
+  const billing = calculateVisitBillableMinutes({ elapsedMinutes: rawMinutes });
+  const billableMinutes = billing.billableMinutes;
+  const hoursEarned = billing.hoursConsumed;
 
   let sathiBalance: any = null;
   if (visitLog.subscriptionBenefitBalanceId) {
@@ -910,7 +910,7 @@ export const checkoutVolunteerVisit = async (volunteerId: string, visitLogId: st
 
   const label = (sathiBalance?.snapshotUnitLabel || sathiBalance?.unit || sathiBalance?.benefit?.unitLabel || '').toLowerCase();
   const isHourBenefit = label.includes('hour') || label.includes('hr');
-  const unitsToDeduct = isHourBenefit ? Math.max(1, Math.ceil(hoursEarned)) : 1;
+  const unitsToDeduct = isHourBenefit ? billing.hoursConsumed : 1;
 
   const currentRemaining = sathiBalance ? Math.max(0, sathiBalance.totalUnits - sathiBalance.usedUnits) : 0;
   const newRemaining = sathiBalance ? Math.max(0, currentRemaining - unitsToDeduct) : 0;

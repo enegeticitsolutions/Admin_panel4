@@ -4,6 +4,11 @@ import { Prisma, UsageType } from '@prisma/client';
 import { benefitLedgerService } from '../shared/benefit_ledger_service';
 import { benefitPeriodManager } from '../benefit/BenefitPeriodManager';
 import { benefitLedgerEngine } from '../benefit/BenefitLedgerEngine';
+import {
+  calculateVisitBillableMinutes,
+  DEFAULT_BASE_VISIT_MINUTES,
+  DEFAULT_OVERTIME_BUFFER_MINUTES,
+} from '../benefit/visitBillingCalculator';
 import { notificationProducer } from '@maihoonna/notifications';
 
 
@@ -153,8 +158,8 @@ export const checkIn = async (data: {
         include: {
           beneficiary: {
             include: {
-              subscriber: { select: { id: true, name: true, phone: true } },
-              user: { select: { id: true, name: true, phone: true } },
+              subscriber: { select: { id: true, name: true, phone: true, fcmToken: true } },
+              user: { select: { id: true, name: true, phone: true, fcmToken: true } },
             },
           },
           careCompanion: {
@@ -445,6 +450,7 @@ export const checkOut = async (data: {
   latitude?: number;
   longitude?: number;
   manualCheckOutReason?: string | null;
+  actualMinutesOverride?: number;
   vitalsList?: {
     vitalDefinitionId: string;
     valueNumeric?: number;
@@ -470,15 +476,35 @@ export const checkOut = async (data: {
     const isEdit = existingVisit.status === 'completed';
 
     const checkOutTime = isEdit ? existingVisit.checkOutTime : new Date();
-    let actualMinutes = 0;
+    let rawElapsedMinutes = 0;
     if (!isEdit && existingVisit.checkInTime) {
-      actualMinutes = Math.round((checkOutTime!.getTime() - existingVisit.checkInTime.getTime()) / 60000);
+      rawElapsedMinutes = Math.max(1, Math.round((checkOutTime!.getTime() - existingVisit.checkInTime.getTime()) / 60000));
     }
+    const actualMinutes = data.actualMinutesOverride !== undefined
+      ? Math.max(1, Math.round(data.actualMinutesOverride))
+      : rawElapsedMinutes;
+
+    const bufferCfg = await tx.systemConfig.findUnique({
+      where: { key: 'VISIT_OVERTIME_BUFFER_MINUTES' },
+    });
+    const parsedBuffer = bufferCfg ? parseInt(bufferCfg.value, 10) : NaN;
+    const bufferMinutes = Number.isFinite(parsedBuffer) && parsedBuffer >= 0
+      ? parsedBuffer
+      : DEFAULT_OVERTIME_BUFFER_MINUTES;
+
+    const billing = calculateVisitBillableMinutes({
+      elapsedMinutes: actualMinutes,
+      baseMinutes: existingVisit.durationMinutes || DEFAULT_BASE_VISIT_MINUTES,
+      bufferMinutes,
+    });
 
     // 2. Map dynamic vitals to standard fields on the Visit record for backward compatibility
     const visitUpdateData: any = {
       checkOutTime,
       // intentionally NOT overwriting durationMinutes to preserve the originally scheduled duration
+      actualDurationMinutes: !isEdit ? actualMinutes : undefined,
+      billableMinutes: !isEdit ? billing.billableMinutes : undefined,
+      overriddenDurationMinutes: !isEdit && data.actualMinutesOverride !== undefined ? actualMinutes : undefined,
       status: 'completed',
       medicationAdherence: data.medicationAdherence,
       mood: data.mood as any,
@@ -575,8 +601,7 @@ export const checkOut = async (data: {
     //      hour-based benefit    → deduct actual hours (min 1h billing rule)
     //      session/visit benefit → deduct 1 unit
     if (!isEdit && actualMinutes >= 0) {
-      const billableMinutes = Math.max(60, actualMinutes);   // floor at 60 min
-      const hoursConsumed   = billableMinutes / 60;          // exact float, min 1.0
+      const hoursConsumed = billing.hoursConsumed;
 
       const activeSubscription = await tx.subscription.findFirst({
         where: { beneficiaryId: visit.beneficiaryId, isActive: true },
@@ -620,7 +645,7 @@ export const checkOut = async (data: {
             if (benefitToDeduct) {
               const label = (benefitToDeduct.snapshotUnitLabel || benefitToDeduct.benefit?.unitLabel || '').toLowerCase();
               const isHourBenefit = label.includes('hour') || label.includes('hr');
-              const unitsToDeduct = isHourBenefit ? Math.ceil(hoursConsumed) : 1;
+              const unitsToDeduct = isHourBenefit ? hoursConsumed : 1;
 
               await tx.subscriptionBenefitBalance.update({
                 where: { id: benefitToDeduct.id },
@@ -806,8 +831,8 @@ export const checkOut = async (data: {
         include: {
           beneficiary: {
             include: {
-              subscriber: { select: { id: true, name: true, phone: true } },
-              user: { select: { id: true, name: true, phone: true } },
+              subscriber: { select: { id: true, name: true, phone: true, fcmToken: true } },
+              user: { select: { id: true, name: true, phone: true, fcmToken: true } },
             },
           },
           careCompanion: {
@@ -824,14 +849,61 @@ export const checkOut = async (data: {
       const subscriberPhone = fullVisit.beneficiary?.subscriber?.phone;
       const beneficiaryPhone = fullVisit.beneficiary?.user?.phone;
 
-      // Calculate duration string
-      let durationMinutes = fullVisit.durationMinutes || 60;
-      if (fullVisit.checkInTime && fullVisit.checkOutTime) {
+      // Calculate duration string (using billable/actual minutes recorded at checkout)
+      let durationMinutes = fullVisit.billableMinutes || fullVisit.actualDurationMinutes || fullVisit.durationMinutes || 60;
+      if (!fullVisit.billableMinutes && !fullVisit.actualDurationMinutes && fullVisit.checkInTime && fullVisit.checkOutTime) {
         durationMinutes = Math.max(1, Math.round((fullVisit.checkOutTime.getTime() - fullVisit.checkInTime.getTime()) / 60000));
       }
       const hours = Math.floor(durationMinutes / 60);
       const mins = durationMinutes % 60;
       const durationText = hours > 0 ? `${hours} hr ${mins} min` : `${mins} mins`;
+
+      const beneficiaryFcm = fullVisit.beneficiary?.user?.fcmToken;
+      const subscriberFcm = fullVisit.beneficiary?.subscriber?.fcmToken;
+
+      // Push notification to Beneficiary (Thank you + visit complete + feedback prompt)
+      if (beneficiaryFcm && fullVisit.beneficiary?.user?.id) {
+        await notificationProducer.publish({
+          idempotencyKey: `visit-${fullVisit.id}-completed-push-benef`,
+          channel: 'push',
+          event: 'VISIT_COMPLETED_FEEDBACK_PUSH',
+          recipient: {
+            pushToken: beneficiaryFcm,
+            userId: fullVisit.beneficiary.user.id,
+          },
+          variables: {
+            title: 'Thank You! Visit Complete',
+            body: `Thank you for choosing MaiHoonNa! Your visit with ${ccName} (${durationText}) is complete. Please share your feedback.`,
+            visitId: fullVisit.id,
+            ccName,
+            duration: durationText,
+          },
+        });
+      }
+
+      // Push notification to Subscriber (if distinct user with FCM token)
+      if (
+        subscriberFcm &&
+        fullVisit.beneficiary?.subscriber?.id &&
+        fullVisit.beneficiary.subscriber.id !== fullVisit.beneficiary?.user?.id
+      ) {
+        await notificationProducer.publish({
+          idempotencyKey: `visit-${fullVisit.id}-completed-push-sub`,
+          channel: 'push',
+          event: 'VISIT_COMPLETED_FEEDBACK_PUSH',
+          recipient: {
+            pushToken: subscriberFcm,
+            userId: fullVisit.beneficiary.subscriber.id,
+          },
+          variables: {
+            title: 'Thank You! Visit Complete',
+            body: `Thank you! ${beneficiaryName}'s visit with ${ccName} (${durationText}) is complete. Tap to share feedback.`,
+            visitId: fullVisit.id,
+            ccName,
+            duration: durationText,
+          },
+        });
+      }
 
       // NT-014: VISIT_COMPLETED to Subscriber & Beneficiary
       if (subscriberPhone) {

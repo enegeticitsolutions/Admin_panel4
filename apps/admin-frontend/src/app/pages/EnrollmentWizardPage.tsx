@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { sanitizeImgSrc } from '../utils/sanitizeUrl';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { PageHeader } from '../components/common/PageHeader';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -74,11 +74,16 @@ const RELATIONSHIPS = [
 
 export default function EnrollmentWizardPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState<Step>('subscriber');
   const [enrolling, setEnrolling] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [enrolledResult, setEnrolledResult] = useState<any>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+
+  const [skipBeneficiary, setSkipBeneficiary] = useState(false);
+  const [existingSubscriptionId, setExistingSubscriptionId] = useState<string | null>(() => searchParams.get('subscriptionId'));
+  const [existingPackageName, setExistingPackageName] = useState<string>(() => searchParams.get('packageName') || '');
 
   const [enrollingMode, setEnrollingMode] = useState<'new' | 'existing'>('existing');
   const [existingSubscriberId, setExistingSubscriberId] = useState('');
@@ -578,15 +583,49 @@ export default function EnrollmentWizardPage() {
   }, [beneficiaryPhone, sameAsSubscriber, subscriberPhone]);
 
 
+  const activeSteps = STEPS.filter((s) => {
+    if (skipBeneficiary && ['beneficiary', 'medical', 'emergency'].includes(s.id)) return false;
+    if (existingSubscriptionId && ['package', 'payment'].includes(s.id)) return false;
+    return true;
+  });
+
+  const activeStepIndex = Math.max(0, activeSteps.findIndex((s) => s.id === step));
+
+  useEffect(() => {
+    const subIdParam = searchParams.get('subscriptionId');
+    const phoneParam = searchParams.get('subscriberPhone');
+    const pkgParam = searchParams.get('packageName');
+    if (subIdParam && phoneParam) {
+      setExistingSubscriptionId(subIdParam);
+      if (pkgParam) setExistingPackageName(pkgParam);
+      setSkipBeneficiary(false);
+      setEnrollingMode('existing');
+      setSubscriberPhone(phoneParam);
+      enrollmentApi.checkPhone(phoneParam).then((data: any) => {
+        setPhoneCheck(data);
+        if (data?.exists) {
+          setSubscriberName(data.name || '');
+          setSubscriberEmail(data.email || '');
+          setSubscriberAddress(data.address || '');
+          setSubscriberPincode(data.pincode || '');
+          setSubscriberCity(data.city || '');
+          setSubscriberState(data.state || '');
+          setExistingSubscriberId(data.id || '');
+        }
+        setStep('beneficiary');
+      }).catch(() => {});
+    }
+  }, []);
+
   const goNext = () => {
-    const nextIndex = Math.min(STEPS.length - 1, stepIndex + 1);
-    setStep(STEPS[nextIndex].id);
+    const nextIndex = Math.min(activeSteps.length - 1, activeStepIndex + 1);
+    setStep(activeSteps[nextIndex].id);
   };
 
   const goBack = () => {
-    if (stepIndex === 0) return navigate(-1);
-    const prevIndex = Math.max(0, stepIndex - 1);
-    setStep(STEPS[prevIndex].id);
+    if (activeStepIndex === 0) return navigate(-1);
+    const prevIndex = Math.max(0, activeStepIndex - 1);
+    setStep(activeSteps[prevIndex].id);
   };
 
   const handleEnroll = async () => {
@@ -630,7 +669,9 @@ export default function EnrollmentWizardPage() {
         secondaryContactRelationship: secondaryContactRel,
         secondaryContactEmail,
         preferredSlot,
-        packageId: selectedPackageId,
+        packageId: existingSubscriptionId ? undefined : selectedPackageId,
+        skipBeneficiary,
+        existingSubscriptionId: existingSubscriptionId || undefined,
         duration,
         startDate,
         amountPaid: parseFloat(amountPaid) || 0,
@@ -745,29 +786,31 @@ export default function EnrollmentWizardPage() {
 
         <Card className="mb-6 text-left">
           <CardContent className="p-5 space-y-3">
-            <div className="flex justify-between items-center text-sm bg-orange-50/50 p-2.5 rounded-xl border border-orange-100">
-              <div>
-                <span className="text-muted-foreground text-xs block font-semibold">Statutory GST Invoice</span>
-                <span className="font-bold font-mono text-[#FF7A00] text-sm">{enrolledResult.invoiceNumber}</span>
+            {enrolledResult.invoiceNumber && (
+              <div className="flex justify-between items-center text-sm bg-orange-50/50 p-2.5 rounded-xl border border-orange-100">
+                <div>
+                  <span className="text-muted-foreground text-xs block font-semibold">Statutory GST Invoice</span>
+                  <span className="font-bold font-mono text-[#FF7A00] text-sm">{enrolledResult.invoiceNumber}</span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowInvoiceModal(true)}
+                  className="h-8 border-[#FF7A00]/40 text-[#FF7A00] hover:bg-[#FF7A00] hover:text-white font-bold text-xs gap-1.5 shadow-sm"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  View &amp; Print Invoice
+                </Button>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setShowInvoiceModal(true)}
-                className="h-8 border-[#FF7A00]/40 text-[#FF7A00] hover:bg-[#FF7A00] hover:text-white font-bold text-xs gap-1.5 shadow-sm"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                View &amp; Print Invoice
-              </Button>
-            </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subscriber</span>
               <span className="font-semibold">{enrolledResult.subscriber?.name} ({enrolledResult.subscriber?.phone})</span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-dashed mb-2">
               <div className="flex items-center gap-3">
-                {profilePhoto ? (
+                {profilePhoto && enrolledResult.beneficiary ? (
                   <img src={sanitizeImgSrc(profilePhoto)} alt="Beneficiary" className="w-12 h-12 rounded-full object-cover border-2 border-primary/20" />
                 ) : (
                   <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
@@ -776,11 +819,13 @@ export default function EnrollmentWizardPage() {
                 )}
                 <div>
                   <span className="text-muted-foreground text-xs block uppercase font-bold tracking-tighter">Beneficiary</span>
-                  <span className="font-bold text-lg leading-none">{enrolledResult.beneficiary?.name}</span>
+                  <span className="font-bold text-lg leading-none">
+                    {enrolledResult.beneficiary?.name || 'Pending Beneficiary (Add Later)'}
+                  </span>
                 </div>
               </div>
               <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                {sameAsSubscriber ? 'Self' : (relationship || 'Family')}
+                {!enrolledResult.beneficiary ? 'Unassigned' : (sameAsSubscriber ? 'Self' : (relationship || 'Family'))}
               </Badge>
             </div>
             <div className="flex justify-between text-sm">
@@ -908,10 +953,10 @@ export default function EnrollmentWizardPage() {
       {/* Progress Steps */}
       <div className="mb-8">
         <div className="flex items-center gap-0">
-          {STEPS.filter(s => s.id !== 'confirm').map((s, i) => {
+          {activeSteps.filter(s => s.id !== 'confirm').map((s, i, arr) => {
             const Icon = s.icon;
             const isActive = s.id === step;
-            const isDone = stepIndex > i;
+            const isDone = activeStepIndex > i;
             return (
               <React.Fragment key={s.id}>
                 <div className="flex flex-col items-center">
@@ -924,7 +969,7 @@ export default function EnrollmentWizardPage() {
                   </div>
                   <span className={`text-xs mt-1 font-medium ${isActive ? 'text-primary' : isDone ? 'text-green-600' : 'text-muted-foreground'}`}>{s.label}</span>
                 </div>
-                {i < STEPS.length - 2 && (
+                {i < arr.length - 1 && (
                   <div className={`h-0.5 flex-1 mx-1 mb-4 ${isDone ? 'bg-green-400' : 'bg-border'}`} />
                 )}
               </React.Fragment>
@@ -1128,6 +1173,22 @@ export default function EnrollmentWizardPage() {
                   </>
                 )}
               </div>
+
+              {/* Skip Beneficiary option */}
+              {!existingSubscriptionId && (
+                <div className="flex items-center justify-between bg-amber-50/70 border border-amber-200 rounded-xl p-3.5">
+                  <div className="pr-3">
+                    <p className="text-xs font-bold text-amber-900">Enroll Subscriber Only (Add Beneficiary Later)</p>
+                    <p className="text-[11px] text-amber-700 mt-0.5">
+                      Purchase/assign the care package now without beneficiary details. You can link a beneficiary later from the Subscriber Profile.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={skipBeneficiary}
+                    onCheckedChange={(checked) => setSkipBeneficiary(Boolean(checked))}
+                  />
+                </div>
+              )}
 
               {/* CSA mode info */}
               <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-xs text-orange-800 flex gap-2 items-start">
@@ -2635,7 +2696,7 @@ export default function EnrollmentWizardPage() {
             {step === 'subscriber' ? 'Cancel' : 'Back'}
           </Button>
 
-          {step !== 'payment' ? (
+          {step !== 'payment' && !(existingSubscriptionId && step === 'emergency') ? (
             <Button
               onClick={goNext}
               disabled={
@@ -2651,11 +2712,14 @@ export default function EnrollmentWizardPage() {
           ) : (
             <Button
               onClick={handleEnroll}
-              disabled={!canProceedPayment || enrolling}
+              disabled={
+                enrolling ||
+                (existingSubscriptionId ? (!emergencyContactName || !emergencyContactPhone) : !canProceedPayment)
+              }
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               {enrolling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-              {enrolling ? 'Enrolling...' : 'Enroll Now'}
+              {enrolling ? 'Saving...' : (existingSubscriptionId ? `Link Beneficiary${existingPackageName ? ` to ${existingPackageName}` : ''}` : 'Enroll Now')}
             </Button>
           )}
         </div>

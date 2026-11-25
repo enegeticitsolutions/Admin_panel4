@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { 
   X, User, Phone, Mail, MapPin, Package, Calendar, Loader2, Users, 
-  UserCheck, ChevronRight, ArrowLeft, Edit2, TrendingUp, AlertTriangle, PackageCheck, CheckCircle2, Info,
+  UserCheck, UserPlus, ChevronRight, ArrowLeft, Edit2, TrendingUp, AlertTriangle, PackageCheck, CheckCircle2, Info,
   Receipt, ExternalLink, FileText, Plus, Upload, Trash2, FileMinus, Hash
 } from 'lucide-react';
 import { subscriberApi, invoicesApi } from '../../services/api';
@@ -406,13 +406,22 @@ export default function SubscriberProfilePage() {
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
                       {unassignedSubs.map((sub: any) => (
-                        <div key={sub.id} className="bg-white/80 backdrop-blur p-4 rounded-2xl border border-amber-200 flex justify-between items-start text-xs shadow-sm">
+                        <div key={sub.id} className="bg-white/80 backdrop-blur p-4 rounded-2xl border border-amber-200 flex justify-between items-start gap-3 text-xs shadow-sm">
                           <div className="space-y-1">
                             <span className="font-bold text-gray-800 text-sm block">{sub.package?.name || 'Unassigned Package'}</span>
                             <span className="text-[10px] text-gray-500 block uppercase tracking-tight font-semibold">Type: {sub.packageType}</span>
                             <span className="text-[9px] text-gray-400 block">Purchased {new Date(sub.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                           </div>
-                          <Badge className="bg-amber-100 text-amber-800 border-none font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 mt-0.5">Pending Details</Badge>
+                          <div className="flex flex-col items-end gap-2">
+                            <Badge className="bg-amber-100 text-amber-800 border-none font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 mt-0.5">Pending Details</Badge>
+                            <Button
+                              size="sm"
+                              onClick={() => navigate(`/enroll?subscriptionId=${sub.id}&subscriberPhone=${encodeURIComponent(details.subscriber?.phone || '')}&packageName=${encodeURIComponent(sub.package?.name || sub.packageType || '')}`)}
+                              className="h-7 px-2.5 text-[11px] font-bold bg-[#FF7A00] hover:bg-[#E06800] text-white"
+                            >
+                              <UserPlus className="w-3 h-3 mr-1" /> Enroll Beneficiary
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>

@@ -121,6 +121,10 @@ export default function VisitDetailsScreen() {
     const [proximityMeters, setProximityMeters] = useState<number | null>(null);
     const [locationLoading, setLocationLoading] = useState(false);
 
+    // Actual time spent override at checkout
+    const [actualMinutesInput, setActualMinutesInput] = useState<string>('');
+    const [hasEditedActualMinutes, setHasEditedActualMinutes] = useState(false);
+
     // CC Service Request state
     const [showBenefitDropdown, setShowBenefitDropdown] = useState(false);
     const [selectedBenefit, setSelectedBenefit] = useState<any>(null);
@@ -279,6 +283,14 @@ export default function VisitDetailsScreen() {
                     setEscalationReason(json.data.visit?.escalationReason || '');
                 }
                 setManualRemarks(json.data.visit?.manualCheckInReason || '');
+
+                if (json.data.visit?.checkInTime && !hasEditedActualMinutes) {
+                    const elapsed = Math.max(
+                        1,
+                        Math.round((Date.now() - new Date(json.data.visit.checkInTime).getTime()) / 60000)
+                    );
+                    setActualMinutesInput(String(json.data.visit?.actualDurationMinutes || elapsed));
+                }
 
                 if (json.data.activeMedications && json.data.activeMedications.length > 0) {
                     const adherence = json.data.visit?.medicationAdherenceRecords || [];
@@ -731,11 +743,15 @@ export default function VisitDetailsScreen() {
                 return;
             }
             
+            const parsedOverride = parseInt(actualMinutesInput, 10);
             const token = await AsyncStorage.getItem('userToken');
             const payload = {
                 ...getPayload(),
                 latitude: location.latitude,
                 longitude: location.longitude,
+                ...(Number.isFinite(parsedOverride) && parsedOverride > 0
+                    ? { actualMinutesOverride: Math.min(720, parsedOverride) }
+                    : {}),
             };
 
             const response = await fetch(`${API_URL}/care-companion/visits/check-out`, {
@@ -790,11 +806,15 @@ export default function VisitDetailsScreen() {
                 lng = loc?.longitude ?? null;
             }
 
+            const parsedOverride = parseInt(actualMinutesInput, 10);
             const payload = {
                 ...getPayload(),
                 latitude: lat ?? 0,
                 longitude: lng ?? 0,
                 manualCheckOutReason: manualRemarks,
+                ...(Number.isFinite(parsedOverride) && parsedOverride > 0
+                    ? { actualMinutesOverride: Math.min(720, parsedOverride) }
+                    : {}),
             };
 
             const response = await fetch(`${API_URL}/care-companion/visits/check-out`, {
@@ -1582,11 +1602,37 @@ export default function VisitDetailsScreen() {
 
                         
                         {/* 8. COMPLETE ENCOUNTER CARD */}
-                        {isCheckedIn && !isCompleted && (
+                        {isCheckedIn && !isCompleted && (() => {
+                            const baseMins = Math.max(60, visit?.durationMinutes || 60);
+                            const bufferMins = 10;
+                            const parsedMins = Math.max(1, parseInt(actualMinutesInput, 10) || baseMins);
+                            const billableMins = parsedMins <= baseMins + bufferMins
+                                ? baseMins
+                                : parsedMins - bufferMins;
+
+                            return (
                             <View style={styles.card}>
                                 <View style={styles.cardHeader}>
                                     <Ionicons name="flag-outline" size={20} color="#059669" />
                                     <Text style={styles.cardTitle}>Complete Encounter</Text>
+                                </View>
+
+                                <View style={styles.timeOverrideBox}>
+                                    <Text style={styles.manualLabel}>Actual Time Spent (minutes)</Text>
+                                    <TextInput
+                                        style={styles.manualInput}
+                                        keyboardType="number-pad"
+                                        placeholder="e.g. 60"
+                                        placeholderTextColor="#9CA3AF"
+                                        value={actualMinutesInput}
+                                        onChangeText={(val) => {
+                                            setHasEditedActualMinutes(true);
+                                            setActualMinutesInput(val.replace(/[^0-9]/g, ''));
+                                        }}
+                                    />
+                                    <Text style={styles.timeOverrideHint}>
+                                        Billable: {billableMins} min ({(billableMins / 60).toFixed(2)} hrs) • {bufferMins} min grace buffer applied
+                                    </Text>
                                 </View>
                                 
                                 <TouchableOpacity style={[styles.checkInBtn, actionLoading && { opacity: 0.7 }]} onPress={handleAutoCheckOut} disabled={actionLoading}>
@@ -1606,7 +1652,8 @@ export default function VisitDetailsScreen() {
                                     </TouchableOpacity>
                                 </View>
                             </View>
-                        )}
+                            );
+                        })()}
 
                         <View style={{ height: 100 }} />
                     </View>
@@ -1848,5 +1895,19 @@ const styles = StyleSheet.create({
         color: '#DC2626',
         marginTop: 6,
         fontStyle: 'italic',
+    },
+    timeOverrideBox: {
+        marginBottom: 14,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        borderRadius: 10,
+        padding: 12,
+    },
+    timeOverrideHint: {
+        fontFamily: 'Poppins_500Medium',
+        fontSize: 11,
+        color: '#047857',
+        marginTop: 6,
     },
 });

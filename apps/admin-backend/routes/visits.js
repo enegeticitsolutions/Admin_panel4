@@ -500,11 +500,14 @@ router.patch('/:id/complete', async (req, res) => {
           if (!subscription) {
             console.warn(`[COMPLETE] No active subscription found for beneficiary ${visit.beneficiaryId} — skipping deduction.`);
           } else if (isHourBased) {
-            // HOUR-BASED: charge actual duration (min 1h billing rule)
-            //   < 60 min  → charge exactly 1h
-            //   >= 60 min → charge actual time
-            const billableMinutes = Math.max(60, actualMinutes);
-            const hoursConsumed = billableMinutes / 60;
+            // HOUR-BASED: 60 min base + 10 min grace buffer; after buffer, deduct actual minutes (elapsed - 10)
+            const baseMinutes = Math.max(60, visit.durationMinutes || 60);
+            const bufferMinutes = 10;
+            const graceLimit = baseMinutes + bufferMinutes;
+            const billableMinutes = actualMinutes <= graceLimit
+              ? baseMinutes
+              : Math.max(baseMinutes, actualMinutes - bufferMinutes);
+            const hoursConsumed = Number((billableMinutes / 60).toFixed(4));
 
             console.log(`[COMPLETE] Hour-based — deducting ${hoursConsumed}h from "${benefit.name}" (sub=${subscription.id})`);
             await deductBenefitBalance(tx, {
@@ -1110,9 +1113,21 @@ router.get('/:id', async (req, res) => {
       }
     }
 
+    // Fetch audit edit logs for this visit
+    const editLogs = await prisma.activityLog.findMany({
+      where: {
+        type: 'VISIT',
+        action: 'VISIT_EDITED',
+        details: { path: ['visitId'], equals: id },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
     // Flatten the phone number to make it easier for the frontend
     const formattedVisit = {
       ...visit,
+      editLogs,
       imageUrls: resolvedImageUrls,
       beneficiary: visit.beneficiary ? {
         ...visit.beneficiary,
@@ -1193,6 +1208,7 @@ router.patch('/:id/edit', async (req, res) => {
     imageUrls, // Array<string> — the FULL updated list after admin deletions
     checkInTime,
     checkOutTime,
+    actualDurationMinutes,
   } = req.body;
 
   try {
@@ -1203,6 +1219,7 @@ router.patch('/:id/edit', async (req, res) => {
         followUpNotes: true, followUpDate: true, escalateToManager: true,
         escalationReason: true, imageUrls: true, beneficiaryId: true,
         checkInTime: true, checkOutTime: true, durationMinutes: true,
+        actualDurationMinutes: true, billableMinutes: true, overriddenDurationMinutes: true,
         beneficiary: { select: { userId: true } }
       }
     });
@@ -1278,6 +1295,25 @@ router.patch('/:id/edit', async (req, res) => {
         if (diffMinutes !== existing.durationMinutes) {
           changes.durationMinutes = { from: existing.durationMinutes, to: diffMinutes };
           updateData.durationMinutes = diffMinutes;
+        }
+      }
+    }
+
+    // Admin override of Care Mitra's actualDurationMinutes (recalculates billableMinutes with 10m buffer)
+    if (actualDurationMinutes !== undefined && actualDurationMinutes !== null && actualDurationMinutes !== '') {
+      const parsedActual = Math.max(1, Math.round(Number(actualDurationMinutes)));
+      if (Number.isFinite(parsedActual) && parsedActual !== existing.actualDurationMinutes) {
+        changes.actualDurationMinutes = { from: existing.actualDurationMinutes, to: parsedActual };
+        updateData.actualDurationMinutes = parsedActual;
+
+        const baseMins = Math.max(60, existing.durationMinutes || 60);
+        const bufferMins = 10;
+        const newBillable = parsedActual <= baseMins + bufferMins
+          ? baseMins
+          : Math.max(baseMins, parsedActual - bufferMins);
+        if (newBillable !== existing.billableMinutes) {
+          changes.billableMinutes = { from: existing.billableMinutes, to: newBillable };
+          updateData.billableMinutes = newBillable;
         }
       }
     }

@@ -4,6 +4,7 @@ import prisma from './core/database';
 import { startMedicationWorker } from './workers/medicationWorker';
 import { startCelebrationWorker } from './workers/celebrationWorker';
 import { startEventReminderWorker } from './workers/eventReminderWorker';
+import { startVisitTimerWorker } from './workers/visitTimerWorker';
 
 const start = async () => {
   try {
@@ -20,6 +21,7 @@ const start = async () => {
       startMedicationWorker();
       startCelebrationWorker();
       startEventReminderWorker();
+      startVisitTimerWorker();
     } else {
       console.log(`ℹ️  [Workers] Background workers skipped on worker replica (instance ${process.env.NODE_APP_INSTANCE})`);
     }

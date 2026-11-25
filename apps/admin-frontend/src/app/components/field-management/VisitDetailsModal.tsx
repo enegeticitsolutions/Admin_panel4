@@ -54,6 +54,7 @@ export default function VisitDetailsModal({ visitId, onClose, onDeleted }: Visit
     escalationReason: '',
     checkInTime: '',
     checkOutTime: '',
+    actualDurationMinutes: '',
   });
 
   const parseImageUrls = (raw: any): string[] => {
@@ -85,6 +86,7 @@ export default function VisitDetailsModal({ visitId, onClose, onDeleted }: Visit
             escalationReason: res.escalationReason || '',
             checkInTime: toDateTimeLocal(res.checkInTime),
             checkOutTime: toDateTimeLocal(res.checkOutTime),
+            actualDurationMinutes: res.actualDurationMinutes != null ? String(res.actualDurationMinutes) : '',
           });
         } else {
           toast.error('Invalid visit data received');
@@ -119,6 +121,7 @@ export default function VisitDetailsModal({ visitId, onClose, onDeleted }: Visit
         imageUrls: editImages, // send updated photos list
         checkInTime: editForm.checkInTime ? new Date(editForm.checkInTime).toISOString() : null,
         checkOutTime: editForm.checkOutTime ? new Date(editForm.checkOutTime).toISOString() : null,
+        ...(editForm.actualDurationMinutes ? { actualDurationMinutes: Number(editForm.actualDurationMinutes) } : {}),
       };
 
       const res = await visitApi.editVisit(visitId, payload);
@@ -209,6 +212,7 @@ export default function VisitDetailsModal({ visitId, onClose, onDeleted }: Visit
       escalationReason: visit.escalationReason || '',
       checkInTime: toDateTimeLocal(visit.checkInTime),
       checkOutTime: toDateTimeLocal(visit.checkOutTime),
+      actualDurationMinutes: visit.actualDurationMinutes != null ? String(visit.actualDurationMinutes) : '',
     });
     setEditMode(false);
   };
@@ -546,6 +550,30 @@ export default function VisitDetailsModal({ visitId, onClose, onDeleted }: Visit
                           className="w-full text-xs font-semibold p-2 bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7A00] text-gray-800"
                         />
                       </div>
+                      <div className="bg-amber-50/60 p-3 rounded-xl border border-amber-200 sm:col-span-2">
+                        <label className="text-[10px] font-black text-[#FF7A00] uppercase tracking-widest block mb-1.5">
+                          Actual Time Spent (Minutes — CC Filled)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={720}
+                          placeholder="e.g. 60"
+                          value={editForm.actualDurationMinutes}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, actualDurationMinutes: e.target.value }))}
+                          className="w-full text-xs font-semibold p-2 bg-white border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FF7A00] text-gray-800"
+                        />
+                        {editForm.actualDurationMinutes ? (() => {
+                          const base = Math.max(60, visit.durationMinutes || 60);
+                          const actual = Math.max(1, Number(editForm.actualDurationMinutes) || base);
+                          const billable = actual <= base + 10 ? base : actual - 10;
+                          return (
+                            <p className="text-[11px] font-semibold text-emerald-700 mt-1.5">
+                              Billable after 10 min buffer: {billable} min ({(billable / 60).toFixed(2)} hrs)
+                            </p>
+                          );
+                        })() : null}
+                      </div>
                     </>
                   ) : (
                     <>
@@ -559,6 +587,23 @@ export default function VisitDetailsModal({ visitId, onClose, onDeleted }: Visit
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Check Out</p>
                         <p className="text-sm font-bold text-gray-800 mt-1">
                           {visit.checkOutTime ? format(new Date(visit.checkOutTime), 'PPp') : <span className="text-gray-400 font-medium italic text-xs">Not recorded</span>}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Actual Time (CC Submitted)</p>
+                        <p className="text-sm font-bold text-gray-800 mt-1 flex items-center gap-2">
+                          {visit.actualDurationMinutes != null ? `${visit.actualDurationMinutes} minutes` : <span className="text-gray-400 font-medium italic text-xs">Not recorded</span>}
+                          {visit.overriddenDurationMinutes != null && (
+                            <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">CC Overridden</span>
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Billable / Deducted</p>
+                        <p className="text-sm font-bold text-emerald-700 mt-1">
+                          {visit.billableMinutes != null
+                            ? `${visit.billableMinutes} min (${(visit.billableMinutes / 60).toFixed(2)} hrs)`
+                            : <span className="text-gray-400 font-medium italic text-xs">Not recorded</span>}
                         </p>
                       </div>
                     </>
@@ -980,6 +1025,43 @@ export default function VisitDetailsModal({ visitId, onClose, onDeleted }: Visit
                   </div>
                 )}
               </div>
+
+              {/* Audit / Edit History */}
+              {Array.isArray(visit.editLogs) && visit.editLogs.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-black text-gray-800 mb-3 flex items-center gap-2">
+                    <FileText size={16} className="text-gray-400" /> Edit History ({visit.editLogs.length})
+                  </h4>
+                  <div className="bg-white border border-[#E7DED6] rounded-2xl p-4 space-y-3">
+                    {visit.editLogs.map((log: any) => {
+                      const details = log.details || {};
+                      const changes = details.changes || {};
+                      const changeEntries = Object.entries(changes);
+                      return (
+                        <div key={log.id} className="border-b border-gray-100 last:border-b-0 pb-2.5 last:pb-0">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-gray-800">{details.editedBy || 'Admin'}</span>
+                            <span className="text-[11px] text-gray-400">
+                              {log.createdAt ? format(new Date(log.createdAt), 'PPp') : ''}
+                            </span>
+                          </div>
+                          {changeEntries.length > 0 && (
+                            <div className="mt-1.5 space-y-1">
+                              {changeEntries.map(([field, diff]: [string, any]) => (
+                                <p key={field} className="text-[11px] text-gray-600">
+                                  <span className="font-semibold text-gray-700">{field}:</span>{' '}
+                                  <span className="line-through text-red-500">{String(diff?.from ?? '—')}</span>{' '}
+                                  → <span className="font-semibold text-emerald-700">{String(diff?.to ?? '—')}</span>
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
             </div>
           </div>
