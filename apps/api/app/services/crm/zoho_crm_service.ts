@@ -42,8 +42,10 @@ export class ZohoCrmService {
         return false;
       }
 
-      // Check if target is a Custom Module (e.g. Q3VzdG9tTW9kdWxlMw== for Partner Registration)
-      const isCustomModule = actionType === 'Q3VzdG9tTW9kdWxlMw==' || formType === 'partner';
+      // Check if target is a Zoho Custom Module (e.g. CustomModule2 = Saathi, CustomModule3 = Partner)
+      const decodedActionType = Buffer.from(actionType, 'base64').toString('utf8');
+      const isPartnerCustomModule = actionType === 'Q3VzdG9tTW9kdWxlMw==' || formType === 'partner';
+      const isCustomModule = isPartnerCustomModule || decodedActionType.startsWith('CustomModule');
       const targetUrl = isCustomModule ? ZohoCrmService.ZOHO_WEB_FORM_URL : ZohoCrmService.ZOHO_WEB_TO_LEAD_URL;
 
       // Prepare form data using URLSearchParams
@@ -78,8 +80,8 @@ export class ZohoCrmService {
         formData.append('Description', leadData.description);
       }
 
-      // Specific field mapping for CustomModule3 (Partner Registration)
-      if (isCustomModule) {
+      // Custom Modules require a NAME field; COBJ3CF* fields belong specifically to CustomModule3 (Partner)
+      if (isPartnerCustomModule) {
         formData.append('NAME', company);
         formData.append('COBJ3CF1', `${leadData.firstName || ''} ${leadData.lastName}`.trim());
         formData.append('COBJ3CF2', leadData.phone);
@@ -87,6 +89,8 @@ export class ZohoCrmService {
         formData.append('COBJ3CF4', leadData.customFields?.city || '');
         formData.append('COBJ3CF5', leadData.customFields?.category || '-None-');
         formData.append('COBJ3CF7', leadData.description || '');
+      } else if (isCustomModule) {
+        formData.append('NAME', `${leadData.firstName || ''} ${leadData.lastName}`.trim() || company);
       }
 
       // Lead Source
