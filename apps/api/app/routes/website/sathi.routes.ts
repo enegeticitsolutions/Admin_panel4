@@ -132,16 +132,22 @@ router.post('/saathi-enrollment', websiteFormLimiter, honeypotCheck, async (req:
       );
     }
 
-    // 3. Optional Zoho CRM sync for Saathi (active once ZOHO_CRM_SAATHI_* is populated)
+    // 3. Forward to Zoho CRM Saathi Network Volunteers (CustomModule2)
     ZohoCrmService.createLead({
       formType: 'saathi',
       firstName: firstName || '',
       lastName: lastName || firstName || 'Volunteer',
       email: email || '',
       phone,
+      gender: gender || undefined,
+      dob: dob || undefined,
       pincode: pincode || undefined,
-      description: `Saathi Volunteer Application | City: ${city}, State: ${state} | Area: ${area || 'N/A'}\nWhy Join: ${whyJoin || 'N/A'}`,
-      company: 'Saathi Volunteer Lead',
+      city,
+      state,
+      area: area || undefined,
+      interests: Array.isArray(interests) ? interests : [],
+      description: `Saathi Volunteer Application | City: ${city}, State: ${state} | Area: ${area || 'N/A'}\nWhy Join: ${whyJoin || 'N/A'}${age ? `\nAge: ${age}` : ''}`,
+      company: name || 'Saathi Volunteer Lead',
     }).catch((zohoErr: any) =>
       console.warn('⚠️ [Saathi Enrollment] Zoho CRM sync skipped or failed:', zohoErr.message)
     );
