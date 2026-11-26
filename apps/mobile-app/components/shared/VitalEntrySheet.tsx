@@ -50,13 +50,14 @@ interface VitalEntry {
 
 interface Props {
     authToken: string;
+    beneficiaryId?: string;
     onSuccess: () => void;
     onClose: () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export const VitalEntrySheet: React.FC<Props> = ({ authToken, onSuccess, onClose }) => {
+export const VitalEntrySheet: React.FC<Props> = ({ authToken, beneficiaryId, onSuccess, onClose }) => {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [definitions, setDefinitions] = useState<VitalDefinition[]>([]);
@@ -66,13 +67,14 @@ export const VitalEntrySheet: React.FC<Props> = ({ authToken, onSuccess, onClose
     // Fetch vital definitions on mount
     useEffect(() => {
         fetchDefinitions();
-    }, [authToken]);
+    }, [authToken, beneficiaryId]);
 
     const fetchDefinitions = async () => {
         try {
             setLoading(true);
             setError(null);
-            const res = await fetch(`${API_URL}/beneficiary/medical-records/vital-definitions`, {
+            const query = beneficiaryId ? `?beneficiaryId=${encodeURIComponent(beneficiaryId)}` : '';
+            const res = await fetch(`${API_URL}/beneficiary/medical-records/vital-definitions${query}`, {
                 headers: { Authorization: `Bearer ${authToken}` },
             });
             const data = await res.json();
@@ -141,7 +143,10 @@ export const VitalEntrySheet: React.FC<Props> = ({ authToken, onSuccess, onClose
                     Authorization: `Bearer ${authToken}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ vitalsList }),
+                body: JSON.stringify({
+                    vitalsList,
+                    ...(beneficiaryId ? { beneficiaryId } : {}),
+                }),
             });
             const data = await res.json();
             if (data.success) {

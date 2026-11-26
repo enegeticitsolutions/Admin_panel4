@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { VitalEntrySheet } from '@/components/shared/VitalEntrySheet';
 import { VitalsTrendsSection } from '@/components/shared/VitalsTrendsSection';
 import { VitalTrend } from '@/app/(subscriber)/components/beneficiary/VitalsCharts';
@@ -15,6 +15,7 @@ import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { API_URL } from '@/constants/api';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSelectedBeneficiary } from '@/contexts/SelectedBeneficiaryContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,9 +31,25 @@ interface SelfReportedHistoryEntry {
 
 export default function VitalsScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams<{ beneficiaryId?: string; beneficiaryName?: string }>();
     useAndroidBackHandler();
     const safeBack = useSafeBack();
     const { isGuest, requireAuth } = useAuth();
+    const { selectedBeneficiary } = useSelectedBeneficiary();
+
+    const targetBeneficiaryId =
+        (typeof params.beneficiaryId === 'string' && params.beneficiaryId.trim()) ||
+        selectedBeneficiary?.id ||
+        undefined;
+    const targetBeneficiaryName =
+        (typeof params.beneficiaryName === 'string' && params.beneficiaryName.trim()) ||
+        selectedBeneficiary?.name ||
+        undefined;
+    const isSelfTarget = !targetBeneficiaryId || Boolean(selectedBeneficiary?.id === targetBeneficiaryId && selectedBeneficiary?.isSelf);
+    const canEditTarget =
+        selectedBeneficiary && selectedBeneficiary.id === targetBeneficiaryId
+            ? selectedBeneficiary.canEditDetails !== false
+            : true;
 
     const [authToken, setAuthToken] = useState('');
     const [userName, setUserName] = useState('');
@@ -45,7 +62,7 @@ export default function VitalsScreen() {
     useFocusEffect(
         useCallback(() => {
             loadData();
-        }, [])
+        }, [targetBeneficiaryId])
     );
 
     useGlobalRefresh(() => { loadData(); });
@@ -54,7 +71,7 @@ export default function VitalsScreen() {
         setRefreshing(true);
         await loadData();
         setRefreshing(false);
-    }, []);
+    }, [targetBeneficiaryId]);
 
     const loadData = async () => {
         try {
@@ -80,7 +97,8 @@ export default function VitalsScreen() {
     const fetchHistory = async (token: string) => {
         try {
             setHistoryLoading(true);
-            const res = await fetch(`${API_URL}/beneficiary/medical-records/me`, {
+            const query = targetBeneficiaryId ? `?beneficiaryId=${encodeURIComponent(targetBeneficiaryId)}` : '';
+            const res = await fetch(`${API_URL}/beneficiary/medical-records/me${query}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
@@ -169,9 +187,13 @@ export default function VitalsScreen() {
                     <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
                 </TouchableOpacity>
                 <View style={styles.topBarContent}>
-                    <Text style={styles.topBarTitle}>My Vitals</Text>
+                    <Text style={styles.topBarTitle}>{isSelfTarget ? 'My Vitals' : `${targetBeneficiaryName || 'Family'} Vitals`}</Text>
                     <Text style={styles.topBarSub}>
-                        {userName ? `Logging for ${userName} (You)` : 'Self-reported personal readings'}
+                        {!isSelfTarget && targetBeneficiaryName
+                            ? `Logging for ${targetBeneficiaryName}`
+                            : userName
+                                ? `Logging for ${userName} (You)`
+                                : 'Self-reported personal readings'}
                     </Text>
                 </View>
             </View>
@@ -184,11 +206,12 @@ export default function VitalsScreen() {
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />}
             >
                 {/* Entry Form */}
-                {showForm && (
+                {showForm && canEditTarget && (
                     <View style={styles.formCard}>
                         {authToken ? (
                             <VitalEntrySheet
                                 authToken={authToken}
+                                beneficiaryId={targetBeneficiaryId}
                                 onSuccess={handleSuccess}
                                 onClose={() => setShowForm(false)}
                             />
@@ -201,22 +224,33 @@ export default function VitalsScreen() {
                 {/* Trends + Log Vitals CTA */}
                 {!showForm && (
                     <>
-                        <TouchableOpacity
-                            style={styles.logVitalsBannerBtn}
-                            onPress={() => setShowForm(true)}
-                            activeOpacity={0.85}
-                        >
-                            <View style={styles.logVitalsIconWrap}>
-                                <Ionicons name="pulse" size={20} color="#FE6700" />
+                        {canEditTarget ? (
+                            <TouchableOpacity
+                                style={styles.logVitalsBannerBtn}
+                                onPress={() => setShowForm(true)}
+                                activeOpacity={0.85}
+                            >
+                                <View style={styles.logVitalsIconWrap}>
+                                    <Ionicons name="pulse" size={20} color="#FE6700" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.logVitalsTitle}>Log Vitals</Text>
+                                </View>
+                                <View style={styles.logVitalsPill}>
+                                    <Ionicons name="add" size={16} color="#FFFFFF" />
+                                    <Text style={styles.logVitalsPillText}>Record</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={[styles.logVitalsBannerBtn, { opacity: 0.75 }]}>
+                                <View style={styles.logVitalsIconWrap}>
+                                    <Ionicons name="eye-outline" size={20} color="#6B7280" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.logVitalsTitle}>View-only access</Text>
+                                </View>
                             </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.logVitalsTitle}>Log Vitals</Text>
-                            </View>
-                            <View style={styles.logVitalsPill}>
-                                <Ionicons name="add" size={16} color="#FFFFFF" />
-                                <Text style={styles.logVitalsPillText}>Record</Text>
-                            </View>
-                        </TouchableOpacity>
+                        )}
 
                         {historyLoading && trends.length === 0 ? (
                             <ActivityIndicator style={{ marginTop: 32 }} size="large" color="#FF6900" />

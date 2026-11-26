@@ -129,6 +129,11 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
     const membershipInclude = {
       beneficiary: {
         include: {
+          primaryCC: {
+            include: {
+              user: { select: { isActive: true, phone: true } },
+            },
+          },
           careCircleMembers: {
             where: { status: 'active' },
             select: {
@@ -488,7 +493,18 @@ async function handleUserDashboard(req: AuthRequest, res: Response) {
           (b.emotionalScore === 8.0 ? null : (b.emotionalScore ?? null)),
         happinessMood: happinessByBenId.get(b.id)?.mood || null,
         // Only map default Prisma seed score (8.0) → null; real scores pass through as-is
-        emotionalScore: b.emotionalScore === 8.0 ? null : (b.emotionalScore ?? null)
+        emotionalScore: b.emotionalScore === 8.0 ? null : (b.emotionalScore ?? null),
+        careCoordinator:
+          b.primaryCC && b.primaryCC.user?.isActive !== false
+            ? {
+                id: b.primaryCC.id,
+                name: b.primaryCC.name,
+                role: 'Primary Care Coordinator',
+                bio: b.primaryCC.bio || 'Experienced care companion.',
+                photo: b.primaryCC.photo ? await resolveFileUrl(b.primaryCC.photo, 1800) : null,
+                phone: b.primaryCC.user?.phone || null,
+              }
+            : null,
       };
     }));
 

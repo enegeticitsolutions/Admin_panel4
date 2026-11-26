@@ -24,6 +24,7 @@ import NotificationBell from '@/components/shared/NotificationBell';
 import { EmergencyAssistanceModal } from '@/components/shared/EmergencyAssistanceModal';
 import { useExitOnBack } from '@/hooks/useExitOnBack';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSelectedBeneficiary } from '@/contexts/SelectedBeneficiaryContext';
 import { triggerEmergencyAlert, dialEmergencyHelpline, EMERGENCY_HELPLINE_NUMBER } from '@/services/emergencyTrigger';
 import { useCustomAlert } from '@/contexts/CustomAlertContext';
 import {
@@ -122,6 +123,7 @@ export default function BeneficiaryDashboard() {
     useExitOnBack();
     const { showConfirm, showAlert } = useCustomAlert();
     const { user, isGuest, requireAuth } = useAuth();
+    const { selectedBeneficiary } = useSelectedBeneficiary();
 
     const [triggeringEmergency, setTriggeringEmergency] = useState(false);
     const [showEmergencyModal, setShowEmergencyModal] = useState(false);
@@ -444,6 +446,7 @@ export default function BeneficiaryDashboard() {
                     relationship: b.relationship || 'Family',
                     photo: b.photo || null,
                     age: b.age || null,
+                    remainingHours: b.remainingUnits,
                     planName: b.activePackageName || b.packageName || undefined,
                 });
             }
@@ -471,9 +474,78 @@ export default function BeneficiaryDashboard() {
         return list;
     };
 
+    const ensureCanEditSelected = (actionLabel: string): boolean => {
+        if (selectedBeneficiary && selectedBeneficiary.canEditDetails === false) {
+            Alert.alert(
+                'View-Only Access',
+                `You only have view-only access for ${selectedBeneficiary.name}. Ask for Edit access to ${actionLabel}.`
+            );
+            return false;
+        }
+        return true;
+    };
+
     const handleSaathiPress = () => {
         if (requireAuth('Request a verified Saathi companion or book your free care assessment.')) return;
+        if (!ensureCanEditSelected('book a Saathi companion')) return;
+
         const eligibleList = getEligibleSaathiList();
+
+        if (selectedBeneficiary?.id) {
+            const matched = eligibleList.find(
+                (m) => m.id === selectedBeneficiary.id || (selectedBeneficiary.isSelf && m.isPersonal)
+            );
+
+            if (!matched) {
+                Alert.alert(
+                    'No Saathi Package',
+                    `${selectedBeneficiary.name} doesn't have any Saathi package. Buy a care package to unlock Saathi companion visits.`,
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Buy Package',
+                            onPress: () =>
+                                router.push({
+                                    pathname: '/(setup)/subscription-packages',
+                                    params: {
+                                        beneficiaryId: selectedBeneficiary.id,
+                                        beneficiaryName: selectedBeneficiary.name,
+                                    },
+                                }),
+                        },
+                    ]
+                );
+                return;
+            }
+
+            if (matched.remainingHours !== undefined && matched.remainingHours <= 0) {
+                Alert.alert(
+                    'Saathi Hours Exhausted',
+                    `${selectedBeneficiary.name}'s Saathi companion hours are exhausted. Purchase an add-on to continue booking Saathi visits.`,
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Buy Add-on',
+                            onPress: () =>
+                                router.push({
+                                    pathname: '/package-utilization',
+                                    params: { beneficiaryId: selectedBeneficiary.id },
+                                } as any),
+                        },
+                    ]
+                );
+                return;
+            }
+
+            router.push({
+                pathname: '/(beneficiary)/sathi-request',
+                params: {
+                    beneficiaryId: matched.id,
+                    beneficiaryName: matched.name,
+                },
+            });
+            return;
+        }
 
         if (eligibleList.length === 0) {
             // No Saathi package active -> show educational overview modal
@@ -481,7 +553,18 @@ export default function BeneficiaryDashboard() {
             return;
         }
 
-        // Open Beneficiary Selector Modal so user can select whose Saathi service they want to access
+        if (eligibleList.length === 1) {
+            router.push({
+                pathname: '/(beneficiary)/sathi-request',
+                params: {
+                    beneficiaryId: eligibleList[0].id,
+                    beneficiaryName: eligibleList[0].name,
+                },
+            });
+            return;
+        }
+
+        // Open Beneficiary Selector Modal when multiple eligible members exist without a selection
         setShowSaathiPickerModal(true);
     };
 
@@ -528,15 +611,43 @@ export default function BeneficiaryDashboard() {
                     <FloatingQuickActions
                         onBookSaathi={handleSaathiPress}
                         onBookCareMitra={() => {
-                            router.push('/(setup)/subscription-packages');
+                            if (!ensureCanEditSelected('book a Care Mitra plan')) return;
+                            if (selectedBeneficiary?.id) {
+                                router.push({
+                                    pathname: '/(setup)/subscription-packages',
+                                    params: {
+                                        beneficiaryId: selectedBeneficiary.id,
+                                        beneficiaryName: selectedBeneficiary.name,
+                                    },
+                                });
+                            } else {
+                                router.push('/(setup)/subscription-packages');
+                            }
                         }}
                         onAddMedicine={() => {
                             if (isGuest && requireAuth('Create an account to manage medications.')) return;
-                            router.push('/(beneficiary)/meds' as any);
+                            if (selectedBeneficiary?.id) {
+                                router.push({
+                                    pathname: '/(beneficiary)/meds',
+                                    params: { beneficiaryId: selectedBeneficiary.id },
+                                } as any);
+                            } else {
+                                router.push('/(beneficiary)/meds' as any);
+                            }
                         }}
                         onLogVitals={() => {
                             if (requireAuth('Track and monitor your daily health vitals.')) return;
-                            router.push('/(beneficiary)/vitals' as any);
+                            if (selectedBeneficiary?.id) {
+                                router.push({
+                                    pathname: '/(beneficiary)/vitals',
+                                    params: {
+                                        beneficiaryId: selectedBeneficiary.id,
+                                        beneficiaryName: selectedBeneficiary.name,
+                                    },
+                                } as any);
+                            } else {
+                                router.push('/(beneficiary)/vitals' as any);
+                            }
                         }}
                     />
 
@@ -658,7 +769,20 @@ export default function BeneficiaryDashboard() {
                     {/* ── Personal Wellness (Today For You) ── */}
                     <PersonalCareOverview
                         data={personalWellnessData}
-                        onViewTeam={() => router.push('/(beneficiary)/team')}
+                        onViewTeam={() => {
+                            if (selectedBeneficiary?.id) {
+                                router.push({
+                                    pathname: '/(beneficiary)/team',
+                                    params: {
+                                        beneficiaryId: selectedBeneficiary.id,
+                                        beneficiaryName: selectedBeneficiary.name,
+                                        isSelf: selectedBeneficiary.isSelf ? 'true' : 'false',
+                                    },
+                                });
+                            } else {
+                                router.push('/(beneficiary)/team');
+                            }
+                        }}
                         onViewAllMeds={() => {
                             const targetId = personalData?.beneficiaryId || user?.id;
                             router.push({

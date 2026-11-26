@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { HomeColors, HomeShadows } from '@/constants/homeTheme';
-import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
+import { useSelectedBeneficiary } from '@/contexts/SelectedBeneficiaryContext';
 
 export interface PersonalCareData {
   beneficiaryId?: string;
@@ -40,8 +40,10 @@ interface PersonalCareOverviewProps {
 
 export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
   data,
+  onViewTeam,
   onViewAllMeds,
 }) => {
+  const { selectedBeneficiary } = useSelectedBeneficiary();
   // Extract next medication
   const nextMed =
     data.todaysMedications && data.todaysMedications.length > 0
@@ -56,18 +58,18 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
   const adherenceNum = Math.min(100, Math.max(0, parseInt(adherenceRaw, 10) || 0));
   const adherenceDisplay = `${adherenceNum}%`;
 
-  const coordinator = data.careCoordinator || null;
+  const coordinator =
+    selectedBeneficiary && !selectedBeneficiary.isSelf
+      ? selectedBeneficiary.careCoordinator ?? null
+      : selectedBeneficiary?.careCoordinator ?? data.careCoordinator ?? null;
 
   const handlePhonePress = () => {
-    if (coordinator?.phone) {
-      Linking.openURL(`tel:${coordinator.phone.replace(/[^0-9+]/g, '')}`);
+    const cleanedPhone = coordinator?.phone?.replace(/[^0-9+]/g, '');
+    if (!cleanedPhone) {
+      Alert.alert('Contact unavailable', 'No phone number is available for your care coordinator.');
+      return;
     }
-  };
-
-  const handleMessagePress = () => {
-    if (coordinator?.phone) {
-      Linking.openURL(`sms:${coordinator.phone.replace(/[^0-9+]/g, '')}`);
-    }
+    Linking.openURL(`tel:${cleanedPhone}`);
   };
 
   return (
@@ -119,47 +121,54 @@ export const PersonalCareOverview: React.FC<PersonalCareOverviewProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* ── Care Coordinator Card (if assigned) ── */}
-      {coordinator ? (
-        <View style={styles.coordinatorCard}>
-          <View style={styles.stethoscopeCircle}>
-            <MaterialCommunityIcons name="stethoscope" size={22} color={HomeColors.mintIcon} />
-          </View>
-
-          <View style={styles.coordinatorInfo}>
-            <Text style={styles.coordinatorRole}>{coordinator.role || 'Care coordinator'}</Text>
-            <Text style={styles.coordinatorName} numberOfLines={1}>
-              {coordinator.name}
-            </Text>
-          </View>
-
-          <View style={styles.contactActions}>
-            <ConnectContactButton
-              name={coordinator.name}
-              role={coordinator.role}
-              phone={coordinator.phone || null}
-              photo={coordinator.photo}
-              trigger={
-                <TouchableOpacity
-                  style={styles.circleBtnPeach}
-                  onPress={handlePhonePress}
-                  activeOpacity={0.8}
-                >
-                  <Feather name="phone" size={19} color={HomeColors.brandOrange} />
-                </TouchableOpacity>
-              }
-            />
-
-            <TouchableOpacity
-              style={styles.circleBtnBlue}
-              onPress={handleMessagePress}
-              activeOpacity={0.8}
-            >
-              <Feather name="message-square" size={19} color={HomeColors.blueIcon} />
-            </TouchableOpacity>
-          </View>
+      {/* ── Care Team Section ── */}
+      <View style={styles.careTeamSection}>
+        <View style={styles.careTeamHeaderRow}>
+          <Text style={styles.careTeamTitle}>Care Team</Text>
+          <TouchableOpacity onPress={onViewTeam} activeOpacity={0.75}>
+            <Text style={styles.viewTeamLink}>View team</Text>
+          </TouchableOpacity>
         </View>
-      ) : null}
+
+        {coordinator ? (
+          <View style={styles.coordinatorCard}>
+            <View style={styles.stethoscopeCircle}>
+              <MaterialCommunityIcons name="stethoscope" size={22} color={HomeColors.mintIcon} />
+            </View>
+
+            <View style={styles.coordinatorInfo}>
+              <Text style={styles.coordinatorRole}>{coordinator.role || 'Care coordinator'}</Text>
+              <Text style={styles.coordinatorName} numberOfLines={1}>
+                {coordinator.name}
+              </Text>
+            </View>
+
+            <View style={styles.contactActions}>
+              <TouchableOpacity
+                style={styles.circleBtnPeach}
+                onPress={handlePhonePress}
+                activeOpacity={0.8}
+                accessibilityLabel={`Call ${coordinator.name}`}
+                accessibilityRole="button"
+              >
+                <Feather name="phone" size={19} color={HomeColors.brandOrange} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.coordinatorCard}>
+            <View style={styles.stethoscopeCircle}>
+              <MaterialCommunityIcons name="stethoscope" size={22} color={HomeColors.mintIcon} />
+            </View>
+            <View style={styles.coordinatorInfo}>
+              <Text style={styles.coordinatorRole}>Primary Care Coordinator</Text>
+              <Text style={styles.coordinatorEmptyText} numberOfLines={1}>
+                Not assigned yet
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
     </View>
   );
 };
@@ -287,6 +296,30 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: HomeColors.cardDark,
   },
+  careTeamSection: {
+    marginTop: 22,
+  },
+  careTeamHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  careTeamTitle: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 19,
+    lineHeight: 26,
+    letterSpacing: -0.4,
+    color: HomeColors.textPrimary,
+  },
+  viewTeamLink: {
+    fontFamily: 'Poppins-SemiBold',
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+    color: HomeColors.brandOrange,
+  },
   coordinatorCard: {
     width: '100%',
     flexDirection: 'row',
@@ -296,9 +329,16 @@ const styles = StyleSheet.create({
     borderWidth: 1.08,
     borderColor: HomeColors.borderSubtle,
     padding: 16,
-    marginTop: 16,
     gap: 12,
     ...HomeShadows.card,
+  },
+  coordinatorEmptyText: {
+    fontFamily: 'Poppins-Medium',
+    fontWeight: '500',
+    fontSize: 14,
+    lineHeight: 20,
+    color: HomeColors.textMuted,
+    marginTop: 2,
   },
   stethoscopeCircle: {
     width: 44,
@@ -337,14 +377,6 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 36,
     backgroundColor: HomeColors.peachBg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  circleBtnBlue: {
-    width: 44,
-    height: 44,
-    borderRadius: 36,
-    backgroundColor: HomeColors.blueBg,
     justifyContent: 'center',
     alignItems: 'center',
   },

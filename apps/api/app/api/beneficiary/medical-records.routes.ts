@@ -44,85 +44,129 @@ function getRecorderLabel(r: any): string {
     return 'Care Companion';
 }
 
+const VITAL_CONFIG_INCLUDE = {
+    vitalConfigs: {
+        where: { isActive: true },
+        include: {
+            vitalDefinition: {
+                select: {
+                    id: true, code: true, name: true, unit: true,
+                    dataType: true, iconCode: true, displayOrder: true,
+                    normalMin: true, normalMax: true,
+                    normalMin2: true, normalMax2: true,
+                    value1Label: true, value2Label: true,
+                    booleanTrueLabel: true, booleanFalseLabel: true,
+                    textOptions: true,
+                }
+            }
+        }
+    }
+} as const;
+
+async function resolveTargetBeneficiary(
+    userId: string,
+    requestedBeneficiaryId: string | undefined,
+    options: { requireEdit: boolean; autoProvisionSelf: boolean; includeVitalConfigs?: boolean }
+): Promise<{ beneficiary?: any; errorStatus?: number; errorMessage?: string }> {
+    const include = options.includeVitalConfigs ? VITAL_CONFIG_INCLUDE : undefined;
+
+    if (!requestedBeneficiaryId) {
+        let beneficiary = await prisma.beneficiary.findFirst({
+            where: { OR: [{ id: userId }, { userId }] },
+            ...(include ? { include } : {}),
+        }) as any;
+
+        if (!beneficiary && options.autoProvisionSelf) {
+            beneficiary = await ensureSelfBeneficiaryProfile(userId);
+            if (include) {
+                beneficiary = await prisma.beneficiary.findUnique({
+                    where: { id: beneficiary.id },
+                    include,
+                });
+            }
+        }
+
+        if (!beneficiary) {
+            return { errorStatus: 404, errorMessage: 'Beneficiary profile not found' };
+        }
+        return { beneficiary };
+    }
+
+    const beneficiary = await prisma.beneficiary.findUnique({
+        where: { id: requestedBeneficiaryId },
+        ...(include ? { include } : {}),
+    }) as any;
+
+    if (!beneficiary) {
+        return { errorStatus: 404, errorMessage: 'Beneficiary profile not found' };
+    }
+
+    const isOwnerOrSelf =
+        beneficiary.id === userId ||
+        beneficiary.userId === userId ||
+        beneficiary.subscriberId === userId;
+
+    if (!isOwnerOrSelf) {
+        const membership = await prisma.careCircleMember.findFirst({
+            where: {
+                beneficiaryId: beneficiary.id,
+                userId,
+                status: 'active',
+            },
+            select: { accessRole: true, canEditDetails: true },
+        });
+
+        if (!membership) {
+            return { errorStatus: 403, errorMessage: 'Unauthorized access to beneficiary medical records' };
+        }
+
+        const hasEdit =
+            membership.accessRole === 'SELF' ||
+            membership.accessRole === 'MANAGER' ||
+            membership.accessRole === 'EDITOR' ||
+            membership.canEditDetails === true;
+
+        if (options.requireEdit && !hasEdit) {
+            return {
+                errorStatus: 403,
+                errorMessage: 'View-only access: you do not have permission to log vitals for this beneficiary',
+            };
+        }
+    }
+
+    return { beneficiary };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /beneficiary/medical-records/vital-definitions
-// Returns all active vital definitions assigned to the authenticated beneficiary.
-// If the user has no profile or configs, auto-provisions self-profile with Standard Care vitals.
+// Returns all active vital definitions assigned to the target beneficiary.
+// If the user has no self profile or configs, auto-provisions self-profile with Standard Care vitals.
 // Used by VitalEntrySheet to build input fields.
 // ─────────────────────────────────────────────────────────────────────────────
 router.get('/vital-definitions', authenticate, async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.userId as string;
+        const requestedBeneficiaryId = typeof req.query.beneficiaryId === 'string' && req.query.beneficiaryId.trim()
+            ? req.query.beneficiaryId.trim()
+            : undefined;
 
-        let beneficiary = await prisma.beneficiary.findFirst({
-            where: { OR: [{ id: userId }, { userId }] },
-            include: {
-                vitalConfigs: {
-                    where: { isActive: true },
-                    include: {
-                        vitalDefinition: {
-                            select: {
-                                id: true, code: true, name: true, unit: true,
-                                dataType: true, iconCode: true, displayOrder: true,
-                                normalMin: true, normalMax: true,
-                                normalMin2: true, normalMax2: true,
-                                value1Label: true, value2Label: true,
-                                booleanTrueLabel: true, booleanFalseLabel: true,
-                                textOptions: true,
-                            }
-                        }
-                    }
-                }
-            }
-        }) as any;
+        const resolved = await resolveTargetBeneficiary(userId, requestedBeneficiaryId, {
+            requireEdit: false,
+            autoProvisionSelf: !requestedBeneficiaryId,
+            includeVitalConfigs: true,
+        });
 
-        if (!beneficiary) {
-            // Auto-provision self profile with default standard care vitals
-            beneficiary = await ensureSelfBeneficiaryProfile(userId);
-            beneficiary = await prisma.beneficiary.findUnique({
-                where: { id: beneficiary.id },
-                include: {
-                    vitalConfigs: {
-                        where: { isActive: true },
-                        include: {
-                            vitalDefinition: {
-                                select: {
-                                    id: true, code: true, name: true, unit: true,
-                                    dataType: true, iconCode: true, displayOrder: true,
-                                    normalMin: true, normalMax: true,
-                                    normalMin2: true, normalMax2: true,
-                                    value1Label: true, value2Label: true,
-                                    booleanTrueLabel: true, booleanFalseLabel: true,
-                                    textOptions: true,
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        } else if (!beneficiary.vitalConfigs || beneficiary.vitalConfigs.length === 0) {
-            // Self profile exists but has no active vital configs yet — provision standard care vitals
+        if (resolved.errorStatus) {
+            return res.status(resolved.errorStatus).json({ success: false, message: resolved.errorMessage });
+        }
+
+        let beneficiary = resolved.beneficiary;
+        if (!beneficiary.vitalConfigs || beneficiary.vitalConfigs.length === 0) {
+            // Profile exists but has no active vital configs yet — provision standard care vitals
             await ensureDefaultVitalsForBeneficiary(beneficiary.id);
             beneficiary = await prisma.beneficiary.findUnique({
                 where: { id: beneficiary.id },
-                include: {
-                    vitalConfigs: {
-                        where: { isActive: true },
-                        include: {
-                            vitalDefinition: {
-                                select: {
-                                    id: true, code: true, name: true, unit: true,
-                                    dataType: true, iconCode: true, displayOrder: true,
-                                    normalMin: true, normalMax: true,
-                                    normalMin2: true, normalMax2: true,
-                                    value1Label: true, value2Label: true,
-                                    booleanTrueLabel: true, booleanFalseLabel: true,
-                                    textOptions: true,
-                                }
-                            }
-                        }
-                    }
-                }
+                include: VITAL_CONFIG_INCLUDE,
             });
         }
 
@@ -147,15 +191,8 @@ router.post('/vitals', authenticate, async (req: AuthRequest, res: Response) => 
     try {
         const userId = req.userId as string;
 
-        let beneficiary = await prisma.beneficiary.findFirst({
-            where: { OR: [{ id: userId }, { userId }] },
-        }) as any;
-
-        if (!beneficiary) {
-            beneficiary = await ensureSelfBeneficiaryProfile(userId);
-        }
-
-        const { vitalsList } = req.body as {
+        const { vitalsList, beneficiaryId: bodyBeneficiaryId } = req.body as {
+            beneficiaryId?: string;
             vitalsList: Array<{
                 vitalDefinitionId: string;
                 valueNumeric?: number;
@@ -164,6 +201,21 @@ router.post('/vitals', authenticate, async (req: AuthRequest, res: Response) => 
                 valueBoolean?: boolean;
             }>;
         };
+
+        const requestedBeneficiaryId = typeof bodyBeneficiaryId === 'string' && bodyBeneficiaryId.trim()
+            ? bodyBeneficiaryId.trim()
+            : undefined;
+
+        const resolved = await resolveTargetBeneficiary(userId, requestedBeneficiaryId, {
+            requireEdit: true,
+            autoProvisionSelf: !requestedBeneficiaryId,
+        });
+
+        if (resolved.errorStatus) {
+            return res.status(resolved.errorStatus).json({ success: false, message: resolved.errorMessage });
+        }
+
+        const beneficiary = resolved.beneficiary;
 
         if (!Array.isArray(vitalsList) || vitalsList.length === 0) {
             return res.status(400).json({ success: false, message: 'vitalsList must be a non-empty array' });
@@ -310,31 +362,21 @@ router.post('/vitals', authenticate, async (req: AuthRequest, res: Response) => 
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.userId as string;
+        const requestedBeneficiaryId = typeof req.query.beneficiaryId === 'string' && req.query.beneficiaryId.trim()
+            ? req.query.beneficiaryId.trim()
+            : undefined;
 
-        const beneficiary = await prisma.beneficiary.findFirst({
-            where: { OR: [{ id: userId }, { userId }] },
-            include: {
-                vitalConfigs: {
-                    where: { isActive: true },
-                    include: {
-                        vitalDefinition: {
-                            select: {
-                                id: true, code: true, name: true, unit: true,
-                                dataType: true, iconCode: true, displayOrder: true,
-                                normalMin: true, normalMax: true,
-                                normalMin2: true, normalMax2: true,
-                                value1Label: true, value2Label: true,
-                                booleanTrueLabel: true, booleanFalseLabel: true,
-                            }
-                        }
-                    }
-                }
-            }
-        }) as any;
+        const resolved = await resolveTargetBeneficiary(userId, requestedBeneficiaryId, {
+            requireEdit: false,
+            autoProvisionSelf: false,
+            includeVitalConfigs: true,
+        });
 
-        if (!beneficiary) {
-            return res.status(404).json({ success: false, message: 'Beneficiary profile not found' });
+        if (resolved.errorStatus) {
+            return res.status(resolved.errorStatus).json({ success: false, message: resolved.errorMessage });
         }
+
+        const beneficiary = resolved.beneficiary;
 
         // ── 1. All readings — both CC and self-reported ───────────────────────
         const allReadings = await prisma.vitalReading.findMany({

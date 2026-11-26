@@ -354,9 +354,9 @@ export const getSathiEligibleBeneficiaries = async (subscriberId: string) => {
       status: 'active',
       beneficiary: { status: { not: 'deleted' }, isActive: true }
     },
-    select: { beneficiaryId: true, relationship: true }
+    select: { beneficiaryId: true, relationship: true, accessRole: true, canEditDetails: true }
   });
-  const membershipMap = new Map(careCircleMemberships.map(m => [m.beneficiaryId, m.relationship]));
+  const membershipMap = new Map(careCircleMemberships.map(m => [m.beneficiaryId, m]));
   const accessibleBenIds = Array.from(new Set(careCircleMemberships.map(m => m.beneficiaryId)));
 
   const beneficiaries = await prisma.beneficiary.findMany({
@@ -381,11 +381,22 @@ export const getSathiEligibleBeneficiaries = async (subscriberId: string) => {
   
   const eligibleBeneficiaries = [];
   for (const b of beneficiaries) {
+    const isSelf = b.userId === subscriberId;
+    const isSponsor = b.subscriberId === subscriberId;
+    const membership = membershipMap.get(b.id);
+    const canEdit =
+      isSelf ||
+      isSponsor ||
+      membership?.accessRole === 'SELF' ||
+      membership?.accessRole === 'MANAGER' ||
+      membership?.accessRole === 'EDITOR' ||
+      membership?.canEditDetails === true;
+
+    if (!canEdit) continue;
+
     const eligibility = await getBeneficiarySathiEligibility(b.id);
     if (eligibility.eligible) {
-      const isSelf = b.userId === subscriberId;
-      const isSponsor = b.subscriberId === subscriberId;
-      const careCircleRel = membershipMap.get(b.id);
+      const careCircleRel = membership?.relationship;
       const contextualRelationship = isSelf
         ? 'Self'
         : isSponsor
@@ -395,6 +406,8 @@ export const getSathiEligibleBeneficiaries = async (subscriberId: string) => {
       eligibleBeneficiaries.push({
         ...b,
         relationship: contextualRelationship,
+        accessRole: isSelf ? 'SELF' : isSponsor ? 'MANAGER' : (membership?.accessRole || 'EDITOR'),
+        canEditDetails: true,
         activePackageName: b.subscriptions?.[0]?.package?.name || undefined,
         remainingUnits: eligibility.remainingUnits,
       });
