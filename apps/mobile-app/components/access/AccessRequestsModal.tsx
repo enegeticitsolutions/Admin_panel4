@@ -191,7 +191,7 @@ export const AccessRequestsModal: React.FC<AccessRequestsModalProps> = ({
                                                             <Text style={styles.typePillText}>ACCESS REQUEST</Text>
                                                         </View>
                                                         <Text style={styles.roleTag}>
-                                                            {item.requestedRole === 'EDITOR' ? 'View & Edit' : 'View Only'}
+                                                            {item.requestedRole === 'EDITOR' ? 'Manage' : 'View Only'}
                                                         </Text>
                                                     </View>
 
@@ -245,7 +245,7 @@ export const AccessRequestsModal: React.FC<AccessRequestsModalProps> = ({
                                                             <Text style={[styles.typePillText, { color: '#2563EB' }]}>INVITATION FOR YOU</Text>
                                                         </View>
                                                         <Text style={styles.roleTag}>
-                                                            {inv.requestedRole === 'EDITOR' ? 'View & Edit' : 'View Only'}
+                                                            {inv.requestedRole === 'EDITOR' ? 'Manage' : 'View Only'}
                                                         </Text>
                                                     </View>
 
@@ -299,7 +299,7 @@ export const AccessRequestsModal: React.FC<AccessRequestsModalProps> = ({
                                                     <Text style={[styles.typePillText, { color: badge.text }]}>{req.status}</Text>
                                                 </View>
                                                 <Text style={styles.roleTag}>
-                                                    {req.requestedRole === 'EDITOR' ? 'View & Edit' : 'View Only'}
+                                                    {req.requestedRole === 'EDITOR' ? 'Manage' : 'View Only'}
                                                 </Text>
                                             </View>
                                             <Text style={styles.cardHeadline}>

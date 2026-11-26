@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { HomeColors, HomeShadows } from '@/constants/homeTheme';
 import { ProfileAccessActionButtons } from '@/components/access';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
+import { useSelectedBeneficiary } from '@/contexts/SelectedBeneficiaryContext';
 
 export interface BeneficiaryItem {
   id: string;
@@ -40,6 +41,14 @@ export interface BeneficiaryItem {
   happinessScore?: number | null;
   happinessMood?: string | null;
   emotionalScore?: number | null;
+  careCoordinator?: {
+    id: string;
+    name: string;
+    role: string;
+    bio?: string;
+    photo?: string | null;
+    phone?: string | null;
+  } | null;
   visits?: Array<{
     scheduledTime?: string;
     primaryCC?: { user?: { name?: string } };
@@ -74,8 +83,26 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
   onAccessChanged,
   isGuest = false,
 }) => {
+  const { selectedBeneficiary, setSelectedBeneficiary } = useSelectedBeneficiary();
   // Track currently selected family member in the pills row
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  useEffect(() => {
+    if (!beneficiaries || beneficiaries.length === 0) {
+      if (selectedBeneficiary) setSelectedBeneficiary(null);
+      return;
+    }
+    const existingIdx = selectedBeneficiary
+      ? beneficiaries.findIndex((b) => b.id === selectedBeneficiary.id)
+      : -1;
+    if (existingIdx >= 0) {
+      setSelectedIndex(existingIdx);
+      setSelectedBeneficiary(beneficiaries[existingIdx]);
+    } else {
+      setSelectedIndex(0);
+      setSelectedBeneficiary(beneficiaries[0]);
+    }
+  }, [beneficiaries]);
 
   const getDisplayAge = (b: BeneficiaryItem): string => {
     if (b.dateOfBirth) {
@@ -227,7 +254,10 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
             <TouchableOpacity
               key={b.id || `member-pill-${idx}`}
               style={[styles.memberPill, isSelected ? styles.memberPillActive : styles.memberPillInactive]}
-              onPress={() => setSelectedIndex(idx)}
+              onPress={() => {
+                setSelectedIndex(idx);
+                setSelectedBeneficiary(b);
+              }}
               activeOpacity={0.8}
             >
               <View
@@ -285,6 +315,7 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({
             <Text style={styles.seniorMeta}>
               {ageStr ? `${ageStr} · ` : ''}
               {relStr}
+              {currentBen.canEditDetails === false ? ' · View Only' : ''}
             </Text>
           </View>
 

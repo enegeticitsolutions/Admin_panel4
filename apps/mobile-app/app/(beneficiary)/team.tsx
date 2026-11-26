@@ -8,8 +8,10 @@ import { ConnectContactButton } from '@/components/shared/ConnectContactModal';
 import { sanitizeImageUri } from '@/utils/sanitizeImageUri';
 import { useSafeBack } from '@/hooks/useSafeBack';
 import { useGlobalRefresh } from '@/utils/events';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSelectedBeneficiary } from '@/contexts/SelectedBeneficiaryContext';
+import { HomeColors, HomeShadows } from '@/constants/homeTheme';
 
 type TeamMember = {
     id: string;
@@ -28,7 +30,25 @@ export default function CareTeamScreen() {
     const responsiveStyle = { width: '100%' as const, maxWidth: MAX_CONTENT_WIDTH, alignSelf: 'center' as const };
 
     const router = useRouter();
+    const params = useLocalSearchParams<{ beneficiaryId?: string; beneficiaryName?: string; isSelf?: string }>();
     const { isGuest, isLoggedIn, isLoading: authLoading } = useAuth();
+    const { selectedBeneficiary } = useSelectedBeneficiary();
+
+    const targetBeneficiaryId =
+        (typeof params.beneficiaryId === 'string' && params.beneficiaryId.trim()) ||
+        selectedBeneficiary?.id ||
+        undefined;
+    const targetBeneficiaryName =
+        (typeof params.beneficiaryName === 'string' && params.beneficiaryName.trim()) ||
+        selectedBeneficiary?.name ||
+        undefined;
+    const isSelfTarget =
+        params.isSelf === 'true' ||
+        (!targetBeneficiaryId && !selectedBeneficiary) ||
+        Boolean(selectedBeneficiary && selectedBeneficiary.id === targetBeneficiaryId && selectedBeneficiary.isSelf);
+    const headerTitle = isSelfTarget || !targetBeneficiaryName
+        ? 'Your Care Team'
+        : `${targetBeneficiaryName}'s Care Team`;
     const [isUnauthenticated, setIsUnauthenticated] = useState(false);
     const [team, setTeam] = useState<TeamMember[]>([]);
     const [loading, setLoading] = useState(true);
@@ -44,7 +64,7 @@ export default function CareTeamScreen() {
             } else {
                 fetchTeam();
             }
-        }, [authLoading, isGuest, isLoggedIn])
+        }, [authLoading, isGuest, isLoggedIn, targetBeneficiaryId])
     );
 
     useGlobalRefresh(() => {
@@ -58,7 +78,7 @@ export default function CareTeamScreen() {
         setRefreshing(true);
         await fetchTeam();
         setRefreshing(false);
-    }, [isGuest, isLoggedIn]);
+    }, [isGuest, isLoggedIn, targetBeneficiaryId]);
 
     const fetchTeam = async () => {
         if (isGuest || !isLoggedIn) {
@@ -82,9 +102,9 @@ export default function CareTeamScreen() {
 
             setIsUnauthenticated(false);
             const user = JSON.parse(userStr);
-            const userId = user.id;
+            const targetId = targetBeneficiaryId || user.id;
 
-            const response = await fetch(`${API_URL}/beneficiary/${userId}/team`, {
+            const response = await fetch(`${API_URL}/beneficiary/${targetId}/team`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -105,14 +125,26 @@ export default function CareTeamScreen() {
         }
     };
 
-    const getTagStyle = (level: string) =>
-        level === 'Primary' ? styles.badgePrimary : styles.badgeSecondary;
+    const getTagStyle = (level: string) => {
+        if (level === 'Primary') return styles.badgePrimary;
+        if (level === 'Field Manager') return styles.badgeMint;
+        return styles.badgeBlue;
+    };
 
-    const getTagTextStyle = (level: string) =>
-        level === 'Primary' ? styles.badgeTextPrimary : styles.badgeTextSecondary;
+    const getTagTextStyle = (level: string) => {
+        if (level === 'Primary') return styles.badgeTextPrimary;
+        if (level === 'Field Manager') return styles.badgeTextMint;
+        return styles.badgeTextBlue;
+    };
+
+    const getInitials = (name: string) => {
+        const parts = (name || '').trim().split(/\s+/);
+        if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+        return (name || 'CT').slice(0, 2).toUpperCase();
+    };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
             <View style={[styles.header, responsiveStyle]}>
                 <TouchableOpacity
                     onPress={() => safeBack('/(beneficiary)')}
@@ -121,9 +153,10 @@ export default function CareTeamScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Go back"
                 >
-                    <Feather name="arrow-left" size={22} color="#111827" />
+                    <Feather name="arrow-left" size={20} color={HomeColors.textPrimary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Your Care Team</Text>
+                <Text style={styles.headerTitle} numberOfLines={1}>{headerTitle}</Text>
+                <View style={styles.headerSpacer} />
             </View>
 
             {loading || authLoading ? (
@@ -208,8 +241,15 @@ export default function CareTeamScreen() {
                 </View>
             ) : team.length === 0 ? (
                 <View style={[styles.centerContainer, responsiveStyle]}>
-                    <Feather name="users" size={48} color="#9CA3AF" />
-                    <Text style={styles.emptyText}>No care team assigned yet.</Text>
+                    <View style={styles.emptyCard}>
+                        <View style={styles.emptyIconCircle}>
+                            <Feather name="users" size={32} color={HomeColors.brandOrange} />
+                        </View>
+                        <Text style={styles.emptyTitle}>No Care Team Assigned Yet</Text>
+                        <Text style={styles.emptyText}>
+                            Once a care coordinator or field manager is assigned, their contact details will appear here.
+                        </Text>
+                    </View>
                 </View>
             ) : (
                 <ScrollView
@@ -218,51 +258,115 @@ export default function CareTeamScreen() {
                     showsVerticalScrollIndicator={false}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FE6700" />}
                 >
-                    {team.map((member) => (
-                        <View key={member.id} style={styles.card}>
-                            {/* Tag Badge */}
-                            <View style={[styles.badge, getTagStyle(member.level)]}>
-                                <Text style={[styles.badgeText, getTagTextStyle(member.level)]}>
-                                    {member.level}
-                                </Text>
-                            </View>
+                    {/* Hero Summary Banner */}
+                    <View style={styles.heroCard}>
+                        <View style={styles.heroDecorCircle} />
+                        <Text style={styles.heroEyebrow}>DEDICATED SUPPORT</Text>
+                        <Text style={styles.heroTitle}>{headerTitle}</Text>
+                        <Text style={styles.heroSub}>
+                            {team.length} {team.length === 1 ? 'specialist' : 'specialists'} assigned and ready to help with care coordination.
+                        </Text>
+                    </View>
 
-                            {/* Profile Info */}
-                            <View style={styles.profileRow}>
-                                <View style={styles.avatarContainer}>
-                                    {member.photo ? (
-                                        <Image source={{ uri: sanitizeImageUri(member.photo) }} style={styles.avatar} />
-                                    ) : (
-                                        <View style={styles.avatarPlaceholder}>
-                                            <Feather name="user" size={26} color="#9CA3AF" />
-                                        </View>
-                                    )}
-                                </View>
-
-                                <View style={styles.profileTextContainer}>
-                                    <Text style={styles.name}>{member.name}</Text>
-                                    <Text style={styles.role}>{member.role}</Text>
-                                </View>
-                            </View>
-
-                            {/* Bio */}
-                            <Text style={styles.description}>{member.bio}</Text>
-
-                            {/* Call Button — uses ConnectContactButton for the modal */}
-                            <ConnectContactButton
-                                name={member.name}
-                                role={member.role}
-                                phone={member.phone}
-                                photo={member.photo}
-                                trigger={
-                                    <View style={styles.callButton}>
-                                        <Feather name="phone" size={18} color="#FFFFFF" style={styles.buttonIcon} />
-                                        <Text style={styles.callButtonText}>Call</Text>
+                    {team.map((member) => {
+                        const firstName = (member.name || 'Member').trim().split(/\s+/)[0];
+                        return (
+                            <View key={member.id} style={styles.card}>
+                                {/* Top Badges Row */}
+                                <View style={styles.badgeRow}>
+                                    <View style={[styles.badge, getTagStyle(member.level)]}>
+                                        <MaterialCommunityIcons
+                                            name={member.level === 'Field Manager' ? 'shield-account-outline' : 'stethoscope'}
+                                            size={13}
+                                            color={
+                                                member.level === 'Primary'
+                                                    ? HomeColors.brandOrange
+                                                    : member.level === 'Field Manager'
+                                                    ? HomeColors.mintIcon
+                                                    : HomeColors.blueIcon
+                                            }
+                                        />
+                                        <Text style={[styles.badgeText, getTagTextStyle(member.level)]}>
+                                            {member.level}
+                                        </Text>
                                     </View>
-                                }
-                            />
-                        </View>
-                    ))}
+
+                                    <View style={styles.verifiedPill}>
+                                        <Feather name="check-circle" size={12} color={HomeColors.mintIcon} />
+                                        <Text style={styles.verifiedText}>Verified</Text>
+                                    </View>
+                                </View>
+
+                                {/* Profile Info */}
+                                <View style={styles.profileRow}>
+                                    <View
+                                        style={[
+                                            styles.avatarContainer,
+                                            member.level === 'Primary'
+                                                ? styles.avatarRingPrimary
+                                                : member.level === 'Field Manager'
+                                                ? styles.avatarRingMint
+                                                : styles.avatarRingBlue,
+                                        ]}
+                                    >
+                                        {member.photo ? (
+                                            <Image source={{ uri: sanitizeImageUri(member.photo) }} style={styles.avatar} />
+                                        ) : (
+                                            <View
+                                                style={[
+                                                    styles.avatarPlaceholder,
+                                                    member.level === 'Primary'
+                                                        ? { backgroundColor: HomeColors.peachBg }
+                                                        : member.level === 'Field Manager'
+                                                        ? { backgroundColor: HomeColors.mintBg }
+                                                        : { backgroundColor: HomeColors.blueBg },
+                                                ]}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.avatarInitials,
+                                                        member.level === 'Primary'
+                                                            ? { color: HomeColors.brandOrange }
+                                                            : member.level === 'Field Manager'
+                                                            ? { color: HomeColors.mintIcon }
+                                                            : { color: HomeColors.blueIcon },
+                                                    ]}
+                                                >
+                                                    {getInitials(member.name)}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
+
+                                    <View style={styles.profileTextContainer}>
+                                        <Text style={styles.name} numberOfLines={1}>{member.name}</Text>
+                                        <Text style={styles.role} numberOfLines={1}>{member.role}</Text>
+                                    </View>
+                                </View>
+
+                                {/* Bio Box */}
+                                {member.bio ? (
+                                    <View style={styles.bioBox}>
+                                        <Text style={styles.description}>{member.bio}</Text>
+                                    </View>
+                                ) : null}
+
+                                {/* Call Button — uses ConnectContactButton for the modal */}
+                                <ConnectContactButton
+                                    name={member.name}
+                                    role={member.role}
+                                    phone={member.phone}
+                                    photo={member.photo}
+                                    trigger={
+                                        <View style={styles.callButton}>
+                                            <Feather name="phone-call" size={17} color="#FFFFFF" style={styles.buttonIcon} />
+                                            <Text style={styles.callButtonText}>Call {firstName}</Text>
+                                        </View>
+                                    }
+                                />
+                            </View>
+                        );
+                    })}
                 </ScrollView>
             )}
         </SafeAreaView>
@@ -272,69 +376,147 @@ export default function CareTeamScreen() {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: HomeColors.pageBackground,
     },
     header: {
         height: 60,
-        backgroundColor: '#FFFFFF',
-        justifyContent: 'center',
+        backgroundColor: HomeColors.pageBackground,
+        flexDirection: 'row',
         alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: '#F3F4F6',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
     },
     backBtn: {
-        position: 'absolute',
-        left: 20,
-        zIndex: 1,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: HomeColors.cardWhite,
+        borderWidth: 1,
+        borderColor: HomeColors.borderSubtle,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    headerSpacer: {
+        width: 40,
     },
     headerTitle: {
-        fontFamily: 'Poppins-Medium',
+        flex: 1,
+        textAlign: 'center',
+        fontFamily: 'Poppins-SemiBold',
+        fontWeight: '600',
         fontSize: 18,
-        color: '#111827',
+        color: HomeColors.textPrimary,
+        paddingHorizontal: 8,
     },
     scroll: {
         flex: 1,
-        backgroundColor: '#FAF5ED',
+        backgroundColor: HomeColors.pageBackground,
     },
     content: {
-        padding: 20,
+        paddingHorizontal: 16,
+        paddingTop: 8,
         paddingBottom: Platform.OS === 'ios' ? 100 : 80,
     },
-    card: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
+    heroCard: {
+        backgroundColor: HomeColors.brandOrange,
+        borderRadius: 24,
         padding: 20,
-        marginBottom: 20,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-        elevation: 3,
-        borderWidth: 1,
-        borderColor: '#F3F4F6',
+        marginBottom: 18,
+        overflow: 'hidden',
+        position: 'relative',
+        ...HomeShadows.hero,
     },
-    badge: {
-        alignSelf: 'flex-start',
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
+    heroDecorCircle: {
+        position: 'absolute',
+        width: 150,
+        height: 150,
+        borderRadius: 75,
+        right: -35,
+        top: -45,
+        borderWidth: 26,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+    },
+    heroEyebrow: {
+        fontFamily: 'Poppins-Bold',
+        fontWeight: '700',
+        fontSize: 11,
+        letterSpacing: 1.4,
+        color: HomeColors.textWhiteMuted,
+        marginBottom: 4,
+    },
+    heroTitle: {
+        fontFamily: 'Poppins-Bold',
+        fontWeight: '700',
+        fontSize: 22,
+        lineHeight: 28,
+        color: HomeColors.textWhite,
+        marginBottom: 6,
+    },
+    heroSub: {
+        fontFamily: 'Poppins-Regular',
+        fontSize: 13,
+        lineHeight: 19,
+        color: HomeColors.textWhiteBody,
+    },
+    card: {
+        backgroundColor: HomeColors.cardWhite,
+        borderRadius: 24,
+        padding: 20,
+        marginBottom: 16,
+        borderWidth: 1.08,
+        borderColor: HomeColors.borderSubtle,
+        ...HomeShadows.card,
+    },
+    badgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         marginBottom: 16,
     },
-    badgePrimary: {
-        backgroundColor: '#FFF0E6',
+    badge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        borderRadius: 20,
     },
-    badgeSecondary: {
-        backgroundColor: '#F3F4F6',
+    badgePrimary: {
+        backgroundColor: HomeColors.peachBg,
+    },
+    badgeMint: {
+        backgroundColor: HomeColors.mintBg,
+    },
+    badgeBlue: {
+        backgroundColor: HomeColors.blueBg,
     },
     badgeText: {
-        fontFamily: 'Poppins-Medium',
+        fontFamily: 'Poppins-SemiBold',
+        fontWeight: '600',
         fontSize: 12,
     },
     badgeTextPrimary: {
-        color: '#FE6700',
+        color: HomeColors.brandOrange,
     },
-    badgeTextSecondary: {
-        color: '#4B5563',
+    badgeTextMint: {
+        color: HomeColors.mintIcon,
+    },
+    badgeTextBlue: {
+        color: HomeColors.blueText,
+    },
+    verifiedPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: HomeColors.mintBg,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 20,
+    },
+    verifiedText: {
+        fontFamily: 'Poppins-Medium',
+        fontSize: 11,
+        color: HomeColors.mintIcon,
     },
     profileRow: {
         flexDirection: 'row',
@@ -342,62 +524,83 @@ const styles = StyleSheet.create({
         marginBottom: 16,
     },
     avatarContainer: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         overflow: 'hidden',
-        marginRight: 16,
+        marginRight: 14,
+        borderWidth: 2,
+    },
+    avatarRingPrimary: {
+        borderColor: '#FFD6BA',
+    },
+    avatarRingMint: {
+        borderColor: '#BDE8D8',
+    },
+    avatarRingBlue: {
+        borderColor: '#C9DDFB',
     },
     avatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        width: '100%',
+        height: '100%',
         backgroundColor: '#E5E7EB',
     },
     avatarPlaceholder: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: '#F3F4F6',
+        width: '100%',
+        height: '100%',
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    avatarInitials: {
+        fontFamily: 'Poppins-Bold',
+        fontWeight: '700',
+        fontSize: 20,
     },
     profileTextContainer: {
         flex: 1,
         justifyContent: 'center',
     },
     name: {
-        fontFamily: 'Poppins-Medium',
+        fontFamily: 'Poppins-SemiBold',
+        fontWeight: '600',
         fontSize: 18,
-        color: '#111827',
+        color: HomeColors.textPrimary,
         marginBottom: 2,
     },
     role: {
         fontFamily: 'Poppins-Regular',
-        fontSize: 14,
-        color: '#9CA3AF',
+        fontSize: 13,
+        color: HomeColors.textMuted,
+    },
+    bioBox: {
+        backgroundColor: '#FAF7F3',
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 18,
+        borderWidth: 1,
+        borderColor: '#F0E8E0',
     },
     description: {
         fontFamily: 'Poppins-Regular',
-        fontSize: 14,
-        color: '#4B5563',
-        lineHeight: 22,
-        marginBottom: 20,
+        fontSize: 13,
+        color: HomeColors.textSecondary,
+        lineHeight: 20,
     },
     callButton: {
-        flex: 1,
-        backgroundColor: '#FE6700',
+        backgroundColor: HomeColors.brandOrange,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 14,
-        borderRadius: 12,
+        borderRadius: 16,
+        ...HomeShadows.hero,
     },
     buttonIcon: {
         marginRight: 8,
     },
     callButtonText: {
-        fontFamily: 'Poppins-Medium',
+        fontFamily: 'Poppins-SemiBold',
+        fontWeight: '600',
         fontSize: 15,
         color: '#FFFFFF',
     },
@@ -406,7 +609,33 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         padding: 24,
-        backgroundColor: '#FAF5ED',
+        backgroundColor: HomeColors.pageBackground,
+    },
+    emptyCard: {
+        width: '100%',
+        backgroundColor: HomeColors.cardWhite,
+        borderRadius: 24,
+        padding: 28,
+        alignItems: 'center',
+        borderWidth: 1.08,
+        borderColor: HomeColors.borderSubtle,
+        ...HomeShadows.card,
+    },
+    emptyIconCircle: {
+        width: 68,
+        height: 68,
+        borderRadius: 34,
+        backgroundColor: HomeColors.peachBg,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 14,
+    },
+    emptyTitle: {
+        fontFamily: 'Poppins-SemiBold',
+        fontSize: 17,
+        color: HomeColors.textPrimary,
+        marginBottom: 6,
+        textAlign: 'center',
     },
     loaderText: {
         fontFamily: 'Poppins-Medium',
@@ -587,8 +816,9 @@ const styles = StyleSheet.create({
     },
     emptyText: {
         fontFamily: 'Poppins-Regular',
-        fontSize: 15,
-        color: '#9CA3AF',
-        marginTop: 12,
+        fontSize: 14,
+        lineHeight: 20,
+        color: HomeColors.textMuted,
+        textAlign: 'center',
     },
 });

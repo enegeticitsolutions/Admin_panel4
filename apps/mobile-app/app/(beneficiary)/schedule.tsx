@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSelectedBeneficiary } from '@/contexts/SelectedBeneficiaryContext';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { format } from 'date-fns';
 import { HomeHeader } from '@/components/dashboard/HomeHeader';
@@ -43,8 +44,15 @@ export default function ScheduleScreen() {
 
   const router = useRouter();
   const params = useLocalSearchParams<{ beneficiaryId?: string; beneficiaryName?: string }>();
-  const selectedBeneficiaryId = typeof params.beneficiaryId === 'string' ? params.beneficiaryId : undefined;
-  const selectedBeneficiaryName = typeof params.beneficiaryName === 'string' ? params.beneficiaryName : undefined;
+  const { selectedBeneficiary } = useSelectedBeneficiary();
+  const selectedBeneficiaryId =
+    (typeof params.beneficiaryId === 'string' && params.beneficiaryId) ||
+    selectedBeneficiary?.id ||
+    undefined;
+  const selectedBeneficiaryName =
+    (typeof params.beneficiaryName === 'string' && params.beneficiaryName) ||
+    selectedBeneficiary?.name ||
+    undefined;
   useAndroidBackHandler();
 
   const { user, isGuest, isLoggedIn, isLoading: authLoading, requireAuth } = useAuth();
@@ -192,6 +200,13 @@ export default function ScheduleScreen() {
   };
 
   const handleRequestChangePress = (visit: ScheduleVisit) => {
+    if (selectedBeneficiary && selectedBeneficiary.id === selectedBeneficiaryId && selectedBeneficiary.canEditDetails === false) {
+      Alert.alert(
+        'View-Only Access',
+        `You only have view-only access for ${selectedBeneficiary.name}. Ask for Edit access to request visit changes.`
+      );
+      return;
+    }
     if (!visit.rawScheduledTime) {
       Alert.alert('Error', 'Could not verify scheduled time.');
       return;

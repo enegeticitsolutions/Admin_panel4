@@ -3,6 +3,7 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SelectedBeneficiaryProvider } from '@/contexts/SelectedBeneficiaryContext';
 
 const visibleTabs = ['index', 'schedule', 'meds', 'community', 'more'];
 
@@ -10,6 +11,7 @@ export default function BeneficiaryLayout() {
     const insets = useSafeAreaInsets();
 
     return (
+        <SelectedBeneficiaryProvider>
         <Tabs
             backBehavior="history"
             screenOptions={({ route }) => {
@@ -112,5 +114,6 @@ export default function BeneficiaryLayout() {
                 }}
             />
         </Tabs>
+        </SelectedBeneficiaryProvider>
     );
 }

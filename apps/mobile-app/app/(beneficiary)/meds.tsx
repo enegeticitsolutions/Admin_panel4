@@ -19,6 +19,7 @@ import * as Notifications from 'expo-notifications';
 import { API_URL } from '@/constants/api';
 import { useGlobalRefresh, emitGlobalRefresh } from '@/utils/events';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSelectedBeneficiary } from '@/contexts/SelectedBeneficiaryContext';
 import { HomeHeader } from '@/components/dashboard/HomeHeader';
 import { EmergencyAssistanceModal } from '@/components/shared/EmergencyAssistanceModal';
 import { HomeColors } from '@/constants/homeTheme';
@@ -51,6 +52,7 @@ export default function MedsTracker() {
     const insets = useSafeAreaInsets();
     const { width } = useWindowDimensions();
     const { user, isGuest, requireAuth } = useAuth();
+    const { selectedBeneficiary } = useSelectedBeneficiary();
 
     // Responsive container
     const isTablet = width >= 768;
@@ -74,7 +76,17 @@ export default function MedsTracker() {
 
     // Beneficiary switching
     const [familyMembers, setFamilyMembers] = useState<FamilyFilterMember[]>([]);
-    const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string>(routeParams.beneficiaryId || '');
+    const [canEditById, setCanEditById] = useState<Record<string, boolean>>({});
+    const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string>(
+        routeParams.beneficiaryId || selectedBeneficiary?.id || ''
+    );
+
+    useEffect(() => {
+        const target = routeParams.beneficiaryId || selectedBeneficiary?.id;
+        if (target) {
+            setSelectedBeneficiaryId(target);
+        }
+    }, [routeParams.beneficiaryId, selectedBeneficiary?.id]);
 
     // Calendar selection
     const getTodayDateStr = () => {
@@ -120,11 +132,14 @@ export default function MedsTracker() {
                 });
                 const subJson = await subRes.json();
                 const list = subJson?.data?.beneficiaries || subJson?.beneficiaries || [];
+                const editMap: Record<string, boolean> = {};
                 list.forEach((b: any) => {
                     if (b?.id && b?.name) {
                         members.push({ id: b.id, name: b.name });
+                        editMap[b.id] = b.canEditDetails !== false;
                     }
                 });
+                setCanEditById(editMap);
             } catch (e) {
                 console.warn('[MedsTracker] Could not load subscriber beneficiaries:', e);
             }
@@ -156,14 +171,15 @@ export default function MedsTracker() {
 
             // Set initial selected beneficiary if none is set
             setSelectedBeneficiaryId((prev) => {
-                if (prev) return prev;
                 if (routeParams.beneficiaryId) return routeParams.beneficiaryId;
+                if (prev) return prev;
+                if (selectedBeneficiary?.id) return selectedBeneficiary.id;
                 return members[0]?.id || 'self';
             });
         } catch (err) {
             console.error('Failed to load beneficiaries:', err);
         }
-    }, [user?.id, routeParams.beneficiaryId]);
+    }, [user?.id, routeParams.beneficiaryId, selectedBeneficiary?.id]);
 
     // Resolve Target Beneficiary ID
     const resolveTargetBeneficiaryId = useCallback(async (): Promise<string | null> => {
@@ -525,6 +541,7 @@ export default function MedsTracker() {
                         <Text style={styles.headingTitle}>Meds & health</Text>
                     </View>
 
+                    {canEditById[selectedBeneficiaryId] !== false && (
                     <TouchableOpacity
                         style={styles.addMedButton}
                         onPress={handleOpenAdd}
@@ -533,6 +550,7 @@ export default function MedsTracker() {
                         <Ionicons name="add" size={18} color="#FFFFFF" style={{ marginRight: 4 }} />
                         <Text style={styles.addMedButtonText}>Add medication</Text>
                     </TouchableOpacity>
+                    )}
                 </View>
 
                 {/* ── Family Member / Care Circle Filter Pills ── */}
@@ -576,7 +594,7 @@ export default function MedsTracker() {
                                 onMarkTaken={(it) => handleLogAdherence(it, true)}
                                 onMarkMissed={(it) => handleLogAdherence(it, false)}
                                 isSubmitting={submittingId === item.id}
-                                canMark={isViewingToday}
+                                canMark={isViewingToday && canEditById[selectedBeneficiaryId] !== false}
                             />
                         ))
                     )}

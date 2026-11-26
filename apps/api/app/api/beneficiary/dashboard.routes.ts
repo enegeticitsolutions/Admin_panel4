@@ -171,7 +171,7 @@ router.get('/:userId/team', authenticate, async (req: AuthRequest, res: Response
         const userId = req.params.userId as string;
 
         const beneficiary = await prisma.beneficiary.findFirst({
-            where: { userId: userId },
+            where: { OR: [{ id: userId }, { userId: userId }] },
             include: {
                 primaryCC: { include: { user: true } },
                 secondaryCC: { include: { user: true } },

@@ -74,10 +74,15 @@ export default function PackageDetailScreen() {
     const { push, replace, pop } = useNavigationStack();
     useAndroidBackHandler();
     const safeBack = useSafeBack();
-    const { type, cycle } = useLocalSearchParams<{ type: string; cycle?: string }>();
+    const { type, cycle, beneficiaryId, beneficiaryName } = useLocalSearchParams<{
+        type: string;
+        cycle?: string;
+        beneficiaryId?: string;
+        beneficiaryName?: string;
+    }>();
     const [pkg, setPkg] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [selectedCycle, setSelectedCycle] = useState<string>((cycle as string) || '3');
+    const [selectedCycle, setSelectedCycle] = useState<string>((cycle as string) || '12');
 
     useEffect(() => {
         const fetchPackage = async () => {
@@ -151,8 +156,10 @@ export default function PackageDetailScreen() {
         let label = (pb.benefit?.unitLabel || 'visit').replace(/^per\s+/i, '').trim();
         if (pb.isUnlimited) return 'Unlimited';
 
-        // Pluralize when base > 1 and doesn't already end with 's'
-        if (base > 1 && !label.toLowerCase().endsWith('s')) {
+        const lower = label.toLowerCase();
+        if (lower === 'hour' || lower === 'hours' || lower === 'hr' || lower === 'hrs') {
+            label = base > 1 ? 'Visit Hours' : 'Visit Hour';
+        } else if (base > 1 && !lower.endsWith('s')) {
             label = `${label}s`;
         }
 
@@ -394,7 +401,12 @@ export default function PackageDetailScreen() {
                         if (!token) {
                             push({ pathname: '/(auth)/register' });
                         } else {
-                            push('/(setup)/checkout', { packageId: pkg.type, durationMonths: isTrial ? 1 : selectedCycle });
+                            push('/(setup)/checkout', {
+                                packageId: pkg.type,
+                                durationMonths: isTrial ? 1 : selectedCycle,
+                                ...(typeof beneficiaryId === 'string' && beneficiaryId ? { beneficiaryId } : {}),
+                                ...(typeof beneficiaryName === 'string' && beneficiaryName ? { beneficiaryName } : {}),
+                            });
                         }
                     }}
                 >

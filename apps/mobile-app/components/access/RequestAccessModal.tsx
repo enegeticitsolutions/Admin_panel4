@@ -172,7 +172,7 @@ export const RequestAccessModal: React.FC<RequestAccessModalProps> = ({
                                         color={requestedRole === 'EDITOR' ? '#FE6700' : '#6B7280'}
                                     />
                                     <Text style={[styles.roleTitle, requestedRole === 'EDITOR' && styles.roleTitleSelected]}>
-                                        View &amp; Edit
+                                        Manage
                                     </Text>
                                 </View>
                                 <Text style={styles.roleDesc}>Update meds, upload reports &amp; edit profile.</Text>

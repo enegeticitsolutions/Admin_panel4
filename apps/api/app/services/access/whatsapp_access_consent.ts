@@ -35,7 +35,7 @@ export async function dispatchAccessRequestWhatsApp(requestId: string): Promise<
       requestId,
       requesterName: reqRecord.requester?.name || reqRecord.requester?.phone || 'A family member',
       relationship: reqRecord.relationship || 'Family Member',
-      accessLevel: reqRecord.requestedRole === 'EDITOR' ? 'View & Edit' : 'View Only',
+      accessLevel: reqRecord.requestedRole === 'EDITOR' ? 'Manage' : 'View Only',
       recipients: reqRecord.beneficiary.careCircleMembers.map((m) => ({
         name: m.user?.name || reqRecord.beneficiary.name,
         phone: m.user?.phone,
