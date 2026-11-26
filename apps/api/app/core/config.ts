@@ -9,7 +9,7 @@ export const config = {
     if (!secret && process.env.NODE_ENV === 'production') {
       throw new Error('FATAL: JWT_SECRET environment variable is missing in production mode!');
     }
-    
+
     return secret || 'fallback-secret-dev-only';
   })(),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
@@ -45,11 +45,11 @@ export const config = {
       actionType: process.env.ZOHO_CRM_CONTACT_ACTION_TYPE || process.env.ZOHO_CRM_ACTION_TYPE || 'TGVhZHM=',
       returnURL: 'null',
     },
-    // 3. Saathi Volunteer Enrollment Form
+    // 3. Saathi Volunteer Enrollment Form (Saathi_Network_Volunteers CustomModule2)
     saathi: {
       xnQsjsdp: process.env.ZOHO_CRM_SAATHI_XNQSJSDP || '',
       xmIwtLD: process.env.ZOHO_CRM_SAATHI_XMIWTLD || '',
-      actionType: process.env.ZOHO_CRM_SAATHI_ACTION_TYPE || 'TGVhZHM=',
+      actionType: process.env.ZOHO_CRM_SAATHI_ACTION_TYPE || 'Q3VzdG9tTW9kdWxlMg==',
       returnURL: 'null',
     },
   },
@@ -57,6 +57,13 @@ export const config = {
     xnQsjsdp: process.env.ZOHO_CRM_CONTACT_XNQSJSDP || process.env.ZOHO_CONTACT_US_XNQSJSDP || '',
     xmIwtLD: process.env.ZOHO_CRM_CONTACT_XMIWTLD || process.env.ZOHO_CONTACT_US_XMIWTLD || '',
     actionType: process.env.ZOHO_CRM_CONTACT_ACTION_TYPE || process.env.ZOHO_CONTACT_US_ACTION_TYPE || 'TGVhZHM=',
+  },
+  zohoOAuth: {
+    clientId: process.env.ZOHO_CLIENT_ID || '',
+    clientSecret: process.env.ZOHO_CLIENT_SECRET || '',
+    refreshToken: process.env.ZOHO_REFRESH_TOKEN || '',
+    apiDomain: (process.env.ZOHO_API_DOMAIN || 'https://crm.zoho.in').replace(/\/$/, ''),
+    accountsDomain: (process.env.ZOHO_ACCOUNTS_DOMAIN || 'https://accounts.zoho.in').replace(/\/$/, ''),
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
